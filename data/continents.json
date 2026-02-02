@@ -1,0 +1,149 @@
+[
+  {
+    "name": "North America",
+    "bonus": 15,
+    "territories": [
+      "East US",
+      "West US",
+      "East Canada",
+      "West Canada",
+      "Mexico",
+      "Alaska",
+      "Cuba",
+      "Panama"
+    ],
+    "color": "#1E90FF"
+  },
+  {
+    "name": "South America",
+    "bonus": 6,
+    "territories": [
+      "Brazil",
+      "Argentina-Chile",
+      "Peru",
+      "Columbia"
+    ],
+    "color": "#9932CC"
+  },
+  {
+    "name": "Europe",
+    "bonus": 15,
+    "territories": [
+      "United Kingdom",
+      "West Europe",
+      "Germany",
+      "South Europe",
+      "East Europe",
+      "Eire",
+      "Gibraltar",
+      "Spain",
+      "Sweden",
+      "Switzerland",
+      "Finland Norway"
+    ],
+    "color": "#4169E1"
+  },
+  {
+    "name": "Soviet Union",
+    "bonus": 9,
+    "territories": [
+      "Russia",
+      "Karelia S.S.R.",
+      "Caucasus",
+      "Ukraine S.S.R.",
+      "Kazakh S.S.R.",
+      "Novosibirsk",
+      "Evenki National Okrug",
+      "Yakut S.S.R.",
+      "Soviet Far East"
+    ],
+    "color": "#8B008B"
+  },
+  {
+    "name": "Middle East",
+    "bonus": 6,
+    "territories": [
+      "Turkey",
+      "Syria Jordan",
+      "Saudi Arabia",
+      "Persia",
+      "Afghanistan",
+      "India"
+    ],
+    "color": "#00CED1"
+  },
+  {
+    "name": "North Africa",
+    "bonus": 6,
+    "territories": [
+      "Algeria",
+      "Libya",
+      "Rio del Oro",
+      "French West Africa",
+      "Anglo Sudan Egypt"
+    ],
+    "color": "#FFD700"
+  },
+  {
+    "name": "Sub-Saharan Africa",
+    "bonus": 9,
+    "territories": [
+      "French Equatorial Africa",
+      "Congo",
+      "Angola",
+      "Kenya-Rhodesia",
+      "Mozambique",
+      "South Africa",
+      "Italian East Africa",
+      "Madagascar"
+    ],
+    "color": "#32CD32"
+  },
+  {
+    "name": "Asia",
+    "bonus": 21,
+    "territories": [
+      "Mongolia",
+      "Manchuria",
+      "Sinkiang",
+      "China",
+      "Kwangtung",
+      "French Indo China"
+    ],
+    "color": "#BA55D3"
+  },
+  {
+    "name": "Southeast Asia",
+    "bonus": 6,
+    "territories": [
+      "Borneo Celebes",
+      "East Indies",
+      "Philippines",
+      "Okinawa"
+    ],
+    "color": "#00BFFF"
+  },
+  {
+    "name": "Oceania & Pacific",
+    "bonus": 6,
+    "territories": [
+      "Australia",
+      "New Zealand",
+      "New Guinea",
+      "Solomon Islands",
+      "Caroline Islands",
+      "Hawaiian Islands",
+      "Midway",
+      "Wake Island"
+    ],
+    "color": "#7B68EE"
+  },
+  {
+    "name": "Japan",
+    "bonus": 4,
+    "territories": [
+      "Japan"
+    ],
+    "color": "#FF69B4"
+  }
+]

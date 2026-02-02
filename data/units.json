@@ -1,0 +1,118 @@
+{
+  "infantry": {
+    "cost": 3,
+    "attack": 1,
+    "defense": 2,
+    "movement": 1,
+    "isLand": true,
+    "image": "Infantry.png"
+  },
+  "armour": {
+    "cost": 5,
+    "attack": 3,
+    "defense": 2,
+    "movement": 2,
+    "isLand": true,
+    "image": "Tank.png"
+  },
+  "artillery": {
+    "cost": 4,
+    "attack": 2,
+    "defense": 2,
+    "movement": 1,
+    "isLand": true,
+    "image": "Artillery.png"
+  },
+  "fighter": {
+    "cost": 10,
+    "attack": 3,
+    "defense": 4,
+    "movement": 4,
+    "isAir": true,
+    "image": "Fighter.png"
+  },
+  "bomber": {
+    "cost": 12,
+    "attack": 4,
+    "defense": 1,
+    "movement": 6,
+    "isAir": true,
+    "image": "Bomber.png"
+  },
+  "tacticalBomber": {
+    "cost": 11,
+    "attack": 3,
+    "defense": 3,
+    "movement": 4,
+    "isAir": true,
+    "image": "TacBomber.png"
+  },
+  "transport": {
+    "cost": 7,
+    "attack": 0,
+    "defense": 0,
+    "movement": 2,
+    "isSea": true,
+    "capacity": 2,
+    "image": "Transport.png"
+  },
+  "submarine": {
+    "cost": 6,
+    "attack": 2,
+    "defense": 1,
+    "movement": 2,
+    "isSea": true,
+    "image": "Submarine.png"
+  },
+  "destroyer": {
+    "cost": 8,
+    "attack": 2,
+    "defense": 2,
+    "movement": 2,
+    "isSea": true,
+    "image": "Destroyer.png"
+  },
+  "cruiser": {
+    "cost": 12,
+    "attack": 3,
+    "defense": 3,
+    "movement": 2,
+    "isSea": true,
+    "image": "Cruiser.png"
+  },
+  "battleship": {
+    "cost": 20,
+    "attack": 4,
+    "defense": 4,
+    "movement": 2,
+    "isSea": true,
+    "hp": 2,
+    "image": "Battleship.png"
+  },
+  "carrier": {
+    "cost": 14,
+    "attack": 1,
+    "defense": 2,
+    "movement": 2,
+    "isSea": true,
+    "aircraftCapacity": 2,
+    "image": "Carrier.png"
+  },
+  "factory": {
+    "cost": 15,
+    "attack": 0,
+    "defense": 0,
+    "movement": 0,
+    "isBuilding": true,
+    "image": "Factory.png"
+  },
+  "aaGun": {
+    "cost": 5,
+    "attack": 0,
+    "defense": 0,
+    "movement": 1,
+    "isLand": true,
+    "antiAir": true,
+    "image": "AAGun.png"
+  }
+}

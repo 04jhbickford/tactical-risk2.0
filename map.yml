@@ -1,0 +1,5 @@
+map_name: world_war_ii_classic
+games:
+- {game_name: World War II Classic 3rd Edition, file_name: classic_3rd_edition.xml}
+- {game_name: World War II Classic, file_name: classic.xml}
+- {game_name: 'Classic: Iron Blitz 3rd Edition', file_name: iron_blitz.xml}

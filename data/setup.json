@@ -1,0 +1,943 @@
+{
+  "gameModes": [
+    {
+      "id": "classic",
+      "name": "Classic WW2",
+      "description": "Historical 1942 setup with 5 factions",
+      "enabled": false,
+      "useHistoricalSetup": true
+    },
+    {
+      "id": "risk",
+      "name": "Risk Style",
+      "description": "Random territories, WW2 factions, 80 IPCs each",
+      "enabled": true,
+      "useHistoricalSetup": false,
+      "startingIPCs": 80,
+      "startingInfantryPerTerritory": 1
+    },
+    {
+      "id": "draft",
+      "name": "Territory Draft",
+      "description": "Players take turns drafting territories",
+      "enabled": false
+    }
+  ],
+  "factions": [
+    {
+      "id": "Russians",
+      "name": "Russians",
+      "color": "#B22222",
+      "lightColor": "#DC143C",
+      "flag": "Russians.png",
+      "alliance": "Allies"
+    },
+    {
+      "id": "Germans",
+      "name": "Germans",
+      "color": "#4A4A4A",
+      "lightColor": "#6A6A6A",
+      "flag": "Germans.png",
+      "alliance": "Axis"
+    },
+    {
+      "id": "British",
+      "name": "British",
+      "color": "#B8860B",
+      "lightColor": "#DAA520",
+      "flag": "British.png",
+      "alliance": "Allies"
+    },
+    {
+      "id": "Japanese",
+      "name": "Japanese",
+      "color": "#FF8C00",
+      "lightColor": "#FFA500",
+      "flag": "Japanese.png",
+      "alliance": "Axis"
+    },
+    {
+      "id": "Americans",
+      "name": "Americans",
+      "color": "#556B2F",
+      "lightColor": "#6B8E23",
+      "flag": "Americans.png",
+      "alliance": "Allies"
+    }
+  ],
+  "alliances": {
+    "Axis": {
+      "name": "Axis Powers",
+      "color": "#4A4A4A",
+      "members": [
+        "Germans",
+        "Japanese"
+      ]
+    },
+    "Allies": {
+      "name": "Allied Forces",
+      "color": "#4169E1",
+      "members": [
+        "Russians",
+        "British",
+        "Americans"
+      ]
+    }
+  },
+  "classic": {
+    "factions": [
+      {
+        "id": "Russians",
+        "name": "Russians",
+        "color": "#B22222",
+        "lightColor": "#DC143C",
+        "flag": "Russians.png",
+        "alliance": "Allies",
+        "startingPUs": 24
+      },
+      {
+        "id": "Germans",
+        "name": "Germans",
+        "color": "#4A4A4A",
+        "lightColor": "#6A6A6A",
+        "flag": "Germans.png",
+        "alliance": "Axis",
+        "startingPUs": 32
+      },
+      {
+        "id": "British",
+        "name": "British",
+        "color": "#B8860B",
+        "lightColor": "#DAA520",
+        "flag": "British.png",
+        "alliance": "Allies",
+        "startingPUs": 30
+      },
+      {
+        "id": "Japanese",
+        "name": "Japanese",
+        "color": "#FF8C00",
+        "lightColor": "#FFA500",
+        "flag": "Japanese.png",
+        "alliance": "Axis",
+        "startingPUs": 25
+      },
+      {
+        "id": "Americans",
+        "name": "Americans",
+        "color": "#556B2F",
+        "lightColor": "#6B8E23",
+        "flag": "Americans.png",
+        "alliance": "Allies",
+        "startingPUs": 36
+      }
+    ],
+    "territoryOwners": {
+      "Alaska": "Americans",
+      "Algeria": "Germans",
+      "Anglo Sudan Egypt": "British",
+      "Australia": "British",
+      "Borneo Celebes": "Japanese",
+      "Brazil": "Americans",
+      "Caroline Islands": "Japanese",
+      "Caucasus": "Russians",
+      "China": "Americans",
+      "Congo": "British",
+      "Cuba": "Americans",
+      "East Indies": "Japanese",
+      "East Canada": "British",
+      "East Europe": "Germans",
+      "East US": "Americans",
+      "Evenki National Okrug": "Russians",
+      "Finland Norway": "Germans",
+      "French Equatorial Africa": "British",
+      "Kwangtung": "Japanese",
+      "French West Africa": "British",
+      "Germany": "Germans",
+      "Spain": "British",
+      "Hawaiian Islands": "Americans",
+      "India": "British",
+      "Italian East Africa": "British",
+      "Japan": "Japanese",
+      "Karelia S.S.R.": "Russians",
+      "Kazakh S.S.R.": "Russians",
+      "Kenya-Rhodesia": "British",
+      "Libya": "Germans",
+      "Madagascar": "British",
+      "Manchuria": "Japanese",
+      "Mexico": "Americans",
+      "Midway": "Americans",
+      "New Guinea": "Japanese",
+      "New Zealand": "British",
+      "Novosibirsk": "Russians",
+      "Okinawa": "Japanese",
+      "Panama": "Americans",
+      "Persia": "British",
+      "Philippines": "Japanese",
+      "Russia": "Russians",
+      "Solomon Islands": "Japanese",
+      "South Africa": "British",
+      "South Europe": "Germans",
+      "Soviet Far East": "Russians",
+      "Syria Jordan": "British",
+      "Ukraine S.S.R.": "Germans",
+      "United Kingdom": "British",
+      "Wake Island": "Japanese",
+      "West Canada": "British",
+      "West Europe": "Germans",
+      "West US": "Americans",
+      "Yakut S.S.R.": "Russians"
+    },
+    "unitPlacements": {
+      "Alaska": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Americans"
+        }
+      ],
+      "Algeria": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Germans"
+        }
+      ],
+      "Anglo Sudan Egypt": [
+        {
+          "type": "armour",
+          "quantity": 1,
+          "owner": "British"
+        },
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "British"
+        }
+      ],
+      "Australia": [
+        {
+          "type": "infantry",
+          "quantity": 2,
+          "owner": "British"
+        }
+      ],
+      "Borneo Celebes": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "Caroline Islands": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "Caucasus": [
+        {
+          "type": "infantry",
+          "quantity": 5,
+          "owner": "Russians"
+        }
+      ],
+      "China": [
+        {
+          "type": "infantry",
+          "quantity": 4,
+          "owner": "Americans"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Americans"
+        }
+      ],
+      "East Indies": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "East Canada": [
+        {
+          "type": "armour",
+          "quantity": 1,
+          "owner": "British"
+        }
+      ],
+      "East Europe": [
+        {
+          "type": "armour",
+          "quantity": 1,
+          "owner": "Germans"
+        },
+        {
+          "type": "infantry",
+          "quantity": 3,
+          "owner": "Germans"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Germans"
+        }
+      ],
+      "East US": [
+        {
+          "type": "infantry",
+          "quantity": 2,
+          "owner": "Americans"
+        },
+        {
+          "type": "armour",
+          "quantity": 1,
+          "owner": "Americans"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Americans"
+        },
+        {
+          "type": "bomber",
+          "quantity": 1,
+          "owner": "Americans"
+        },
+        {
+          "type": "factory",
+          "quantity": 1,
+          "owner": "Americans"
+        },
+        {
+          "type": "aaGun",
+          "quantity": 1,
+          "owner": "Americans"
+        }
+      ],
+      "Evenki National Okrug": [
+        {
+          "type": "infantry",
+          "quantity": 2,
+          "owner": "Russians"
+        }
+      ],
+      "Finland Norway": [
+        {
+          "type": "armour",
+          "quantity": 1,
+          "owner": "Germans"
+        },
+        {
+          "type": "infantry",
+          "quantity": 3,
+          "owner": "Germans"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Germans"
+        }
+      ],
+      "Kwangtung": [
+        {
+          "type": "infantry",
+          "quantity": 4,
+          "owner": "Japanese"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "Germany": [
+        {
+          "type": "armour",
+          "quantity": 2,
+          "owner": "Germans"
+        },
+        {
+          "type": "infantry",
+          "quantity": 4,
+          "owner": "Germans"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Germans"
+        },
+        {
+          "type": "bomber",
+          "quantity": 1,
+          "owner": "Germans"
+        },
+        {
+          "type": "factory",
+          "quantity": 1,
+          "owner": "Germans"
+        },
+        {
+          "type": "aaGun",
+          "quantity": 1,
+          "owner": "Germans"
+        }
+      ],
+      "Hawaiian Islands": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Americans"
+        }
+      ],
+      "India": [
+        {
+          "type": "infantry",
+          "quantity": 2,
+          "owner": "British"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "British"
+        }
+      ],
+      "Japan": [
+        {
+          "type": "armour",
+          "quantity": 1,
+          "owner": "Japanese"
+        },
+        {
+          "type": "infantry",
+          "quantity": 3,
+          "owner": "Japanese"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Japanese"
+        },
+        {
+          "type": "bomber",
+          "quantity": 1,
+          "owner": "Japanese"
+        },
+        {
+          "type": "factory",
+          "quantity": 1,
+          "owner": "Japanese"
+        },
+        {
+          "type": "aaGun",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "Karelia S.S.R.": [
+        {
+          "type": "armour",
+          "quantity": 1,
+          "owner": "Russians"
+        },
+        {
+          "type": "infantry",
+          "quantity": 3,
+          "owner": "Russians"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Russians"
+        },
+        {
+          "type": "factory",
+          "quantity": 1,
+          "owner": "Russians"
+        },
+        {
+          "type": "aaGun",
+          "quantity": 1,
+          "owner": "Russians"
+        }
+      ],
+      "Libya": [
+        {
+          "type": "armour",
+          "quantity": 1,
+          "owner": "Germans"
+        },
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Germans"
+        }
+      ],
+      "Manchuria": [
+        {
+          "type": "infantry",
+          "quantity": 3,
+          "owner": "Japanese"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "Midway": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Americans"
+        }
+      ],
+      "New Guinea": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "Okinawa": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "Philippines": [
+        {
+          "type": "infantry",
+          "quantity": 2,
+          "owner": "Japanese"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "Russia": [
+        {
+          "type": "armour",
+          "quantity": 2,
+          "owner": "Russians"
+        },
+        {
+          "type": "infantry",
+          "quantity": 4,
+          "owner": "Russians"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Russians"
+        },
+        {
+          "type": "factory",
+          "quantity": 1,
+          "owner": "Russians"
+        },
+        {
+          "type": "aaGun",
+          "quantity": 1,
+          "owner": "Russians"
+        }
+      ],
+      "Solomon Islands": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "South Africa": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "British"
+        }
+      ],
+      "South Europe": [
+        {
+          "type": "armour",
+          "quantity": 1,
+          "owner": "Germans"
+        },
+        {
+          "type": "infantry",
+          "quantity": 2,
+          "owner": "Germans"
+        },
+        {
+          "type": "factory",
+          "quantity": 1,
+          "owner": "Germans"
+        },
+        {
+          "type": "aaGun",
+          "quantity": 1,
+          "owner": "Germans"
+        }
+      ],
+      "Soviet Far East": [
+        {
+          "type": "armour",
+          "quantity": 1,
+          "owner": "Russians"
+        },
+        {
+          "type": "infantry",
+          "quantity": 2,
+          "owner": "Russians"
+        }
+      ],
+      "Syria Jordan": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "British"
+        }
+      ],
+      "Ukraine S.S.R.": [
+        {
+          "type": "armour",
+          "quantity": 2,
+          "owner": "Germans"
+        },
+        {
+          "type": "infantry",
+          "quantity": 3,
+          "owner": "Germans"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Germans"
+        }
+      ],
+      "United Kingdom": [
+        {
+          "type": "armour",
+          "quantity": 1,
+          "owner": "British"
+        },
+        {
+          "type": "infantry",
+          "quantity": 2,
+          "owner": "British"
+        },
+        {
+          "type": "factory",
+          "quantity": 1,
+          "owner": "British"
+        },
+        {
+          "type": "aaGun",
+          "quantity": 1,
+          "owner": "British"
+        },
+        {
+          "type": "fighter",
+          "quantity": 2,
+          "owner": "British"
+        },
+        {
+          "type": "bomber",
+          "quantity": 1,
+          "owner": "British"
+        }
+      ],
+      "Wake Island": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "West Canada": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "British"
+        }
+      ],
+      "West Europe": [
+        {
+          "type": "armour",
+          "quantity": 2,
+          "owner": "Germans"
+        },
+        {
+          "type": "infantry",
+          "quantity": 2,
+          "owner": "Germans"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Germans"
+        },
+        {
+          "type": "aaGun",
+          "quantity": 1,
+          "owner": "Germans"
+        }
+      ],
+      "West US": [
+        {
+          "type": "infantry",
+          "quantity": 2,
+          "owner": "Americans"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Americans"
+        },
+        {
+          "type": "factory",
+          "quantity": 1,
+          "owner": "Americans"
+        },
+        {
+          "type": "aaGun",
+          "quantity": 1,
+          "owner": "Americans"
+        }
+      ],
+      "Yakut S.S.R.": [
+        {
+          "type": "infantry",
+          "quantity": 3,
+          "owner": "Russians"
+        }
+      ],
+      "Baltic Sea Zone": [
+        {
+          "type": "submarine",
+          "quantity": 1,
+          "owner": "Germans"
+        },
+        {
+          "type": "transport",
+          "quantity": 1,
+          "owner": "Germans"
+        }
+      ],
+      "Caroline Islands Sea Zone": [
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Japanese"
+        },
+        {
+          "type": "battleship",
+          "quantity": 1,
+          "owner": "Japanese"
+        },
+        {
+          "type": "carrier",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "Central Mediteranean Sea Zone": [
+        {
+          "type": "battleship",
+          "quantity": 1,
+          "owner": "Germans"
+        },
+        {
+          "type": "transport",
+          "quantity": 1,
+          "owner": "Germans"
+        }
+      ],
+      "East Canada Sea Zone": [
+        {
+          "type": "transport",
+          "quantity": 1,
+          "owner": "British"
+        }
+      ],
+      "East Mediteranean Sea Zone": [
+        {
+          "type": "submarine",
+          "quantity": 1,
+          "owner": "British"
+        }
+      ],
+      "East US Sea Zone": [
+        {
+          "type": "transport",
+          "quantity": 1,
+          "owner": "Americans"
+        }
+      ],
+      "Hawaii Sea Zone": [
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Americans"
+        },
+        {
+          "type": "submarine",
+          "quantity": 1,
+          "owner": "Americans"
+        },
+        {
+          "type": "carrier",
+          "quantity": 1,
+          "owner": "Americans"
+        }
+      ],
+      "Indian Ocean Sea Zone": [
+        {
+          "type": "transport",
+          "quantity": 1,
+          "owner": "British"
+        }
+      ],
+      "Japan Sea Zone": [
+        {
+          "type": "battleship",
+          "quantity": 1,
+          "owner": "Japanese"
+        },
+        {
+          "type": "transport",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "Karelia Sea Zone": [
+        {
+          "type": "submarine",
+          "quantity": 1,
+          "owner": "Russians"
+        },
+        {
+          "type": "transport",
+          "quantity": 1,
+          "owner": "Russians"
+        }
+      ],
+      "North Sea Zone": [
+        {
+          "type": "battleship",
+          "quantity": 1,
+          "owner": "British"
+        },
+        {
+          "type": "transport",
+          "quantity": 1,
+          "owner": "British"
+        }
+      ],
+      "Philippines Sea Zone": [
+        {
+          "type": "transport",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "Solomon Islands Sea Zone": [
+        {
+          "type": "submarine",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "West Mediteranean Sea Zone": [
+        {
+          "type": "battleship",
+          "quantity": 1,
+          "owner": "British"
+        }
+      ],
+      "West Spain Sea Zone": [
+        {
+          "type": "submarine",
+          "quantity": 1,
+          "owner": "Germans"
+        }
+      ],
+      "West US Sea Zone": [
+        {
+          "type": "transport",
+          "quantity": 1,
+          "owner": "Americans"
+        },
+        {
+          "type": "battleship",
+          "quantity": 1,
+          "owner": "Americans"
+        }
+      ]
+    },
+    "turnOrder": [
+      "Russians",
+      "Germans",
+      "British",
+      "Japanese",
+      "Americans"
+    ]
+  },
+  "risk": {
+    "factions": [
+      {
+        "id": "Russians",
+        "name": "Russians",
+        "color": "#B22222",
+        "lightColor": "#DC143C",
+        "flag": "Russians.png",
+        "alliance": "Allies"
+      },
+      {
+        "id": "Germans",
+        "name": "Germans",
+        "color": "#4A4A4A",
+        "lightColor": "#6A6A6A",
+        "flag": "Germans.png",
+        "alliance": "Axis"
+      },
+      {
+        "id": "British",
+        "name": "British",
+        "color": "#B8860B",
+        "lightColor": "#DAA520",
+        "flag": "British.png",
+        "alliance": "Allies"
+      },
+      {
+        "id": "Japanese",
+        "name": "Japanese",
+        "color": "#FF8C00",
+        "lightColor": "#FFA500",
+        "flag": "Japanese.png",
+        "alliance": "Axis"
+      },
+      {
+        "id": "Americans",
+        "name": "Americans",
+        "color": "#556B2F",
+        "lightColor": "#6B8E23",
+        "flag": "Americans.png",
+        "alliance": "Allies"
+      }
+    ],
+    "startingIPCs": 80,
+    "startingInfantryPerTerritory": 1,
+    "capitalUnits": [
+      "factory",
+      "aaGun"
+    ],
+    "maxPlayers": 5,
+    "minPlayers": 2
+  }
+}
