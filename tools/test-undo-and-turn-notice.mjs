@@ -69,6 +69,10 @@ check('combat resolve hides undo',
   && resolveUndoAction({
     phase: GAME_PHASES.PLAYING, turnPhase: TURN_PHASES.COMBAT, canUndoMove: true,
   }).reason === 'combat');
+check('air-land undo shows during COMBAT (9.20.26.06)',
+  resolveUndoAction({
+    phase: GAME_PHASES.PLAYING, turnPhase: TURN_PHASES.COMBAT, canUndoAirLanding: true,
+  }).action === 'undo-air-landing');
 check('Done/pass with empty history hides undo',
   resolveUndoAction({
     phase: GAME_PHASES.UNIT_PLACEMENT, canUndoPlacement: false,

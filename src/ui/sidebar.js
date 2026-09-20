@@ -271,10 +271,8 @@ export class Sidebar {
         }
 
         html += `</div>`;
-        html += `
-          <button class="sb-action-btn" data-action="finish-placement">
-            Done Placing Units
-          </button>`;
+        // 9.20.26.04 — playerPanel green Done is the only pass. Do not
+        // paint a second finish-placement in the sidebar.
         html += `</div>`;
       }
     }

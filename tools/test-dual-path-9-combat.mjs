@@ -202,6 +202,15 @@ console.log('=== 9.20.26.04 single green Done ===');
     panel.includes('phone-place-done') && panel.includes('Done — next player'));
   check('desktop thumb still offers green finish-placement',
     panel.includes("action: 'finish-placement'"));
+  const sidebar = readFileSync(new URL('../src/ui/sidebar.js', import.meta.url), 'utf8');
+  check('sidebar no longer paints finish-placement',
+    !/data-action="finish-placement"/.test(sidebar));
+  const movement = readFileSync(new URL('../src/ui/movementUI.js', import.meta.url), 'utf8');
+  check('Classic movementUI uses shared Select All / dests',
+    movement.includes('maxMoveSelection') && movement.includes('combatMoveReachableDests'));
+  const undo = readFileSync(new URL('../src/state/undoPolicy.js', import.meta.url), 'utf8');
+  check('undoPolicy allows air-land undo during COMBAT',
+    undo.includes('canUndoAirLanding') && undo.includes('undo-air-landing'));
 }
 
 if (failures > 0) {

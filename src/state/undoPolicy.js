@@ -23,8 +23,14 @@ export function resolveUndoAction({
   canUndoMove = false,
   canUndoPurchase = false,
   canUndoMobilize = false,
+  canUndoAirLanding = false,
 } = {}) {
   if (phase === GAME_PHASES.PLAYING && turnPhase === TURN_PHASES.COMBAT) {
+    // Combat dice/resolve stays locked. Post-combat air land is undoable
+    // (9.20.26.06) — Classic chrome used to hide Undo for the whole COMBAT phase.
+    if (canUndoAirLanding) {
+      return { show: true, action: 'undo-air-landing', reason: null };
+    }
     return { show: false, action: null, reason: 'combat' };
   }
   if (phase === GAME_PHASES.UNIT_PLACEMENT && canUndoPlacement) {
@@ -58,6 +64,7 @@ export function shouldShowUndoChrome({
   canUndoMove = false,
   canUndoPurchase = false,
   canUndoMobilize = false,
+  canUndoAirLanding = false,
 } = {}) {
   void mobile;
   return resolveUndoAction({
@@ -68,6 +75,7 @@ export function shouldShowUndoChrome({
     canUndoMove,
     canUndoPurchase,
     canUndoMobilize,
+    canUndoAirLanding,
   });
 }
 

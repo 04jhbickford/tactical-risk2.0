@@ -20,6 +20,7 @@ import {
 } from './airLanding.js';
 import { emitGameEvent, summarizeUnits } from '../multiplayer/gameEventLog.js';
 import { omitUndefinedDeep } from './persistState.js';
+import { captureIfAttackerHolds } from './combatFinalize.js';
 
 export const GAME_PHASES = {
   LOBBY: 'lobby',
@@ -3522,39 +3523,24 @@ export class GameState {
     });
 
     if (attackers.length === 0 || combatDefenders.length === 0) {
-      // Attacker wins if there are no combat defenders
-      if (attackers.length > 0) {
-        // Capture territory - either from enemy defenders (factories/AA) or undefended enemy territory
-        const t = this.territoryByName[territory];
-        if (!t?.isWater) {
-          const currentOwner = this.territoryState[territory]?.owner;
-          // Capture if territory belongs to enemy or neutral
-          if (!currentOwner || (currentOwner !== player.id && !this.areAllies(player.id, currentOwner))) {
-            this.territoryState[territory].owner = player.id;
-            // Transfer factory and AA gun ownership (captured, not destroyed - A&A Anniversary rules)
-            for (const unit of units) {
-              if (unit.type === 'factory' || unit.type === 'aaGun') {
-                unit.owner = player.id;
-                // Ensure unit has quantity (safeguard)
-                if (!unit.quantity || unit.quantity < 1) {
-                  unit.quantity = 1;
-                }
-              }
-            }
-            // Award Risk card for conquering
-            if (!this.conqueredThisTurn[player.id]) {
-              this.conqueredThisTurn[player.id] = true;
-              this.awardRiskCard(player.id);
-            }
-          }
-        }
-      }
+      // Shared land-hold capture (9.20.26.02). Air-only / attacker wipe
+      // leave the original owner — same gate as combatUI + Experimental.
+      const capture = attackers.length > 0
+        ? captureIfAttackerHolds(this, territory, {
+          playerId: player.id,
+          unitDefs,
+        })
+        : { captured: false };
       // Repair damaged ships at end of combat
       this._repairDamagedShips(units, unitDefs);
       // Remove from combat queue
       this.combatQueue = this.combatQueue.filter(t => t !== territory);
       this._notify();
-      return { resolved: true, winner: attackers.length > 0 ? 'attacker' : 'defender', conquered: attackers.length > 0 };
+      return {
+        resolved: true,
+        winner: attackers.length > 0 ? 'attacker' : 'defender',
+        conquered: !!capture.captured,
+      };
     }
 
     const t = this.territoryByName[territory];

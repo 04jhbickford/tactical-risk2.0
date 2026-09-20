@@ -2006,6 +2006,7 @@ export class PlayerPanel {
         }),
         canUndoPurchase: pendingPurchases.some(p => p.quantity > 0),
         canUndoMobilize: (this.gameState.mobilizationHistory || []).length > 0,
+        canUndoAirLanding: Object.keys(this.airLandingSelections || {}).length > 0,
       });
       const showCapitalUndoGhost = phase === GAME_PHASES.CAPITAL_PLACEMENT;
       const showUndo = (undo.show && Date.now() >= (this._ignoreUndoUntil || 0))

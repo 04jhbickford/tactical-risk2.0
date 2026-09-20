@@ -1,7 +1,24 @@
 # dual-path.9 — combat capture, combat-move, air land, deploy Done
 
 Stamp: **V2.81.57-dual-path.9**. HOLD MERGE. Quiet James.
-Stacked on PR4 / dual-path.8. Do not touch the `.8` merge.
+Stacked follow-up on PR4 / dual-path.8. Do not touch the `.8` merge.
+When `.8` lands on `main`, rebase this tip onto `main`. `.8` is **not** on `main` yet (`454a271` dual-path.4).
+
+Preview (commit `2d16696`+):
+- Classic: https://tactical-risk20-8t5wg7kw2-james-projects-20d8de40.vercel.app/
+- Experimental: https://tactical-risk20-8t5wg7kw2-james-projects-20d8de40.vercel.app/?ux=three
+- Alias: https://tactical-risk20-git-cursor-dual-4601e7-james-projects-20d8de40.vercel.app/
+
+Path map (use; do not re-litigate):
+
+| Issue | Classic | Experimental | Shared? |
+|---|---|---|---|
+| .02 political control | combatUI + `gameState.resolveCombat` → `captureIfAttackerHolds` | threeSoloPlay `applyHits` hasLand gate + `applyTerritoryCapture` | Yes — land leftover only |
+| .03 move all eligible | movementUI `mp-all` / `canMoveTo` + playerPanel Select All | threeSoloPlay `movableStacks` / `eligibleStacks` + All stepper | `maxMoveSelection` + `combatMoveReachableDests` |
+| .04 dual Done | playerPanel green only; sidebar finish-placement dropped | three `finishPlacementRound` chrome (single Confirm) | — |
+| .05 air land both FTR | combatUI / airLandingUI unique unitKey | startAirLand / applyLanding per-plane ids | airLanding.js |
+| .06 air Undo | undoPolicy `undo-air-landing` during COMBAT | `undoLast` handles `play.landing` | `clearAirLandingSelections` |
+| ping blank phase | — | — | discordTurnPing `phaseLabelOf` |
 
 ## What fixed
 
