@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="vercel-toolbar" content="disable">
+  <meta name="tr-game-version" content="V2.81.57-dual-path.4">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <title>Tactical Risk</title>
@@ -128,22 +129,29 @@
   <script>
     window.__TR_GAME_VERSION = 'V2.81.57-dual-path.4';
     document.documentElement.setAttribute('data-game-version', window.__TR_GAME_VERSION);
-    (function stampLoop() {
-      var v = window.__TR_GAME_VERSION;
-      if (!v) return;
-      document.documentElement.setAttribute('data-game-version', v);
-      document.querySelectorAll('.three-l0-ver, .three-lobby-ver, .lobby-version-badge').forEach(function (el) {
-        if (el && el.textContent !== v) el.textContent = v;
-      });
+    (function lockStamp() {
+      var LOCKED = 'V2.81.57-dual-path.4';
+      function patch(v) {
+        var m = /(?:ux-solo|dual-path)\.(\d+)/.exec(String(v || ''));
+        return m ? Number(m[1]) : NaN;
+      }
+      function prefer(v) {
+        var a = patch(LOCKED);
+        var b = patch(v);
+        if (Number.isFinite(a) && Number.isFinite(b) && b > a) return String(v);
+        return LOCKED;
+      }
+      function paint() {
+        var v = prefer(window.__TR_GAME_VERSION);
+        window.__TR_GAME_VERSION = v;
+        document.documentElement.setAttribute('data-game-version', v);
+        document.querySelectorAll('.three-l0-ver, .three-lobby-ver, .lobby-version-badge').forEach(function (el) {
+          if (el && el.textContent !== v) el.textContent = v;
+        });
+      }
+      paint();
+      setInterval(paint, 400);
     })();
-    setInterval(function () {
-      var v = window.__TR_GAME_VERSION;
-      if (!v) return;
-      document.documentElement.setAttribute('data-game-version', v);
-      document.querySelectorAll('.three-l0-ver, .three-lobby-ver, .lobby-version-badge').forEach(function (el) {
-        if (el && el.textContent !== v) el.textContent = v;
-      });
-    }, 400);
     if (navigator.serviceWorker) {
       navigator.serviceWorker.getRegistrations().then(function (regs) {
         regs.forEach(function (reg) { reg.unregister(); });
@@ -158,4 +166,4 @@
   <script type="module" src="src/main.js?v=V2.81.57-dual-path.4"></script>
 </body>
 </html>
-<!-- force redeploy dual-path.4 -->
+<!-- force redeploy dual-path.4 lockStamp -->
