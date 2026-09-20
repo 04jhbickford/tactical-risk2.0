@@ -1,0 +1,31 @@
+{
+  "version": "V2.81.57-dual-path.4",
+  "steps": [
+    {
+      "step": "visited ?ux=three",
+      "html": "V2.81.57-dual-path.4",
+      "attr": "V2.81.57-dual-path.4",
+      "l0": "V2.81.57-dual-path.4",
+      "lobby": "V2.81.57-dual-path.4",
+      "storage": null,
+      "threeLobby": true
+    },
+    {
+      "step": "queryless after New UX",
+      "html": "V2.81.57-dual-path.4",
+      "attr": "V2.81.57-dual-path.4",
+      "badge": "V2.81.57-dual-path.4",
+      "storage": null,
+      "classicPicker": true,
+      "threeLobby": false,
+      "classicOn": true
+    },
+    {
+      "step": "hard reload queryless",
+      "html": "V2.81.57-dual-path.4",
+      "badge": "V2.81.57-dual-path.4",
+      "storage": null,
+      "threeLobby": false
+    }
+  ]
+}
