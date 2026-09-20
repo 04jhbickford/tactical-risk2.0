@@ -26,13 +26,13 @@ globalThis.sessionStorage = memoryStore();
 globalThis.localStorage = memoryStore();
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-assert.match(html, /window\.__TR_GAME_VERSION = 'V2\.81\.57-dual-path\.5'/);
-assert.match(html, /name="tr-game-version" content="V2\.81\.57-dual-path\.5"/);
-assert.match(html, /lockStamp/, 'HTML stamp cannot drop below .5');
-assert.match(html, /src="src\/main\.js\?v=V2\.81\.57-dual-path\.5"/);
-assert.doesNotMatch(html, /dual-path\.[234]['"]/);
+assert.match(html, /window\.__TR_GAME_VERSION = 'V2\.81\.57-dual-path\.6'/);
+assert.match(html, /name="tr-game-version" content="V2\.81\.57-dual-path\.6"/);
+assert.match(html, /lockStamp/, 'HTML stamp cannot drop below .6');
+assert.match(html, /src="src\/main\.js\?v=V2\.81\.57-dual-path\.6"/);
+assert.doesNotMatch(html, /dual-path\.[2345]['"]/);
 
-assert.equal(GAME_VERSION, 'V2.81.57-dual-path.5', 'stamp is dual-path.5');
+assert.equal(GAME_VERSION, 'V2.81.57-dual-path.6', 'stamp is dual-path.6');
 assert.equal(UX_LABEL_EXPERIMENTAL, 'Experimental UX');
 
 const lobbySrc = readFileSync(new URL('../src/ui/lobby.js', import.meta.url), 'utf8');
@@ -41,7 +41,10 @@ assert.match(lobbySrc, /UX_LABEL_EXPERIMENTAL/);
 assert.match(chromeSrc, /UX_LABEL_EXPERIMENTAL/);
 assert.match(chromeSrc, /assets\/flags\/\$\{flag\}/);
 assert.match(chromeSrc, /three-lobby-swatch\$\{on \? ' is-on'/);
-assert.match(chromeSrc, /Color · \$\{name\}/);
+assert.match(chromeSrc, /data-lobby-select="\$\{action\}"/);
+assert.match(chromeSrc, /three-lobby-pip/);
+assert.match(chromeSrc, /compactLocalSeatHtml/);
+assert.doesNotMatch(chromeSrc, /three-lobby-occupants|three-lobby-ai-tiers/);
 assert.doesNotMatch(lobbySrc, /New UX \(Three\.js\)|three\.js/i);
 assert.doesNotMatch(chromeSrc, /New UX \(Three\.js\)|three\.js/i);
 

@@ -14,7 +14,7 @@ import {
 import { createSoloLobby } from '../src/map/threeSoloLobby.js';
 import { injectThreeChrome } from '../src/map/threeMapChrome.js';
 
-assert.equal(GAME_VERSION, 'V2.81.57-dual-path.5', 'stamp is dual-path.5');
+assert.equal(GAME_VERSION, 'V2.81.57-dual-path.6', 'stamp is dual-path.6');
 assert.equal(UX_LABEL_EXPERIMENTAL, 'Experimental UX');
 assert.equal(resolveUxMode('?ux=three'), UX_THREE, '?ux=three still opens Experimental UX');
 assert.match(applyUxQuery(UX_THREE, 'https://example.test/'), /ux=three/);
@@ -60,7 +60,11 @@ assert.doesNotMatch(lobbySrc, /three\.js/i);
 assert.match(chromeSrc, /assets\/flags\/\$\{flag\}/);
 assert.match(chromeSrc, /three-lobby-swatch\$\{on \? ' is-on'/);
 assert.match(chromeSrc, /COLOR_CHECK_SVG/);
-assert.match(chromeSrc, /Color · \$\{name\}/);
+assert.match(chromeSrc, /data-lobby-select="\$\{action\}"/);
+assert.match(chromeSrc, /three-lobby-pip/);
+assert.match(chromeSrc, /compactLocalSeatHtml/);
+assert.doesNotMatch(chromeSrc, /three-lobby-occupants|three-lobby-ai-tiers/);
+assert.doesNotMatch(chromeSrc, /data-lobby="occupant"/);
 assert.equal(classicCanvas.includes('Experimental UX'), false, 'Classic canvas renderer untouched');
 
 const factions = setup.risk?.factions || setup.factions || [];
@@ -85,8 +89,15 @@ if (painted) {
   const flags = painted.querySelectorAll('.three-lobby-seat-flag img');
   assert.ok(flags.length >= 2, `setup seats show faction flags (${flags.length})`);
   assert.ok([...flags].some((img) => /assets\/flags\/Russians\.png/.test(img.getAttribute('src') || '')));
-  const selected = painted.querySelectorAll('.three-lobby-swatch.is-on');
-  assert.ok(selected.length >= 1, 'seated faction has a selected color swatch');
+  const selects = painted.querySelectorAll('select[data-lobby-select="occupant"]');
+  assert.ok(selects.length >= 5, `compact occupant selects on seats (${selects.length})`);
+  const occupantOpts = [...selects[0].options].map((o) => o.value);
+  assert.ok(occupantOpts.includes('empty') && occupantOpts.includes('human') && occupantOpts.includes('easy'),
+    `occupant select has Empty/Human/AI (${occupantOpts.join(',')})`);
+  const pips = painted.querySelectorAll('.three-lobby-pip.is-on');
+  assert.ok(pips.length >= 1, 'seated faction has a color pip');
+  const selected = painted.querySelectorAll('.three-lobby-color-drop .three-lobby-swatch.is-on');
+  assert.ok(selected.length >= 1, 'dropdown marks the selected color');
   selected.forEach((btn) => {
     assert.ok(btn.querySelector('svg'), 'selected color has a check');
     assert.equal(btn.getAttribute('aria-pressed'), 'true');
