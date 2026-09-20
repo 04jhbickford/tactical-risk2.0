@@ -21,6 +21,13 @@ git rev-parse stable-state-1^{}
 
 Must equal `f0f3b486378d7061c9dbf541ecbb90d56d6c9fde`.
 
+### Remote status (20 Sep 2026)
+
+| Remote | Tag present? |
+|---|---|
+| `04jhbickford/Tactical-Risk` (live SoT) | **No** — `cursor[bot]` has no write (403). SHA is already on `origin/main`; James can `git tag -a stable-state-1 f0f3b486378d7061c9dbf541ecbb90d56d6c9fde` and push the tag. |
+| `04jhbickford/tactical-risk2.0` (this agent's assigned repo) | **Yes** — annotated tag `stable-state-1` → `f0f3b486378d7061c9dbf541ecbb90d56d6c9fde` |
+
 ## Live
 
 | Field | Value |
