@@ -119,7 +119,7 @@ export class PlacementUI {
 
     if (result.success) {
       // Don't auto-advance - let user review and undo if needed
-      // The "Done - Next Player" button will appear when 6 units placed
+      // Done lives on the green player-panel confirm, not this hidden panel
 
       // Notify about the placed unit (for logging)
       if (this.onUnitPlaced) {
@@ -288,11 +288,7 @@ export class PlacementUI {
         ${canUndo ? `
           <button class="pl-btn undo" data-action="undo">Undo Last</button>
         ` : ''}
-        ${roundComplete ? `
-          <button class="pl-btn done primary" data-action="finish">
-            ✓ Done - Next Player
-          </button>
-        ` : `
+        ${roundComplete ? '' : `
           <div class="pl-progress-hint">Place ${6 - placedThisRound} more unit${6 - placedThisRound !== 1 ? 's' : ''} to continue</div>
         `}
       </div>

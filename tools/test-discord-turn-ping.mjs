@@ -11,6 +11,7 @@ import {
   parseDiscordSeatInput,
   turnIndexOf,
   pingDedupeKey,
+  phaseLabelOf,
   buildDeepLink,
   buildDiscordTurnContent,
   shouldPingHumanSeat,
@@ -31,7 +32,7 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-check('stamp is dual-path.8', GAME_VERSION === 'V2.81.57-dual-path.8');
+check('stamp is dual-path.10', GAME_VERSION === 'V2.81.57-dual-path.10');
 check('channel id documented', DISCORD_TURN_CHANNEL_ID === '1551283474303025292');
 check('Classic lobby field', classicLobby.includes('mp-discord-input') && classicLobby.includes('data-action="discord-id"'));
 check('New UX lobby field', threeChrome.includes('data-lobby-discord') && threeChrome.includes('three-lobby-discord'));
@@ -74,6 +75,22 @@ const fallback = buildDiscordTurnContent({
   deepLink: 'https://tactical-risk20.vercel.app/?ux=classic&code=ZZZZZZ',
 });
 check('untagged fallback', fallback.startsWith('your turn — British · Purchase'));
+
+check('blank phase does not leave a dangling dot',
+  buildDiscordTurnContent({ faction: 'Russians', phase: '' }) === 'your turn — Russians');
+check('setup turnPhase labels Initial Deployment',
+  phaseLabelOf({ phase: 'unit_placement', turnPhase: 'setup' }) === 'Initial Deployment');
+check('playing uses getTurnPhaseName',
+  phaseLabelOf({
+    phase: 'playing',
+    turnPhase: 'combat_move',
+    getTurnPhaseName: () => 'Combat Movement',
+  }) === 'Combat Movement');
+check('playing with missing turnPhase is not blank if named',
+  phaseLabelOf({
+    phase: 'playing',
+    getTurnPhaseName: () => 'Purchase Units',
+  }) === 'Purchase Units');
 
 const store = {
   _d: {},

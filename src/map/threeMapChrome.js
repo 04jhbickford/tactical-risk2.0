@@ -216,7 +216,7 @@ function lobbyCardHtml({ action, value, kicker, title, desc, mark, off = false }
   </button>`;
 }
 
-function tileRowHtml(tiles, { loss = false, readOnly = false, side = '', dieSize = '' } = {}) {
+function tileRowHtml(tiles, { loss = false, readOnly = false, side = '', dieSize = '', showAll = false } = {}) {
   if (!tiles?.length) return '';
   const wave = tiles.length >= 8;
   return `<div class="three-tile-row${readOnly ? ' is-ro' : ''}${wave ? ' is-wave' : ''}">${tiles.map((s) => {
@@ -246,6 +246,7 @@ function tileRowHtml(tiles, { loss = false, readOnly = false, side = '', dieSize
         <button type="button" class="three-step" ${minus} ${minusOff ? 'disabled' : ''} aria-label="Fewer ${name}">−</button>
         <b>${picked}/${have}</b>
         <button type="button" class="three-step" ${plus} ${plusOff ? 'disabled' : ''} aria-label="More ${name}">+</button>
+        ${showAll && !readOnly && !loss ? `<button type="button" class="three-step three-step-all" data-step="${have}" data-unit-type="${s.type}" ${picked >= have ? 'disabled' : ''} aria-label="All ${name}">All</button>` : ''}
       </div>
     </div>`;
   }).join('')}</div>`;
@@ -1965,6 +1966,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       unitType = null,
       unitTypes = null,
       steppers = null,
+      showAll = false,
       airLand = false,
       label = null,
       gold = false,
@@ -1999,7 +2001,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
         const rosterTotal = (steppers || stacks).reduce((n, s) => n + (Number(s.have ?? s.quantity) || 0), 0);
         api.peek.innerHTML = `<div class="three-peek-head"><strong>${title}</strong>
           <div class="three-peek-meta">${route || 'Selected aircraft'}</div></div>
-          ${steppers?.length ? stepperRowHtml(steppers) : iconRowHtml(stacks)}`;
+          ${steppers?.length ? stepperRowHtml(steppers, { showAll: false }) : iconRowHtml(stacks)}`;
         api.peek.dataset.rosterTotal = String(rosterTotal);
         api.peek.dataset.airLand = '1';
         if (!api.isSheetOpen()) api.peek.classList.add('is-on');
@@ -2017,7 +2019,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
           : '';
         const body = research && steppers?.length
           ? `<div class="three-research-row">${cubeDieHtml(5, { size: 'sm' })}${stepperRowHtml(steppers, { dieSize: 'sm' })}</div>`
-          : (steppers?.length ? stepperRowHtml(steppers) : iconRowHtml(stacks));
+          : (steppers?.length ? stepperRowHtml(steppers, { showAll }) : iconRowHtml(stacks));
         api.peek.innerHTML = `<div class="three-peek-head"><strong>${land.name}</strong>
           <div class="three-peek-meta">${[owner, ipcLine, route].filter(Boolean).join(' · ')}</div></div>
           ${researchInfo}

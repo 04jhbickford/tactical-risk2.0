@@ -2,6 +2,7 @@
 
 import { TURN_PHASES } from '../state/gameState.js';
 import { getUnitIconPath } from '../utils/unitIcons.js';
+import { combatMoveReachableDests, maxMoveSelection } from '../state/combatMoveEligibility.js';
 
 export class MovementUI {
   constructor() {
@@ -225,11 +226,23 @@ export class MovementUI {
       return false;
     }
 
-    // Combat move: land units can only move to enemy territory or sea zones (for loading)
-    // They cannot move to friendly territories during combat move
+    // Combat move dests come from the shared reachability helper
+    // (friendly transit is legal; the attack dest must be enemy or sea).
+    if (isCombatMove && this.selectedFrom && Object.values(this.selectedUnits).some((q) => q > 0)) {
+      const attackDests = combatMoveReachableDests(
+        this.gameState,
+        this.selectedFrom.name,
+        this.selectedUnits,
+        this.unitDefs,
+      );
+      if (attackDests.some((d) => d.name === territory.name)) {
+        if (!territory.isWater && isFriendly) return false;
+        if (!territory.isWater && isEnemy) return true;
+      }
+    }
+
+    // Combat move: land units cannot end on friendly land (transit only).
     if (isCombatMove && !territory.isWater && isFriendly) {
-      // Exception: Allow if moving to load onto transports in adjacent sea zone
-      // For now, don't allow friendly land territories during combat move
       return false;
     }
 
@@ -1496,7 +1509,7 @@ export class MovementUI {
       });
     });
 
-    // Select All Units button
+    // Select All Units — every eligible stack (Mexico / 9.20.26.03).
     this.el.querySelector('[data-action="select-all"]')?.addEventListener('click', () => {
       const player = this.gameState.currentPlayer;
       const units = this.gameState.getUnitsAt(this.selectedFrom.name);
@@ -1504,16 +1517,8 @@ export class MovementUI {
         u.owner === player.id && this._hasRemainingMovement(u) && this._canUnitMove(u.type)
       );
 
-      // Aggregate quantities by type (there may be multiple stacks with different movementUsed)
-      const totalByType = {};
-      for (const unit of movableUnits) {
-        if (!unit.id) { // Only aggregate grouped units, not individual ships
-          totalByType[unit.type] = (totalByType[unit.type] || 0) + unit.quantity;
-        }
-      }
-      for (const [type, qty] of Object.entries(totalByType)) {
-        this.selectedUnits[type] = qty;
-      }
+      const picked = maxMoveSelection(movableUnits.filter((u) => !u.id));
+      this.selectedUnits = { ...this.selectedUnits, ...picked };
 
       // Also select all ships with cargo (transports and carriers)
       const shipsWithCargo = this._getShipsWithCargo(this.selectedFrom.name, player.id);

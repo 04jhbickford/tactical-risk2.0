@@ -9,31 +9,47 @@ export function landingKeyFor(unit, index = 0) {
 
 export function resolveLandingDestination(unit, index = 0, selectedLandings = {}) {
   if (!unit || !selectedLandings) return unit?.destination || null;
-  const keys = [
+  // Unique keys first. Never let a type-wide key steal a second fighter
+  // (9.20.26.05 — one landing must not force every same-type aircraft).
+  const uniqueKeys = [
     unit.id,
     `${unit.type}_${index}`,
-    unit.type,
     landingKeyFor(unit, index),
   ].filter(Boolean);
-  for (const key of keys) {
+  for (const key of uniqueKeys) {
     const dest = selectedLandings[key];
     if (dest) return dest;
   }
+  if (!unit.id && selectedLandings[unit.type]) return selectedLandings[unit.type];
   return unit.destination || null;
 }
 
-// Overlay / pending dests can use id, type_index, or type. Merge so a
-// 0-remaining counter and Confirm/Done share the same generous keys.
+// Overlay / pending dests merge by unique id / type_index only.
+// Type-wide keys are not written — they assigned every fighter together.
 export function mergeLandingSelections(selectedLandings = {}, pendingUnits = []) {
   const merged = { ...(selectedLandings || {}) };
   for (const unit of pendingUnits || []) {
     if (!unit?.destination) continue;
     if (unit.id && !merged[unit.id]) merged[unit.id] = unit.destination;
-    if (unit.type && !merged[unit.type]) merged[unit.type] = unit.destination;
     const typed = unit.id || landingKeyFor(unit, 0);
     if (typed && !merged[typed]) merged[typed] = unit.destination;
   }
   return merged;
+}
+
+export function clearPendingLandingDestinations(pending = [], originTerritory = null) {
+  const list = Array.isArray(pending) ? pending.map((entry) => ({
+    originTerritory: entry.originTerritory,
+    units: (entry.units || []).map((unit) => ({ ...unit })),
+  })) : [];
+  for (const entry of list) {
+    if (originTerritory && entry.originTerritory !== originTerritory) continue;
+    for (const unit of entry.units || []) {
+      unit.destination = null;
+      unit.applied = false;
+    }
+  }
+  return list;
 }
 
 // Aircraft with no landing options crash — they do not block Done.

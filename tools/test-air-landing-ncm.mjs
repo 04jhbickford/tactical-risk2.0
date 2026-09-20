@@ -79,7 +79,7 @@ function makePlayingState() {
 }
 
 console.log('=== Version stamps ===');
-check('GAME_VERSION is V2.81.57-dual-path.8', GAME_VERSION === 'V2.81.57-dual-path.8');
+check('GAME_VERSION is V2.81.57-dual-path.10', GAME_VERSION === 'V2.81.57-dual-path.10');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== landing key resolve (id / type_index / type) ===');
@@ -89,8 +89,10 @@ console.log('=== landing key resolve (id / type_index / type) ===');
     resolveLandingDestination(unit, 0, { fighter_0: 'Eastern United States' }) === 'Eastern United States');
   check('falls back to type_index',
     resolveLandingDestination({ type: 'fighter' }, 1, { fighter_1: 'Eastern United States' }) === 'Eastern United States');
-  check('falls back to type',
+  check('falls back to type only when the unit has no id',
     resolveLandingDestination({ type: 'fighter' }, 0, { fighter: 'Eastern United States' }) === 'Eastern United States');
+  check('id is not stolen by a type-wide dest',
+    resolveLandingDestination({ id: 'fighter_1', type: 'fighter' }, 1, { fighter: 'Mexico' }) == null);
 }
 
 console.log('=== buildLandingPlan + applyAirLandingPlan ===');
@@ -221,8 +223,10 @@ console.log('=== remaining count + Done at 0 remaining ===');
   ];
   check('2 remaining when nothing named',
     remainingAirLandingsToAssign(twoFighters, {}) === 2);
-  check('type key counts for both aircraft (generous)',
-    remainingAirLandingsToAssign(twoFighters, { fighter: 'Eastern United States' }) === 0);
+  check('type key does not assign both named fighters (9.20.26.05)',
+    remainingAirLandingsToAssign(twoFighters, { fighter: 'Eastern United States' }) === 2);
+  check('each fighter id lands independently',
+    remainingAirLandingsToAssign(twoFighters, { fighter_0: 'Eastern United States' }) === 1);
   check('pending dests merge into remaining',
     remainingAirLandingsToAssign(
       twoFighters,

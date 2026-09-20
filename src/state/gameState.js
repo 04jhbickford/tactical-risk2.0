@@ -13,12 +13,19 @@ import { resolveDeployedThisRoundAfterLoad } from './placeQueue.js';
 import {
   applyAirLandingPlan,
   buildLandingPlan,
+  clearPendingLandingDestinations,
   markPendingAirLandingsApplied,
   unappliedLandingPlan,
   upsertPendingAirLanding,
 } from './airLanding.js';
 import { emitGameEvent, summarizeUnits } from '../multiplayer/gameEventLog.js';
 import { omitUndefinedDeep } from './persistState.js';
+import { captureIfAttackerHolds, finalizeAttackerHoldsOnBoard } from './combatFinalize.js';
+import {
+  canPlaceAirOnCarrierInSeaZone,
+  loadOneAirOntoCarrier,
+  unloadOneAirFromCarrier,
+} from './carrierPlacement.js';
 
 export const GAME_PHASES = {
   LOBBY: 'lobby',
@@ -1459,32 +1466,11 @@ export class GameState {
         const seaUnits = this.units[territoryName] || [];
 
         if (unitDef.isAir) {
-          // Fighters can be placed on carriers
-          const carriers = seaUnits.filter(u => u.type === 'carrier' && u.owner === player.id);
-          const carrierDef = unitDefs.carrier;
-          // Find carrier with capacity
-          let placed = false;
-          for (const carrier of carriers) {
-            const currentAircraft = carrier.aircraft || [];
-            if (carrierDef && currentAircraft.length < (carrierDef.aircraftCapacity || 2)) {
-              if (carrierDef.canCarry?.includes(unitType)) {
-                // Individualize carrier if not already (so aircraft stay with it when moved)
-                if (!carrier.id) {
-                  carrier.id = `carrier_${++this._shipIdCounter}`;
-                  carrier.quantity = 1;
-                }
-                // Place on carrier
-                unitEntry.quantity--;
-                carrier.aircraft = carrier.aircraft || [];
-                carrier.aircraft.push({ type: unitType, owner: player.id });
-                placed = true;
-                break;
-              }
-            }
+          const loaded = loadOneAirOntoCarrier(this, territoryName, unitType, player.id, unitDefs);
+          if (!loaded.success) {
+            return { success: false, error: loaded.error || 'No carrier with capacity to hold this aircraft' };
           }
-          if (!placed) {
-            return { success: false, error: 'No carrier with capacity to hold this aircraft' };
-          }
+          unitEntry.quantity--;
           // Track placement for undo (special carrier placement)
           this.placementHistory.push({
             territory: territoryName,
@@ -1888,6 +1874,49 @@ export class GameState {
       if (!validSeaZones.has(territoryName)) {
         return { success: false, error: 'Naval units must be placed on sea zones adjacent to territories with factories' };
       }
+    } else if (unitDef.isAir && this.territoryByName[territoryName]?.isWater) {
+      // 9.20.26.07 — fighters may mobilize onto a friendly carrier in a
+      // factory-adjacent sea zone (same dests as new ships).
+      if (!canPlaceAirOnCarrierInSeaZone(this, territoryName, unitType, player.id, unitDefs, {
+        requireFactoryAdjacent: true,
+      })) {
+        return {
+          success: false,
+          error: 'Aircraft must be placed on a factory or a friendly carrier in a sea zone adjacent to a factory',
+        };
+      }
+
+      const cost = pending.cost || unitDef.cost;
+      pending.quantity--;
+      if (pending.quantity <= 0) {
+        const idx = this.pendingPurchases.indexOf(pending);
+        this.pendingPurchases.splice(idx, 1);
+      }
+
+      const loaded = loadOneAirOntoCarrier(this, territoryName, unitType, player.id, unitDefs);
+      if (!loaded.success) {
+        const restore = this.pendingPurchases.find((p) => p.type === unitType && p.owner === player.id);
+        if (restore) restore.quantity++;
+        else {
+          this.pendingPurchases.push({
+            type: unitType,
+            quantity: 1,
+            owner: player.id,
+            cost,
+          });
+        }
+        return loaded;
+      }
+
+      this.mobilizationHistory.push({
+        territory: territoryName,
+        unitType,
+        owner: player.id,
+        cost,
+        onCarrier: true,
+      });
+      this._notify();
+      return { success: true };
     } else if (unitDef.isBuilding) {
       // Factories: placed on owned land territories without a factory
       // CRITICAL: Cannot place on territories captured this turn
@@ -1982,14 +2011,18 @@ export class GameState {
       return { success: false, error: 'Cannot undo other player placements' };
     }
 
-    // Remove unit from territory
-    const units = this.units[lastPlacement.territory] || [];
-    const unitEntry = units.find(u => u.type === lastPlacement.unitType && u.owner === player.id);
-    if (unitEntry) {
-      unitEntry.quantity--;
-      if (unitEntry.quantity <= 0) {
-        const idx = units.indexOf(unitEntry);
-        units.splice(idx, 1);
+    if (lastPlacement.onCarrier) {
+      unloadOneAirFromCarrier(this, lastPlacement.territory, lastPlacement.unitType, player.id);
+    } else {
+      // Remove unit from territory
+      const units = this.units[lastPlacement.territory] || [];
+      const unitEntry = units.find(u => u.type === lastPlacement.unitType && u.owner === player.id);
+      if (unitEntry) {
+        unitEntry.quantity--;
+        if (unitEntry.quantity <= 0) {
+          const idx = units.indexOf(unitEntry);
+          units.splice(idx, 1);
+        }
       }
     }
 
@@ -3365,7 +3398,11 @@ export class GameState {
 
   // Detect territories where combat should occur
   // Per A&A rules: Naval battles are resolved before land battles (amphibious assaults)
-  _detectCombats() {
+  _detectCombats(unitDefs = this._unitDefs || {}) {
+    // Finalize leftover land holds before wiping the queue. Otherwise a
+    // dismissed overlay / last-defender-dead hex is dropped and never
+    // flips political control (35RB85 / 9.20.26.02).
+    finalizeAttackerHoldsOnBoard(this, { unitDefs });
     this.combatQueue = [];
     this.clearedSeaZones = new Set(); // Track sea zones cleared for shore bombardment
     // Note: amphibiousTerritories is set during combat move and used during combat phase
@@ -3521,39 +3558,24 @@ export class GameState {
     });
 
     if (attackers.length === 0 || combatDefenders.length === 0) {
-      // Attacker wins if there are no combat defenders
-      if (attackers.length > 0) {
-        // Capture territory - either from enemy defenders (factories/AA) or undefended enemy territory
-        const t = this.territoryByName[territory];
-        if (!t?.isWater) {
-          const currentOwner = this.territoryState[territory]?.owner;
-          // Capture if territory belongs to enemy or neutral
-          if (!currentOwner || (currentOwner !== player.id && !this.areAllies(player.id, currentOwner))) {
-            this.territoryState[territory].owner = player.id;
-            // Transfer factory and AA gun ownership (captured, not destroyed - A&A Anniversary rules)
-            for (const unit of units) {
-              if (unit.type === 'factory' || unit.type === 'aaGun') {
-                unit.owner = player.id;
-                // Ensure unit has quantity (safeguard)
-                if (!unit.quantity || unit.quantity < 1) {
-                  unit.quantity = 1;
-                }
-              }
-            }
-            // Award Risk card for conquering
-            if (!this.conqueredThisTurn[player.id]) {
-              this.conqueredThisTurn[player.id] = true;
-              this.awardRiskCard(player.id);
-            }
-          }
-        }
-      }
+      // Shared land-hold capture (9.20.26.02). Air-only / attacker wipe
+      // leave the original owner — same gate as combatUI + Experimental.
+      const capture = attackers.length > 0
+        ? captureIfAttackerHolds(this, territory, {
+          playerId: player.id,
+          unitDefs,
+        })
+        : { captured: false };
       // Repair damaged ships at end of combat
       this._repairDamagedShips(units, unitDefs);
       // Remove from combat queue
       this.combatQueue = this.combatQueue.filter(t => t !== territory);
       this._notify();
-      return { resolved: true, winner: attackers.length > 0 ? 'attacker' : 'defender', conquered: attackers.length > 0 };
+      return {
+        resolved: true,
+        winner: attackers.length > 0 ? 'attacker' : 'defender',
+        conquered: !!capture.captured,
+      };
     }
 
     const t = this.territoryByName[territory];
@@ -5267,6 +5289,15 @@ export class GameState {
       quantity,
       destination,
     });
+    if (notify) this._notify();
+    return this.pendingAirLandings;
+  }
+
+  clearAirLandingSelections(originTerritory = null, { notify = true } = {}) {
+    this.pendingAirLandings = clearPendingLandingDestinations(
+      this.pendingAirLandings,
+      originTerritory,
+    );
     if (notify) this._notify();
     return this.pendingAirLandings;
   }

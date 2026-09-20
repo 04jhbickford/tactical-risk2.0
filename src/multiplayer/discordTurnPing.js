@@ -31,13 +31,23 @@ export function pingDedupeKey({ gameId = '', turnIndex = 0, seatId = '' } = {}) 
   return `${gameId || ''}|${turnIndex ?? ''}|${seatId || ''}`;
 }
 
+const SETUP_PHASE_LABELS = {
+  setup: 'Initial Deployment',
+  unit_placement: 'Initial Deployment',
+  capital_placement: 'Place Capital',
+  lobby: 'Lobby',
+};
+
 export function phaseLabelOf(gameState) {
   if (!gameState) return '';
   if (typeof gameState.getTurnPhaseName === 'function' && gameState.phase === 'playing') {
-    return gameState.getTurnPhaseName() || gameState.turnPhase || '';
+    const named = gameState.getTurnPhaseName();
+    if (named && named !== gameState.turnPhase) return named;
+    if (named) return named;
   }
-  const phase = String(gameState.turnPhase || gameState.phase || '').replace(/_/g, ' ');
-  return phase;
+  const raw = String(gameState.turnPhase || gameState.phase || '').trim();
+  if (SETUP_PHASE_LABELS[raw]) return SETUP_PHASE_LABELS[raw];
+  return raw.replace(/_/g, ' ');
 }
 
 export function factionLabelOf(player) {
@@ -68,9 +78,11 @@ export function buildDiscordTurnContent({
   deepLink = '',
 } = {}) {
   const snowflake = normalizeDiscordSnowflake(discordUserId);
+  const who = faction || 'seat';
+  const tail = phase ? ` · ${phase}` : '';
   const head = snowflake
-    ? `<@${snowflake}> your turn — ${faction} · ${phase}`
-    : `your turn — ${faction} · ${phase}`;
+    ? `<@${snowflake}> your turn — ${who}${tail}`
+    : `your turn — ${who}${tail}`;
   return [head, deepLink].filter(Boolean).join('\n');
 }
 
