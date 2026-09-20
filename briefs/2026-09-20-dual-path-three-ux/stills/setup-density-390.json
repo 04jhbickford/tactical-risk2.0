@@ -1,0 +1,98 @@
+{
+  "version": "V2.81.57-dual-path.6",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "checks": [
+    {
+      "label": "Classic setup paints seats",
+      "ok": true,
+      "classicSeats": 5
+    },
+    {
+      "label": "stamp is dual-path.6",
+      "ok": true,
+      "stamp": "V2.81.57-dual-path.6",
+      "GAME_VERSION": "V2.81.57-dual-path.6"
+    },
+    {
+      "label": "five Experimental seats",
+      "ok": true,
+      "seatCount": 5
+    },
+    {
+      "label": "compact occupant selects",
+      "ok": true,
+      "selectCount": 5
+    },
+    {
+      "label": "Classic flags on seats",
+      "ok": true,
+      "flagCount": 5
+    },
+    {
+      "label": "color pip after seat",
+      "ok": true
+    },
+    {
+      "label": "color pop opens from pip",
+      "ok": true,
+      "popOpen": 1
+    },
+    {
+      "label": "selected swatch check",
+      "ok": true
+    },
+    {
+      "label": "footer below MAIN",
+      "ok": true,
+      "mainBox": {
+        "x": 14,
+        "y": 66,
+        "width": 362,
+        "height": 657
+      },
+      "footerBox": {
+        "x": 14,
+        "y": 723,
+        "width": 362,
+        "height": 121
+      }
+    },
+    {
+      "label": "footer outside MAIN",
+      "ok": true
+    },
+    {
+      "label": "all five seats in MAIN",
+      "ok": true,
+      "scrollHeight": 657,
+      "clientHeight": 657,
+      "overflow": "auto",
+      "touchAction": "pan-y"
+    },
+    {
+      "label": "MAIN is a touch-pan scrollport",
+      "ok": true,
+      "scrollHeight": 657,
+      "clientHeight": 657,
+      "overflow": "auto",
+      "touchAction": "pan-y"
+    }
+  ],
+  "classicSeats": 5,
+  "classicShot": "/workspace/briefs/2026-09-20-dual-path-three-ux/stills/classic-setup-density-390.png",
+  "experimental": {
+    "seatCount": 5,
+    "selectCount": 5,
+    "flagCount": 5,
+    "stamp": "V2.81.57-dual-path.6"
+  },
+  "shots": {
+    "classicShot": "/workspace/briefs/2026-09-20-dual-path-three-ux/stills/classic-setup-density-390.png",
+    "expShot": "/workspace/briefs/2026-09-20-dual-path-three-ux/stills/experimental-setup-compact-390.png",
+    "flagsShot": "/workspace/briefs/2026-09-20-dual-path-three-ux/stills/experimental-setup-flags-color-390.png",
+    "stampShot": "/workspace/briefs/2026-09-20-dual-path-three-ux/stills/experimental-setup-stamp-6-390.png"
+  }
+}
