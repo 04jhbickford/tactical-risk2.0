@@ -19175,6 +19175,73 @@ html.mobile-shell.combat-active .mob-max-btn {
   box-shadow: 0 0 0 2px rgba(201, 164, 74, 0.55);
 }
 
+.lobby-ux-picker {
+  margin: 0 0 16px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(201, 164, 74, 0.28);
+  background: rgba(18, 22, 32, 0.55);
+}
+
+.lobby-ux-kicker {
+  margin: 0 0 8px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.lobby-ux-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.lobby-ux-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 56px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.72);
+  color: #e8dcc4;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lobby-ux-btn.is-on {
+  border-color: #c9a44a;
+  box-shadow: 0 0 0 1px rgba(201, 164, 74, 0.45);
+  background: rgba(61, 48, 22, 0.72);
+}
+
+.lobby-ux-btn-new {
+  border-color: rgba(96, 165, 250, 0.55);
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.28), rgba(15, 23, 42, 0.8));
+}
+
+.lobby-ux-btn-new .lobby-ux-title {
+  color: #bfdbfe;
+}
+
+.lobby-ux-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.lobby-ux-desc {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+}
+
+.lobby-ux-btn-new .lobby-ux-desc {
+  color: #93c5fd;
+}
+
 .lobby-mode-kicker,
 .lobby-phone-path {
   margin: 0 0 10px;

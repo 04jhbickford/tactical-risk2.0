@@ -6,7 +6,7 @@ import { Camera, MAP_WIDTH } from './camera.js';
 import { MapRenderer } from './mapRenderer.js';
 import { TerritoryRenderer } from './territoryRenderer.js';
 import { TerritoryMap } from './territoryMap.js';
-import { injectThreeChrome, applyLiveStamp, liveGameVersion } from './threeMapChrome.js?v=V2.81.56-ux-solo.18';
+import { injectThreeChrome, applyLiveStamp, liveGameVersion } from './threeMapChrome.js';
 import {
   preloadUnitImages,
   renderPreviewStacks,
@@ -18,7 +18,9 @@ import {
   reportStartupError,
   reportStartupStatus,
 } from '../ui/startupLoader.js';
-import { GAME_VERSION } from '../version.js?v=V2.81.56-ux-solo.18';
+import { GAME_VERSION } from '../version.js';
+import { createThreeMpSession } from './threeMpSession.js';
+import { UX_CLASSIC, navigateUxMode } from './presentationMode.js';
 import {
   bindSealedActivate,
   clientPointOf,
@@ -40,7 +42,7 @@ import {
   lobbyCanStart,
   lobbyStartOptions,
   lobbyInspect,
-} from './threeSoloLobby.js?v=V2.81.56-ux-solo.18';
+} from './threeSoloLobby.js';
 import {
   shouldShowSetupTutorial,
   dismissTutorial,
@@ -59,7 +61,7 @@ import {
   pickShip,
   applyCargoSeed,
   LAND_TEAL,
-} from './threeSoloPlay.js?v=V2.81.56-ux-solo.18';
+} from './threeSoloPlay.js';
 
 const SELECT_GOLD = '#C4A35A';
 const EUROPE_FIT = { minX: 620, minY: 180, maxX: 1680, maxY: 980 };
@@ -143,6 +145,8 @@ export async function bootThreeSolo() {
   const factionColors = new Map(factions.map((f) => [f.id, f.color]));
 
   const lobby = createSoloLobby(setup, typeof location !== 'undefined' ? location.search : '');
+  lobby.mp = { error: '', lobby: null, isHost: false };
+  const mp = createThreeMpSession({ setup, territories, continents });
   let gameState = startClassicSolo(setup, territories, continents);
   gameState.unitDefs = unitDefs;
   territoryRenderer.setGameState(gameState);
@@ -298,14 +302,98 @@ export async function bootThreeSolo() {
   chrome.onNewGameVsAI = () => {
     openLobby();
   };
-  chrome.onLobbyChange = (kind, value) => {
-    applyLobbyAction(lobby, kind, value);
+  function paintLobbyNow() {
     chrome.paintLobby(lobby);
     applyLiveStamp();
+  }
+
+  mp.subscribe((kind, payload) => {
+    if (kind === 'lobby') {
+      lobby.mp.lobby = payload.lobby || mp.currentLobby();
+      lobby.mp.isHost = mp.isHostUser();
+      lobby.mp.error = '';
+      if (lobby.mp.lobby) lobby.screen = 'room';
+      if (lobby.open) paintLobbyNow();
+    }
+    if (kind === 'starting' && payload?.gameId) {
+      startMpMatch(payload.gameId, payload.lobby);
+    }
+  });
+
+  chrome.onLobbyChange = (kind, value) => {
+    if (kind === 'ux' && value === 'classic') {
+      navigateUxMode(UX_CLASSIC);
+      return;
+    }
+    if (kind === 'mp-faction') {
+      mp.pickFaction(value).then((res) => {
+        if (res && res.success === false) lobby.mp.error = res.error || 'Could not sit';
+        lobby.mp.lobby = mp.currentLobby();
+        paintLobbyNow();
+      });
+      return;
+    }
+    if (kind === 'mp-ai') {
+      const [factionId, difficulty] = String(value || '').split(':');
+      mp.addAi(difficulty || 'medium', factionId).then((res) => {
+        if (res && res.success === false) lobby.mp.error = res.error || 'Could not add AI';
+        lobby.mp.lobby = mp.currentLobby();
+        paintLobbyNow();
+      });
+      return;
+    }
+    applyLobbyAction(lobby, kind, value);
+    paintLobbyNow();
+  };
+  chrome.onLobbyForm = async (kind, form) => {
+    const data = new FormData(form);
+    lobby.mp.error = '';
+    if (kind === 'create') {
+      const result = await mp.createGame({
+        name: String(data.get('name') || ''),
+        maxPlayers: Number(data.get('maxPlayers') || 5),
+        startingIPCs: Number(data.get('startingIPCs') || 80),
+      });
+      if (!result.ok) {
+        lobby.mp.error = result.error || 'Create failed';
+        paintLobbyNow();
+        return;
+      }
+      lobby.screen = 'room';
+      lobby.mp.lobby = result.lobby || mp.currentLobby();
+      lobby.mp.isHost = true;
+      paintLobbyNow();
+      return;
+    }
+    if (kind === 'join') {
+      const result = await mp.joinGame({
+        code: String(data.get('code') || ''),
+        password: String(data.get('password') || '') || null,
+      });
+      if (!result.ok) {
+        lobby.mp.error = result.error || 'Join failed';
+        paintLobbyNow();
+        return;
+      }
+      if (result.started) return;
+      lobby.screen = 'room';
+      lobby.mp.lobby = result.lobby || mp.currentLobby();
+      lobby.mp.isHost = mp.isHostUser();
+      paintLobbyNow();
+    }
   };
   chrome.onLobbyStart = () => {
+    if (lobby.screen === 'room') {
+      mp.startRoom().then((result) => {
+        if (!result.ok) {
+          lobby.mp.error = result.error || 'Start failed';
+          paintLobbyNow();
+        }
+      });
+      return;
+    }
     if (!lobbyCanStart(lobby)) {
-      chrome.paintLobby(lobby);
+      paintLobbyNow();
       return;
     }
     lobby.open = false;
@@ -354,6 +442,45 @@ export async function bootThreeSolo() {
     fitEurope();
     camera.dirty = true;
     maybeShowTutorial();
+  }
+
+  async function startMpMatch(gameId, incoming) {
+    const result = await mp.startMatch(gameId, incoming);
+    if (!result.ok) {
+      lobby.mp.error = result.error || 'Could not start multiplayer';
+      lobby.open = true;
+      lobby.screen = 'online';
+      chrome.setLobbyOpen(true);
+      paintLobbyNow();
+      return;
+    }
+    bindState(result.gameState);
+    gameState.localUserId = result.localUserId;
+    play = createSoloPlay(gameState, unitDefs);
+    play.localUserId = result.localUserId;
+    play.aiStatus = null;
+    selected = null;
+    lobby.open = false;
+    chrome.setLobbyOpen(false);
+    if (result.isHost) {
+      if (aiController) aiController.setGameState(gameState);
+      else wireAI();
+      aiController.setCanAct(() => {
+        const cur = gameState.currentPlayer;
+        return !!(cur?.isAI && result.syncManager?.hasAIAuthority?.());
+      });
+    } else if (aiController) {
+      aiController.setCanAct(() => false);
+    }
+    result.syncManager.subscribe((event) => {
+      if (event === 'state_updated' || event === 'turn_changed') {
+        paintChrome();
+        camera.dirty = true;
+      }
+    });
+    paintChrome();
+    fitEurope();
+    camera.dirty = true;
   }
 
   let lastFitPad = 0;

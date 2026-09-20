@@ -166,7 +166,7 @@ function makePlacementTable({
 
 console.log('=== V2.72 version + leftover-unit pass predicate ===');
 {
-  check('GAME_VERSION is V2.81.56', GAME_VERSION === 'V2.81.56');
+  check('GAME_VERSION is V2.81.57-dual-path.1', GAME_VERSION === 'V2.81.57-dual-path.1');
   check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
   check('round cap allows Done with leftovers still in the pool',
     canFinishPlacementRound({

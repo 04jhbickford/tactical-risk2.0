@@ -225,6 +225,8 @@ export class GameState {
     this.gameOver = false;
     this.winner = null; // 'Allies', 'Axis', or player name
     this.winCondition = null;
+    // Additive: New UX income Confirm preview. Classic _collectIncome unchanged.
+    this.lastIncome = null;
 
     // Combat log for current round
     this.combatLog = [];
@@ -242,6 +244,8 @@ export class GameState {
     this.cardTradeCount = {};
     // Track if player has conquered a territory this turn (for Risk card award - one per turn)
     this.conqueredThisTurn = {};
+    // Additive Set. Classic NCM validation does not read this (fail closed).
+    this.capturedThisTurn = new Set();
 
     // Territories with amphibious assault this turn (for shore bombardment - only bombard with amphibious units)
     this.amphibiousTerritories = new Set();
@@ -580,6 +584,39 @@ export class GameState {
 
   getOwner(territoryName) {
     return this.territoryState[territoryName]?.owner || null;
+  }
+
+  // New UX helper only. Classic combat-move / NCM still uses getOwner + isEnemy.
+  isNcmFriendly(territoryName, playerId) {
+    const owner = this.getOwner(territoryName);
+    if (owner === playerId || this.areAllies(playerId, owner)) return true;
+    return this.capturedThisTurn instanceof Set && this.capturedThisTurn.has(territoryName);
+  }
+
+  // Preview collect-income IPCs. Does not mutate. Classic _collectIncome stays.
+  getCollectIncomeAmount(playerId = this.currentPlayer?.id) {
+    if (!playerId) return 0;
+    if (!this.canCollectIncome(playerId)) return 0;
+
+    let income = 0;
+    const capitalTerritory = this.playerState[playerId]?.capitalTerritory;
+
+    for (const [territory, state] of Object.entries(this.territoryState)) {
+      if (state.owner !== playerId) continue;
+      if (territory === capitalTerritory) {
+        income += 10;
+        continue;
+      }
+      const t = this.territoryByName[territory];
+      if (t && t.production) income += t.production;
+    }
+
+    for (const continent of this.continents || []) {
+      if (this.controlsContinent(playerId, continent.name)) {
+        income += continent.bonus;
+      }
+    }
+    return income;
   }
 
   isCapital(territoryName) {
@@ -5477,6 +5514,7 @@ export class GameState {
     this.amphibiousAssaultDetails = {};
     this.moveHistory = [];
     this.conqueredThisTurn = {};
+    this.capturedThisTurn = new Set(data.capturedThisTurn || []);
 
     this._notify();
   }

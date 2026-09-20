@@ -8,6 +8,7 @@
 // importers but leave GAME_VERSION undefined inside this module.
 import { GAME_VERSION } from '../version.js';
 import { isMobileShell } from './mobileShell.js';
+import { UX_CLASSIC, UX_THREE, persistUxMode, navigateUxMode } from '../map/presentationMode.js';
 export { GAME_VERSION };
 
 // Native <select> option taps land on the card under the popup.
@@ -27,8 +28,8 @@ export function shouldSeatFactionOnPointerDown({ mobile } = {}) {
   return !!mobile;
 }
 
-// AI Difficulty levels
-const AI_DIFFICULTIES = [
+// Shared with New UX Three lobby so option labels stay one source of truth.
+export const AI_DIFFICULTIES = [
   { id: 'human', name: 'Human', desc: 'Local player' },
   { id: 'easy', name: 'Easy AI', desc: 'Basic strategy' },
   { id: 'medium', name: 'Medium AI', desc: 'Balanced play' },
@@ -36,7 +37,7 @@ const AI_DIFFICULTIES = [
 ];
 
 // Available colors for faction selection
-const FACTION_COLORS = [
+export const FACTION_COLORS = [
   { id: 'red', color: '#B22222', light: '#DC143C', name: 'Crimson' },
   { id: 'blue', color: '#1E90FF', light: '#4169E1', name: 'Blue' },
   { id: 'green', color: '#228B22', light: '#32CD32', name: 'Green' },
@@ -49,11 +50,19 @@ const FACTION_COLORS = [
   { id: 'pink', color: '#C71585', light: '#FF69B4', name: 'Pink' },
 ];
 
-// Team colors
-const TEAM_COLORS = {
+export const TEAM_COLORS = {
   1: { color: '#1E90FF', name: 'Team 1 (Blue)' },
   2: { color: '#DC143C', name: 'Team 2 (Red)' },
 };
+
+export const STARTING_IPC_OPTIONS = [40, 60, 80, 100, 120, 150];
+export const DEFAULT_STARTING_IPCS = 80;
+
+function startingIpcOptionsHtml(selected) {
+  return STARTING_IPC_OPTIONS.map((n) => (
+    `<option value="${n}" ${Number(selected) === n ? 'selected' : ''}>${n}</option>`
+  )).join('');
+}
 
 export class Lobby {
   constructor(setup, onStart, onPlayOnline) {
@@ -68,7 +77,7 @@ export class Lobby {
     this.playerAI = {};
     this.playerTeams = {};
     this.teamsEnabled = false;
-    this.startingIPCs = 80;
+    this.startingIPCs = DEFAULT_STARTING_IPCS;
     this.el = null;
     this._ignoreCardToggleUntil = 0;
     this._ignoreCardTogglePlayer = null;
@@ -122,6 +131,24 @@ export class Lobby {
     this._bindEvents();
   }
 
+  _renderUxPicker() {
+    return `
+      <div class="lobby-ux-picker" role="group" aria-label="Interface">
+        <p class="lobby-ux-kicker">Interface</p>
+        <div class="lobby-ux-row">
+          <button type="button" class="lobby-ux-btn is-on" data-action="ux-classic" aria-pressed="true">
+            <span class="lobby-ux-title">Classic</span>
+            <span class="lobby-ux-desc">Default · Canvas</span>
+          </button>
+          <button type="button" class="lobby-ux-btn lobby-ux-btn-new" data-action="ux-three" aria-pressed="false">
+            <span class="lobby-ux-title">New UX (Three.js)</span>
+            <span class="lobby-ux-desc">Experimental</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
   _renderMobileMainMenu() {
     const savedGames = this._getSavedGames();
     const hasSavedGames = savedGames.length > 0;
@@ -134,6 +161,7 @@ export class Lobby {
           <span class="lobby-version-badge">${GAME_VERSION}</span>
         </div>
 
+        ${this._renderUxPicker()}
         <p class="lobby-phone-path">Start here</p>
         <div class="lobby-phone-actions">
           <button class="lobby-phone-card" data-action="local-play">
@@ -215,12 +243,7 @@ export class Lobby {
           <label class="lobby-phone-option">
             <span>Starting IPCs</span>
             <select id="starting-ipcs" class="modern-select compact">
-              <option value="40" ${this.startingIPCs === 40 ? 'selected' : ''}>40</option>
-              <option value="60" ${this.startingIPCs === 60 ? 'selected' : ''}>60</option>
-              <option value="80" ${this.startingIPCs === 80 ? 'selected' : ''}>80</option>
-              <option value="100" ${this.startingIPCs === 100 ? 'selected' : ''}>100</option>
-              <option value="120" ${this.startingIPCs === 120 ? 'selected' : ''}>120</option>
-              <option value="150" ${this.startingIPCs === 150 ? 'selected' : ''}>150</option>
+              ${startingIpcOptionsHtml(this.startingIPCs)}
             </select>
           </label>
           <label class="lobby-phone-option lobby-phone-teams">
@@ -303,6 +326,7 @@ export class Lobby {
           <span class="lobby-version-badge">${GAME_VERSION}</span>
         </div>
 
+        ${this._renderUxPicker()}
         <p class="lobby-mode-kicker">Start here</p>
         <div class="lobby-menu-grid lobby-mode-tiles">
           <button class="lobby-menu-card" data-action="local-play">
@@ -387,12 +411,7 @@ export class Lobby {
             <label class="select-option inline">
               <span class="select-label">Starting IPCs</span>
               <select id="starting-ipcs" class="modern-select compact">
-                <option value="40" ${this.startingIPCs === 40 ? 'selected' : ''}>40</option>
-                <option value="60" ${this.startingIPCs === 60 ? 'selected' : ''}>60</option>
-                <option value="80" ${this.startingIPCs === 80 ? 'selected' : ''}>80</option>
-                <option value="100" ${this.startingIPCs === 100 ? 'selected' : ''}>100</option>
-                <option value="120" ${this.startingIPCs === 120 ? 'selected' : ''}>120</option>
-                <option value="150" ${this.startingIPCs === 150 ? 'selected' : ''}>150</option>
+                ${startingIpcOptionsHtml(this.startingIPCs)}
               </select>
             </label>
           </div>
@@ -564,6 +583,14 @@ export class Lobby {
 
   _bindEvents() {
     // Main menu actions
+    this.el.querySelector('[data-action="ux-classic"]')?.addEventListener('click', () => {
+      persistUxMode(UX_CLASSIC);
+    });
+
+    this.el.querySelector('[data-action="ux-three"]')?.addEventListener('click', () => {
+      navigateUxMode(UX_THREE);
+    });
+
     this.el.querySelector('[data-action="local-play"]')?.addEventListener('click', () => {
       this.mode = 'local-setup';
       this._render();

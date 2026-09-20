@@ -56,6 +56,7 @@ import { withTimeout } from './utils/timeout.js';
 import { HUD } from './ui/hud.js';
 import { Minimap } from './ui/minimap.js';
 import { Lobby } from './ui/lobby.js';
+import { isPocketPreviewRequested, resolveUxMode, UX_THREE } from './map/presentationMode.js';
 import { ContinentPanel } from './ui/continentPanel.js';
 import { GameState, GAME_PHASES, TURN_PHASES, shouldShowPurchase } from './state/gameState.js';
 import { syncPushPhaseLabel } from './state/placementPass.js';
@@ -3202,7 +3203,17 @@ async function init() {
   dismissStartupLoader();
 }
 
-init().catch((err) => {
-  console.error('Failed to initialize:', err);
-  reportStartupError('Could not start Tactical Risk. Local saves and in-progress games stay on this device.');
-});
+if (resolveUxMode() === UX_THREE) {
+  const boot = isPocketPreviewRequested()
+    ? import('./map/uxPreview.js').then((mod) => mod.bootUxPreview())
+    : import('./map/threeSoloBoot.js').then((mod) => mod.bootThreeSolo());
+  boot.catch((err) => {
+    console.error('Failed to start New UX:', err);
+    reportStartupError('Could not start New UX. Classic Canvas is unchanged at / or ?ux=classic.');
+  });
+} else {
+  init().catch((err) => {
+    console.error('Failed to initialize:', err);
+    reportStartupError('Could not start Tactical Risk. Local saves and in-progress games stay on this device.');
+  });
+}

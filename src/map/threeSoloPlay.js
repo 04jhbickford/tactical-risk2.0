@@ -124,7 +124,12 @@ export function isGameOver(play) {
 
 export function isHumanTurn(play) {
   const p = play?.gameState?.currentPlayer;
-  return !!(p && !p.isAI);
+  if (!p || p.isAI) return false;
+  const gs = play.gameState;
+  if (!gs?.isMultiplayer) return true;
+  const me = gs.localUserId || play.localUserId;
+  if (!me) return false;
+  return p.oderId === me;
 }
 
 export function isPlaying(play) {

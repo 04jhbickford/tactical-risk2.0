@@ -122,7 +122,36 @@
       };
     })();
   </script>
-  <script type="module" src="src/main.js"></script>
+  <script>
+    window.__TR_GAME_VERSION = 'V2.81.57-dual-path.1';
+    document.documentElement.setAttribute('data-game-version', window.__TR_GAME_VERSION);
+    (function stampLoop() {
+      var v = window.__TR_GAME_VERSION;
+      if (!v) return;
+      document.documentElement.setAttribute('data-game-version', v);
+      document.querySelectorAll('.three-l0-ver, .three-lobby-ver, .lobby-version-badge').forEach(function (el) {
+        if (el && el.textContent !== v) el.textContent = v;
+      });
+    })();
+    setInterval(function () {
+      var v = window.__TR_GAME_VERSION;
+      if (!v) return;
+      document.querySelectorAll('.three-l0-ver, .three-lobby-ver').forEach(function (el) {
+        if (el && el.textContent !== v) el.textContent = v;
+      });
+    }, 400);
+    if (navigator.serviceWorker) {
+      navigator.serviceWorker.getRegistrations().then(function (regs) {
+        regs.forEach(function (reg) { reg.unregister(); });
+      }).catch(function () {});
+    }
+    if (window.caches && caches.keys) {
+      caches.keys().then(function (keys) {
+        keys.forEach(function (k) { caches.delete(k); });
+      }).catch(function () {});
+    }
+  </script>
+  <script type="module" src="src/main.js?v=V2.81.57-dual-path.1"></script>
 </body>
 </html>
 <!-- force redeploy -->

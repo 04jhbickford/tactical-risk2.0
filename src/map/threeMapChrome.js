@@ -1,7 +1,7 @@
 // Three / side-project HUD. Preview only.
 // Frosted L0/L1/L2 + exclusive Confirm gold. Board stays main Canvas art.
 
-import { GAME_VERSION, SCHEMA_VERSION } from '../version.js?v=V2.81.56-ux-solo.18';
+import { GAME_VERSION, SCHEMA_VERSION } from '../version.js';
 import { formatUnitName } from '../utils/unitNames.js';
 import { getUnitIconPath } from '../utils/unitIcons.js';
 import { stripPreviewParams, soloHref } from './uxPreviewFlag.js';
@@ -12,7 +12,7 @@ import {
   lobbyCanStart,
   lobbyStartLabel,
   seatOccupantView,
-} from './threeSoloLobby.js?v=V2.81.56-ux-solo.18';
+} from './threeSoloLobby.js';
 import {
   SETUP_TUTORIAL_STEPS,
   SETUP_TUTORIAL_TITLE,
@@ -231,7 +231,7 @@ function printIpc(land) {
 }
 
 function uxSoloPatch(v) {
-  const m = /ux-solo\.(\d+)/.exec(String(v || ''));
+  const m = /(?:ux-solo|dual-path)\.(\d+)/.exec(String(v || ''));
   return m ? Number(m[1]) : NaN;
 }
 
@@ -928,6 +928,21 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
     #three-lobby .three-lobby-start:disabled {
       background:#334155; color:#64748b; cursor:default;
     }
+    #three-lobby .three-lobby-form {
+      display:flex; flex-direction:column; gap:12px; padding:8px 4px 16px;
+    }
+    #three-lobby .three-lobby-form label {
+      display:flex; flex-direction:column; gap:6px;
+      font:600 12px/1.2 -apple-system,"SF Pro Text",sans-serif;
+      letter-spacing:0.06em; text-transform:uppercase; color:#C9B896;
+    }
+    #three-lobby .three-lobby-form input,
+    #three-lobby .three-lobby-form select {
+      min-height:44px; padding:0 12px; border-radius:12px;
+      border:1px solid rgba(255,255,255,0.14);
+      background:rgba(30,36,32,0.55); color:#E8E2D4; font-size:16px;
+    }
+    #three-lobby .three-lobby-error { color:#F4A3A3; font-size:13px; margin:8px 4px 0; }
     #three-lobby button.three-lobby-card {
       display:flex; flex-direction:row; align-items:center; gap:12px;
       width:100%; text-align:left; min-height:88px;
@@ -1298,6 +1313,147 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
     },
     paintLobby(model = {}) {
       const screen = model.screen || 'main';
+      const mp = model.mp || {};
+      const mpError = mp.error || '';
+      const room = mp.lobby || null;
+      const roomPlayers = room?.players || [];
+      const roomFactions = model.factions || [];
+      const taken = new Set(roomPlayers.map((p) => p.factionId).filter(Boolean));
+      const host = !!mp.isHost;
+      const code = room?.code || '------';
+
+      if (screen === 'online' || screen === 'create' || screen === 'join' || screen === 'room') {
+        if (screen === 'online') {
+          lobby.innerHTML = `
+            <div class="three-lobby-home">
+              <div class="three-lobby-setup-head">
+                <button type="button" class="three-lobby-back" data-lobby="screen" data-value="main" aria-label="Back">${LOBBY_BACK_ICON}</button>
+                <div>
+                  <p class="three-lobby-title">Play Online</p>
+                  <p class="three-lobby-sub">Same Firebase as Classic · New UX chrome</p>
+                </div>
+              </div>
+              <div class="three-lobby-actions">
+                ${lobbyCardHtml({
+                  action: 'screen', value: 'create', mark: LOBBY_MARK_LOCAL,
+                  kicker: 'Host', title: 'Create Game',
+                  desc: 'Open a lobby · share the code',
+                })}
+                ${lobbyCardHtml({
+                  action: 'screen', value: 'join', mark: LOBBY_MARK_ONLINE,
+                  kicker: 'Join', title: 'Join by Code',
+                  desc: 'Enter a 6-character code',
+                })}
+              </div>
+              ${mpError ? `<p class="three-lobby-error">${mpError}</p>` : ''}
+            </div>
+          `;
+        } else if (screen === 'create') {
+          lobby.innerHTML = `
+            <div class="three-lobby-howto">
+              <div class="three-lobby-setup-head">
+                <button type="button" class="three-lobby-back" data-lobby="screen" data-value="online" aria-label="Back">${LOBBY_BACK_ICON}</button>
+                <div>
+                  <p class="three-lobby-title">Create Game</p>
+                  <p class="three-lobby-sub">Host · New UX (Three.js)</p>
+                </div>
+              </div>
+              <form class="three-lobby-form" data-lobby-form="create" autocomplete="off">
+                <label>Game name<input name="name" maxlength="30" placeholder="Game"></label>
+                <label>Max players
+                  <select name="maxPlayers">
+                    <option value="2">2</option><option value="3">3</option>
+                    <option value="4">4</option><option value="5" selected>5</option>
+                  </select>
+                </label>
+                <label>Starting IPCs
+                  <select name="startingIPCs">
+                    ${STARTING_IPC_OPTIONS.map((n) => `<option value="${n}" ${n === 80 ? 'selected' : ''}>${n}</option>`).join('')}
+                  </select>
+                </label>
+                ${mpError ? `<p class="three-lobby-error">${mpError}</p>` : ''}
+                <button type="submit" class="three-lobby-start">Create lobby</button>
+              </form>
+            </div>
+          `;
+        } else if (screen === 'join') {
+          lobby.innerHTML = `
+            <div class="three-lobby-howto">
+              <div class="three-lobby-setup-head">
+                <button type="button" class="three-lobby-back" data-lobby="screen" data-value="online" aria-label="Back">${LOBBY_BACK_ICON}</button>
+                <div>
+                  <p class="three-lobby-title">Join by Code</p>
+                  <p class="three-lobby-sub">Same games as Classic</p>
+                </div>
+              </div>
+              <form class="three-lobby-form" data-lobby-form="join" autocomplete="off">
+                <label>Code<input name="code" maxlength="6" placeholder="ABC123" class="code-input"></label>
+                <label>Password<input name="password" type="password" placeholder="If required"></label>
+                ${mpError ? `<p class="three-lobby-error">${mpError}</p>` : ''}
+                <button type="submit" class="three-lobby-start">Join lobby</button>
+              </form>
+            </div>
+          `;
+        } else {
+          lobby.innerHTML = `
+            <div class="three-lobby-setup">
+              <div class="three-lobby-setup-head">
+                <button type="button" class="three-lobby-back" data-lobby="screen" data-value="online" aria-label="Back">${LOBBY_BACK_ICON}</button>
+                <div>
+                  <p class="three-lobby-title">Lobby ${code}</p>
+                  <p class="three-lobby-sub">${host ? 'Host' : 'Guest'} · Human / AI / Empty</p>
+                </div>
+              </div>
+              <div class="three-lobby-main">
+                <div class="three-lobby-sec three-lobby-seats-sec">
+                  <h2>Seats</h2>
+                  <div class="three-lobby-seats">
+                    ${roomFactions.map((f) => {
+                      const seated = roomPlayers.find((p) => p.factionId === f.id);
+                      const kind = seated ? (seated.isAI ? 'ai' : 'human') : 'empty';
+                      const tier = seated?.aiDifficulty || 'medium';
+                      const meta = seated
+                        ? (seated.isAI ? `${occupantChipLabel(tier)} AI` : (seated.displayName || 'Human'))
+                        : 'Empty';
+                      return `
+                        <div class="three-lobby-seat-wrap${seated ? ' is-on' : ''}" data-seat="${f.id}">
+                          <button type="button" class="three-lobby-seat${seated ? ' is-on' : ''}" data-lobby="mp-faction" data-value="${f.id}">
+                            <div class="three-lobby-seat-name">${f.name || f.id}</div>
+                            <span class="three-lobby-seat-meta">${meta}</span>
+                          </button>
+                          ${host ? `
+                            <div class="three-lobby-seat-tools">
+                              <div class="three-lobby-occupants">
+                                <button type="button" class="three-lobby-tile${kind === 'human' ? ' is-on' : ''}" data-lobby="mp-faction" data-value="${f.id}">Human</button>
+                                <button type="button" class="three-lobby-tile${kind === 'ai' ? ' is-on' : ''}" data-lobby="mp-ai" data-value="${f.id}:medium">AI</button>
+                              </div>
+                              <div class="three-lobby-ai-tiers">
+                                ${['easy', 'medium', 'hard'].map((id) => `
+                                  <button type="button" class="three-lobby-tile${kind === 'ai' && tier === id ? ' is-on' : ''}" data-lobby="mp-ai" data-value="${f.id}:${id}">${occupantChipLabel(id)}</button>
+                                `).join('')}
+                              </div>
+                            </div>
+                          ` : ''}
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+                </div>
+                ${mpError ? `<p class="three-lobby-error">${mpError}</p>` : ''}
+              </div>
+              <div class="three-lobby-footer">
+                <button type="button" class="three-lobby-start" data-lobby="mp-start" ${host && roomPlayers.length >= 2 && roomPlayers.every((p) => p.factionId) ? '' : 'disabled'}>
+                  ${host ? `Start Game (${roomPlayers.length})` : 'Waiting for host'}
+                </button>
+              </div>
+            </div>
+          `;
+        }
+        api.setLobbyOpen(true);
+        applyLiveStamp();
+        return;
+      }
+
       if (screen === 'main' || model.showHowTo) {
         if (model.showHowTo && screen !== 'setup') {
           lobby.innerHTML = `
@@ -1326,6 +1482,19 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
               <p class="three-lobby-tag">World War II Grand Strategy</p>
               <span class="three-lobby-ver"></span>
             </div>
+            <div class="lobby-ux-picker three-lobby-ux">
+              <p class="lobby-ux-kicker">Interface</p>
+              <div class="lobby-ux-row">
+                <button type="button" class="lobby-ux-btn" data-lobby="ux" data-value="classic">
+                  <span class="lobby-ux-title">Classic</span>
+                  <span class="lobby-ux-desc">Canvas · default</span>
+                </button>
+                <button type="button" class="lobby-ux-btn lobby-ux-btn-new is-on" data-lobby="ux" data-value="three" aria-pressed="true">
+                  <span class="lobby-ux-title">New UX (Three.js)</span>
+                  <span class="lobby-ux-desc">Experimental</span>
+                </button>
+              </div>
+            </div>
             <p class="three-lobby-path">Start here</p>
             <div class="three-lobby-actions">
               ${lobbyCardHtml({
@@ -1334,9 +1503,9 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
                 desc: 'Friends or AI on this screen',
               })}
               ${lobbyCardHtml({
-                action: 'online', value: '0', mark: LOBBY_MARK_ONLINE,
+                action: 'screen', value: 'online', mark: LOBBY_MARK_ONLINE,
                 kicker: 'Multiplayer', title: 'Play Online',
-                desc: 'Off this tip · no Firebase', off: true,
+                desc: 'Create or join · full MP',
               })}
               ${lobbyCardHtml({
                 action: 'howto', value: '1', mark: LOBBY_MARK_HOWTO,
@@ -1845,7 +2014,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
   });
   bindSealedActivate(lobby, '[data-lobby]', (e, btn) => {
     const kind = btn.dataset.lobby;
-    if (kind === 'start') {
+    if (kind === 'start' || kind === 'mp-start') {
       if (typeof api.onLobbyStart === 'function') api.onLobbyStart();
       return;
     }
@@ -1853,6 +2022,12 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       api.onLobbyChange(kind, btn.dataset.value);
     }
   }, { prevent: false });
+  lobby.addEventListener('submit', (e) => {
+    const form = e.target?.closest?.('[data-lobby-form]');
+    if (!form || !lobby.contains(form)) return;
+    e.preventDefault();
+    if (typeof api.onLobbyForm === 'function') api.onLobbyForm(form.dataset.lobbyForm, form);
+  });
   bindSealedActivate(tutorial, '[data-tutorial]', () => {
     api.setTutorialOpen(false);
     if (typeof api.onTutorialDismiss === 'function') api.onTutorialDismiss();

@@ -145,6 +145,7 @@ export class AIController {
 
     // Don't process during lobby phase
     if (this.gameState.phase === GAME_PHASES.LOBBY) return false;
+    if (this.gameState.gameOver) return false;
 
     const currentPlayer = this.gameState.currentPlayer;
     if (!currentPlayer?.isAI) return false;
@@ -180,6 +181,7 @@ export class AIController {
   }
 
   async _processAITurn(aiPlayer, player) {
+    if (this.gameState?.gameOver) return;
     const phase = this.gameState.phase;
     const turnPhase = this.gameState.turnPhase;
 
