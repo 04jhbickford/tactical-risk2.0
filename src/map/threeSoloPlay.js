@@ -1551,7 +1551,7 @@ export function confirmLabel(play) {
       return `Confirm: Unload · ${play.destPicked}`;
     }
     return phase === TURN_PHASES.COMBAT_MOVE
-      ? `Confirm: Attack ${play.destPicked}`
+      ? 'Confirm Attack'
       : `Confirm: Move to ${play.destPicked}`;
   }
   if (phase === TURN_PHASES.COMBAT_MOVE || phase === TURN_PHASES.NON_COMBAT_MOVE) {

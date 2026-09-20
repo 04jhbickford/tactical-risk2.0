@@ -369,18 +369,22 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       pointer-events:none;
       background:linear-gradient(0deg, rgba(30,36,32,0.42) 0%, transparent 70%);
       max-height:calc(100svh - 52px - env(safe-area-inset-top, 0px));
+      overflow:hidden;
     }
-    html.three-spike.has-l1 #three-bottom,
-    html.three-spike.has-battle #three-bottom,
-    html.three-spike.has-l2 #three-bottom,
-    html.three-spike.has-undo #three-bottom {
-      pointer-events:auto;
+    /* Children take hits. The dock itself stays pointer-events:none so
+       dest taps on the map above peek/confirm are not swallowed. */
+    #three-sheet-stack {
+      display:flex; flex-direction:column; gap:8px;
+      flex:1 1 auto; min-height:0;
+      max-height:calc(100svh - 52px - env(safe-area-inset-top, 0px) - 72px - env(safe-area-inset-bottom, 0px));
+      overflow-x:hidden; overflow-y:auto;
+      -webkit-overflow-scrolling:touch;
+      pointer-events:none;
     }
     #three-peek {
       display:none; pointer-events:none;
       min-height:0; padding:6px 8px; border-radius:12px;
-      max-height:min(44dvh, 320px); overflow-x:hidden; overflow-y:auto;
-      -webkit-overflow-scrolling:touch;
+      max-height:none; overflow:visible;
       background:rgba(30,36,32,0.36);
       -webkit-backdrop-filter:saturate(1.35) blur(18px);
       backdrop-filter:saturate(1.35) blur(18px);
@@ -514,15 +518,17 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
     #three-confirm.is-idle,
     #three-confirm:disabled {
       pointer-events:auto;
-      min-height:56px; height:56px; width:100%;
+      min-height:56px; height:auto; max-height:72px; width:100%;
+      padding:0 14px;
       border:1px solid rgba(255,255,255,0.10); border-radius:16px;
       background:rgba(30,36,32,0.88); color:rgba(232,226,212,0.55);
       -webkit-backdrop-filter:blur(24px) saturate(1.15);
       backdrop-filter:blur(24px) saturate(1.15);
       box-shadow:inset 0 1px 0 rgba(255,255,255,0.06);
-      font:600 17px/1 -apple-system,"SF Pro Text",sans-serif;
+      font:600 17px/1.2 -apple-system,"SF Pro Text",sans-serif;
       letter-spacing:-0.01em;
       cursor:default;
+      overflow:hidden;
       -webkit-tap-highlight-color:transparent;
     }
     #three-confirm.is-ready:not(:disabled):not(.is-idle) {
@@ -594,7 +600,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       display:none; pointer-events:none;
       padding:8px 10px; border-radius:12px;
       overflow:visible;
-      min-height:0; flex:1 1 auto;
+      min-height:0; flex:0 0 auto;
       background:rgba(30,36,32,0.55);
       -webkit-backdrop-filter:saturate(1.35) blur(18px);
       backdrop-filter:saturate(1.35) blur(18px);
@@ -774,7 +780,11 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       padding:2px 6px; border-radius:999px; background:rgba(196,163,90,0.2);
       font:700 10px/1 -apple-system,sans-serif; color:#F4E8C4;
     }
-    #three-actions { display:flex; gap:8px; flex:0 0 auto; }
+    #three-actions {
+      display:flex; gap:8px; flex:0 0 auto;
+      position:relative; z-index:8;
+      pointer-events:auto;
+    }
     #three-undo {
       display:none !important; min-height:56px; min-width:88px; padding:0 14px; border-radius:16px;
       border:1px solid rgba(255,255,255,0.22); background:rgba(30,36,32,0.88);
@@ -803,7 +813,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
     }
     #three-battle .three-picker[data-loss-side="def"] .three-picker-label { color:#8EB8C8; }
     #three-battle .three-tile-row { margin-top:4px; }
-    #three-confirm { flex:0 0 auto; position:relative; z-index:2; }
+    #three-confirm { flex:0 0 auto; position:relative; z-index:8; }
     html.three-spike.has-battle #three-stack-toggle { display:none; }
     #three-sheet {
       display:none; position:absolute; left:0; right:0; bottom:0; z-index:40;
@@ -1096,7 +1106,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       #three-peek .three-tile-row.is-wave .three-tile-steps b { min-width:14px; font-size:8px; }
       #three-phase-strip .three-step { font-size:11px; }
       #three-confirm, #three-confirm.is-idle, #three-confirm:disabled {
-        min-height:56px; height:56px; font-size:15px;
+        min-height:56px; height:auto; max-height:72px; font-size:15px;
       }
       #three-battle strong { font-size:14px; }
       #three-battle .three-die { width:18px; height:18px; }
@@ -1158,8 +1168,10 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
   bottom.innerHTML = `
     <button type="button" id="three-stack-toggle" aria-pressed="false">Expand stacks</button>
     <div id="three-guide" aria-live="polite"></div>
-    <div id="three-battle"></div>
-    <div id="three-peek"></div>
+    <div id="three-sheet-stack">
+      <div id="three-battle"></div>
+      <div id="three-peek"></div>
+    </div>
     <div id="three-actions">
       <button type="button" id="three-undo">Undo</button>
       <button type="button" id="three-confirm" class="is-idle" disabled>Select units</button>
@@ -1620,6 +1632,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       api.confirm.setAttribute('disabled', '');
       api.confirm.setAttribute('aria-disabled', 'true');
       api.confirm.dataset.youReady = '0';
+      api.confirm.dataset.cta = '';
       api.confirm.classList.remove('is-ready');
       api.confirm.classList.add('is-idle');
       api.confirm.textContent = label;
@@ -1634,6 +1647,8 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       api.confirm.classList.remove('is-idle');
       api.confirm.classList.add('is-ready');
       api.confirm.textContent = label;
+      if (/confirm attack/i.test(label || '')) api.confirm.dataset.cta = 'confirm-attack';
+      try { api.confirm.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) { /* ignore */ }
     },
     setUndo(on = false) {
       if (!api.undoBtn) return;
@@ -1868,7 +1883,11 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       stage = '',
     } = {}) {
       api.setGuide('', false);
-      if (api.confirm) api.confirm.dataset.stage = stage || '';
+      if (api.confirm) {
+        api.confirm.dataset.stage = stage || '';
+        api.confirm.dataset.cta = (stage === 'confirm' && /attack/i.test(label || ''))
+          ? 'confirm-attack' : '';
+      }
       if (phaseStrip !== undefined) api.setPhaseStrip(phaseStrip, phaseStripCurrent);
       api.setBattle(battle);
       if (battle) {

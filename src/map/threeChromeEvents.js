@@ -83,8 +83,8 @@ export function chromeHitRectsFrom(api = {}) {
   const battleOn = api.battleEl?.classList?.contains('is-on');
   if (peekOn) push(api.peek);
   if (battleOn) push(api.battleEl);
-  if (peekOn || battleOn) push(api.bottom);
   push(api.confirm);
+  if (api.undoBtn?.classList?.contains('is-on')) push(api.undoBtn);
   return els.map(rectFromElement).filter(Boolean);
 }
 
