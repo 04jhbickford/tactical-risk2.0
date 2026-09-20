@@ -16,9 +16,8 @@ Before READY:
 
 ## Stack
 
-Start from PR4 head `cursor/experimental-setup-density-4d5c` (dual-path.8).
-`.9` is a follow-up tip. Do **not** merge. Do **not** touch the `.8` merge.
-When `.8` lands on main, rebase this tip onto main.
+`.9` is a follow-up tip on main (PR4 / dual-path.8 already merged).
+Do **not** merge this tip. Do **not** touch the `.8` merge.
 
 ## Scope this tip (B–D)
 

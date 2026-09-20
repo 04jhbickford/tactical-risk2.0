@@ -18,6 +18,7 @@ const {
   dequeueResolvedCombatHeads,
   captureIfAttackerHolds,
   applyTerritoryCapture,
+  finalizeAttackerHoldsOnBoard,
 } = await import(pathToFileURL(join(root, 'src/state/combatFinalize.js')));
 const {
   resolveLandingDestination,
@@ -130,6 +131,14 @@ console.log('=== 9.20.26.02 / 35RB85 dequeue captures land leftover ===');
   applyTerritoryCapture(gs, 'West US', { playerId: 'usa', unitDefs });
   check('factory ownership transfers',
     gs.units['West US'].find((u) => u.type === 'factory')?.owner === 'usa');
+}
+
+{
+  const gs = makeGs();
+  gs.combatQueue = [];
+  finalizeAttackerHoldsOnBoard(gs, { unitDefs });
+  check('_detectCombats wipe still flips leftover hold',
+    gs.territoryState['West US'].owner === 'usa');
 }
 
 console.log('=== 9.20.26.03 Mexico combat move may empty the origin ===');

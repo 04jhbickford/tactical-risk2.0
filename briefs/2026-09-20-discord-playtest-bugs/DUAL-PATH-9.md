@@ -1,8 +1,7 @@
 # dual-path.9 — combat capture, combat-move, air land, deploy Done
 
 Stamp: **V2.81.57-dual-path.9**. HOLD MERGE. Quiet James.
-Stacked follow-up on PR4 / dual-path.8. Do not touch the `.8` merge.
-When `.8` lands on `main`, rebase this tip onto `main`. `.8` is **not** on `main` yet (`454a271` dual-path.4).
+Rebased onto `main` after PR4 / dual-path.8 landed (`3a460b6`). Do not merge this tip.
 
 Preview (commit `2d16696`+):
 - Classic: https://tactical-risk20-8t5wg7kw2-james-projects-20d8de40.vercel.app/

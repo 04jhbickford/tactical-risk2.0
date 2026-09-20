@@ -20,7 +20,7 @@ import {
 } from './airLanding.js';
 import { emitGameEvent, summarizeUnits } from '../multiplayer/gameEventLog.js';
 import { omitUndefinedDeep } from './persistState.js';
-import { captureIfAttackerHolds } from './combatFinalize.js';
+import { captureIfAttackerHolds, finalizeAttackerHoldsOnBoard } from './combatFinalize.js';
 
 export const GAME_PHASES = {
   LOBBY: 'lobby',
@@ -3367,7 +3367,11 @@ export class GameState {
 
   // Detect territories where combat should occur
   // Per A&A rules: Naval battles are resolved before land battles (amphibious assaults)
-  _detectCombats() {
+  _detectCombats(unitDefs = this._unitDefs || {}) {
+    // Finalize leftover land holds before wiping the queue. Otherwise a
+    // dismissed overlay / last-defender-dead hex is dropped and never
+    // flips political control (35RB85 / 9.20.26.02).
+    finalizeAttackerHoldsOnBoard(this, { unitDefs });
     this.combatQueue = [];
     this.clearedSeaZones = new Set(); // Track sea zones cleared for shore bombardment
     // Note: amphibiousTerritories is set during combat move and used during combat phase

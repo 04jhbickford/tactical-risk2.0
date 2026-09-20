@@ -13,10 +13,16 @@ function unitsAt(gameState, name) {
   return gameState?.getUnitsAt?.(name) || gameState?.units?.[name] || [];
 }
 
+const FALLBACK_LAND = new Set([
+  'infantry', 'artillery', 'armour', 'mechanizedInfantry', 'mechInfantry',
+]);
+
 function isLandCombatUnit(unit, unitDefs = {}) {
   if (!unit || unit.type === 'factory' || unit.type === 'aaGun') return false;
+  if ((Number(unit.quantity) || 0) <= 0) return false;
   const def = unitDefs[unit.type];
-  return !!(def?.isLand && (Number(unit.quantity) || 0) > 0);
+  if (def) return !!def.isLand;
+  return FALLBACK_LAND.has(unit.type);
 }
 
 export function attackerHoldsWithLand(units, playerId, {
@@ -132,4 +138,24 @@ export function dequeueResolvedCombatHeads(gameState, {
     } catch { /* fail-closed */ }
   }
   return { skipped, captured };
+}
+
+// _detectCombats rebuilds combatQueue from mixed hexes only. A leftover
+// land hold (no enemies, enemy owner) is dropped and would never flip
+// (35RB85). Scan the board after / instead of relying on the queue.
+export function finalizeAttackerHoldsOnBoard(gameState, { unitDefs = {} } = {}) {
+  const captured = [];
+  const playerId = gameState?.currentPlayer?.id;
+  if (!gameState || !playerId) return { captured };
+
+  const names = new Set([
+    ...(gameState.combatQueue || []),
+    ...Object.keys(gameState.units || {}),
+  ]);
+  for (const name of names) {
+    const result = captureIfAttackerHolds(gameState, name, { playerId, unitDefs });
+    if (result.captured) captured.push(name);
+  }
+  if (captured.length > 0) gameState._notify?.();
+  return { captured };
 }
