@@ -4,6 +4,7 @@
 import { GAME_VERSION, SCHEMA_VERSION } from '../version.js';
 import { formatUnitName } from '../utils/unitNames.js';
 import { getUnitIconPath } from '../utils/unitIcons.js';
+import { UX_LABEL_EXPERIMENTAL } from './presentationMode.js';
 import { stripPreviewParams, soloHref } from './uxPreviewFlag.js';
 import {
   FACTION_COLORS,
@@ -128,6 +129,50 @@ const LOBBY_MARK_LOCAL = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidd
 const LOBBY_MARK_ONLINE = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>';
 const LOBBY_MARK_HOWTO = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>';
 const LOBBY_BACK_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>';
+// Steal Classic MP color check + lobby flag path (`assets/flags/${faction.flag}`).
+const COLOR_CHECK_SVG = '<svg viewBox="0 0 24 24" fill="white" width="14" height="14" aria-hidden="true"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+
+function hexEq(a, b) {
+  return String(a || '').toLowerCase() === String(b || '').toLowerCase();
+}
+
+function factionFlagHtml(faction, color) {
+  const name = faction?.name || faction?.id || 'Faction';
+  const flag = faction?.flag;
+  const border = color || faction?.color || '#888';
+  if (!flag) {
+    return `<span class="three-lobby-seat-flag is-empty" style="border-color:${border}" aria-hidden="true"></span>`;
+  }
+  return `<span class="three-lobby-seat-flag" style="border-color:${border}"><img src="assets/flags/${flag}" alt="${name}"></span>`;
+}
+
+function seatHeadHtml(faction, { color, meta } = {}) {
+  const name = faction?.name || faction?.id || '';
+  return `
+    <div class="three-lobby-seat-main">
+      ${factionFlagHtml(faction, color)}
+      <div class="three-lobby-seat-copy">
+        <div class="three-lobby-seat-name">${name}</div>
+        <span class="three-lobby-seat-meta">${meta || ''}</span>
+      </div>
+    </div>
+  `;
+}
+
+function colorSwatchesHtml(faction, currentHex) {
+  const name = faction?.name || faction?.id || 'Faction';
+  return `
+    <div class="three-lobby-colors" role="group" aria-label="${name} color">
+      <span class="three-lobby-colors-label">Color · ${name}</span>
+      <div class="three-lobby-color-row">
+        ${FACTION_COLORS.map((c) => {
+          const on = hexEq(c.color, currentHex);
+          return `<button type="button" class="three-lobby-swatch${on ? ' is-on' : ''}" data-lobby="color" data-value="${faction.id}:${c.id}" title="${name} · ${c.name}" aria-label="${name} · ${c.name}${on ? ' selected' : ''}" aria-pressed="${on ? 'true' : 'false'}" style="background:${c.color}">${on ? COLOR_CHECK_SVG : ''}</button>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
 
 function lobbyCardHtml({ action, value, kicker, title, desc, mark, off = false }) {
   const data = off
@@ -1010,6 +1055,19 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       width:100%; text-align:left; min-height:52px; padding:12px 14px;
       border:0; border-radius:0; background:transparent; color:#f1f5f9; cursor:pointer;
     }
+    #three-lobby .three-lobby-seat-main {
+      display:flex; align-items:center; gap:10px; min-width:0;
+    }
+    #three-lobby .three-lobby-seat-flag {
+      flex:0 0 40px; width:40px; height:40px;
+      border-radius:50%; border:2px solid; overflow:hidden;
+      background:rgba(15,23,42,0.8); box-sizing:border-box;
+    }
+    #three-lobby .three-lobby-seat-flag img {
+      display:block; width:100%; height:100%; object-fit:cover;
+    }
+    #three-lobby .three-lobby-seat-flag.is-empty { background:rgba(148,163,184,0.18); }
+    #three-lobby .three-lobby-seat-copy { min-width:0; flex:1 1 auto; }
     #three-lobby .three-lobby-seat-name { font:700 16px/1.2 -apple-system,sans-serif; }
     #three-lobby .three-lobby-seat-meta {
       display:block; margin-top:2px;
@@ -1045,13 +1103,25 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
     }
     #three-lobby .three-lobby-ai-tiers .three-lobby-tile:not(.is-on) { opacity:0.78; }
     #three-lobby .three-lobby-colors {
-      display:flex; flex-wrap:wrap; gap:6px;
+      display:flex; flex-direction:column; gap:6px;
+    }
+    #three-lobby .three-lobby-colors-label {
+      font:600 11px/1 -apple-system,sans-serif;
+      letter-spacing:0.06em; text-transform:uppercase; color:#C4A35A;
+    }
+    #three-lobby .three-lobby-color-row {
+      display:flex; flex-wrap:wrap; gap:8px;
     }
     #three-lobby .three-lobby-swatch {
-      width:22px; min-width:22px; height:22px; min-height:22px;
-      padding:0; border-radius:999px;
-      border:1px solid rgba(255,255,255,0.28);
+      width:32px; min-width:32px; height:32px; min-height:32px;
+      padding:0; border-radius:8px;
+      border:3px solid transparent;
       cursor:pointer;
+      display:inline-flex; align-items:center; justify-content:center;
+    }
+    #three-lobby .three-lobby-swatch.is-on {
+      border-color:#fff;
+      box-shadow:0 0 0 2px #C4A35A, 0 0 12px rgba(255,255,255,0.35);
     }
     #three-lobby .three-lobby-teams {
       display:flex; flex-wrap:wrap; gap:6px;
@@ -1123,6 +1193,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       #three-lobby h2 { margin:0 0 4px; }
       #three-lobby .three-lobby-seats { gap:8px; }
       #three-lobby .three-lobby-seat { min-height:0; padding:8px 10px; }
+      #three-lobby .three-lobby-seat-flag { width:36px; height:36px; flex-basis:36px; }
       #three-lobby .three-lobby-seat-tools { padding:0 10px 10px; gap:8px; }
       #three-lobby .three-lobby-occupants,
       #three-lobby .three-lobby-ai-tiers { gap:4px; }
@@ -1190,7 +1261,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
     <button type="button" class="three-sheet-row" data-sheet="close">Back to board</button>
     <button type="button" class="three-sheet-row" data-sheet="solo">New Game vs AI</button>
     <button type="button" class="three-sheet-row" data-sheet="canvas">Open live Canvas (no preview)</button>
-    <p class="three-sheet-note">Preview only · main art · Three UX · SCHEMA ${SCHEMA_VERSION} · do not merge.</p>
+    <p class="three-sheet-note">Preview only · main art · ${UX_LABEL_EXPERIMENTAL} · SCHEMA ${SCHEMA_VERSION} · do not merge.</p>
   `;
   document.body.appendChild(sheet);
 
@@ -1349,7 +1420,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
                 <button type="button" class="three-lobby-back" data-lobby="screen" data-value="main" aria-label="Back">${LOBBY_BACK_ICON}</button>
                 <div>
                   <p class="three-lobby-title">Play Online</p>
-                  <p class="three-lobby-sub">Same Firebase as Classic · New UX chrome</p>
+                  <p class="three-lobby-sub">Same Firebase as Classic · ${UX_LABEL_EXPERIMENTAL}</p>
                 </div>
               </div>
               <div class="three-lobby-actions">
@@ -1374,7 +1445,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
                 <button type="button" class="three-lobby-back" data-lobby="screen" data-value="online" aria-label="Back">${LOBBY_BACK_ICON}</button>
                 <div>
                   <p class="three-lobby-title">Create Game</p>
-                  <p class="three-lobby-sub">Host · New UX (Three.js)</p>
+                  <p class="three-lobby-sub">Host · ${UX_LABEL_EXPERIMENTAL}</p>
                 </div>
               </div>
               <form class="three-lobby-form" data-lobby-form="create" autocomplete="off">
@@ -1438,8 +1509,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
                       return `
                         <div class="three-lobby-seat-wrap${seated ? ' is-on' : ''}" data-seat="${f.id}">
                           <button type="button" class="three-lobby-seat${seated ? ' is-on' : ''}" data-lobby="mp-faction" data-value="${f.id}">
-                            <div class="three-lobby-seat-name">${f.name || f.id}</div>
-                            <span class="three-lobby-seat-meta">${meta}</span>
+                            ${seatHeadHtml(f, { color: seated?.color || f.color, meta })}
                           </button>
                           ${isMe ? `
                             <label class="three-lobby-discord">Discord
@@ -1517,8 +1587,8 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
                   <span class="lobby-ux-desc">Canvas · default</span>
                 </button>
                 <button type="button" class="lobby-ux-btn lobby-ux-btn-new is-on" data-lobby="ux" data-value="three" aria-pressed="true">
-                  <span class="lobby-ux-title">New UX (Three.js)</span>
-                  <span class="lobby-ux-desc">Experimental</span>
+                  <span class="lobby-ux-title">${UX_LABEL_EXPERIMENTAL}</span>
+                  <span class="lobby-ux-desc">Optional</span>
                 </button>
               </div>
             </div>
@@ -1577,8 +1647,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
                   return `
                     <div class="three-lobby-seat-wrap${on ? ' is-on' : ''}" data-seat="${f.id}" data-occupant-kind="${view.kind}">
                       <button type="button" class="three-lobby-seat${on ? ' is-on' : ''}" data-lobby="seat" data-value="${f.id}">
-                        <div class="three-lobby-seat-name" style="box-shadow:inset 3px 0 0 ${color};padding-left:10px">${f.name || f.id}</div>
-                        <span class="three-lobby-seat-meta">${view.meta}</span>
+                        ${seatHeadHtml(f, { color, meta: view.meta })}
                       </button>
                       <div class="three-lobby-seat-tools">
                         <div class="three-lobby-occupants" role="group" aria-label="${f.name || f.id} occupant">
@@ -1598,13 +1667,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
                             <button type="button" class="three-lobby-tile${!model.playerTeams?.[f.id] ? ' is-on' : ''}" data-lobby="team" data-value="${f.id}:0">-</button>
                           </div>
                         ` : ''}
-                        ${on ? `
-                          <div class="three-lobby-colors">
-                            ${FACTION_COLORS.slice(0, 6).map((c) => `
-                              <button type="button" class="three-lobby-swatch" data-lobby="color" data-value="${f.id}:${c.id}" title="${c.name}" style="background:${c.color}"></button>
-                            `).join('')}
-                          </div>
-                        ` : ''}
+                        ${on ? colorSwatchesHtml(f, color) : ''}
                       </div>
                     </div>
                   `;

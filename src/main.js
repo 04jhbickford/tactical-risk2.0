@@ -3235,8 +3235,8 @@ if (resolveUxMode() === UX_THREE) {
     ? import('./map/uxPreview.js').then((mod) => mod.bootUxPreview())
     : import('./map/threeSoloBoot.js').then((mod) => mod.bootThreeSolo());
   boot.catch((err) => {
-    console.error('Failed to start New UX:', err);
-    reportStartupError('Could not start New UX. Classic Canvas is unchanged at / or ?ux=classic.');
+    console.error('Failed to start Experimental UX:', err);
+    reportStartupError('Could not start Experimental UX. Classic Canvas is unchanged at / or ?ux=classic.');
   });
 } else {
   init().catch((err) => {
