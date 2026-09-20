@@ -1,7 +1,7 @@
 // Durable Classic | New UX fork.
 // Queryless / cold load is always Classic Canvas (fail-closed).
 // sessionStorage New UX is set only when the user clicks New UX.
-// Reading a URL with no ux/three query clears three mode.
+// Reading a URL with no ux/three query clears session + local sticky keys.
 
 export const UX_STORAGE_KEY = 'tacticalRisk_uxMode';
 export const UX_CLASSIC = 'classic';
@@ -22,6 +22,11 @@ function hasUxQuery(params) {
 export function clearUxMode() {
   try {
     if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(UX_STORAGE_KEY);
+  } catch {
+    /* private mode */
+  }
+  try {
+    if (typeof localStorage !== 'undefined') localStorage.removeItem(UX_STORAGE_KEY);
   } catch {
     /* private mode */
   }

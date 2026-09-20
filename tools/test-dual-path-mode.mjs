@@ -9,14 +9,27 @@ import {
   clearUxMode,
   isPocketPreviewRequested,
 } from '../src/map/presentationMode.js';
+import { readFileSync } from 'node:fs';
 import { GAME_VERSION } from '../src/version.js';
 
-globalThis.sessionStorage = {
-  _d: {},
-  getItem(k) { return Object.prototype.hasOwnProperty.call(this._d, k) ? this._d[k] : null; },
-  setItem(k, v) { this._d[k] = String(v); },
-  removeItem(k) { delete this._d[k]; },
-};
+function memoryStore() {
+  return {
+    _d: {},
+    getItem(k) { return Object.prototype.hasOwnProperty.call(this._d, k) ? this._d[k] : null; },
+    setItem(k, v) { this._d[k] = String(v); },
+    removeItem(k) { delete this._d[k]; },
+  };
+}
+
+globalThis.sessionStorage = memoryStore();
+globalThis.localStorage = memoryStore();
+
+const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+assert.match(html, /window\.__TR_GAME_VERSION = 'V2\.81\.57-dual-path\.4'/);
+assert.match(html, /name="tr-game-version" content="V2\.81\.57-dual-path\.4"/);
+assert.match(html, /lockStamp/, 'HTML stamp cannot drop below .4');
+assert.match(html, /src="src\/main\.js\?v=V2\.81\.57-dual-path\.4"/);
+assert.doesNotMatch(html, /dual-path\.[23]/);
 
 assert.equal(GAME_VERSION, 'V2.81.57-dual-path.4', 'stamp is dual-path.4');
 
@@ -40,6 +53,10 @@ assert.equal(globalThis.sessionStorage.getItem(UX_STORAGE_KEY), null);
 
 clearUxMode();
 assert.equal(resolveUxMode('?code=ABC123'), UX_CLASSIC, 'other query still Classic');
+
+globalThis.localStorage.setItem(UX_STORAGE_KEY, UX_THREE);
+assert.equal(resolveUxMode(''), UX_CLASSIC, 'queryless ignores leftover localStorage');
+assert.equal(globalThis.localStorage.getItem(UX_STORAGE_KEY), null, 'queryless wipes local sticky');
 
 const threeHref = applyUxQuery(UX_THREE, 'https://tactical-risk20.vercel.app/');
 assert.match(threeHref, /ux=three/);
