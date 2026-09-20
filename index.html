@@ -62,6 +62,7 @@
   </div>
   <canvas id="minimap"></canvas>
   <!-- Optional turn-swap webhook: window.TACTICAL_RISK_TURN_NOTICE_URL = 'https://...'; unused if unset. Does not send WhatsApp from this page. -->
+  <!-- Optional Discord turn ping (Classic + New UX): window.DISCORD_TURN_WEBHOOK_URL = 'https://discord.com/api/webhooks/...'; soft-fail. -->
   <script>
     (function () {
       var reduced = false;
@@ -123,7 +124,7 @@
     })();
   </script>
   <script>
-    window.__TR_GAME_VERSION = 'V2.81.57-dual-path.2';
+    window.__TR_GAME_VERSION = 'V2.81.57-dual-path.3';
     document.documentElement.setAttribute('data-game-version', window.__TR_GAME_VERSION);
     (function stampLoop() {
       var v = window.__TR_GAME_VERSION;
@@ -151,7 +152,7 @@
       }).catch(function () {});
     }
   </script>
-  <script type="module" src="src/main.js?v=V2.81.57-dual-path.2"></script>
+  <script type="module" src="src/main.js?v=V2.81.57-dual-path.3"></script>
 </body>
 </html>
 <!-- force redeploy -->

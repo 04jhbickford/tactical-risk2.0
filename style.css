@@ -3099,6 +3099,34 @@ iframe[title="Vercel Live Feedback"] {
   color: #e2e8f0;
 }
 
+.mp-discord-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.mp-discord-input {
+  min-height: 36px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.55);
+  color: #e2e8f0;
+  font-size: 13px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.mp-discord-linked {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
 .mp-player-badges {
   display: flex;
   gap: 6px;

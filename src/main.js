@@ -139,6 +139,7 @@ import {
   shouldReconnectToGame,
 } from './multiplayer/presencePolicy.js';
 import { maybePostTurnNotice } from './multiplayer/turnNotice.js';
+import { bindDiscordTurnPing } from './multiplayer/discordTurnPing.js';
 import {
   forgetLastMatch,
   rememberLastMatch,
@@ -962,6 +963,7 @@ async function init() {
   let currentGameCode = null;
   let lastTurnNoticeSeatId = null;
   let mpStartGameId = null;
+  let unbindDiscordTurnPing = null;
 
   const notifyTurnSwap = (prevPlayer, nextPlayer) => {
     const nextId = nextPlayer?.oderId || nextPlayer?.id || null;
@@ -1207,7 +1209,9 @@ async function init() {
           lightColor: p.color || factionDef?.lightColor,
           isAI: p.isAI || false,
           aiDifficulty: p.aiDifficulty || null,
-          oderId: p.oderId // Link to Firebase user ID
+          oderId: p.oderId, // Link to Firebase user ID
+          discordUserId: p.discordUserId || '',
+          discordName: p.discordName || '',
         };
       });
 
@@ -1575,8 +1579,19 @@ async function init() {
   };
 
   // Function to wire up all game components (shared between local and multiplayer)
+  const attachDiscordTurnPing = () => {
+    if (typeof unbindDiscordTurnPing === 'function') unbindDiscordTurnPing();
+    unbindDiscordTurnPing = bindDiscordTurnPing(gameState, {
+      getGameId: () => currentGameCode || '',
+      getUxMode: () => resolveUxMode(),
+      getOrigin: () => (typeof location !== 'undefined' ? `${location.origin}${location.pathname}` : ''),
+      isApplyingRemote: () => !!syncManager?.isLoading?.(),
+    });
+  };
+
   const wireUpGameComponents = () => {
     lastTurnNoticeSeatId = gameState.currentPlayer?.oderId || gameState.currentPlayer?.id || null;
+    attachDiscordTurnPing();
     // Check if there are AI players
     const hasAIPlayers = gameState.players?.some(p => p.isAI);
 

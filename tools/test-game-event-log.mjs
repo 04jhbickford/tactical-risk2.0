@@ -40,7 +40,7 @@ function check(name, cond) {
 }
 
 console.log('game event log');
-check('GAME_VERSION is V2.81.57-dual-path.2', GAME_VERSION === 'V2.81.57-dual-path.2');
+check('GAME_VERSION is V2.81.57-dual-path.3', GAME_VERSION === 'V2.81.57-dual-path.3');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 check('EVENT_SCHEMA is 1', EVENT_SCHEMA === 1);
 check('kinds include combat/aa/phase', EVENT_KINDS.includes('combat') && EVENT_KINDS.includes('aa') && EVENT_KINDS.includes('phase'));

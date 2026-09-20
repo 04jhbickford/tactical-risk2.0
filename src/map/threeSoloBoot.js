@@ -20,7 +20,8 @@ import {
 } from '../ui/startupLoader.js';
 import { GAME_VERSION } from '../version.js';
 import { createThreeMpSession } from './threeMpSession.js';
-import { UX_CLASSIC, navigateUxMode } from './presentationMode.js';
+import { UX_CLASSIC, UX_THREE, navigateUxMode } from './presentationMode.js';
+import { bindDiscordTurnPing } from '../multiplayer/discordTurnPing.js';
 import {
   bindSealedActivate,
   clientPointOf,
@@ -145,8 +146,10 @@ export async function bootThreeSolo() {
   const factionColors = new Map(factions.map((f) => [f.id, f.color]));
 
   const lobby = createSoloLobby(setup, typeof location !== 'undefined' ? location.search : '');
-  lobby.mp = { error: '', lobby: null, isHost: false };
+  lobby.mp = { error: '', lobby: null, isHost: false, localUserId: '' };
   const mp = createThreeMpSession({ setup, territories, continents });
+  let unbindDiscordTurnPing = null;
+  let mpGameCode = '';
   let gameState = startClassicSolo(setup, territories, continents);
   gameState.unitDefs = unitDefs;
   territoryRenderer.setGameState(gameState);
@@ -303,8 +306,19 @@ export async function bootThreeSolo() {
     openLobby();
   };
   function paintLobbyNow() {
+    lobby.mp.localUserId = mp.localUserId?.() || '';
     chrome.paintLobby(lobby);
     applyLiveStamp();
+  }
+
+  function attachDiscordTurnPing() {
+    if (typeof unbindDiscordTurnPing === 'function') unbindDiscordTurnPing();
+    unbindDiscordTurnPing = bindDiscordTurnPing(gameState, {
+      getGameId: () => mpGameCode || lobby.mp.lobby?.code || '',
+      getUxMode: () => UX_THREE,
+      getOrigin: () => (typeof location !== 'undefined' ? `${location.origin}${location.pathname}` : ''),
+      isApplyingRemote: () => !!mp.syncManager?.isLoading?.(),
+    });
   }
 
   mp.subscribe((kind, payload) => {
@@ -340,6 +354,14 @@ export async function bootThreeSolo() {
         lobby.mp.lobby = mp.currentLobby();
         paintLobbyNow();
       });
+      return;
+    }
+    if (kind === 'discord') {
+      mp.setDiscord(value).then((res) => {
+        if (res && res.success === false) lobby.mp.error = res.error || '';
+        lobby.mp.lobby = mp.currentLobby();
+        paintLobbyNow();
+      }).catch(() => {});
       return;
     }
     applyLobbyAction(lobby, kind, value);
@@ -456,6 +478,9 @@ export async function bootThreeSolo() {
     }
     bindState(result.gameState);
     gameState.localUserId = result.localUserId;
+    mpGameCode = incoming?.code || incoming?.lobbyCode || incoming?.lobbyData?.code
+      || lobby.mp.lobby?.code || gameId || '';
+    attachDiscordTurnPing();
     play = createSoloPlay(gameState, unitDefs);
     play.localUserId = result.localUserId;
     play.aiStatus = null;

@@ -1027,6 +1027,22 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       display:block; margin-top:2px;
       font:400 12px/1.2 -apple-system,sans-serif; color:#94a3b8;
     }
+    #three-lobby .three-lobby-discord {
+      display:flex; flex-direction:column; gap:4px;
+      padding:0 14px 10px;
+      font:600 11px/1.2 -apple-system,sans-serif; color:#C4A35A;
+      letter-spacing:.04em; text-transform:uppercase;
+    }
+    #three-lobby .three-lobby-discord input {
+      width:100%; min-height:36px; padding:6px 10px;
+      border-radius:8px; border:1px solid rgba(255,255,255,0.16);
+      background:rgba(0,0,0,0.28); color:#f1f5f9;
+      font:400 13px/1.2 -apple-system,sans-serif; text-transform:none; letter-spacing:0;
+    }
+    #three-lobby .three-lobby-discord-linked {
+      display:block; padding:0 14px 10px;
+      font:400 11px/1.2 -apple-system,sans-serif; color:#94a3b8;
+    }
     #three-lobby .three-lobby-seat-tools {
       display:flex; flex-direction:column; gap:8px; padding:0 12px 12px;
     }
@@ -1332,6 +1348,9 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       const roomFactions = model.factions || [];
       const taken = new Set(roomPlayers.map((p) => p.factionId).filter(Boolean));
       const host = !!mp.isHost;
+      const localUserId = typeof mp.localUserId === 'function'
+        ? (mp.localUserId() || '')
+        : (mp.localUserId || '');
       const code = room?.code || '------';
 
       if (screen === 'online' || screen === 'create' || screen === 'join' || screen === 'room') {
@@ -1424,6 +1443,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
                       const seated = roomPlayers.find((p) => p.factionId === f.id);
                       const kind = seated ? (seated.isAI ? 'ai' : 'human') : 'empty';
                       const tier = seated?.aiDifficulty || 'medium';
+                      const isMe = !!(seated && !seated.isAI && localUserId && seated.oderId === localUserId);
                       const meta = seated
                         ? (seated.isAI ? `${occupantChipLabel(tier)} AI` : (seated.displayName || 'Human'))
                         : 'Empty';
@@ -1433,6 +1453,13 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
                             <div class="three-lobby-seat-name">${f.name || f.id}</div>
                             <span class="three-lobby-seat-meta">${meta}</span>
                           </button>
+                          ${isMe ? `
+                            <label class="three-lobby-discord">Discord
+                              <input type="text" data-lobby-discord="1" maxlength="48" placeholder="ID or username (optional)" value="${seated.discordUserId || seated.discordName || ''}" autocomplete="off">
+                            </label>
+                          ` : (!seated?.isAI && (seated?.discordUserId || seated?.discordName)
+                            ? `<span class="three-lobby-discord-linked">Discord linked</span>`
+                            : '')}
                           ${host ? `
                             <div class="three-lobby-seat-tools">
                               <div class="three-lobby-occupants">
@@ -2041,6 +2068,11 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       api.onLobbyChange(kind, btn.dataset.value);
     }
   }, { prevent: false });
+  lobby.addEventListener('change', (e) => {
+    const input = e.target?.closest?.('[data-lobby-discord]');
+    if (!input || !lobby.contains(input)) return;
+    if (typeof api.onLobbyChange === 'function') api.onLobbyChange('discord', input.value);
+  });
   lobby.addEventListener('submit', (e) => {
     const form = e.target?.closest?.('[data-lobby-form]');
     if (!form || !lobby.contains(form)) return;

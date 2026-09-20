@@ -23,6 +23,7 @@ import {
 } from '../multiplayer/lastMatch.js';
 import { resolveHostLobbyPrimaryCta } from '../multiplayer/lobbyStart.js';
 import { seatNamesForOpenGameCard } from '../multiplayer/lobbySeats.js';
+import { parseDiscordSeatInput, rememberDiscordSeat } from '../multiplayer/discordTurnPing.js';
 import { resolveHostAwayBanner } from '../ui/hudClarity.js';
 
 // Available factions (should match setup data)
@@ -764,6 +765,12 @@ export class MultiplayerLobby {
                       ${isAI ? `<span class="badge ai">${player.aiDifficulty?.toUpperCase() || 'AI'}</span>` : ''}
                       ${!isAI && !player.isHost ? `<span class="badge ${player.isReady ? 'ready' : 'waiting'}">${player.isReady ? 'READY' : 'SELECTING'}</span>` : ''}
                     </div>
+                    ${isMe && !isAI ? `
+                      <label class="mp-discord-field">
+                        Discord
+                        <input type="text" class="mp-discord-input" data-action="discord-id" maxlength="48" placeholder="ID or username (optional)" value="${player.discordUserId || player.discordName || ''}" autocomplete="off">
+                      </label>
+                    ` : (!isAI && (player.discordName || player.discordUserId) ? `<span class="mp-discord-linked">Discord linked</span>` : '')}
                   </div>
                   ${isAI && isHost ? `
                     <button class="mp-remove-btn" data-action="remove-ai" data-index="${index}" data-oder-id="${player.oderId || ''}" title="Remove AI">×</button>
@@ -1015,6 +1022,12 @@ export class MultiplayerLobby {
     });
 
     // Faction selection
+    this.el.querySelector('[data-action="discord-id"]')?.addEventListener('change', async (e) => {
+      const fields = parseDiscordSeatInput(e.target.value);
+      rememberDiscordSeat(fields);
+      await this.lobbyManager.updatePlayer(fields);
+    });
+
     this.el.querySelectorAll('.mp-faction-btn:not([disabled])').forEach(btn => {
       btn.addEventListener('click', async () => {
         const factionId = btn.dataset.faction;

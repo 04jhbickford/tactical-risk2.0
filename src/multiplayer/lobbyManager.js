@@ -46,6 +46,7 @@ import {
   startGameRoster,
   transferLobbyHost,
 } from './lobbySeats.js';
+import { readRememberedDiscordSeat } from './discordTurnPing.js';
 
 // Generate a random 6-character lobby code
 function generateLobbyCode() {
@@ -117,7 +118,8 @@ export class LobbyManager {
         color: null,
         isReady: false,
         isHost: true,
-        joinedAt: Date.now()
+        joinedAt: Date.now(),
+        ...readRememberedDiscordSeat(),
       }],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
@@ -436,7 +438,8 @@ export class LobbyManager {
       color: null,
       isReady: false,
       isHost: false,
-      joinedAt: Date.now()
+      joinedAt: Date.now(),
+      ...readRememberedDiscordSeat(),
     };
 
     console.log('[LobbyManager] Player joining lobby:', {

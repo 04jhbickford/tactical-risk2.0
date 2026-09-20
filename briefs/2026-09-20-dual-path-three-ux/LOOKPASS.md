@@ -1,6 +1,6 @@
 # Dual-path Classic | New UX — lookpass
 
-Stamp: **V2.81.57-dual-path.2**
+Stamp: **V2.81.57-dual-path.3**
 Hold merge for Viz gate + James look.
 
 ## Paths
@@ -18,6 +18,10 @@ See `briefs/2026-09-20-boardgame-sandbox-ref/LOOKPASS.md`: seat cards Human / AI
 ## P0 — Confirm Attack @390 (tip .18 Viz PARTIAL)
 
 Tip `.18` combat ORIGIN→UNITS→DEST reached; gold **Confirm Attack** was clipped / not tappable because `#three-bottom` swallowed dest taps and peek/battle grew over the footer. Ported tip `.19` dock (Viz PASS ~97%): `#three-sheet-stack` scrolls above a reserved Confirm footer; hit-test is Confirm (and Undo) only. Label is `Confirm Attack`. Classic Canvas untouched. Cite: `briefs/2026-09-20-main-art-three-ux/preview-solo-19/SCORE-solo-19.md`. Tip→main STOP.
+
+## Discord turn ping (Classic + New UX)
+
+Webhook `DISCORD_TURN_WEBHOOK_URL` on shared sync. Once per new human seat; skip AI; dedupe `(gameId, turnIndex, seatId)`. Lobby field: Classic `.mp-discord-input`, New UX `[data-lobby-discord]`. Unlinked → one untagged fallback. Soft-fail. See `DISCORD-TURN-PING.md`.
 
 ## Known stubs (from tip .18)
 

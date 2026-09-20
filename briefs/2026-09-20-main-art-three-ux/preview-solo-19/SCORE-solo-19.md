@@ -10,7 +10,7 @@ Viz **PASS ~97%** on `V2.81.56-ux-solo.19` (PR76 `cursor/unit-sheet-clickthrough
 
 ## Dual-path New UX (already landed)
 
-`V2.81.57-dual-path.2` uses this `.19` reserved Confirm footer — not `.18`:
+`V2.81.57-dual-path.3` uses this `.19` reserved Confirm footer — not `.18`:
 
 - `#three-sheet-stack` scrolls peek/battle above Confirm + safe-area
 - `#three-bottom` `pointer-events:none`; dest taps live

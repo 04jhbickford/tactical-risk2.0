@@ -18,6 +18,7 @@ import { GameState } from '../state/gameState.js';
 import { rememberLastMatch } from '../multiplayer/lastMatch.js';
 import { resolveIsHost } from '../multiplayer/hostHandoff.js';
 import { FACTION_COLORS } from '../ui/lobby.js';
+import { parseDiscordSeatInput, readRememberedDiscordSeat, rememberDiscordSeat } from '../multiplayer/discordTurnPing.js';
 
 export function createThreeMpSession({ setup, territories, continents }) {
   let ready = false;
@@ -100,6 +101,7 @@ export function createThreeMpSession({ setup, territories, continents }) {
           resolve({ ok: false, error: result.error || 'Create failed' });
           return;
         }
+        await applyRememberedDiscord();
         notify('lobby', { lobby: getLobbyManager().currentLobby });
         resolve({ ok: true, lobby: getLobbyManager().currentLobby });
       });
@@ -126,10 +128,26 @@ export function createThreeMpSession({ setup, territories, continents }) {
           resolve({ ok: true, started: true, gameId: result.gameId, game: result.game });
           return;
         }
+        await applyRememberedDiscord();
         notify('lobby', { lobby: getLobbyManager().currentLobby });
         resolve({ ok: true, lobby: getLobbyManager().currentLobby });
       });
     });
+  }
+
+  async function applyRememberedDiscord() {
+    const remembered = readRememberedDiscordSeat();
+    if (!remembered.discordUserId && !remembered.discordName) return;
+    const me = getLobbyManager().getCurrentPlayer?.() || null;
+    if (me?.isAI) return;
+    if (me?.discordUserId || me?.discordName) return;
+    await getLobbyManager().updatePlayer(remembered);
+  }
+
+  async function setDiscord(raw) {
+    const fields = parseDiscordSeatInput(raw);
+    rememberDiscordSeat(fields);
+    return getLobbyManager().updatePlayer(fields);
   }
 
   async function pickFaction(factionId, color) {
@@ -208,6 +226,8 @@ export function createThreeMpSession({ setup, territories, continents }) {
           isAI: p.isAI || false,
           aiDifficulty: p.aiDifficulty || null,
           oderId: p.oderId,
+          discordUserId: p.discordUserId || '',
+          discordName: p.discordName || '',
         };
       });
       gameState.initGame('risk', players, {
@@ -258,12 +278,14 @@ export function createThreeMpSession({ setup, territories, continents }) {
     createGame,
     joinGame,
     pickFaction,
+    setDiscord,
     addAi,
     startRoom,
     startMatch,
     subscribe,
     currentLobby,
     localUser,
+    localUserId: () => localUser()?.id || null,
     isHostUser,
     get syncManager() { return syncManager; },
   };
