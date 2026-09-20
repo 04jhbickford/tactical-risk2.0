@@ -3,6 +3,7 @@ import {
   UX_CLASSIC,
   UX_THREE,
   UX_STORAGE_KEY,
+  UX_LABEL_EXPERIMENTAL,
   resolveUxMode,
   applyUxQuery,
   persistUxMode,
@@ -25,13 +26,27 @@ globalThis.sessionStorage = memoryStore();
 globalThis.localStorage = memoryStore();
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-assert.match(html, /window\.__TR_GAME_VERSION = 'V2\.81\.57-dual-path\.4'/);
-assert.match(html, /name="tr-game-version" content="V2\.81\.57-dual-path\.4"/);
-assert.match(html, /lockStamp/, 'HTML stamp cannot drop below .4');
-assert.match(html, /src="src\/main\.js\?v=V2\.81\.57-dual-path\.4"/);
-assert.doesNotMatch(html, /dual-path\.[23]/);
+assert.match(html, /window\.__TR_GAME_VERSION = 'V2\.81\.57-dual-path\.8'/);
+assert.match(html, /name="tr-game-version" content="V2\.81\.57-dual-path\.8"/);
+assert.match(html, /lockStamp/, 'HTML stamp cannot drop below .8');
+assert.match(html, /src="src\/main\.js\?v=V2\.81\.57-dual-path\.8"/);
+assert.doesNotMatch(html, /dual-path\.[234567]['"]/);
 
-assert.equal(GAME_VERSION, 'V2.81.57-dual-path.4', 'stamp is dual-path.4');
+assert.equal(GAME_VERSION, 'V2.81.57-dual-path.8', 'stamp is dual-path.8');
+assert.equal(UX_LABEL_EXPERIMENTAL, 'Experimental UX');
+
+const lobbySrc = readFileSync(new URL('../src/ui/lobby.js', import.meta.url), 'utf8');
+const chromeSrc = readFileSync(new URL('../src/map/threeMapChrome.js', import.meta.url), 'utf8');
+assert.match(lobbySrc, /UX_LABEL_EXPERIMENTAL/);
+assert.match(chromeSrc, /UX_LABEL_EXPERIMENTAL/);
+assert.match(chromeSrc, /assets\/flags\/\$\{flag\}/);
+assert.match(chromeSrc, /three-lobby-swatch\$\{on \? ' is-on'/);
+assert.match(chromeSrc, /data-lobby-select="\$\{action\}"/);
+assert.match(chromeSrc, /three-lobby-pip/);
+assert.match(chromeSrc, /compactLocalSeatHtml/);
+assert.doesNotMatch(chromeSrc, /three-lobby-occupants|three-lobby-ai-tiers/);
+assert.doesNotMatch(lobbySrc, /New UX \(Three\.js\)|three\.js/i);
+assert.doesNotMatch(chromeSrc, /New UX \(Three\.js\)|three\.js/i);
 
 assert.equal(resolveUxMode(''), UX_CLASSIC, 'default Classic');
 assert.equal(resolveUxMode('?ux=classic'), UX_CLASSIC);

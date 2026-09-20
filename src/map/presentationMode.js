@@ -6,6 +6,8 @@
 export const UX_STORAGE_KEY = 'tacticalRisk_uxMode';
 export const UX_CLASSIC = 'classic';
 export const UX_THREE = 'three';
+// Player-facing label. Mode key stays `three` so ?ux=three deep links work.
+export const UX_LABEL_EXPERIMENTAL = 'Experimental UX';
 
 const ON = new Set(['1', 'true', 'yes', 'three', 'new', 'newux']);
 const CLASSIC = new Set(['0', 'false', 'no', 'classic', 'canvas', 'off']);

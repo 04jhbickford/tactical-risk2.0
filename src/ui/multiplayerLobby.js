@@ -25,6 +25,12 @@ import { resolveHostLobbyPrimaryCta } from '../multiplayer/lobbyStart.js';
 import { seatNamesForOpenGameCard } from '../multiplayer/lobbySeats.js';
 import { parseDiscordSeatInput, rememberDiscordSeat } from '../multiplayer/discordTurnPing.js';
 import { resolveHostAwayBanner } from '../ui/hudClarity.js';
+import {
+  formatWelcomeEmail,
+  formatWelcomeName,
+  isRealAuthIdentity,
+  resolveAuthSurface,
+} from '../multiplayer/authSession.js';
 
 // Available factions (should match setup data)
 const FACTIONS = [
@@ -136,7 +142,33 @@ export class MultiplayerLobby {
     this.el.classList.remove('hidden');
     this.el.style.display = 'flex'; // Ensure visible
     this._subscribeToLobby();
+    this._subscribeToAuth();
+    void this._paintOrBounceToAuth();
+  }
+
+  async _paintOrBounceToAuth() {
+    if (!this.authManager.isAuthReady()) {
+      try { await this.authManager.whenReady(); } catch { /* keep going */ }
+    }
+    const surface = resolveAuthSurface({
+      authReady: this.authManager.isAuthReady(),
+      user: this.authManager.getUser(),
+    });
+    if (surface === 'signin') {
+      this.hide();
+      if (this.onBack) this.onBack('rejoin-auth');
+      return;
+    }
     this._render();
+  }
+
+  _subscribeToAuth() {
+    if (this._unsubAuth) return;
+    this._unsubAuth = this.authManager.subscribe(() => {
+      if (this.el?.classList.contains('hidden')) return;
+      if (this.mode !== 'menu') return;
+      this._render();
+    });
   }
 
   hide({ resetMode = true } = {}) {
@@ -240,15 +272,23 @@ export class MultiplayerLobby {
   }
 
   _renderMenu(user) {
-    // Show clear identity for debugging
-    const userIdShort = user?.id ? user.id.slice(-8) : 'unknown';
+    const welcome = formatWelcomeName(user);
+    const email = formatWelcomeEmail(user);
+    const userIdShort = user?.id ? user.id.slice(-8) : '';
+    if (!isRealAuthIdentity(user) || !welcome) {
+      return `
+      <div class="mp-identity-box">
+        <p class="mp-welcome">Restoring your session…</p>
+        <p class="mp-identity-details">You were signed in. Hang on.</p>
+      </div>`;
+    }
 
     return `
       <div class="mp-identity-box">
-        <p class="mp-welcome">Welcome, <strong>${user?.displayName || 'Player'}</strong></p>
+        <p class="mp-welcome">Welcome, <strong>${welcome}</strong></p>
         <p class="mp-identity-details">
-          Logged in as: <strong>${user?.email || 'unknown'}</strong>
-          <span class="mp-user-id">(ID: ...${userIdShort})</span>
+          Logged in as: <strong>${email || welcome}</strong>
+          ${userIdShort ? `<span class="mp-user-id">(ID: ...${userIdShort})</span>` : ''}
         </p>
       </div>
       ${this._renderLastMatchBanner()}

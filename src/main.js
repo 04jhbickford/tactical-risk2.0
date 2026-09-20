@@ -153,6 +153,10 @@ import {
 import { maybePostTurnNotice } from './multiplayer/turnNotice.js';
 import { bindDiscordTurnPing } from './multiplayer/discordTurnPing.js';
 import {
+  resumeAuthEvent,
+  shouldRefreshTokenOnResume,
+} from './multiplayer/authSession.js';
+import {
   forgetLastMatch,
   rememberLastMatch,
   readLastMatch,
@@ -176,6 +180,7 @@ import {
   bindGameEventLog,
   createFirestoreEventWriter,
   createGameEventLog,
+  emitGameEvent,
   installClientErrorHooks,
   unbindGameEventLog,
 } from './multiplayer/gameEventLog.js';
@@ -1019,6 +1024,15 @@ async function init() {
   if (isFirebaseConfigured()) {
     authManager.initialize();
     lobbyManager.initialize();
+    const quietResume = (event, extra = {}) => {
+      if (!shouldRefreshTokenOnResume({ event: resumeAuthEvent(event, extra) })) return;
+      authManager.refreshSessionQuietly?.();
+    };
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') quietResume('visible');
+    });
+    window.addEventListener('pageshow', (ev) => quietResume('visible', { persisted: !!ev.persisted }));
+    window.addEventListener('online', () => quietResume('online'));
   }
 
   // Function to start a multiplayer game
@@ -1598,6 +1612,14 @@ async function init() {
       getUxMode: () => resolveUxMode(),
       getOrigin: () => (typeof location !== 'undefined' ? `${location.origin}${location.pathname}` : ''),
       isApplyingRemote: () => !!syncManager?.isLoading?.(),
+      onResult: (result) => {
+        emitGameEvent('ui', {
+          payload: {
+            action: 'discordTurnPing',
+            reason: result?.reason || (result?.ok ? 'sent' : 'soft-fail'),
+          },
+        });
+      },
     });
   };
 
@@ -2142,6 +2164,7 @@ async function init() {
       || shouldShowSignInForm({
         authReady: authManager.isAuthReady(),
         userPresent: authManager.isLoggedIn(),
+        user: authManager.getUser(),
       })) {
       if (!authScreen) {
         authScreen = new AuthScreen((user) => {
@@ -3235,8 +3258,8 @@ if (resolveUxMode() === UX_THREE) {
     ? import('./map/uxPreview.js').then((mod) => mod.bootUxPreview())
     : import('./map/threeSoloBoot.js').then((mod) => mod.bootThreeSolo());
   boot.catch((err) => {
-    console.error('Failed to start New UX:', err);
-    reportStartupError('Could not start New UX. Classic Canvas is unchanged at / or ?ux=classic.');
+    console.error('Failed to start Experimental UX:', err);
+    reportStartupError('Could not start Experimental UX. Classic Canvas is unchanged at / or ?ux=classic.');
   });
 } else {
   init().catch((err) => {

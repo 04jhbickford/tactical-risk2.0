@@ -27,6 +27,14 @@ Viz FAIL ~58% (`SCORE-dual-path-3.md`): CDN stamp painted `.2`; queryless `/` st
 
 Webhook `DISCORD_TURN_WEBHOOK_URL` on shared sync. Once per new human seat; skip AI; dedupe `(gameId, turnIndex, seatId)`. Lobby field: Classic `.mp-discord-input`, New UX `[data-lobby-discord]`. Unlinked → one untagged fallback. Soft-fail. See `DISCORD-TURN-PING.md`.
 
+## dual-path.7 — auth + server Discord (hold merge)
+
+Issue 9.20.26.01: return-to-login zombie (`Player` / non-player) is gone — clean Sign In **or** real restored identity. Persistence stays local (no sign-out on tab return). Discord production path is `POST /api/discord-turn-ping` (Vercel env). Stamp **V2.81.57-dual-path.7**. Compact Experimental seats from .6 stay. See `AUTH-DISCORD.md`.
+
+## dual-path.8 — durable Discord env + max persistence (hold merge)
+
+Webhook is Vercel sensitive env `DISCORD_TURN_WEBHOOK_URL` on Production + Preview. Client POSTs `/api/discord-turn-ping` payload only. Server soft-fails 200 if unconfigured. Quiet token refresh also on `online`; hydrate identity on resume. Stamp **V2.81.57-dual-path.8**.
+
 ## Known stubs (from tip .18)
 
 Retreat tiles, bombard tiles, sub-vs-air / first-strike split. Naval fights still auto-resolve in the Three adapter.

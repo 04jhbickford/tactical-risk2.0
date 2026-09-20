@@ -178,7 +178,7 @@ const unitDefs = {
 };
 
 console.log('=== Version stamps ===');
-check('GAME_VERSION is V2.81.57-dual-path.4', GAME_VERSION === 'V2.81.57-dual-path.4');
+check('GAME_VERSION is V2.81.57-dual-path.8', GAME_VERSION === 'V2.81.57-dual-path.8');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== Presence: background must not delete or go offline ===');
@@ -218,6 +218,17 @@ check('E1/B25: Sign In form waits for auth restore',
   shouldShowSignInForm({ authReady: false, userPresent: false }) === false
   && shouldShowSignInForm({ authReady: true, userPresent: true }) === false
   && shouldShowSignInForm({ authReady: true, userPresent: false }) === true);
+check('9.20.26.01: zombie Player after ready is Sign In not welcome',
+  shouldShowSignInForm({
+    authReady: true,
+    userPresent: true,
+    user: { id: 'uid', displayName: 'Player' },
+  }) === true
+  && shouldShowSignInForm({
+    authReady: true,
+    userPresent: true,
+    user: { id: 'uid', email: 'rob@example.com', displayName: 'Player' },
+  }) === false);
 check('E1: resume on visible and pageshow (incl. bfcache)',
   shouldResumeSnapshots({ event: 'visibility-visible' })
   && shouldResumeSnapshots({ event: 'pageshow' })
@@ -967,11 +978,18 @@ console.log('=== B26–B30 James client: join bind, stay in view, deploy, Max, +
   check('E1/B25: init does not call setPersistence (IndexedDB race)',
     !/setPersistence\s*\(/.test(firebaseSrc)
     && !firebaseSrc.includes('browserLocalPersistence'));
-  check('E1/B25: restored Firebase user is applied before Firestore lastLogin',
-    authSrc.includes('_applyFirebaseUser')
-    && authSrc.includes('authStateReady')
-    && /onAuthStateChanged\([\s\S]*_updateUserDocument\(user\)\.catch/.test(authSrc)
-    && !/onAuthStateChanged\([\s\S]*await this\._updateUserDocument/.test(authSrc));
+  {
+    const listenerStart = authSrc.indexOf('onAuthStateChanged(this.auth, (user) => {');
+    const listenerEnd = authSrc.indexOf('  _applyFirebaseUser(user) {', listenerStart);
+    const listenerChunk = authSrc.slice(listenerStart, listenerEnd === -1 ? listenerStart + 400 : listenerEnd);
+    check('E1/B25: restored Firebase user is applied before Firestore lastLogin',
+      authSrc.includes('_applyFirebaseUser')
+      && authSrc.includes('authStateReady')
+      && listenerChunk.includes('_applyFirebaseUser(user)')
+      && listenerChunk.includes('_hydrateIdentity(user).catch')
+      && !listenerChunk.includes('await this._hydrateIdentity')
+      && !listenerChunk.includes('await this._updateUserDocument'));
+  }
   const authUiSrc = readFileSync(join(root, 'src/ui/authScreen.js'), 'utf8');
   check('E1/B25: AuthScreen restores session before the password form',
     authUiSrc.includes("mode === 'restoring'")

@@ -8,7 +8,7 @@
 // importers but leave GAME_VERSION undefined inside this module.
 import { GAME_VERSION } from '../version.js';
 import { isMobileShell } from './mobileShell.js';
-import { UX_CLASSIC, UX_THREE, navigateUxMode } from '../map/presentationMode.js';
+import { UX_CLASSIC, UX_THREE, UX_LABEL_EXPERIMENTAL, navigateUxMode } from '../map/presentationMode.js';
 export { GAME_VERSION };
 
 // Native <select> option taps land on the card under the popup.
@@ -141,8 +141,8 @@ export class Lobby {
             <span class="lobby-ux-desc">Default · Canvas</span>
           </button>
           <button type="button" class="lobby-ux-btn lobby-ux-btn-new" data-action="ux-three" aria-pressed="false">
-            <span class="lobby-ux-title">New UX (Three.js)</span>
-            <span class="lobby-ux-desc">Experimental</span>
+            <span class="lobby-ux-title">${UX_LABEL_EXPERIMENTAL}</span>
+            <span class="lobby-ux-desc">Optional</span>
           </button>
         </div>
       </div>

@@ -19,6 +19,12 @@ import { rememberLastMatch } from '../multiplayer/lastMatch.js';
 import { resolveIsHost } from '../multiplayer/hostHandoff.js';
 import { FACTION_COLORS } from '../ui/lobby.js';
 import { parseDiscordSeatInput, readRememberedDiscordSeat, rememberDiscordSeat } from '../multiplayer/discordTurnPing.js';
+import {
+  isRealAuthIdentity,
+  resolveAuthSurface,
+  resumeAuthEvent,
+  shouldRefreshTokenOnResume,
+} from '../multiplayer/authSession.js';
 
 export function createThreeMpSession({ setup, territories, continents }) {
   let ready = false;
@@ -51,23 +57,64 @@ export function createThreeMpSession({ setup, territories, continents }) {
     auth.initialize();
     lobby.initialize();
     getPresenceManager();
+    const quietResume = (event, extra = {}) => {
+      if (!shouldRefreshTokenOnResume({ event: resumeAuthEvent(event, extra) })) return;
+      auth.refreshSessionQuietly?.();
+    };
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') quietResume('visible');
+      });
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pageshow', (ev) => quietResume('visible', { persisted: !!ev.persisted }));
+      window.addEventListener('online', () => quietResume('online'));
+    }
     ready = true;
     return { ok: true };
   }
 
+  async function restoreSession() {
+    const gate = await ensure();
+    if (!gate.ok) return gate;
+    const auth = getAuthManager();
+    try { await auth.whenReady(); } catch { /* keep going */ }
+    return { ok: true, user: auth.getUser(), surface: authSurface() };
+  }
+
+  function authSurface() {
+    const auth = getAuthManager();
+    return resolveAuthSurface({
+      authReady: auth.isAuthReady(),
+      user: auth.getUser(),
+    });
+  }
+
   function ensureAuth(onUser) {
     const auth = getAuthManager();
-    if (auth.isLoggedIn()) {
-      onUser(auth.getUser());
-      return;
-    }
-    if (!authScreen) {
-      authScreen = new AuthScreen((user) => {
-        authScreen.hide();
+    const proceed = async () => {
+      if (!auth.isAuthReady()) {
+        try { await auth.whenReady(); } catch { /* keep going */ }
+      }
+      const user = auth.getUser();
+      if (isRealAuthIdentity(user)) {
         onUser(user);
-      });
-    }
-    authScreen.show();
+        return;
+      }
+      if (!authScreen) {
+        authScreen = new AuthScreen((next) => {
+          authScreen.hide();
+          onUser(isRealAuthIdentity(next) ? next : null);
+        });
+      } else {
+        authScreen.onComplete = (next) => {
+          authScreen.hide();
+          onUser(isRealAuthIdentity(next) ? next : null);
+        };
+      }
+      authScreen.show();
+    };
+    void proceed();
   }
 
   function bindLobby() {
@@ -263,7 +310,13 @@ export function createThreeMpSession({ setup, territories, continents }) {
   }
 
   function localUser() {
-    return getAuthManager().getUser();
+    const user = getAuthManager().getUser();
+    return isRealAuthIdentity(user) ? user : null;
+  }
+
+  async function signOut() {
+    const auth = getAuthManager();
+    return auth.signOut({ confirmed: true });
   }
 
   function isHostUser() {
@@ -275,6 +328,9 @@ export function createThreeMpSession({ setup, territories, continents }) {
   return {
     ensure,
     ensureAuth,
+    restoreSession,
+    authSurface,
+    signOut,
     createGame,
     joinGame,
     pickFaction,
