@@ -1,10 +1,11 @@
 // Discord turn ping: human-only, dedupe, untagged fallback, soft-fail.
 // Run: node tools/test-discord-turn-ping.mjs
 
-import { readFileSync } from 'node:fs';
 import { GAME_VERSION } from '../src/version.js';
+import { existsSync, readFileSync } from 'node:fs';
 import {
   DISCORD_TURN_CHANNEL_ID,
+  DISCORD_TURN_PING_API,
   normalizeDiscordSnowflake,
   parseDiscordSeatInput,
   turnIndexOf,
@@ -14,6 +15,8 @@ import {
   shouldPingHumanSeat,
   maybePostDiscordTurnPing,
   bindDiscordTurnPing,
+  postDiscordTurnPingViaProxy,
+  discordPingPayload,
 } from '../src/multiplayer/discordTurnPing.js';
 
 const classicLobby = readFileSync(new URL('../src/ui/multiplayerLobby.js', import.meta.url), 'utf8');
@@ -27,7 +30,7 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-check('stamp is dual-path.6', GAME_VERSION === 'V2.81.57-dual-path.6');
+check('stamp is dual-path.7', GAME_VERSION === 'V2.81.57-dual-path.7');
 check('channel id documented', DISCORD_TURN_CHANNEL_ID === '1551283474303025292');
 check('Classic lobby field', classicLobby.includes('mp-discord-input') && classicLobby.includes('data-action="discord-id"'));
 check('New UX lobby field', threeChrome.includes('data-lobby-discord') && threeChrome.includes('three-lobby-discord'));
@@ -164,6 +167,42 @@ bindDiscordTurnPing(gs, {
 gs.currentPlayer = { id: 'Russians', isAI: false, discordUserId: '1' };
 listeners[listeners.length - 1]();
 check('remote apply does not ping', !pingPosts.includes('remote'));
+
+const apiPath = new URL('../api/discord-turn-ping.js', import.meta.url);
+check('serverless api file exists', existsSync(apiPath));
+const apiSrc = readFileSync(apiPath, 'utf8');
+check('api reads server env only', apiSrc.includes('process.env.DISCORD_TURN_WEBHOOK_URL') && apiSrc.includes('skip-ai'));
+check('client default proxy path', DISCORD_TURN_PING_API === '/api/discord-turn-ping');
+check('Classic + Experimental still bind', classicMain.includes('bindDiscordTurnPing') && threeBoot.includes('attachDiscordTurnPing'));
+check('index.html does not bake a webhook secret',
+  !/DISCORD_TURN_WEBHOOK_URL\s*=\s*'https:\/\/discord\.com\/api\/webhooks\/[A-Za-z0-9]/.test(
+    readFileSync(new URL('../index.html', import.meta.url), 'utf8')
+  ));
+
+const proxyPosts = [];
+const proxied = await maybePostDiscordTurnPing({
+  player: human,
+  gameId: 'ABC123',
+  turnIndex: 9,
+  seatId: 'Russians',
+  phase: 'Combat Move',
+  deepLink: 'https://example.test/?ux=three&code=ABC123',
+  storage: { _d: {}, getItem() { return null; }, setItem() {} },
+  proxyPost: async (url, payload) => {
+    proxyPosts.push({ url, payload });
+    return { ok: true, reason: 'sent' };
+  },
+});
+check('production path uses /api proxy',
+  proxied.ok === true
+  && proxyPosts[0].url === '/api/discord-turn-ping'
+  && proxyPosts[0].payload.gameId === 'ABC123'
+  && proxyPosts[0].payload.discordUserId === '123456789012345678');
+
+const via = await postDiscordTurnPingViaProxy('/api/discord-turn-ping', discordPingPayload({
+  player: human, gameId: 'Z', turnIndex: 1, seatId: 'Russians',
+}), async () => ({ ok: true, json: async () => ({ ok: true, reason: 'sent' }) }));
+check('proxy helper accepts json {ok:true}', via.ok === true);
 
 console.log(failures === 0 ? '\nALL DISCORD TURN-PING CHECKS PASS' : `\n${failures} FAILURES`);
 process.exit(failures === 0 ? 0 : 1);

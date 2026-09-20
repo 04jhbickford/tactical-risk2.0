@@ -2,6 +2,10 @@
 
 import { getAuthManager } from '../multiplayer/auth.js';
 import { shouldShowSignInForm } from '../multiplayer/presencePolicy.js';
+import {
+  isRealAuthIdentity,
+  resolveAuthSurface,
+} from '../multiplayer/authSession.js';
 
 export class AuthScreen {
   constructor(onComplete) {
@@ -11,21 +15,26 @@ export class AuthScreen {
     this.mode = 'login'; // 'restoring', 'login', 'signup', 'phone', 'verify'
     this.phoneNumber = '';
     this.isLoading = false;
+    this._unsubAuth = null;
+    this._completed = false;
   }
 
   show() {
     if (!this.el) {
       this._create();
     }
+    this._completed = false;
     this.el.classList.remove('hidden');
-    if (this.authManager.isLoggedIn()) {
-      this.hide();
-      if (this.onComplete) this.onComplete(this.authManager.getUser());
-      return;
-    }
-    if (!shouldShowSignInForm({
+    this._watchAuth();
+    const surface = resolveAuthSurface({
+      authReady: this.authManager.isAuthReady(),
+      user: this.authManager.getUser(),
+    });
+    if (this._finishIfSession()) return;
+    if (surface === 'restoring' || !shouldShowSignInForm({
       authReady: this.authManager.isAuthReady(),
       userPresent: this.authManager.isLoggedIn(),
+      user: this.authManager.getUser(),
     })) {
       this.mode = 'restoring';
       this._render();
@@ -36,13 +45,31 @@ export class AuthScreen {
     this._render();
   }
 
+  _watchAuth() {
+    if (this._unsubAuth) return;
+    this._unsubAuth = this.authManager.subscribe((user) => {
+      if (this.el?.classList.contains('hidden')) return;
+      if (isRealAuthIdentity(user)) this._finishIfSession();
+    });
+  }
+
+  _finishIfSession() {
+    const user = this.authManager.getUser();
+    if (!isRealAuthIdentity(user)) return false;
+    this._complete(user);
+    return true;
+  }
+
+  _complete(user) {
+    if (this._completed) return;
+    this._completed = true;
+    this.hide();
+    if (this.onComplete) this.onComplete(user);
+  }
+
   async _restoreThenContinue() {
     await this.authManager.whenReady();
-    if (this.authManager.isLoggedIn()) {
-      this.hide();
-      if (this.onComplete) this.onComplete(this.authManager.getUser());
-      return;
-    }
+    if (this._finishIfSession()) return;
     this.mode = 'login';
     this._render();
   }
@@ -202,7 +229,8 @@ export class AuthScreen {
     this.el.querySelector('.auth-back-btn')?.addEventListener('click', () => {
       this.hide();
       if (this.onComplete) {
-        this.onComplete(null); // Cancelled
+        // Cancel only — do not sign out. Tab return / Back keeps the session.
+        this.onComplete(null);
       }
     });
 
@@ -250,10 +278,7 @@ export class AuthScreen {
     this.isLoading = false;
 
     if (result.success) {
-      this.hide();
-      if (this.onComplete) {
-        this.onComplete(this.authManager.getUser());
-      }
+      this._complete(this.authManager.getUser());
     } else {
       this._render();
       const newErrorEl = this.el.querySelector('#login-error');
@@ -278,10 +303,7 @@ export class AuthScreen {
     this.isLoading = false;
 
     if (result.success) {
-      this.hide();
-      if (this.onComplete) {
-        this.onComplete(this.authManager.getUser());
-      }
+      this._complete(this.authManager.getUser());
     } else {
       this._render();
       const newErrorEl = this.el.querySelector('#signup-error');
@@ -329,10 +351,7 @@ export class AuthScreen {
     this.isLoading = false;
 
     if (result.success) {
-      this.hide();
-      if (this.onComplete) {
-        this.onComplete(this.authManager.getUser());
-      }
+      this._complete(this.authManager.getUser());
     } else {
       this._render();
       const newErrorEl = this.el.querySelector('#verify-error');

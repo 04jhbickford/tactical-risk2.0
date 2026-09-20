@@ -153,6 +153,10 @@ import {
 import { maybePostTurnNotice } from './multiplayer/turnNotice.js';
 import { bindDiscordTurnPing } from './multiplayer/discordTurnPing.js';
 import {
+  resumeAuthEvent,
+  shouldRefreshTokenOnResume,
+} from './multiplayer/authSession.js';
+import {
   forgetLastMatch,
   rememberLastMatch,
   readLastMatch,
@@ -176,6 +180,7 @@ import {
   bindGameEventLog,
   createFirestoreEventWriter,
   createGameEventLog,
+  emitGameEvent,
   installClientErrorHooks,
   unbindGameEventLog,
 } from './multiplayer/gameEventLog.js';
@@ -1019,6 +1024,14 @@ async function init() {
   if (isFirebaseConfigured()) {
     authManager.initialize();
     lobbyManager.initialize();
+    const quietResume = (event, extra = {}) => {
+      if (!shouldRefreshTokenOnResume({ event: resumeAuthEvent(event, extra) })) return;
+      authManager.refreshSessionQuietly?.();
+    };
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') quietResume('visible');
+    });
+    window.addEventListener('pageshow', (ev) => quietResume('visible', { persisted: !!ev.persisted }));
   }
 
   // Function to start a multiplayer game
@@ -1598,6 +1611,14 @@ async function init() {
       getUxMode: () => resolveUxMode(),
       getOrigin: () => (typeof location !== 'undefined' ? `${location.origin}${location.pathname}` : ''),
       isApplyingRemote: () => !!syncManager?.isLoading?.(),
+      onResult: (result) => {
+        emitGameEvent('ui', {
+          payload: {
+            action: 'discordTurnPing',
+            reason: result?.reason || (result?.ok ? 'sent' : 'soft-fail'),
+          },
+        });
+      },
     });
   };
 
@@ -2142,6 +2163,7 @@ async function init() {
       || shouldShowSignInForm({
         authReady: authManager.isAuthReady(),
         userPresent: authManager.isLoggedIn(),
+        user: authManager.getUser(),
       })) {
       if (!authScreen) {
         authScreen = new AuthScreen((user) => {

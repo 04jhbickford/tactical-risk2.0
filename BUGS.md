@@ -2,6 +2,20 @@
 
 ---
 
+## 9.20.26.01 — auth return zombie + Discord server ping (dual-path.7)
+
+Playtester Rob: return to login showed a non-player / `Player` half-session.
+Must Sign Out then Sign In. Welcome used `user?.displayName || 'Player'` and
+Experimental `ensureAuth` did not wait for `authReady`.
+
+Fix: `authSession` — real identity or clean Sign In, never invent `Player`.
+Hydrate displayName from Firestore. Quiet token refresh on tab return (no
+sign-out). Discord production path is Vercel `POST /api/discord-turn-ping`
+(`DISCORD_TURN_WEBHOOK_URL` server env). Stamp V2.81.57-dual-path.7.
+Hold merge. See `briefs/2026-09-20-dual-path-three-ux/AUTH-DISCORD.md`.
+
+---
+
 ## 9.20.26 — V2.81.56 persist combat capture (SCHEMA 11)
 
 P0 live Canvas, Robert Watts + Sean Benson. Combat “wins” but

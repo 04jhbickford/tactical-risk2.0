@@ -1,6 +1,8 @@
 // Presence / auth / lobby rules for backgrounded tabs.
 // No Firebase here — PresenceManager and harnesses share one policy.
 
+import { isRealAuthIdentity, isZombieAuthIdentity } from './authSession.js';
+
 export const PRESENCE_HEARTBEAT_MS = 30000;
 export const PRESENCE_STALE_MS = 120000;
 // A backgrounded tab's interval is frozen. The doc still exists — that is
@@ -73,11 +75,16 @@ export function shouldAwaitAuthBeforeSignIn() {
 
 // Do not show the password form until Firebase has finished restoring.
 // A null user before authReady is "still loading", not signed out.
+// A half-session ("Player" / no email) after restore is not a session —
+// show a clean Sign In form instead of a zombie welcome (9.20.26.01).
 export function shouldShowSignInForm({
   authReady = false,
   userPresent = false,
+  user = null,
 } = {}) {
   if (!authReady) return false;
+  if (isRealAuthIdentity(user)) return false;
+  if (isZombieAuthIdentity(user)) return true;
   return !userPresent;
 }
 

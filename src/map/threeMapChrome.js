@@ -5,6 +5,7 @@ import { GAME_VERSION, SCHEMA_VERSION } from '../version.js';
 import { formatUnitName } from '../utils/unitNames.js';
 import { getUnitIconPath } from '../utils/unitIcons.js';
 import { UX_LABEL_EXPERIMENTAL } from './presentationMode.js';
+import { formatWelcomeEmail, formatWelcomeName, isRealAuthIdentity } from '../multiplayer/authSession.js';
 import { stripPreviewParams, soloHref } from './uxPreviewFlag.js';
 import {
   AI_DIFFICULTIES,
@@ -965,6 +966,19 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       letter-spacing:0.08em; text-transform:uppercase; color:#93c5fd;
     }
     #three-lobby .three-lobby-actions { display:flex; flex-direction:column; gap:8px; }
+    #three-lobby .three-lobby-identity {
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      padding:8px 10px; border-radius:10px;
+      background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08);
+    }
+    #three-lobby .three-lobby-identity p { margin:0; font:400 13px/1.3 -apple-system,sans-serif; color:#E8E2D4; }
+    #three-lobby .three-lobby-identity strong { color:#F4EFE4; }
+    #three-lobby .three-lobby-identity-email { color:#94a3b8; font-size:12px; }
+    #three-lobby .three-lobby-signout {
+      flex:none; min-height:36px; padding:0 10px; border-radius:8px;
+      border:1px solid rgba(196,163,90,0.35); background:transparent; color:#C4A35A;
+      font:600 12px/1 -apple-system,sans-serif; cursor:pointer;
+    }
     #three-lobby h2 {
       margin:0 0 8px; font:600 12px/1 -apple-system,sans-serif;
       letter-spacing:0.10em; text-transform:uppercase; color:#C4A35A;
@@ -1449,6 +1463,17 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       const localUserId = typeof mp.localUserId === 'function'
         ? (mp.localUserId() || '')
         : (mp.localUserId || '');
+      const localUser = mp.user || null;
+      const welcomeName = formatWelcomeName(localUser);
+      const welcomeEmail = formatWelcomeEmail(localUser);
+      const identityHtml = isRealAuthIdentity(localUser) && welcomeName
+        ? `<div class="three-lobby-identity" data-auth-surface="session">
+            <p>Signed in as <strong>${welcomeName}</strong>${welcomeEmail && welcomeEmail !== welcomeName ? ` <span class="three-lobby-identity-email">${welcomeEmail}</span>` : ''}</p>
+            <button type="button" class="three-lobby-signout" data-lobby="mp-signout">Sign Out</button>
+          </div>`
+        : (mp.authSurface === 'restoring'
+          ? `<div class="three-lobby-identity" data-auth-surface="restoring"><p>Restoring your session…</p></div>`
+          : `<div class="three-lobby-identity" data-auth-surface="signin"><p>Sign in when you create or join. Session stays until Sign Out.</p></div>`);
       const code = room?.code || '------';
 
       if (screen === 'online' || screen === 'create' || screen === 'join' || screen === 'room') {
@@ -1462,6 +1487,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
                   <p class="three-lobby-sub">Same Firebase as Classic · ${UX_LABEL_EXPERIMENTAL}</p>
                 </div>
               </div>
+              ${identityHtml}
               <div class="three-lobby-actions">
                 ${lobbyCardHtml({
                   action: 'screen', value: 'create', mark: LOBBY_MARK_LOCAL,
@@ -1487,6 +1513,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
                   <p class="three-lobby-sub">Host · ${UX_LABEL_EXPERIMENTAL}</p>
                 </div>
               </div>
+              ${identityHtml}
               <form class="three-lobby-form" data-lobby-form="create" autocomplete="off">
                 <label>Game name<input name="name" maxlength="30" placeholder="Game"></label>
                 <label>Max players
@@ -1515,6 +1542,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
                   <p class="three-lobby-sub">Same games as Classic</p>
                 </div>
               </div>
+              ${identityHtml}
               <form class="three-lobby-form" data-lobby-form="join" autocomplete="off">
                 <label>Code<input name="code" maxlength="6" placeholder="ABC123" class="code-input"></label>
                 <label>Password<input name="password" type="password" placeholder="If required"></label>

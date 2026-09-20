@@ -22,6 +22,7 @@ import { GAME_VERSION } from '../version.js';
 import { createThreeMpSession } from './threeMpSession.js';
 import { UX_CLASSIC, UX_THREE, navigateUxMode } from './presentationMode.js';
 import { bindDiscordTurnPing } from '../multiplayer/discordTurnPing.js';
+import { emitGameEvent } from '../multiplayer/gameEventLog.js';
 import {
   bindSealedActivate,
   clientPointOf,
@@ -146,7 +147,7 @@ export async function bootThreeSolo() {
   const factionColors = new Map(factions.map((f) => [f.id, f.color]));
 
   const lobby = createSoloLobby(setup, typeof location !== 'undefined' ? location.search : '');
-  lobby.mp = { error: '', lobby: null, isHost: false, localUserId: '' };
+  lobby.mp = { error: '', lobby: null, isHost: false, localUserId: '', user: null, authSurface: '' };
   const mp = createThreeMpSession({ setup, territories, continents });
   let unbindDiscordTurnPing = null;
   let mpGameCode = '';
@@ -307,8 +308,19 @@ export async function bootThreeSolo() {
   };
   function paintLobbyNow() {
     lobby.mp.localUserId = mp.localUserId?.() || '';
+    lobby.mp.user = mp.localUser?.() || null;
+    lobby.mp.authSurface = mp.authSurface?.() || '';
     chrome.paintLobby(lobby);
     applyLiveStamp();
+  }
+
+  async function restoreOnlineAuth() {
+    const restored = await mp.restoreSession();
+    if (restored?.ok === false && restored.error) lobby.mp.error = restored.error;
+    lobby.mp.user = mp.localUser?.() || restored?.user || null;
+    lobby.mp.authSurface = mp.authSurface?.() || restored?.surface || '';
+    lobby.mp.localUserId = mp.localUserId?.() || '';
+    paintLobbyNow();
   }
 
   function attachDiscordTurnPing() {
@@ -318,6 +330,14 @@ export async function bootThreeSolo() {
       getUxMode: () => UX_THREE,
       getOrigin: () => (typeof location !== 'undefined' ? `${location.origin}${location.pathname}` : ''),
       isApplyingRemote: () => !!mp.syncManager?.isLoading?.(),
+      onResult: (result) => {
+        emitGameEvent('ui', {
+          payload: {
+            action: 'discordTurnPing',
+            reason: result?.reason || (result?.ok ? 'sent' : 'soft-fail'),
+          },
+        });
+      },
     });
   }
 
@@ -364,8 +384,22 @@ export async function bootThreeSolo() {
       }).catch(() => {});
       return;
     }
+    if (kind === 'mp-signout') {
+      mp.signOut().then(() => {
+        lobby.mp.user = null;
+        lobby.mp.localUserId = '';
+        lobby.mp.authSurface = 'signin';
+        lobby.mp.lobby = null;
+        lobby.screen = 'online';
+        paintLobbyNow();
+      }).catch(() => {});
+      return;
+    }
     applyLobbyAction(lobby, kind, value);
     paintLobbyNow();
+    if (kind === 'screen' && (value === 'online' || value === 'create' || value === 'join')) {
+      void restoreOnlineAuth();
+    }
   };
   chrome.onLobbyForm = async (kind, form) => {
     const data = new FormData(form);

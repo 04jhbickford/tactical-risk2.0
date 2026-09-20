@@ -1,11 +1,13 @@
 // Discord turn ping for Classic + New UX. Soft-fail only — never blocks play.
-// Webhook: DISCORD_TURN_WEBHOOK_URL (window / env / localStorage).
+// Production path: POST /api/discord-turn-ping (Vercel env holds the webhook).
+// Legacy fallback: DISCORD_TURN_WEBHOOK_URL on window / localStorage / env.
 // Dedupe key: (gameId, turnIndex, seatId). Skip AI. One untagged fallback
 // when the seat has no snowflake.
 
 export const DISCORD_TURN_CHANNEL_ID = '1551283474303025292';
 export const DISCORD_SEEN_KEY = 'tacticalRisk_discordTurnPingSeen';
 export const DISCORD_SEAT_KEY = 'tacticalRisk_discordSeat';
+export const DISCORD_TURN_PING_API = '/api/discord-turn-ping';
 
 export function normalizeDiscordSnowflake(raw) {
   const s = String(raw ?? '').trim();
@@ -180,6 +182,50 @@ export async function postDiscordWebhook(url, content, fetchImpl) {
   }
 }
 
+export function discordPingPayload({
+  player = null,
+  gameId = '',
+  turnIndex = 0,
+  seatId = '',
+  phase = '',
+  deepLink = '',
+  uxMode = '',
+} = {}) {
+  return {
+    gameId: String(gameId || ''),
+    turnIndex: Number(turnIndex) || 0,
+    seatId: String(seatId || player?.id || player?.oderId || ''),
+    discordUserId: player?.discordUserId || '',
+    faction: factionLabelOf(player),
+    phase: String(phase || ''),
+    deepLink: String(deepLink || ''),
+    uxMode: String(uxMode || ''),
+    isAI: !!player?.isAI,
+  };
+}
+
+export async function postDiscordTurnPingViaProxy(apiUrl, payload, fetchImpl) {
+  const fetchFn = fetchImpl || (typeof fetch === 'function' ? fetch : null);
+  if (!fetchFn) return { ok: false, reason: 'no-fetch' };
+  const path = String(apiUrl || DISCORD_TURN_PING_API);
+  try {
+    const res = await fetchFn(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    });
+    if (!res) return { ok: false, reason: 'soft-fail' };
+    let body = null;
+    try { body = await res.json(); } catch { body = null; }
+    if (body && typeof body.ok === 'boolean') return body;
+    if (res.status === 404) return { ok: false, reason: 'unconfigured' };
+    if (!res.ok) return { ok: false, reason: 'soft-fail' };
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: 'network' };
+  }
+}
+
 export function maybePostDiscordTurnPing({
   player = null,
   gameId = '',
@@ -187,10 +233,14 @@ export function maybePostDiscordTurnPing({
   seatId = '',
   phase = '',
   deepLink = '',
+  uxMode = '',
   config = null,
   seen = null,
   storage = null,
-  post = postDiscordWebhook,
+  post = null,
+  viaProxy = true,
+  proxyUrl = DISCORD_TURN_PING_API,
+  proxyPost = postDiscordTurnPingViaProxy,
 } = {}) {
   try {
     const store = storage;
@@ -199,20 +249,57 @@ export function maybePostDiscordTurnPing({
       player, gameId, turnIndex, seatId, seen: seenKeys,
     });
     if (!gate.ok) return { ok: false, reason: gate.reason };
-    const url = readDiscordWebhookUrl(config || readDiscordWebhookConfig());
-    if (!url) return { ok: false, reason: 'unconfigured' };
     const content = buildDiscordTurnContent({
       discordUserId: player?.discordUserId,
       faction: factionLabelOf(player),
       phase,
       deepLink,
     });
-    rememberPingKey(gate.key, store);
-    const posted = post(url, content);
-    if (posted && typeof posted.then === 'function') {
-      return posted.catch(() => ({ ok: false, reason: 'soft-fail' }));
+    const payload = discordPingPayload({
+      player, gameId, turnIndex, seatId, phase, deepLink, uxMode,
+    });
+    const legacyUrl = readDiscordWebhookUrl(config || readDiscordWebhookConfig());
+
+    const finish = (posted) => {
+      rememberPingKey(gate.key, store);
+      if (posted && typeof posted.then === 'function') {
+        return posted.catch(() => ({ ok: false, reason: 'soft-fail' }));
+      }
+      return posted;
+    };
+
+    // Test / explicit webhook poster: same contract as dual-path.3.
+    if (typeof post === 'function') {
+      if (!legacyUrl) return { ok: false, reason: 'unconfigured' };
+      return finish(post(legacyUrl, content));
     }
-    return posted;
+
+    if (viaProxy !== false) {
+      const posted = proxyPost(proxyUrl, payload);
+      if (posted && typeof posted.then === 'function') {
+        return posted.then((result) => {
+          if (result?.ok) {
+            rememberPingKey(gate.key, store);
+            return result;
+          }
+          if (result?.reason === 'unconfigured' && legacyUrl) {
+            return finish(postDiscordWebhook(legacyUrl, content));
+          }
+          return result || { ok: false, reason: 'unconfigured' };
+        }).catch(() => ({ ok: false, reason: 'soft-fail' }));
+      }
+      if (posted?.ok) {
+        rememberPingKey(gate.key, store);
+        return posted;
+      }
+      if (posted?.reason === 'unconfigured' && legacyUrl) {
+        return finish(postDiscordWebhook(legacyUrl, content));
+      }
+      if (posted) return posted;
+    }
+
+    if (legacyUrl) return finish(postDiscordWebhook(legacyUrl, content));
+    return { ok: false, reason: 'unconfigured' };
   } catch {
     return { ok: false, reason: 'soft-fail' };
   }
@@ -229,8 +316,9 @@ export function bindDiscordTurnPing(gameState, {
   getOrigin = () => 'https://tactical-risk20.vercel.app/',
   isApplyingRemote = () => false,
   config = null,
-  post = postDiscordWebhook,
+  post = null,
   storage = null,
+  onResult = null,
 } = {}) {
   if (!gameState || typeof gameState.subscribe !== 'function') {
     return () => {};
@@ -245,6 +333,7 @@ export function bindDiscordTurnPing(gameState, {
       if (!hadPrev) return;
       if (isApplyingRemote()) return;
       const player = gameState.currentPlayer;
+      const uxMode = getUxMode();
       const result = maybePostDiscordTurnPing({
         player,
         gameId: getGameId() || '',
@@ -256,15 +345,22 @@ export function bindDiscordTurnPing(gameState, {
         phase: phaseLabelOf(gameState),
         deepLink: buildDeepLink({
           origin: getOrigin(),
-          uxMode: getUxMode(),
+          uxMode,
           gameCode: getGameId(),
         }),
+        uxMode,
         config,
         storage,
         post,
       });
+      const report = (value) => {
+        try { onResult?.(value); } catch { /* diagnostics only */ }
+        return value;
+      };
       if (result && typeof result.then === 'function') {
-        result.catch(() => {});
+        result.then(report).catch(() => report({ ok: false, reason: 'soft-fail' }));
+      } else {
+        report(result);
       }
     } catch {
       /* never block the game */

@@ -109,7 +109,7 @@ try {
   const stamp = (await page.locator('.three-lobby-ver, .three-l0-ver').first().textContent().catch(() => ''))?.trim()
     || await page.evaluate(() => document.documentElement.getAttribute('data-game-version') || '');
   notes.experimental = { seatCount, selectCount, flagCount, stamp };
-  check('stamp is dual-path.6', stamp === GAME_VERSION, { stamp, GAME_VERSION });
+  check('stamp matches GAME_VERSION', stamp === GAME_VERSION, { stamp, GAME_VERSION });
   check('five Experimental seats', seatCount === 5, { seatCount });
   check('compact occupant selects', selectCount === 5, { selectCount });
   check('Classic flags on seats', flagCount === 5, { flagCount });

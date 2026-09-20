@@ -44,7 +44,7 @@ function assert(cond, msg) {
   }
 }
 
-assert(GAME_VERSION === 'V2.81.57-dual-path.6', 'stamp is dual-path.6');
+assert(GAME_VERSION === 'V2.81.57-dual-path.7', 'stamp is dual-path.7');
 
 const hiddenZoom = {
   hidden: true,

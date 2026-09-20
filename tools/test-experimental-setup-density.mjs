@@ -10,7 +10,7 @@ import { UX_LABEL_EXPERIMENTAL } from '../src/map/presentationMode.js';
 import { createSoloLobby, applyLobbyAction, seatOccupantView } from '../src/map/threeSoloLobby.js';
 import { injectThreeChrome } from '../src/map/threeMapChrome.js';
 
-assert.equal(GAME_VERSION, 'V2.81.57-dual-path.6', 'stamp is dual-path.6');
+assert.equal(GAME_VERSION, 'V2.81.57-dual-path.7', 'stamp is dual-path.7');
 assert.equal(UX_LABEL_EXPERIMENTAL, 'Experimental UX');
 
 const chromeSrc = readFileSync(new URL('../src/map/threeMapChrome.js', import.meta.url), 'utf8');
@@ -26,6 +26,8 @@ assert.match(chromeSrc, /three-lobby-pip/);
 assert.match(chromeSrc, /three-lobby-color-drop/);
 assert.match(chromeSrc, /three-lobby-toolbar/);
 assert.match(chromeSrc, /three-lobby-footer/);
+assert.match(chromeSrc, /data-auth-surface/);
+assert.match(chromeSrc, /data-lobby="mp-signout"/);
 assert.doesNotMatch(chromeSrc, /three-lobby-occupants|three-lobby-ai-tiers/);
 assert.doesNotMatch(chromeSrc, /New UX \(Three\.js\)|three\.js/i);
 assert.equal(classicCanvas.includes('Experimental UX'), false);

@@ -17,6 +17,12 @@ import {
   serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { getFirebaseAuth, getFirebaseDb } from './firebase.js';
+import {
+  isRealAuthIdentity,
+  resolveSessionIdentity,
+  shouldClearUserOnSignOut,
+  shouldHydrateIdentityFromUserDoc,
+} from './authSession.js';
 
 export class AuthManager {
   constructor() {
@@ -47,8 +53,8 @@ export class AuthManager {
     onAuthStateChanged(this.auth, (user) => {
       if (user) {
         this._applyFirebaseUser(user);
-        this._updateUserDocument(user).catch((err) => {
-          console.warn('[Auth] user doc update failed — session kept', err);
+        this._hydrateIdentity(user).catch((err) => {
+          console.warn('[Auth] identity hydrate failed — session kept', err);
         });
       } else if (this._ready) {
         this.currentUser = null;
@@ -62,13 +68,52 @@ export class AuthManager {
       this.currentUser = null;
       return null;
     }
-    this.currentUser = {
+    const prev = this.currentUser?.id === user.uid ? this.currentUser : null;
+    this.currentUser = resolveSessionIdentity({
       id: user.uid,
-      email: user.email,
-      displayName: user.displayName || user.email?.split('@')[0] || 'Player',
-      phoneNumber: user.phoneNumber
-    };
+      email: user.email || prev?.email,
+      displayName: user.displayName,
+      phoneNumber: user.phoneNumber || prev?.phoneNumber,
+      storedDisplayName: prev?.displayName,
+    });
     return this.currentUser;
+  }
+
+  // Firestore users/{uid} often has the real displayName when the Auth
+  // profile was never written (signup race). Never invent "Player".
+  async _hydrateIdentity(user) {
+    if (!shouldHydrateIdentityFromUserDoc() || !this.db || !user?.uid) {
+      await this._updateUserDocument(user);
+      return this.getUser();
+    }
+    try {
+      const userRef = doc(this.db, 'users', user.uid);
+      const userDoc = await getDoc(userRef);
+      if (userDoc.exists()) {
+        const data = userDoc.data() || {};
+        this.currentUser = resolveSessionIdentity({
+          id: user.uid,
+          email: user.email || data.email,
+          displayName: user.displayName,
+          phoneNumber: user.phoneNumber || data.phoneNumber,
+          storedDisplayName: data.displayName,
+        });
+        this._notifyListeners();
+        if (
+          data.displayName
+          && !user.displayName
+          && this.auth?.currentUser
+        ) {
+          updateProfile(this.auth.currentUser, { displayName: data.displayName }).catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.warn('[Auth] user doc read failed — session kept', err);
+    }
+    await this._updateUserDocument(user).catch((err) => {
+      console.warn('[Auth] user doc update failed — session kept', err);
+    });
+    return this.getUser();
   }
 
   async _waitForAuthReady() {
@@ -102,15 +147,16 @@ export class AuthManager {
   subscribe(callback) {
     this._listeners.push(callback);
     // Immediately call with current state
-    callback(this.currentUser);
+    callback(this.getUser());
     return () => {
       this._listeners = this._listeners.filter(cb => cb !== callback);
     };
   }
 
   _notifyListeners() {
+    const user = this.getUser();
     for (const cb of this._listeners) {
-      cb(this.currentUser);
+      cb(user);
     }
   }
 
@@ -130,7 +176,12 @@ export class AuthManager {
       // Create new user document
       await setDoc(userRef, {
         email: user.email,
-        displayName: user.displayName || user.email?.split('@')[0] || 'Player',
+        displayName: resolveSessionIdentity({
+          id: user.uid,
+          email: user.email,
+          displayName: user.displayName,
+          phoneNumber: user.phoneNumber,
+        }).displayName,
         phoneNumber: user.phoneNumber || null,
         createdAt: serverTimestamp(),
         lastLogin: serverTimestamp()
@@ -152,13 +203,14 @@ export class AuthManager {
         await updateProfile(result.user, { displayName });
       }
 
-      // Eagerly set currentUser (same race condition as signInWithEmail)
-      this.currentUser = {
+      this.currentUser = resolveSessionIdentity({
         id: result.user.uid,
         email: result.user.email,
-        displayName: displayName || result.user.email?.split('@')[0] || 'Player',
-        phoneNumber: result.user.phoneNumber
-      };
+        displayName: displayName || result.user.displayName,
+        phoneNumber: result.user.phoneNumber,
+        storedDisplayName: displayName,
+      });
+      this._notifyListeners();
       return { success: true, user: result.user };
     } catch (error) {
       return { success: false, error: this._getErrorMessage(error) };
@@ -175,12 +227,13 @@ export class AuthManager {
       const result = await signInWithEmailAndPassword(this.auth, email, password);
       // Set currentUser eagerly so isLoggedIn() is true immediately — onAuthStateChanged
       // fires asynchronously (after a Firestore write) so getUser() would be null otherwise
-      this.currentUser = {
+      this.currentUser = resolveSessionIdentity({
         id: result.user.uid,
         email: result.user.email,
-        displayName: result.user.displayName || result.user.email?.split('@')[0] || 'Player',
-        phoneNumber: result.user.phoneNumber
-      };
+        displayName: result.user.displayName,
+        phoneNumber: result.user.phoneNumber,
+      });
+      this._notifyListeners();
       return { success: true, user: result.user };
     } catch (error) {
       return { success: false, error: this._getErrorMessage(error) };
@@ -231,12 +284,13 @@ export class AuthManager {
       const result = await this.confirmationResult.confirm(code);
       this.confirmationResult = null;
       // Eagerly set currentUser (same race condition as signInWithEmail)
-      this.currentUser = {
+      this.currentUser = resolveSessionIdentity({
         id: result.user.uid,
         email: result.user.email,
-        displayName: result.user.displayName || result.user.phoneNumber || 'Player',
-        phoneNumber: result.user.phoneNumber
-      };
+        displayName: result.user.displayName,
+        phoneNumber: result.user.phoneNumber,
+      });
+      this._notifyListeners();
       return { success: true, user: result.user };
     } catch (error) {
       return { success: false, error: this._getErrorMessage(error) };
@@ -246,14 +300,36 @@ export class AuthManager {
   // Sign Out — only the Sign Out button. Background / visibilitychange /
   // pagehide / pageshow must never call this (E1 / B25).
   async signOut({ confirmed = true } = {}) {
-    if (!this.auth) return;
+    if (!this.auth) return { success: false, error: 'Authentication not available' };
     if (!confirmed) return { success: false, error: 'Sign-out not confirmed' };
 
     try {
+      if (shouldClearUserOnSignOut()) {
+        this.currentUser = null;
+        this._notifyListeners();
+      }
       await signOut(this.auth);
+      this.currentUser = null;
+      this._notifyListeners();
       return { success: true };
     } catch (error) {
       return { success: false, error: this._getErrorMessage(error) };
+    }
+  }
+
+  // Tab return / reload / bfcache: refresh the token. Never sign out.
+  async refreshSessionQuietly() {
+    const fb = this.auth?.currentUser;
+    if (!fb) return { ok: isRealAuthIdentity(this.getUser()), refreshed: false };
+    try {
+      await fb.getIdToken();
+      try { await fb.reload(); } catch { /* offline — keep cached user */ }
+      this._applyFirebaseUser(this.auth.currentUser || fb);
+      this._notifyListeners();
+      return { ok: true, refreshed: true };
+    } catch (error) {
+      console.warn('[Auth] quiet refresh failed — session kept', error?.code || error);
+      return { ok: isRealAuthIdentity(this.getUser()), refreshed: false };
     }
   }
 
@@ -319,16 +395,29 @@ export class AuthManager {
 
   // Check if user is logged in. Prefer the restored Firebase user so a
   // reload does not look signed-out while onAuthStateChanged is in flight.
+  // A "Player" / no-email half-session is not signed in (9.20.26.01).
   isLoggedIn() {
-    return this.getUser() !== null;
+    return isRealAuthIdentity(this.getUser());
   }
 
-  // Get current user
+  // Get current user. Never return a zombie "Player" identity as the session.
   getUser() {
-    if (this.currentUser) return this.currentUser;
     const fb = this.auth?.currentUser;
-    if (fb) return this._applyFirebaseUser(fb);
-    return null;
+    if (fb) {
+      const applied = this._applyFirebaseUser(fb);
+      if (isRealAuthIdentity(applied)) return applied;
+      if (isRealAuthIdentity(this.currentUser) && this.currentUser.id === fb.uid) {
+        return this.currentUser;
+      }
+      return isRealAuthIdentity(applied) ? applied : null;
+    }
+    if (this._ready) {
+      if (this.currentUser && !isRealAuthIdentity(this.currentUser)) {
+        this.currentUser = null;
+      }
+      return isRealAuthIdentity(this.currentUser) ? this.currentUser : null;
+    }
+    return isRealAuthIdentity(this.currentUser) ? this.currentUser : null;
   }
 
   // Get user ID
