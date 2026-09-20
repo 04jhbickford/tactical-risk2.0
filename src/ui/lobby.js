@@ -8,7 +8,7 @@
 // importers but leave GAME_VERSION undefined inside this module.
 import { GAME_VERSION } from '../version.js';
 import { isMobileShell } from './mobileShell.js';
-import { UX_CLASSIC, UX_THREE, persistUxMode, navigateUxMode } from '../map/presentationMode.js';
+import { UX_CLASSIC, UX_THREE, navigateUxMode } from '../map/presentationMode.js';
 export { GAME_VERSION };
 
 // Native <select> option taps land on the card under the popup.
@@ -584,7 +584,7 @@ export class Lobby {
   _bindEvents() {
     // Main menu actions
     this.el.querySelector('[data-action="ux-classic"]')?.addEventListener('click', () => {
-      persistUxMode(UX_CLASSIC);
+      navigateUxMode(UX_CLASSIC);
     });
 
     this.el.querySelector('[data-action="ux-three"]')?.addEventListener('click', () => {

@@ -57,6 +57,18 @@ import { HUD } from './ui/hud.js';
 import { Minimap } from './ui/minimap.js';
 import { Lobby } from './ui/lobby.js';
 import { isPocketPreviewRequested, resolveUxMode, UX_THREE } from './map/presentationMode.js';
+import { GAME_VERSION } from './version.js';
+
+function paintGameStamp() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return GAME_VERSION;
+  window.__TR_GAME_VERSION = GAME_VERSION;
+  document.documentElement.setAttribute('data-game-version', GAME_VERSION);
+  document.querySelectorAll('.three-l0-ver, .three-lobby-ver, .lobby-version-badge').forEach((el) => {
+    el.textContent = GAME_VERSION;
+  });
+  return GAME_VERSION;
+}
+paintGameStamp();
 import { ContinentPanel } from './ui/continentPanel.js';
 import { GameState, GAME_PHASES, TURN_PHASES, shouldShowPurchase } from './state/gameState.js';
 import { syncPushPhaseLabel } from './state/placementPass.js';

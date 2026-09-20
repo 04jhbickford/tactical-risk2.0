@@ -1,5 +1,7 @@
-// Durable Classic | New UX fork. Query wins, then sessionStorage, else Classic.
-// Classic at / with no flag is unchanged. Do not invent a second rules engine.
+// Durable Classic | New UX fork.
+// Queryless / cold load is always Classic Canvas (fail-closed).
+// sessionStorage New UX is set only when the user clicks New UX.
+// Reading a URL with no ux/three query clears three mode.
 
 export const UX_STORAGE_KEY = 'tacticalRisk_uxMode';
 export const UX_CLASSIC = 'classic';
@@ -13,26 +15,27 @@ function paramsOf(search = '') {
   return new URLSearchParams(q.startsWith('?') ? q : (q ? `?${q}` : ''));
 }
 
-function readSession() {
+function hasUxQuery(params) {
+  return params.has('ux') || params.has('three');
+}
+
+export function clearUxMode() {
   try {
-    if (typeof sessionStorage === 'undefined') return null;
-    const raw = String(sessionStorage.getItem(UX_STORAGE_KEY) || '').toLowerCase();
-    if (raw === UX_THREE) return UX_THREE;
-    if (raw === UX_CLASSIC) return UX_CLASSIC;
+    if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(UX_STORAGE_KEY);
   } catch {
     /* private mode */
   }
-  return null;
+  return UX_CLASSIC;
 }
 
 export function persistUxMode(mode) {
-  const next = mode === UX_THREE ? UX_THREE : UX_CLASSIC;
+  if (mode !== UX_THREE) return clearUxMode();
   try {
-    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(UX_STORAGE_KEY, next);
+    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(UX_STORAGE_KEY, UX_THREE);
   } catch {
     /* private mode */
   }
-  return next;
+  return UX_THREE;
 }
 
 export function applyUxQuery(mode, href = typeof location !== 'undefined' ? location.href : 'http://localhost/') {
@@ -41,7 +44,7 @@ export function applyUxQuery(mode, href = typeof location !== 'undefined' ? loca
     url.searchParams.set('ux', UX_THREE);
     url.searchParams.delete('three');
   } else {
-    url.searchParams.set('ux', UX_CLASSIC);
+    url.searchParams.delete('ux');
     url.searchParams.delete('three');
     url.searchParams.delete('solo');
   }
@@ -49,7 +52,7 @@ export function applyUxQuery(mode, href = typeof location !== 'undefined' ? loca
 }
 
 export function navigateUxMode(mode) {
-  const next = persistUxMode(mode);
+  const next = mode === UX_THREE ? persistUxMode(UX_THREE) : clearUxMode();
   if (typeof location === 'undefined') return next;
   const dest = applyUxQuery(next, location.href);
   if (dest !== location.href) location.assign(dest);
@@ -73,16 +76,16 @@ export function resolveUxMode(search = typeof location !== 'undefined' ? locatio
   const three = String(params.get('three') || '').toLowerCase();
 
   if (CLASSIC.has(ux)) {
-    persistUxMode(UX_CLASSIC);
+    clearUxMode();
     return UX_CLASSIC;
   }
   if (ON.has(ux) || ON.has(three)) {
-    persistUxMode(UX_THREE);
+    // Query carries New UX. Do not persist — queryless must return Classic.
     return UX_THREE;
   }
 
-  const stored = readSession();
-  if (stored) return stored;
+  // Cold / queryless: Classic always. Visiting ?ux=three must not stick.
+  if (!hasUxQuery(params)) clearUxMode();
   return UX_CLASSIC;
 }
 

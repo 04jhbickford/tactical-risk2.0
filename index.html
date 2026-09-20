@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="vercel-toolbar" content="disable">
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
   <title>Tactical Risk</title>
   <style>
     vercel-live-feedback,[data-vercel-toolbar],[data-vercel-live-feedback]{display:none!important}
@@ -34,7 +36,7 @@
     }
     @keyframes tr-loader-fade{from{opacity:.72}to{opacity:1}}
   </style>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=V2.81.57-dual-path.4">
 </head>
 <body>
   <div id="startup-loader" role="status" aria-live="polite" aria-busy="true">
@@ -124,7 +126,7 @@
     })();
   </script>
   <script>
-    window.__TR_GAME_VERSION = 'V2.81.57-dual-path.3';
+    window.__TR_GAME_VERSION = 'V2.81.57-dual-path.4';
     document.documentElement.setAttribute('data-game-version', window.__TR_GAME_VERSION);
     (function stampLoop() {
       var v = window.__TR_GAME_VERSION;
@@ -137,7 +139,8 @@
     setInterval(function () {
       var v = window.__TR_GAME_VERSION;
       if (!v) return;
-      document.querySelectorAll('.three-l0-ver, .three-lobby-ver').forEach(function (el) {
+      document.documentElement.setAttribute('data-game-version', v);
+      document.querySelectorAll('.three-l0-ver, .three-lobby-ver, .lobby-version-badge').forEach(function (el) {
         if (el && el.textContent !== v) el.textContent = v;
       });
     }, 400);
@@ -152,7 +155,7 @@
       }).catch(function () {});
     }
   </script>
-  <script type="module" src="src/main.js?v=V2.81.57-dual-path.3"></script>
+  <script type="module" src="src/main.js?v=V2.81.57-dual-path.4"></script>
 </body>
 </html>
-<!-- force redeploy -->
+<!-- force redeploy dual-path.4 -->

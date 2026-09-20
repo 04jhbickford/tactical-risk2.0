@@ -6,14 +6,19 @@ import {
   resolveUxMode,
   applyUxQuery,
   persistUxMode,
+  clearUxMode,
   isPocketPreviewRequested,
 } from '../src/map/presentationMode.js';
+import { GAME_VERSION } from '../src/version.js';
 
 globalThis.sessionStorage = {
   _d: {},
   getItem(k) { return Object.prototype.hasOwnProperty.call(this._d, k) ? this._d[k] : null; },
   setItem(k, v) { this._d[k] = String(v); },
+  removeItem(k) { delete this._d[k]; },
 };
+
+assert.equal(GAME_VERSION, 'V2.81.57-dual-path.4', 'stamp is dual-path.4');
 
 assert.equal(resolveUxMode(''), UX_CLASSIC, 'default Classic');
 assert.equal(resolveUxMode('?ux=classic'), UX_CLASSIC);
@@ -24,14 +29,22 @@ assert.equal(resolveUxMode('?ux=classic&three=1'), UX_CLASSIC, 'explicit classic
 
 persistUxMode(UX_THREE);
 assert.equal(globalThis.sessionStorage.getItem(UX_STORAGE_KEY), UX_THREE);
-assert.equal(resolveUxMode(''), UX_THREE, 'sessionStorage keeps New UX');
-persistUxMode(UX_CLASSIC);
-assert.equal(resolveUxMode(''), UX_CLASSIC);
+assert.equal(resolveUxMode(''), UX_CLASSIC, 'queryless cold load is Classic');
+assert.equal(globalThis.sessionStorage.getItem(UX_STORAGE_KEY), null, 'queryless clears three mode');
+
+persistUxMode(UX_THREE);
+assert.equal(resolveUxMode('?ux=three'), UX_THREE);
+assert.equal(globalThis.sessionStorage.getItem(UX_STORAGE_KEY), UX_THREE, 'click persist survives while query is three');
+assert.equal(resolveUxMode('/'), UX_CLASSIC, 'bare path is Classic');
+assert.equal(globalThis.sessionStorage.getItem(UX_STORAGE_KEY), null);
+
+clearUxMode();
+assert.equal(resolveUxMode('?code=ABC123'), UX_CLASSIC, 'other query still Classic');
 
 const threeHref = applyUxQuery(UX_THREE, 'https://tactical-risk20.vercel.app/');
 assert.match(threeHref, /ux=three/);
 const classicHref = applyUxQuery(UX_CLASSIC, threeHref);
-assert.match(classicHref, /ux=classic/);
+assert.doesNotMatch(classicHref, /[?&]ux=/);
 assert.doesNotMatch(classicHref, /[?&]three=/);
 
 assert.equal(isPocketPreviewRequested('?ux=three'), false);

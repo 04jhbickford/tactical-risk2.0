@@ -6,7 +6,7 @@ Viz gated tip `.18` **PARTIAL ~76%**. Not a ship gate for dual-path, but the com
 
 Combat Move ORIGIN → UNITS → DEST reached. Gold **Confirm Attack** CTA **not reachable** (clipped / covered / dock swallowed dest taps). Regression vs `.16` (`Confirm: Attack Finland Norway` visible and tappable). Casualty YOU was NOT-REACHED because this path was broken.
 
-## Fix (dual-path New UX — `V2.81.57-dual-path.3`)
+## Fix (dual-path New UX — `V2.81.57-dual-path.4`)
 
 Port tip `.19` dock, not a second engine:
 

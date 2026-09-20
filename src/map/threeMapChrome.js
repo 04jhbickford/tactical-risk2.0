@@ -230,23 +230,11 @@ function printIpc(land) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function uxSoloPatch(v) {
-  const m = /(?:ux-solo|dual-path)\.(\d+)/.exec(String(v || ''));
-  return m ? Number(m[1]) : NaN;
-}
-
 export function liveGameVersion() {
-  const html = (typeof window !== 'undefined' && window.__TR_GAME_VERSION)
-    ? String(window.__TR_GAME_VERSION)
-    : '';
-  if (!html) return GAME_VERSION;
-  if (!GAME_VERSION || html === GAME_VERSION) return html;
-  const htmlN = uxSoloPatch(html);
-  const modN = uxSoloPatch(GAME_VERSION);
-  if (Number.isFinite(htmlN) && Number.isFinite(modN) && htmlN !== modN) {
-    return htmlN > modN ? html : GAME_VERSION;
-  }
-  return html;
+  // Module GAME_VERSION is SoT. Stale CDN HTML must not keep an older L0 stamp.
+  return GAME_VERSION || (typeof window !== 'undefined'
+    ? String(window.__TR_GAME_VERSION || '')
+    : '');
 }
 
 export function applyLiveStamp() {
@@ -255,7 +243,7 @@ export function applyLiveStamp() {
   if (typeof document === 'undefined') return v;
   document.documentElement.dataset.gameVersion = v;
   document.documentElement.setAttribute('data-game-version', v);
-  document.querySelectorAll('.three-l0-ver, .three-lobby-ver').forEach((el) => {
+  document.querySelectorAll('.three-l0-ver, .three-lobby-ver, .lobby-version-badge').forEach((el) => {
     el.textContent = v;
   });
   return v;
