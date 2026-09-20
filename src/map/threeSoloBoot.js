@@ -248,6 +248,7 @@ export async function bootThreeSolo() {
       land: model.land,
       stacks: model.stacks,
       steppers: model.steppers,
+      showAll: model.showAll,
       airLand: model.airLand,
       label: model.label,
       gold: model.gold,

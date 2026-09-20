@@ -26,13 +26,13 @@ globalThis.sessionStorage = memoryStore();
 globalThis.localStorage = memoryStore();
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-assert.match(html, /window\.__TR_GAME_VERSION = 'V2\.81\.57-dual-path\.8'/);
-assert.match(html, /name="tr-game-version" content="V2\.81\.57-dual-path\.8"/);
-assert.match(html, /lockStamp/, 'HTML stamp cannot drop below .8');
-assert.match(html, /src="src\/main\.js\?v=V2\.81\.57-dual-path\.8"/);
-assert.doesNotMatch(html, /dual-path\.[234567]['"]/);
+assert.match(html, /window\.__TR_GAME_VERSION = 'V2\.81\.57-dual-path\.9'/);
+assert.match(html, /name="tr-game-version" content="V2\.81\.57-dual-path\.9"/);
+assert.match(html, /lockStamp/, 'HTML stamp cannot drop below .9');
+assert.match(html, /src="src\/main\.js\?v=V2\.81\.57-dual-path\.9"/);
+assert.doesNotMatch(html, /dual-path\.[2345678]['"]/);
 
-assert.equal(GAME_VERSION, 'V2.81.57-dual-path.8', 'stamp is dual-path.8');
+assert.equal(GAME_VERSION, 'V2.81.57-dual-path.9', 'stamp is dual-path.9');
 assert.equal(UX_LABEL_EXPERIMENTAL, 'Experimental UX');
 
 const lobbySrc = readFileSync(new URL('../src/ui/lobby.js', import.meta.url), 'utf8');

@@ -13,6 +13,7 @@ import { resolveDeployedThisRoundAfterLoad } from './placeQueue.js';
 import {
   applyAirLandingPlan,
   buildLandingPlan,
+  clearPendingLandingDestinations,
   markPendingAirLandingsApplied,
   unappliedLandingPlan,
   upsertPendingAirLanding,
@@ -5267,6 +5268,15 @@ export class GameState {
       quantity,
       destination,
     });
+    if (notify) this._notify();
+    return this.pendingAirLandings;
+  }
+
+  clearAirLandingSelections(originTerritory = null, { notify = true } = {}) {
+    this.pendingAirLandings = clearPendingLandingDestinations(
+      this.pendingAirLandings,
+      originTerritory,
+    );
     if (notify) this._notify();
     return this.pendingAirLandings;
   }

@@ -100,13 +100,19 @@ function makeGame({
     turnPhase,
     units,
     notified: 0,
+    territoryState: { [territory]: { owner: 'p2' } },
+    capturedThisTurn: new Set(),
+    conqueredThisTurn: {},
     getUnitsAt(name) { return this.units[name] || []; },
     areAllies() { return false; },
     getPlayer(id) {
       if (id === 'p1') return this.currentPlayer;
       return { id: 'p2', name: 'James', color: '#00c' };
     },
-    getOwner() { return 'p2'; },
+    getOwner(name) { return this.territoryState[name]?.owner || 'p2'; },
+    awardRiskCard() { return 'infantry'; },
+    handleCapitalCapture() {},
+    logTerritoryCapture() {},
     hasAmphibiousAssault() { return false; },
     territoryByName: { [territory]: { isWater: false, connections: [] } },
     combatTelemetry: [],
@@ -127,7 +133,7 @@ function makeUI(game) {
 }
 
 console.log('=== Version stamps ===');
-check('GAME_VERSION is V2.81.57-dual-path.8', GAME_VERSION === 'V2.81.57-dual-path.8');
+check('GAME_VERSION is V2.81.57-dual-path.9', GAME_VERSION === 'V2.81.57-dual-path.9');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 check('AA result auto-pause is readable (not a 150ms blip)', AA_RESULT_AUTO_PAUSE_MS >= 400);
 
@@ -226,6 +232,10 @@ console.log('=== showNextCombat / syncFromAuthoritativeState skip empty rematch 
   check('already-won queue head is dequeued', game.combatQueue.length === 0);
   check('popup stays hidden (no 0-enemy retry)', ui.el.classList.contains('hidden'));
   check('dequeue notifies so the queue can persist', game.notified >= 1);
+  check('35RB85: land leftover flips political control on dequeue',
+    game.territoryState[territory].owner === 'p1');
+  check('35RB85: capturedThisTurn records the hex',
+    game.capturedThisTurn.has(territory));
 }
 
 {

@@ -2,6 +2,29 @@
 
 ---
 
+## 9.20.26.02–.06 — combat capture, combat-move, air land, deploy Done (dual-path.9)
+
+Playtest (35RB85 / Mexico→West US): taking a territory did not grant
+political control. Soft-lock dequeue skipped the hex without finalize.
+Also: could not empty Mexico on a legal combat move; one fighter landing
+forced both; air-land Undo no-op; two Initial Deployment Done buttons
+(blue + green).
+
+Shared finalize + unique air-landing keys + Select All all stacks + one
+green Done. Stamp V2.81.57-dual-path.9. Hold merge. See
+`briefs/2026-09-20-discord-playtest-bugs/DUAL-PATH-9.md`.
+
+### Smoke (this PR)
+
+- [ ] Classic `/` + Experimental `?ux=three` stamp `.9` after hard reload
+- [ ] Land combat win flips owner on both forks; 35RB85 dequeue leftover also flips
+- [ ] Mexico combat move can send every eligible unit
+- [ ] Two fighters land in two dests; Undo clears both
+- [ ] One green Done on Initial Deployment
+- [ ] `node tools/test-dual-path-9-combat.mjs` passes
+
+---
+
 ## 9.20.26.01 — auth return zombie + Discord server ping (dual-path.8)
 
 Playtester Rob: return to login showed a non-player / `Player` half-session.

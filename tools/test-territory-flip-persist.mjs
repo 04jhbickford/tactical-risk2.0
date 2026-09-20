@@ -114,7 +114,7 @@ function makeUsTheater() {
 }
 
 console.log('=== Version ===');
-check('GAME_VERSION is V2.81.57-dual-path.8', GAME_VERSION === 'V2.81.57-dual-path.8');
+check('GAME_VERSION is V2.81.57-dual-path.9', GAME_VERSION === 'V2.81.57-dual-path.9');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== omitUndefinedDeep ===');

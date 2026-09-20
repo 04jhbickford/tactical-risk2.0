@@ -5,65 +5,31 @@ import { formatUnitName } from '../utils/unitNames.js';
 import { isMobileShell, setShellFlag } from './mobileShell.js';
 import { syncBottomSurfaces } from './bottomSurface.js';
 import { remainingAirLandingsToAssign } from '../state/airLanding.js';
+import {
+  getEnemyCombatUnits,
+  getFriendlyCombatUnits,
+  countLivingUnits,
+  territoryHasEnemyCombatUnits,
+  territoryCombatAlreadyResolved,
+  summarizeCombatForce,
+} from '../state/combatUnits.js';
+import { dequeueResolvedCombatHeads, applyTerritoryCapture } from '../state/combatFinalize.js';
 import { persistableUnit } from '../state/persistState.js';
 import { emitGameEvent, getGameEventLog } from '../multiplayer/gameEventLog.js';
+
+export {
+  getEnemyCombatUnits,
+  getFriendlyCombatUnits,
+  countLivingUnits,
+  territoryHasEnemyCombatUnits,
+  territoryCombatAlreadyResolved,
+  summarizeCombatForce,
+};
 
 // Readable AA result step (UI only). Rules unchanged: 1 die per attacking
 // aircraft, hit on 1, cheapest aircraft first, no attacker choice.
 export const AA_RESULT_PHASE = 'aaResults';
 export const AA_RESULT_AUTO_PAUSE_MS = 600;
-
-// Enemy combat units for "is this a real fight?" Factory is captured, not
-// fought. AA-only is still a real fight (AA can shoot aircraft).
-export function getEnemyCombatUnits(units, currentPlayerId, areAllies = () => false) {
-  return (units || []).filter((u) => (
-    !!u
-    && (u.quantity || 0) > 0
-    && u.owner !== currentPlayerId
-    && !areAllies(currentPlayerId, u.owner)
-    && u.type !== 'factory'
-  ));
-}
-
-export function getFriendlyCombatUnits(units, currentPlayerId) {
-  return (units || []).filter((u) => (
-    !!u
-    && (Number(u.quantity) || 0) > 0
-    && u.owner === currentPlayerId
-    && u.type !== 'factory'
-  ));
-}
-
-export function countLivingUnits(units, { excludeTypes = [] } = {}) {
-  const skip = new Set(excludeTypes);
-  return (units || []).reduce((sum, u) => {
-    if (!u || skip.has(u.type)) return sum;
-    return sum + (Number(u.quantity) || 0);
-  }, 0);
-}
-
-export function territoryHasEnemyCombatUnits(units, currentPlayerId, areAllies) {
-  return getEnemyCombatUnits(units, currentPlayerId, areAllies).length > 0;
-}
-
-// Queue head is done when the attacker is already gone (AA wipe / last
-// round synced) or no enemy combat units remain. Either way, do not paint
-// a 0-attacker rematch that can only sit on Roll Dice.
-export function territoryCombatAlreadyResolved(units, currentPlayerId, areAllies) {
-  const enemies = getEnemyCombatUnits(units, currentPlayerId, areAllies);
-  const friendlies = getFriendlyCombatUnits(units, currentPlayerId);
-  return enemies.length === 0 || friendlies.length === 0;
-}
-
-export function summarizeCombatForce(units) {
-  const byType = new Map();
-  for (const u of units || []) {
-    const n = Number(u?.quantity) || 0;
-    if (n <= 0 || !u?.type) continue;
-    byType.set(u.type, (byType.get(u.type) || 0) + n);
-  }
-  return [...byType.entries()].map(([type, quantity]) => ({ type, quantity }));
-}
 
 export function formatCombatForceLine(units, formatName = formatUnitName) {
   return summarizeCombatForce(units)
@@ -274,26 +240,10 @@ export class CombatUI {
   // is also done — do not paint Roll Dice with nobody left to fight.
   // AA-only still counts while attacking air (or any friendly combat unit) remains.
   _dequeueResolvedCombatHeads() {
-    const skipped = [];
-    if (!this.gameState) return skipped;
-    const playerId = this.gameState.currentPlayer?.id;
-    const areAllies = (a, b) => !!this.gameState.areAllies?.(a, b);
-    while (this.gameState.combatQueue?.length > 0) {
-      const name = this.gameState.combatQueue[0];
-      const units = this.gameState.getUnitsAt?.(name) || this.gameState.units?.[name] || [];
-      if (!territoryCombatAlreadyResolved(units, playerId, areAllies)) break;
-      this.gameState.combatQueue.shift();
-      skipped.push(name);
-    }
-    if (skipped.length > 0) {
-      this.gameState._notify?.();
-      try {
-        getGameEventLog()?.logSoftLockEscape({
-          reason: 'dequeue_resolved_combat_heads',
-          payload: { skipped },
-        });
-      } catch { /* fail-closed */ }
-    }
+    const { skipped } = dequeueResolvedCombatHeads(this.gameState, {
+      unitDefs: this.unitDefs || {},
+      logSoftLock: (entry) => getGameEventLog()?.logSoftLockEscape(entry),
+    });
     return skipped;
   }
 
@@ -1051,6 +1001,7 @@ export class CombatUI {
       defenseRolls: defenseRolls.map((r) => r.roll),
       attackForce: summarizeCombatForce(attackers),
       defenseForce: summarizeCombatForce(defenders),
+      survivors: summarizeCombatForce(attackers),
     });
     return { attackHits, defenseHits };
   }
@@ -1688,25 +1639,21 @@ export class CombatUI {
     if (this.combatState.winner === 'attacker') {
       const hasLandUnit = this.combatState.attackers.some(u => {
         const def = this.unitDefs[u.type];
-        return def && def.isLand && u.quantity > 0;
+        return def && def.isLand && u.quantity > 0 && u.type !== 'aaGun';
       });
 
       if (hasLandUnit) {
-        this.gameState.territoryState[this.currentTerritory].owner = player.id;
-
-        // Award Risk card for conquering (one per turn per Risk rules)
-        if (!this.gameState.conqueredThisTurn[player.id]) {
-          this.gameState.conqueredThisTurn[player.id] = true;
-          const cardType = this.gameState.awardRiskCard(player.id);
-          this.cardAwarded = cardType;
-          // Log the card earned
-          if (this.actionLog && cardType) {
-            this.actionLog.logCardEarned(player, cardType);
+        const capture = applyTerritoryCapture(this.gameState, this.currentTerritory, {
+          playerId: player.id,
+          previousOwner,
+          unitDefs: this.unitDefs || {},
+        });
+        if (capture.cardAwarded) {
+          this.cardAwarded = capture.cardAwarded;
+          if (this.actionLog) {
+            this.actionLog.logCardEarned(player, capture.cardAwarded);
           }
         }
-
-        // Handle capital capture (IPC transfer, victory check)
-        this.gameState.handleCapitalCapture(this.currentTerritory, player.id, previousOwner);
       } else {
         // Air units killed defenders but cannot capture - territory remains with original owner
         // Air units will need to land elsewhere
@@ -3538,9 +3485,9 @@ export class CombatUI {
     // Air landing select dropdowns
     this.el.querySelectorAll('.air-landing-select').forEach(select => {
       select.addEventListener('change', () => {
-        const unitType = select.dataset.unit;
+        const unitKey = select.dataset.unit;
         const destination = select.value;
-        this.combatState.selectedLandings[unitType] = destination;
+        if (unitKey) this.combatState.selectedLandings[unitKey] = destination;
         this._render();
       });
     });

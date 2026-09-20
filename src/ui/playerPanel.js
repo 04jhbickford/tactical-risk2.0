@@ -66,6 +66,7 @@ import {
   mergeLandingSelections,
   resolveLandingDestination,
 } from '../state/airLanding.js';
+import { maxMoveSelection } from '../state/combatMoveEligibility.js';
 
 export {
   shouldOfferEndPhaseDuringMove,
@@ -1502,7 +1503,6 @@ export class PlayerPanel {
       if (dest) {
         landings[unitKey] = dest;
         if (unit.id && unit.id !== unitKey) landings[unit.id] = dest;
-        if (unit.type) landings[unit.type] = dest;
       } else if (!unit.landingOptions || unit.landingOptions.length === 0) {
         crashes.push({ id: unit.id, type: unit.type, quantity: unit.quantity });
       }
@@ -1827,7 +1827,7 @@ export class PlayerPanel {
           disabled: false,
           primary: true
         });
-      } else if (ux.showDone) {
+      } else if (ux.showDone && !shouldUsePhonePlacementTray({ mobile: isMobileShell(), phase })) {
         buttons.push({
           action: 'finish-placement',
           label: ux.canSkipNaval ? 'Done — skip leftover ships →' : 'Done - Next Player →',
@@ -3594,9 +3594,8 @@ export class PlayerPanel {
     // dead first turn (B39) even when they are disabled.
     html += `<div class="pp-placement-actions">`;
     html += `<button class="pp-action-btn secondary small" data-action="undo-placement"${canUndo ? '' : ' disabled'}>↩ Undo</button>`;
-    if (showDoneButton) {
-      html += `<button class="pp-action-btn primary" data-action="finish-placement">${ux.canSkipNaval ? 'Done — skip leftover ships →' : 'Done - Next Player →'}</button>`;
-    }
+    // Green thumb / bottom confirm is the only Done (9.20.26.04).
+    // Do not paint a second blue primary here.
     const canDeploy = totalQueued > 0 && isValidPlacement;
     html += `<button class="pp-action-btn primary" data-action="confirm-placement"${canDeploy ? '' : ' disabled'}>Deploy${totalQueued > 0 ? ` ${totalQueued}` : ''}</button>`;
     html += `</div>`;
@@ -4941,35 +4940,14 @@ export class PlayerPanel {
           return;
         }
 
-        // Handle select-all units for movement (only for current tab)
+        // Handle select-all units for movement — every eligible stack, not
+        // just the open tab. Combat move may empty the origin (A&A / Mexico).
         if (action === 'move-select-all') {
           const movable = this._getMovableUnits(this.selectedTerritory, this.gameState.currentPlayer);
-          const regularUnits = movable.filter(u => !u.isCargo);
-          const cargoUnits = movable.filter(u => u.isCargo);
-
-          // Filter to only current tab's units
-          let unitsToSelect = [];
-          if (this.moveUnitTab === 'land') {
-            unitsToSelect = regularUnits.filter(u => this.unitDefs?.[u.type]?.isLand);
-          } else if (this.moveUnitTab === 'naval') {
-            unitsToSelect = regularUnits.filter(u => this.unitDefs?.[u.type]?.isSea || u.isIndividual);
-          } else if (this.moveUnitTab === 'air') {
-            unitsToSelect = regularUnits.filter(u => this.unitDefs?.[u.type]?.isAir);
-          } else if (this.moveUnitTab === 'cargo') {
-            unitsToSelect = cargoUnits;
-          }
-
-          for (const unit of unitsToSelect) {
-            let unitKey;
-            if (unit.isCargo) {
-              unitKey = unit.cargoKey;
-            } else if (unit.isIndividual) {
-              unitKey = `ship:${unit.id}`;
-            } else {
-              unitKey = unit.type;
-            }
-            this.moveSelectedUnits[unitKey] = unit.quantity;
-          }
+          this.moveSelectedUnits = {
+            ...this.moveSelectedUnits,
+            ...maxMoveSelection(movable),
+          };
           this._scheduleRender();
           return;
         }
@@ -5104,6 +5082,9 @@ export class PlayerPanel {
           if (this.isAirLandingActive()) {
             this.airLandingSelections = {};
             this.airLandingIndex = 0;
+            this.gameState?.clearAirLandingSelections?.(
+              this.airLandingData.combatTerritory,
+            );
             this._scheduleRender();
           }
           return;

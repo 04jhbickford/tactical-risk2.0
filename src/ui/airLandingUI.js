@@ -133,8 +133,15 @@ export class AirLandingUI {
     // Check if this is a valid landing destination
     const validDest = currentUnit.landingOptions.find(opt => opt.territory === territory.name);
     if (validDest) {
-      const unitKey = currentUnit.id || currentUnit.type;
+      const unitKey = currentUnit.id || `${currentUnit.type}_${this.currentUnitIndex}`;
       this.selectedLandings[unitKey] = territory.name;
+      this.gameState?.recordAirLandingSelection?.({
+        originTerritory: this.combatTerritory,
+        id: unitKey,
+        type: currentUnit.type,
+        quantity: currentUnit.quantity || 1,
+        destination: territory.name,
+      });
 
       // Save to current territory's data
       const current = this.pendingByTerritory[this.currentTerritoryIndex];
@@ -299,9 +306,14 @@ export class AirLandingUI {
       `;
     }
 
+    const hasSelections = Object.keys(this.selectedLandings || {}).length > 0;
+
     // Actions
     html += `
       <div class="alp-actions">
+        ${hasSelections ? `
+          <button class="alp-btn secondary" data-action="undo">↩ Undo Selections</button>
+        ` : ''}
         <button class="alp-btn primary" data-action="confirm" ${!allSelected ? 'disabled' : ''}>
           ${allSelected && !isLastTerritory ? 'Next Territory →' : 'Confirm Landings'}
         </button>
@@ -365,6 +377,15 @@ export class AirLandingUI {
     // Confirm button
     this.el.querySelector('[data-action="confirm"]')?.addEventListener('click', () => {
       this._confirmCurrentTerritory();
+    });
+
+    this.el.querySelector('[data-action="undo"]')?.addEventListener('click', () => {
+      this.selectedLandings = {};
+      this.currentUnitIndex = 0;
+      const current = this.pendingByTerritory[this.currentTerritoryIndex];
+      if (current) current.landings = {};
+      this.gameState?.clearAirLandingSelections?.(this.combatTerritory);
+      this._render();
     });
   }
 

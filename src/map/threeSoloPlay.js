@@ -12,10 +12,14 @@ import {
   getEnemyCombatUnits,
   getFriendlyCombatUnits,
   territoryCombatAlreadyResolved,
+} from '../state/combatUnits.js';
+import {
   phoneCombatAttackerWinPercent,
   formatPhoneCombatHeroOdds,
 } from '../ui/combatUI.js';
+import { dequeueResolvedCombatHeads, applyTerritoryCapture } from '../state/combatFinalize.js';
 import { remainingAirLandingsToAssign } from '../state/airLanding.js';
+import { combatMoveReachableDests, maxMoveSelection } from '../state/combatMoveEligibility.js';
 import { placementBudgetCopy } from '../state/placeQueue.js';
 
 export const BATTLE_STEP = {
@@ -423,6 +427,9 @@ export function legalDests(play) {
   const adj = gs.getConnections(from) || [];
 
   if (combat) {
+    for (const hit of combatMoveReachableDests(gs, from, picked, play.unitDefs)) {
+      dests.add(hit.name);
+    }
     for (const to of adj) {
       const t = gs.territoryByName[to];
       if (ground && !t?.isWater && isEnemyLand(play, to)) dests.add(to);
@@ -752,13 +759,14 @@ export function resolveNavalQueue(play) {
   const gs = play.gameState;
   gs._detectCombats?.();
   const defs = play.unitDefs;
+  dequeueResolvedCombatHeads(gs, { unitDefs: defs || {} });
   let guard = 0;
   while ((gs.combatQueue || []).length && guard++ < 80) {
     const name = gs.combatQueue[0];
     const t = gs.territoryByName[name];
     const units = gs.units[name] || [];
     if (territoryCombatAlreadyResolved(units, gs.currentPlayer?.id, (a, b) => gs.areAllies(a, b))) {
-      gs.combatQueue.shift();
+      dequeueResolvedCombatHeads(gs, { unitDefs: defs || {} });
       continue;
     }
     if (!t?.isWater) break;
@@ -774,12 +782,12 @@ export function resolveNavalQueue(play) {
 export function enterCombat(play) {
   const gs = play.gameState;
   resolveNavalQueue(play);
-  const playerId = gs.currentPlayer?.id;
+  dequeueResolvedCombatHeads(gs, { unitDefs: play.unitDefs || {} });
   while ((gs.combatQueue || []).length) {
     const name = gs.combatQueue[0];
     const units = gs.units[name] || [];
-    if (territoryCombatAlreadyResolved(units, playerId, (a, b) => gs.areAllies(a, b))) {
-      gs.combatQueue.shift();
+    if (territoryCombatAlreadyResolved(units, gs.currentPlayer?.id, (a, b) => gs.areAllies(a, b))) {
+      dequeueResolvedCombatHeads(gs, { unitDefs: play.unitDefs || {} });
       continue;
     }
     startBattle(play, name);
@@ -989,21 +997,12 @@ function applyHits(play) {
   const enemies = getEnemyCombatUnits(stacks, player.id, (a, b) => gs.areAllies(a, b));
   if (countLivingUnits(enemies) <= 0 && countLivingUnits(friends) > 0) {
     const t = gs.territoryByName[dest];
-    const hasLand = friends.some((u) => defOf(play, u.type).isLand);
+    const hasLand = friends.some((u) => defOf(play, u.type).isLand && u.type !== 'aaGun');
     if (hasLand && !t?.isWater) {
-      const prev = gs.getOwner(dest);
-      gs.territoryState[dest].owner = player.id;
-      for (const unit of stacks) {
-        if (unit.type === 'factory' || unit.type === 'aaGun') unit.owner = player.id;
-      }
-      if (!gs.capturedThisTurn) gs.capturedThisTurn = new Set();
-      if (gs.capturedThisTurn instanceof Set) gs.capturedThisTurn.add(dest);
-      if (!gs.conqueredThisTurn) gs.conqueredThisTurn = {};
-      if (!gs.conqueredThisTurn[player.id]) {
-        gs.conqueredThisTurn[player.id] = true;
-        gs.awardRiskCard?.(player.id);
-      }
-      gs.handleCapitalCapture?.(dest, player.id, prev);
+      applyTerritoryCapture(gs, dest, {
+        playerId: player.id,
+        unitDefs: play.unitDefs || {},
+      });
     }
     gs.logCombat?.({
       territory: dest,
@@ -1055,11 +1054,14 @@ function startAirLand(play) {
     enterCombat(play);
     return play;
   }
-  play.gameState.addPendingAirLandings?.(dest, Object.entries(air).map(([type, quantity]) => ({
-    id: type,
-    type,
-    quantity,
-  })));
+  const pendingAir = [];
+  let airId = 0;
+  for (const [type, quantity] of Object.entries(air)) {
+    for (let i = 0; i < (Number(quantity) || 0); i++) {
+      pendingAir.push({ id: `${type}_${airId++}`, type, quantity: 1 });
+    }
+  }
+  play.gameState.addPendingAirLandings?.(dest, pendingAir);
   const landable = new Set();
   for (const type of Object.keys(air)) {
     for (const opt of play.gameState.getAirLandingOptions(dest, type, play.unitDefs) || []) {
@@ -1222,6 +1224,15 @@ export function adjustUnit(play, type, delta = 1) {
   syncPlay(play);
   if (isGameOver(play) || !isHumanTurn(play)) return play;
   const phase = play.gameState.turnPhase;
+  if (type === 'ALL' && (phase === TURN_PHASES.COMBAT_MOVE || phase === TURN_PHASES.NON_COMBAT_MOVE)) {
+    const stacks = eligibleStacks(play, play.selected);
+    play.selectedUnits = maxMoveSelection(stacks);
+    if (play.destPicked && !legalDests(play).includes(play.destPicked)) {
+      play.destPicked = null;
+    }
+    refreshStage(play);
+    return play;
+  }
   const step = Number(delta);
   if (!Number.isFinite(step) || step === 0) return play;
 
@@ -1420,6 +1431,9 @@ export function canUndo(play) {
   if (!play?.gameState || !isHumanTurn(play) || isGameOver(play)) return false;
   if (play.income) return true;
   if (play.battle) return false;
+  if (play.landing) {
+    return !!(pickedCount(play.landing.pick) || play.landing.dest);
+  }
   if (play.tech?.rolls || play.tech?.breakthrough) return false;
   const gs = play.gameState;
   if (gs.phase === GAME_PHASES.CAPITAL_PLACEMENT) return !!gs.canUndoLastCapital?.();
@@ -1447,6 +1461,13 @@ export function undoLast(play) {
     return play;
   }
   const gs = play.gameState;
+  if (play.landing) {
+    play.landing.pick = {};
+    play.landing.dest = null;
+    play.gameState?.clearAirLandingSelections?.(play.landing.origin);
+    refreshStage(play);
+    return play;
+  }
   if (gs.phase === GAME_PHASES.CAPITAL_PLACEMENT) {
     gs.undoLastCapital?.();
     resetUi(play);
@@ -2042,6 +2063,7 @@ export function chromeModel(play, territories = []) {
         ? (movePhase ? eligibleStacks(play, landName) : (play.gameState.units[landName] || []))
         : []),
     steppers: play.landing ? planeSteppers : steppers,
+    showAll: !!(movePhase && !play.landing && showSteppers),
     airLand: !!play.landing,
     label: confirmLabel(play),
     gold: confirmGold(play),
