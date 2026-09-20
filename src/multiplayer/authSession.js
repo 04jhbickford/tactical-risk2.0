@@ -94,7 +94,9 @@ export function shouldRefreshTokenOnResume({ event } = {}) {
     || event === 'pageshow'
     || event === 'pageshow-persisted'
     || event === 'resume'
-    || event === 'visibilitychange';
+    || event === 'visibilitychange'
+    || event === 'online'
+    || event === 'focus';
 }
 
 export function shouldForceReauthOnResume() {
@@ -115,6 +117,8 @@ export function shouldKeepSessionOnTabReturn() {
 
 export function resumeAuthEvent(visibilityState, { persisted = false } = {}) {
   if (persisted) return 'pageshow-persisted';
+  if (visibilityState === 'online') return 'online';
+  if (visibilityState === 'focus') return 'focus';
   if (visibilityState === 'visible') return 'visibility-visible';
   if (visibilityState === 'hidden') return 'visibility-hidden';
   return 'pageshow';

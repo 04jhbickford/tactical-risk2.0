@@ -1,6 +1,6 @@
 // Discord turn ping for Classic + New UX. Soft-fail only — never blocks play.
-// Production path: POST /api/discord-turn-ping (Vercel env holds the webhook).
-// Legacy fallback: DISCORD_TURN_WEBHOOK_URL on window / localStorage / env.
+// Production path: POST /api/discord-turn-ping with the seat payload.
+// The webhook lives in Vercel env DISCORD_TURN_WEBHOOK_URL — never on the client.
 // Dedupe key: (gameId, turnIndex, seatId). Skip AI. One untagged fallback
 // when the seat has no snowflake.
 
@@ -234,7 +234,6 @@ export function maybePostDiscordTurnPing({
   phase = '',
   deepLink = '',
   uxMode = '',
-  config = null,
   seen = null,
   storage = null,
   post = null,
@@ -258,7 +257,6 @@ export function maybePostDiscordTurnPing({
     const payload = discordPingPayload({
       player, gameId, turnIndex, seatId, phase, deepLink, uxMode,
     });
-    const legacyUrl = readDiscordWebhookUrl(config || readDiscordWebhookConfig());
 
     const finish = (posted) => {
       rememberPingKey(gate.key, store);
@@ -268,10 +266,9 @@ export function maybePostDiscordTurnPing({
       return posted;
     };
 
-    // Test / explicit webhook poster: same contract as dual-path.3.
+    // Harness only. Production never reads a webhook URL in the browser.
     if (typeof post === 'function') {
-      if (!legacyUrl) return { ok: false, reason: 'unconfigured' };
-      return finish(post(legacyUrl, content));
+      return finish(post(null, content));
     }
 
     if (viaProxy !== false) {
@@ -282,9 +279,6 @@ export function maybePostDiscordTurnPing({
             rememberPingKey(gate.key, store);
             return result;
           }
-          if (result?.reason === 'unconfigured' && legacyUrl) {
-            return finish(postDiscordWebhook(legacyUrl, content));
-          }
           return result || { ok: false, reason: 'unconfigured' };
         }).catch(() => ({ ok: false, reason: 'soft-fail' }));
       }
@@ -292,13 +286,9 @@ export function maybePostDiscordTurnPing({
         rememberPingKey(gate.key, store);
         return posted;
       }
-      if (posted?.reason === 'unconfigured' && legacyUrl) {
-        return finish(postDiscordWebhook(legacyUrl, content));
-      }
       if (posted) return posted;
     }
 
-    if (legacyUrl) return finish(postDiscordWebhook(legacyUrl, content));
     return { ok: false, reason: 'unconfigured' };
   } catch {
     return { ok: false, reason: 'soft-fail' };
@@ -315,7 +305,6 @@ export function bindDiscordTurnPing(gameState, {
   getUxMode = () => 'classic',
   getOrigin = () => 'https://tactical-risk20.vercel.app/',
   isApplyingRemote = () => false,
-  config = null,
   post = null,
   storage = null,
   onResult = null,
@@ -349,7 +338,6 @@ export function bindDiscordTurnPing(gameState, {
           gameCode: getGameId(),
         }),
         uxMode,
-        config,
         storage,
         post,
       });

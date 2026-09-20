@@ -1032,6 +1032,7 @@ async function init() {
       if (document.visibilityState === 'visible') quietResume('visible');
     });
     window.addEventListener('pageshow', (ev) => quietResume('visible', { persisted: !!ev.persisted }));
+    window.addEventListener('online', () => quietResume('online'));
   }
 
   // Function to start a multiplayer game

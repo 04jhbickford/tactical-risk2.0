@@ -317,15 +317,19 @@ export class AuthManager {
     }
   }
 
-  // Tab return / reload / bfcache: refresh the token. Never sign out.
+  // Tab return / reload / bfcache / network-back: refresh the token.
+  // Never sign out. Re-hydrate displayName from Firestore so a generic
+  // Auth profile does not paint a zombie after resume.
   async refreshSessionQuietly() {
     const fb = this.auth?.currentUser;
     if (!fb) return { ok: isRealAuthIdentity(this.getUser()), refreshed: false };
     try {
       await fb.getIdToken();
       try { await fb.reload(); } catch { /* offline — keep cached user */ }
-      this._applyFirebaseUser(this.auth.currentUser || fb);
+      const live = this.auth.currentUser || fb;
+      this._applyFirebaseUser(live);
       this._notifyListeners();
+      this._hydrateIdentity(live).catch(() => {});
       return { ok: true, refreshed: true };
     } catch (error) {
       console.warn('[Auth] quiet refresh failed — session kept', error?.code || error);
@@ -348,10 +352,13 @@ export class AuthManager {
         await setDoc(userRef, { displayName }, { merge: true });
       }
 
-      this.currentUser = {
-        ...this.currentUser,
-        displayName
-      };
+      this.currentUser = resolveSessionIdentity({
+        id: this.auth.currentUser.uid,
+        email: this.auth.currentUser.email || this.currentUser?.email,
+        displayName,
+        phoneNumber: this.auth.currentUser.phoneNumber || this.currentUser?.phoneNumber,
+        storedDisplayName: displayName,
+      });
       this._notifyListeners();
 
       return { success: true };

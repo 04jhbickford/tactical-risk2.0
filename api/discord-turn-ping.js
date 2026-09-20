@@ -1,6 +1,8 @@
 // Vercel serverless Discord turn ping.
-// Reads DISCORD_TURN_WEBHOOK_URL from server env — never ships to the client.
-// Soft-fail only. POST { gameId, turnIndex, seatId, discordUserId, faction, phase, deepLink }.
+// Reads DISCORD_TURN_WEBHOOK_URL from server env (Preview + Production).
+// Never ships the URL to the client. Never logs or echoes it.
+// Soft-fail only (always 200 for POST). Body: gameId, turnIndex, seatId,
+// discordUserId, faction, phase, deepLink.
 
 const seen = new Set();
 

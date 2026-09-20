@@ -26,7 +26,7 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-check('stamp is dual-path.7', GAME_VERSION === 'V2.81.57-dual-path.7');
+check('stamp is dual-path.8', GAME_VERSION === 'V2.81.57-dual-path.8');
 check('email local-part', emailLocalPart('rob@example.com') === 'rob');
 check('generic Player', isGenericDisplayName('Player') && isGenericDisplayName('non-player'));
 check('real name is not generic', isGenericDisplayName('Robert007') === false);
@@ -80,9 +80,10 @@ check('identity helper matches policy', shouldShowSignInFormForIdentity({
 check('background never signs out', shouldSignOutOnBackground({ event: 'pageshow' }) === false);
 check('resume does not force re-auth', shouldForceReauthOnResume() === false);
 check('tab return keeps session', shouldKeepSessionOnTabReturn() === true);
-check('quiet refresh on pageshow / visible',
+check('quiet refresh on pageshow / visible / online',
   shouldRefreshTokenOnResume({ event: 'pageshow' })
-  && shouldRefreshTokenOnResume({ event: 'visibility-visible' }));
+  && shouldRefreshTokenOnResume({ event: 'visibility-visible' })
+  && shouldRefreshTokenOnResume({ event: 'online' }));
 
 const authSrc = readFileSync(new URL('../src/multiplayer/auth.js', import.meta.url), 'utf8');
 const lobbySrc = readFileSync(new URL('../src/ui/multiplayerLobby.js', import.meta.url), 'utf8');
@@ -97,6 +98,10 @@ check('AuthScreen uses resolveAuthSurface', screenSrc.includes('resolveAuthSurfa
 check('Experimental waits whenReady', threeSrc.includes('whenReady') && threeSrc.includes('restoreSession'));
 check('Experimental identity strip', chromeSrc.includes('data-auth-surface') && chromeSrc.includes('mp-signout'));
 check('welcome never returns Player for empty', formatWelcomeName(null) === null);
+const mainSrc = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+check('Classic resumes on network back', mainSrc.includes("addEventListener('online'"));
+check('Experimental resumes on network back', threeSrc.includes("addEventListener('online'"));
+check('quiet refresh rehydrates identity', authSrc.includes('this._hydrateIdentity(live)'));
 
 console.log(failures === 0 ? '\nALL AUTH SESSION CHECKS PASS' : `\n${failures} FAILURES`);
 process.exit(failures === 0 ? 0 : 1);

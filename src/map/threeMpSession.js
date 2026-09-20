@@ -68,6 +68,7 @@ export function createThreeMpSession({ setup, territories, continents }) {
     }
     if (typeof window !== 'undefined') {
       window.addEventListener('pageshow', (ev) => quietResume('visible', { persisted: !!ev.persisted }));
+      window.addEventListener('online', () => quietResume('online'));
     }
     ready = true;
     return { ok: true };

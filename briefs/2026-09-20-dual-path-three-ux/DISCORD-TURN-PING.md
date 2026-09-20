@@ -14,13 +14,11 @@ Shared sync path. Soft-fail only. Never blocks play. Hold merge.
 | Field | Value |
 |---|---|
 | Channel | `#tactical-risk` `1551283474303025292` |
-| Production | `POST /api/discord-turn-ping` — Vercel env `DISCORD_TURN_WEBHOOK_URL` |
-| Client | Never requires localStorage. Optional `window.DISCORD_TURN_WEBHOOK_URL` is local/dev only. |
-| Post | Server posts `{ content }` to the Discord webhook. Missing env → `{ ok: false, reason: 'unconfigured' }`, no throw. |
+| Production | `POST /api/discord-turn-ping` — serverless reads `DISCORD_TURN_WEBHOOK_URL` |
+| Client | Payload only (`gameId`, `seatId`, `turnIndex`, `faction`, `phase`, `deepLink`, `discordUserId`). No webhook on the client. |
+| Post | Server posts `{ content }` to Discord. Missing API/env → `{ ok: false, reason }` HTTP 200, no throw. |
 
-Bare ES modules: browser code cannot read Vercel env. Do **not** bake a real webhook into `index.html`.
-
-Set the secret: Vercel → Project → Settings → Environment Variables → `DISCORD_TURN_WEBHOOK_URL` (Preview + Production) → redeploy.
+Bare ES modules: browser code cannot read Vercel env. The secret stays on the Vercel project (Production + Preview). Do not put the URL in git, PRs, briefs, comments, or client JS. Never echo or log it.
 
 ## Sample ping
 
