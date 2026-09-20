@@ -21,6 +21,11 @@ import {
 import { emitGameEvent, summarizeUnits } from '../multiplayer/gameEventLog.js';
 import { omitUndefinedDeep } from './persistState.js';
 import { captureIfAttackerHolds, finalizeAttackerHoldsOnBoard } from './combatFinalize.js';
+import {
+  canPlaceAirOnCarrierInSeaZone,
+  loadOneAirOntoCarrier,
+  unloadOneAirFromCarrier,
+} from './carrierPlacement.js';
 
 export const GAME_PHASES = {
   LOBBY: 'lobby',
@@ -1461,32 +1466,11 @@ export class GameState {
         const seaUnits = this.units[territoryName] || [];
 
         if (unitDef.isAir) {
-          // Fighters can be placed on carriers
-          const carriers = seaUnits.filter(u => u.type === 'carrier' && u.owner === player.id);
-          const carrierDef = unitDefs.carrier;
-          // Find carrier with capacity
-          let placed = false;
-          for (const carrier of carriers) {
-            const currentAircraft = carrier.aircraft || [];
-            if (carrierDef && currentAircraft.length < (carrierDef.aircraftCapacity || 2)) {
-              if (carrierDef.canCarry?.includes(unitType)) {
-                // Individualize carrier if not already (so aircraft stay with it when moved)
-                if (!carrier.id) {
-                  carrier.id = `carrier_${++this._shipIdCounter}`;
-                  carrier.quantity = 1;
-                }
-                // Place on carrier
-                unitEntry.quantity--;
-                carrier.aircraft = carrier.aircraft || [];
-                carrier.aircraft.push({ type: unitType, owner: player.id });
-                placed = true;
-                break;
-              }
-            }
+          const loaded = loadOneAirOntoCarrier(this, territoryName, unitType, player.id, unitDefs);
+          if (!loaded.success) {
+            return { success: false, error: loaded.error || 'No carrier with capacity to hold this aircraft' };
           }
-          if (!placed) {
-            return { success: false, error: 'No carrier with capacity to hold this aircraft' };
-          }
+          unitEntry.quantity--;
           // Track placement for undo (special carrier placement)
           this.placementHistory.push({
             territory: territoryName,
@@ -1890,6 +1874,49 @@ export class GameState {
       if (!validSeaZones.has(territoryName)) {
         return { success: false, error: 'Naval units must be placed on sea zones adjacent to territories with factories' };
       }
+    } else if (unitDef.isAir && this.territoryByName[territoryName]?.isWater) {
+      // 9.20.26.07 — fighters may mobilize onto a friendly carrier in a
+      // factory-adjacent sea zone (same dests as new ships).
+      if (!canPlaceAirOnCarrierInSeaZone(this, territoryName, unitType, player.id, unitDefs, {
+        requireFactoryAdjacent: true,
+      })) {
+        return {
+          success: false,
+          error: 'Aircraft must be placed on a factory or a friendly carrier in a sea zone adjacent to a factory',
+        };
+      }
+
+      const cost = pending.cost || unitDef.cost;
+      pending.quantity--;
+      if (pending.quantity <= 0) {
+        const idx = this.pendingPurchases.indexOf(pending);
+        this.pendingPurchases.splice(idx, 1);
+      }
+
+      const loaded = loadOneAirOntoCarrier(this, territoryName, unitType, player.id, unitDefs);
+      if (!loaded.success) {
+        const restore = this.pendingPurchases.find((p) => p.type === unitType && p.owner === player.id);
+        if (restore) restore.quantity++;
+        else {
+          this.pendingPurchases.push({
+            type: unitType,
+            quantity: 1,
+            owner: player.id,
+            cost,
+          });
+        }
+        return loaded;
+      }
+
+      this.mobilizationHistory.push({
+        territory: territoryName,
+        unitType,
+        owner: player.id,
+        cost,
+        onCarrier: true,
+      });
+      this._notify();
+      return { success: true };
     } else if (unitDef.isBuilding) {
       // Factories: placed on owned land territories without a factory
       // CRITICAL: Cannot place on territories captured this turn
@@ -1984,14 +2011,18 @@ export class GameState {
       return { success: false, error: 'Cannot undo other player placements' };
     }
 
-    // Remove unit from territory
-    const units = this.units[lastPlacement.territory] || [];
-    const unitEntry = units.find(u => u.type === lastPlacement.unitType && u.owner === player.id);
-    if (unitEntry) {
-      unitEntry.quantity--;
-      if (unitEntry.quantity <= 0) {
-        const idx = units.indexOf(unitEntry);
-        units.splice(idx, 1);
+    if (lastPlacement.onCarrier) {
+      unloadOneAirFromCarrier(this, lastPlacement.territory, lastPlacement.unitType, player.id);
+    } else {
+      // Remove unit from territory
+      const units = this.units[lastPlacement.territory] || [];
+      const unitEntry = units.find(u => u.type === lastPlacement.unitType && u.owner === player.id);
+      if (unitEntry) {
+        unitEntry.quantity--;
+        if (unitEntry.quantity <= 0) {
+          const idx = units.indexOf(unitEntry);
+          units.splice(idx, 1);
+        }
       }
     }
 

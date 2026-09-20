@@ -1,6 +1,6 @@
-# BUILD-PLAN B–D — dual-path.9
+# BUILD-PLAN B–D — dual-path.9 / .10
 
-Hold merge. Quiet James.
+Merge to main. Quiet James.
 
 ## B — P0
 
@@ -51,7 +51,15 @@ Keep green. Experimental already has a single Confirm (`passLabel`).
 `phaseLabelOf` + `buildDiscordTurnContent` so
 `your turn — Russians ·` is not blank-tailed.
 
+### 9.20.26.07 — cannot place new fighters onto a carrier in a sea zone
+
+Robfox007: 2 FTR + 1 CV bought; mobilize blocked air into the SZ.
+Shared `carrierPlacement.js`. `mobilizeUnit` loads air onto a friendly
+carrier in a factory-adjacent sea zone. Classic water dests + Experimental
+`legalPlaceDests` / sea-first Confirm.
+
 ## Proof
 
-`node tools/test-dual-path-9-combat.mjs` plus existing combat / air / discord /
-placement / dual-path tests.
+`node tools/test-dual-path-9-combat.mjs` plus
+`node tools/test-dual-path-9-mobilize-carrier.mjs` plus existing combat /
+air / discord / placement / dual-path tests.

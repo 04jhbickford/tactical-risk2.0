@@ -67,6 +67,11 @@ import {
   resolveLandingDestination,
 } from '../state/airLanding.js';
 import { maxMoveSelection } from '../state/combatMoveEligibility.js';
+import {
+  canPlaceAirOnCarrierInSeaZone,
+  pendingAirCanLoadInSeaZone,
+  seaFirstUnitTypes,
+} from '../state/carrierPlacement.js';
 
 export {
   shouldOfferEndPhaseDuringMove,
@@ -1255,7 +1260,20 @@ export class PlayerPanel {
     if (!dest || !unitType || !this._isValidMobilizeLocation(dest, player)) return false;
     const def = this.unitDefs?.[unitType];
     if (!def) return false;
-    if (dest.isWater) return !!def.isSea;
+    if (dest.isWater) {
+      if (def.isSea) return true;
+      if (def.isAir) {
+        return canPlaceAirOnCarrierInSeaZone(
+          this.gameState,
+          dest.name,
+          unitType,
+          player.id,
+          this.unitDefs,
+          { requireFactoryAdjacent: true },
+        );
+      }
+      return false;
+    }
     const factories = this._getFactoryTerritories(player.id);
     const isFactory = factories.includes(dest.name);
     if (def.isBuilding) return !isFactory;
@@ -1329,7 +1347,7 @@ export class PlayerPanel {
     const dest = this._phoneDeployDest();
     if (!dest) return false;
     const queue = { ...this.placementQueue };
-    const unitTypes = expandPlaceQueue(queue);
+    const unitTypes = seaFirstUnitTypes(expandPlaceQueue(queue), this.unitDefs);
     if (unitTypes.length === 0) return false;
     this._ignoreUndoUntil = Date.now() + 400;
     for (const unitType of unitTypes) {
@@ -4373,6 +4391,10 @@ export class PlayerPanel {
       const def = this.unitDefs?.[p.type];
       return def && (def.isLand || def.isAir) && p.quantity > 0;
     });
+    const airUnits = pending.filter((p) => {
+      const def = this.unitDefs?.[p.type];
+      return def?.isAir && p.quantity > 0;
+    });
     const navalUnits = pending.filter(p => {
       const def = this.unitDefs?.[p.type];
       return def?.isSea && p.quantity > 0;
@@ -4425,14 +4447,22 @@ export class PlayerPanel {
           </div>`;
       }
     } else {
-      html += `<div class="pp-hint">Click a factory territory on the map to deploy units</div>`;
+      html += `<div class="pp-hint">Click a factory or a factory-adjacent sea zone to deploy units</div>`;
     }
 
     // Get units that can be placed at the current location
     let placeableUnits = [];
     if (isValidPlacement && this.selectedTerritory) {
       if (isWater) {
-        placeableUnits = navalUnits;
+        const airOnCarrier = airUnits.filter((p) => canPlaceAirOnCarrierInSeaZone(
+          this.gameState,
+          this.selectedTerritory.name,
+          p.type,
+          player.id,
+          this.unitDefs,
+          { requireFactoryAdjacent: true },
+        ));
+        placeableUnits = [...navalUnits, ...airOnCarrier];
       } else if (isOwnedLand && !isFactoryTerritory) {
         placeableUnits = buildingUnits;
       } else if (isFactoryTerritory) {
@@ -4448,7 +4478,18 @@ export class PlayerPanel {
       html += `<div class="pp-unit-category-label">Land/Air</div>`;
       for (const unit of landUnits) {
         const imageSrc = getUnitIconPath(unit.type, player.id);
-        const canPlace = isFactoryTerritory && isValidPlacement;
+        const def = this.unitDefs?.[unit.type];
+        const onFactory = isFactoryTerritory && isValidPlacement;
+        const onCarrier = isWater && isValidPlacement && def?.isAir
+          && canPlaceAirOnCarrierInSeaZone(
+            this.gameState,
+            this.selectedTerritory.name,
+            unit.type,
+            player.id,
+            this.unitDefs,
+            { requireFactoryAdjacent: true },
+          );
+        const canPlace = onFactory || onCarrier;
         html += `
           <div class="pp-buy-row ${canPlace ? 'can-place' : ''}">
             <div class="pp-buy-info">
@@ -4559,16 +4600,22 @@ export class PlayerPanel {
     const pending = this.gameState.getPendingPurchases?.() || [];
     if (pending.length === 0) return false;
 
-    // Sea zones: valid if adjacent to factory and we have naval units
+    // Sea zones: factory-adjacent, with pending ships or air that can load
     if (territory.isWater) {
-      const navalUnits = pending.filter(p => {
+      const validSeaZones = this._getValidNavalPlacementZones(player.id);
+      if (!validSeaZones.includes(territory.name)) return false;
+      const hasNaval = pending.some((p) => {
         const def = this.unitDefs?.[p.type];
         return def?.isSea && p.quantity > 0;
       });
-      if (navalUnits.length === 0) return false;
-
-      const validSeaZones = this._getValidNavalPlacementZones(player.id);
-      return validSeaZones.includes(territory.name);
+      if (hasNaval) return true;
+      return pendingAirCanLoadInSeaZone(
+        this.gameState,
+        territory.name,
+        pending,
+        player.id,
+        this.unitDefs,
+      );
     }
 
     // Land territories: check if owned by player

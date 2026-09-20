@@ -1,4 +1,4 @@
-// dual-path.9 Experimental fork smoke (threeSoloPlay).
+// dual-path.10 Experimental fork smoke (threeSoloPlay).
 // Run: node tools/test-dual-path-9-experimental.mjs
 
 import { pathToFileURL } from 'url';
@@ -89,7 +89,7 @@ function makeTheater() {
 }
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-dual-path.9', GAME_VERSION === 'V2.81.57-dual-path.9');
+check('GAME_VERSION is V2.81.57-dual-path.10', GAME_VERSION === 'V2.81.57-dual-path.10');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== .02 Experimental applyHits / dequeue land-hold ===');
@@ -175,4 +175,4 @@ if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
   process.exit(1);
 }
-console.log('\nAll dual-path.9 Experimental fork checks passed');
+console.log('\nAll dual-path.10 Experimental fork checks passed');

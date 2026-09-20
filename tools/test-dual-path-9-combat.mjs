@@ -1,4 +1,4 @@
-// dual-path.9: combat capture, combat-move empty origin, independent air land,
+// dual-path.10: combat capture, combat-move empty origin, independent air land,
 // air-land undo, single green Done. Classic + Experimental share the helpers.
 // Run: node tools/test-dual-path-9-combat.mjs
 
@@ -91,7 +91,7 @@ function makeGs({
 }
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-dual-path.9', GAME_VERSION === 'V2.81.57-dual-path.9');
+check('GAME_VERSION is V2.81.57-dual-path.10', GAME_VERSION === 'V2.81.57-dual-path.10');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== 9.20.26.02 / 35RB85 dequeue captures land leftover ===');
@@ -226,4 +226,4 @@ if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
   process.exit(1);
 }
-console.log('\nAll dual-path.9 combat / air / deploy checks passed');
+console.log('\nAll dual-path.10 combat / air / deploy checks passed');

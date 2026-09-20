@@ -2,6 +2,10 @@
 
 import { TURN_PHASES } from '../state/gameState.js';
 import { getUnitIconPath } from '../utils/unitIcons.js';
+import {
+  canPlaceAirOnCarrierInSeaZone,
+  seaFirstUnitEntries,
+} from '../state/carrierPlacement.js';
 
 export class MobilizeUI {
   constructor() {
@@ -150,7 +154,20 @@ export class MobilizeUI {
       const availableUnits = pendingUnits.filter(u => {
         const def = this.unitDefs[u.type];
         if (!def) return false;
-        if (isSeaZone) return def.isSea;
+        if (isSeaZone) {
+          if (def.isSea) return true;
+          if (def.isAir) {
+            return canPlaceAirOnCarrierInSeaZone(
+              this.gameState,
+              this.selectedTerritory.name,
+              u.type,
+              player.id,
+              this.unitDefs,
+              { requireFactoryAdjacent: true },
+            );
+          }
+          return false;
+        }
         // Land territories can have land units, air units, and buildings (factories)
         return def.isLand || def.isAir || def.isBuilding;
       });
@@ -356,14 +373,31 @@ export class MobilizeUI {
     const availableUnits = pending.filter(u => {
       const def = this.unitDefs[u.type];
       if (!def) return false;
-      if (isSeaZone) return def.isSea;
+      if (isSeaZone) {
+        if (def.isSea) return true;
+        if (def.isAir) {
+          return canPlaceAirOnCarrierInSeaZone(
+            this.gameState,
+            this.selectedTerritory.name,
+            u.type,
+            player.id,
+            this.unitDefs,
+            { requireFactoryAdjacent: true },
+          );
+        }
+        return false;
+      }
       return def.isLand || def.isAir || def.isBuilding;
     });
 
     const placedUnits = [];
 
     // Place all available units
-    for (const unit of availableUnits) {
+    const ordered = seaFirstUnitEntries(
+      Object.fromEntries(availableUnits.map((u) => [u.type, u.quantity])),
+      this.unitDefs,
+    ).map(([type]) => availableUnits.find((u) => u.type === type)).filter(Boolean);
+    for (const unit of ordered) {
       let placed = 0;
       const quantityToPlace = unit.quantity;  // Capture before loop as quantity changes
       for (let i = 0; i < quantityToPlace; i++) {

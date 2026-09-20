@@ -26,7 +26,7 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-check('stamp is dual-path.9', GAME_VERSION === 'V2.81.57-dual-path.9');
+check('stamp is dual-path.10', GAME_VERSION === 'V2.81.57-dual-path.10');
 check('email local-part', emailLocalPart('rob@example.com') === 'rob');
 check('generic Player', isGenericDisplayName('Player') && isGenericDisplayName('non-player'));
 check('real name is not generic', isGenericDisplayName('Robert007') === false);

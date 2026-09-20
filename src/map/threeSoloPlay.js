@@ -21,6 +21,10 @@ import { dequeueResolvedCombatHeads, applyTerritoryCapture } from '../state/comb
 import { remainingAirLandingsToAssign } from '../state/airLanding.js';
 import { combatMoveReachableDests, maxMoveSelection } from '../state/combatMoveEligibility.js';
 import { placementBudgetCopy } from '../state/placeQueue.js';
+import {
+  canPlaceAirOnCarrierInSeaZone,
+  seaFirstUnitEntries,
+} from '../state/carrierPlacement.js';
 
 export const BATTLE_STEP = {
   AA_READY: 'aaReady',
@@ -202,6 +206,18 @@ export function deployDests(play) {
     const def = play.unitDefs[type] || {};
     if (def.isSea) {
       for (const zone of gs._getValidNavalPlacementZones?.(player.id) || []) dests.add(zone);
+    } else if (def.isAir) {
+      for (const [name, state] of Object.entries(gs.territoryState || {})) {
+        if (state.owner !== player.id) continue;
+        if (gs.territoryByName[name]?.isWater) continue;
+        dests.add(name);
+      }
+      for (const [name, t] of Object.entries(gs.territoryByName || {})) {
+        if (!t?.isWater) continue;
+        if (canPlaceAirOnCarrierInSeaZone(gs, name, type, player.id, play.unitDefs)) {
+          dests.add(name);
+        }
+      }
     } else {
       for (const [name, state] of Object.entries(gs.territoryState || {})) {
         if (state.owner !== player.id) continue;
@@ -628,6 +644,15 @@ export function legalPlaceDests(play) {
         if (friendly instanceof Set && friendly.size && !friendly.has(name)) continue;
         const hasFac = (gs.units[name] || []).some((u) => u.type === 'factory');
         if (!hasFac) dests.add(name);
+      }
+    } else if (def.isAir) {
+      for (const name of factoryDests(play)) dests.add(name);
+      for (const zone of gs._getValidNavalPlacementZones?.(player.id) || []) {
+        if (canPlaceAirOnCarrierInSeaZone(gs, zone, type, player.id, play.unitDefs, {
+          requireFactoryAdjacent: true,
+        })) {
+          dests.add(zone);
+        }
       }
     } else {
       for (const name of factoryDests(play)) dests.add(name);
@@ -1370,7 +1395,7 @@ function unlockPickedTech(play) {
 
 function placePending(play) {
   if (!play.destPicked || !pickedCount(play.selectedUnits)) return play;
-  for (const [type, qty] of Object.entries(play.selectedUnits)) {
+  for (const [type, qty] of seaFirstUnitEntries(play.selectedUnits, play.unitDefs)) {
     let left = Number(qty) || 0;
     while (left > 0) {
       const result = play.gameState.mobilizeUnit(type, play.destPicked, play.unitDefs);
@@ -1603,7 +1628,7 @@ export function confirm(play) {
   }
   if (play.gameState.phase === GAME_PHASES.UNIT_PLACEMENT) {
     if (play.destPicked && pickedCount(play.selectedUnits)) {
-      for (const [type, qty] of Object.entries(play.selectedUnits)) {
+      for (const [type, qty] of seaFirstUnitEntries(play.selectedUnits, play.unitDefs)) {
         let left = Number(qty) || 0;
         while (left > 0) {
           const result = play.gameState.placeInitialUnit(play.destPicked, type, play.unitDefs);
