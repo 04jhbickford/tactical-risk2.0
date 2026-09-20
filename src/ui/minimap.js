@@ -63,10 +63,13 @@ export class Minimap {
 
   _panFromEvent(e) {
     const rect = this.canvas.getBoundingClientRect();
+    if (!(rect.width > 0) || !(rect.height > 0)) return;
+    // Use the displayed CSS box, not the internal canvas pixel size — narrow
+    // viewports shrink #minimap in CSS while the backing store stays 233×133.
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
-    const worldX = mx / this.scaleX;
-    const worldY = my / this.scaleY;
+    const worldX = (mx / rect.width) * MAP_WIDTH;
+    const worldY = (my / rect.height) * MAP_HEIGHT;
     this.camera.panTo(worldX, worldY);
   }
 

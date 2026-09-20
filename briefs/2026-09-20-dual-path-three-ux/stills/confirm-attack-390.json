@@ -1,0 +1,20 @@
+{
+  "version": "V2.81.57-dual-path.2",
+  "stage": "confirm",
+  "label": "Confirm Attack",
+  "cta": "confirm-attack",
+  "disabled": false,
+  "ready": true,
+  "rect": {
+    "top": 776,
+    "bottom": 832,
+    "left": 10,
+    "right": 380,
+    "height": 56
+  },
+  "viewport": {
+    "vw": 390,
+    "vh": 844
+  },
+  "fullyVisible": true
+}

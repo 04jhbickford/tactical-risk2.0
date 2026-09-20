@@ -101,6 +101,42 @@ export class Sidebar {
               ${continent.name} (+${continent.bonus} bonus)
             </div>
           </div>`;
+
+        // Show all players' progress in this continent as a table
+        if (this.gameState) {
+          const continentOwnership = this._getContinentOwnership(continent);
+          if (continentOwnership.length > 0) {
+            html += `
+              <div class="sb-section">
+                <div class="sb-label">Continent Control</div>
+                <table class="sb-continent-table">
+                  <thead>
+                    <tr>
+                      <th>Player</th>
+                      <th>Territories</th>
+                      <th>%</th>
+                      <th>Bonus</th>
+                    </tr>
+                  </thead>
+                  <tbody>`;
+
+            for (const { player, count, total, hasBonus } of continentOwnership) {
+              const pct = Math.round((count / total) * 100);
+              html += `
+                    <tr class="${hasBonus ? 'has-bonus' : ''}">
+                      <td>
+                        ${player.flag ? `<img src="assets/flags/${player.flag}" class="sb-table-flag" alt="">` : ''}
+                        <span style="color:${player.color}">${player.name}</span>
+                      </td>
+                      <td class="sb-table-center">${count}/${total}</td>
+                      <td class="sb-table-center">${pct}%</td>
+                      <td class="sb-table-center">${hasBonus ? `+${continent.bonus}` : '-'}</td>
+                    </tr>`;
+            }
+
+            html += `</tbody></table></div>`;
+          }
+        }
       }
     } else {
       html += `
@@ -216,15 +252,21 @@ export class Sidebar {
           ? Object.entries(this.unitDefs).filter(([_, u]) => u.isLand || u.isAir)
           : Object.entries(this.unitDefs).filter(([_, u]) => u.isSea);
 
+        // Check for industrial tech discount
+        const hasIndustrialTech = this.gameState.hasTech?.(this.gameState.currentPlayer?.id, 'industrialTech') || false;
+
         for (const [unitType, def] of unitList) {
           if (def.isBuilding) continue; // Can't buy factories
-          const canAfford = ipcs >= def.cost;
+          // Apply industrial tech discount
+          const actualCost = hasIndustrialTech ? Math.max(1, def.cost - 1) : def.cost;
+          const canAfford = ipcs >= actualCost;
           const disabledClass = canAfford ? '' : ' disabled';
+          const costDisplay = hasIndustrialTech && def.cost > 1 ? `${actualCost}$ <s>${def.cost}$</s>` : `${actualCost}$`;
 
           html += `
             <button class="sb-buy-btn${disabledClass}" data-action="buy-unit" data-unit="${unitType}" data-territory="${territory.name}" ${canAfford ? '' : 'disabled'}>
               <span class="buy-name">${unitType}</span>
-              <span class="buy-cost">${def.cost}$</span>
+              <span class="buy-cost">${costDisplay}</span>
             </button>`;
         }
 
@@ -261,6 +303,35 @@ export class Sidebar {
         }
       });
     });
+  }
+
+  // Get ownership breakdown for a continent
+  _getContinentOwnership(continent) {
+    const ownership = {};
+    const total = continent.territories.length;
+
+    // Count territories per player
+    for (const terrName of continent.territories) {
+      const owner = this.gameState.getOwner(terrName);
+      if (owner) {
+        ownership[owner] = (ownership[owner] || 0) + 1;
+      }
+    }
+
+    // Convert to array with player info, sorted by count (descending)
+    const result = Object.entries(ownership)
+      .map(([playerId, count]) => {
+        const player = this.gameState.getPlayer(playerId);
+        return {
+          player: player || { id: playerId, name: playerId, color: '#888' },
+          count,
+          total,
+          hasBonus: count === total
+        };
+      })
+      .sort((a, b) => b.count - a.count);
+
+    return result;
   }
 
   hide() {

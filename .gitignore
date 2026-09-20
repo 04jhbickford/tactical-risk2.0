@@ -1,2 +1,6 @@
 .gradle
 *.zip
+node_modules/
+.claude/
+nul
+.firebase/

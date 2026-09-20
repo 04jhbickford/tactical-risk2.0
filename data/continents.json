@@ -1,7 +1,7 @@
 [
   {
     "name": "North America",
-    "bonus": 15,
+    "bonus": 24,
     "territories": [
       "East US",
       "West US",
@@ -12,22 +12,22 @@
       "Cuba",
       "Panama"
     ],
-    "color": "#1E90FF"
+    "color": "#C4A35A"
   },
   {
     "name": "South America",
-    "bonus": 6,
+    "bonus": 12,
     "territories": [
       "Brazil",
       "Argentina-Chile",
       "Peru",
       "Columbia"
     ],
-    "color": "#9932CC"
+    "color": "#8B4513"
   },
   {
     "name": "Europe",
-    "bonus": 15,
+    "bonus": 30,
     "territories": [
       "United Kingdom",
       "West Europe",
@@ -35,98 +35,69 @@
       "South Europe",
       "East Europe",
       "Eire",
-      "Gibraltar",
       "Spain",
       "Sweden",
       "Switzerland",
       "Finland Norway"
     ],
-    "color": "#4169E1"
-  },
-  {
-    "name": "Soviet Union",
-    "bonus": 9,
-    "territories": [
-      "Russia",
-      "Karelia S.S.R.",
-      "Caucasus",
-      "Ukraine S.S.R.",
-      "Kazakh S.S.R.",
-      "Novosibirsk",
-      "Evenki National Okrug",
-      "Yakut S.S.R.",
-      "Soviet Far East"
-    ],
-    "color": "#8B008B"
+    "color": "#4682B4"
   },
   {
     "name": "Middle East",
-    "bonus": 6,
+    "bonus": 18,
     "territories": [
       "Turkey",
       "Syria Jordan",
       "Saudi Arabia",
       "Persia",
-      "Afghanistan",
-      "India"
+      "India",
+      "Kazakh S.S.R."
     ],
-    "color": "#00CED1"
+    "color": "#CD853F"
   },
   {
-    "name": "North Africa",
-    "bonus": 6,
+    "name": "Africa",
+    "bonus": 27,
     "territories": [
       "Algeria",
-      "Libya",
-      "Rio del Oro",
+      "Anglo Sudan Egypt",
       "French West Africa",
-      "Anglo Sudan Egypt"
-    ],
-    "color": "#FFD700"
-  },
-  {
-    "name": "Sub-Saharan Africa",
-    "bonus": 9,
-    "territories": [
       "French Equatorial Africa",
       "Congo",
-      "Angola",
       "Kenya-Rhodesia",
-      "Mozambique",
       "South Africa",
       "Italian East Africa",
       "Madagascar"
     ],
-    "color": "#32CD32"
+    "color": "#D2691E"
   },
   {
     "name": "Asia",
-    "bonus": 21,
+    "bonus": 33,
     "territories": [
+      "Russia",
+      "Karelia S.S.R.",
+      "Ukraine S.S.R.",
+      "Novosibirsk",
+      "Evenki National Okrug",
+      "Soviet Far East",
       "Mongolia",
       "Manchuria",
-      "Sinkiang",
       "China",
       "Kwangtung",
       "French Indo China"
     ],
-    "color": "#BA55D3"
+    "color": "#6B8E23"
   },
   {
-    "name": "Southeast Asia",
-    "bonus": 6,
+    "name": "Oceania",
+    "bonus": 39,
     "territories": [
+      "Japan",
       "Borneo Celebes",
       "East Indies",
       "Philippines",
-      "Okinawa"
-    ],
-    "color": "#00BFFF"
-  },
-  {
-    "name": "Oceania & Pacific",
-    "bonus": 6,
-    "territories": [
+      "Okinawa",
       "Australia",
       "New Zealand",
       "New Guinea",
@@ -136,14 +107,6 @@
       "Midway",
       "Wake Island"
     ],
-    "color": "#7B68EE"
-  },
-  {
-    "name": "Japan",
-    "bonus": 4,
-    "territories": [
-      "Japan"
-    ],
-    "color": "#FF69B4"
+    "color": "#708090"
   }
 ]
