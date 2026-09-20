@@ -2,6 +2,7 @@
 // Uses smallMap.jpeg as a base layer so missing tile gaps show correct ocean color.
 
 import { MAP_WIDTH, MAP_HEIGHT } from './camera.js';
+import { STARTUP_TILE_TIMEOUT_MS } from '../ui/startupLoader.js';
 
 const TILE_SIZE = 256;
 const COLS = 14; // 0..13
@@ -38,33 +39,51 @@ export class MapRenderer {
   }
 
   _loadSmallMap() {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        this.smallMap = img;
-        resolve();
-      };
-      img.onerror = () => resolve();
-      img.src = '../map/smallMap.jpeg';
+    return this._loadImage('../map/smallMap.jpeg', (img) => {
+      this.smallMap = img;
     });
   }
 
   _loadTile(src, key, store, type) {
+    return this._loadImage(src, (img) => {
+      store[key] = img;
+      if (type === 'base') this.baseCount++;
+      else this.reliefCount++;
+    });
+  }
+
+  // A stalled Image() never fires onload/onerror — that pinned the
+  // branded loader when lastMatch held dismiss until map load finished.
+  _loadImage(src, onSuccess, timeoutMs = STARTUP_TILE_TIMEOUT_MS) {
     return new Promise((resolve) => {
       const img = new Image();
-      img.onload = () => {
-        store[key] = img;
-        if (type === 'base') this.baseCount++;
-        else this.reliefCount++;
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
         resolve();
       };
-      img.onerror = () => resolve(); // silently skip missing tiles
+      const timer = setTimeout(finish, timeoutMs);
+      img.onload = () => {
+        if (typeof onSuccess === 'function') onSuccess(img);
+        finish();
+      };
+      img.onerror = () => finish();
       img.src = src;
     });
   }
 
   /** Render visible tiles onto the canvas context (camera transform must be applied). */
-  render(ctx, viewport) {
+  render(ctx, viewport, { flatOcean = false } = {}) {
+    if (flatOcean) {
+      // Phone Fit / opening: baked tiles carry dark-red country ink.
+      // Land identity is continent fill on top of this ocean, not map art.
+      ctx.fillStyle = '#44C5BD';
+      ctx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+      return;
+    }
+
     if (!this.loaded) return;
 
     // Draw the small map as a base layer so any missing tile gaps show correct ocean

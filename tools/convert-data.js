@@ -12,23 +12,31 @@ const OUT_DIR = path.join(__dirname, '..', 'data');
 // --- Territory merges (mainland only) ---
 // Each entry merges `from` into `into`: polygons combined, production summed,
 // connections unioned, and `from` is deleted from the map.
-// DISABLED: All territories now unmerged for Risk-style play
-const MERGES = [];
+const MERGES = [
+  { from: 'Sinkiang',          into: 'China' },
+  // French Indo China kept separate from Kwangtung
+  { from: 'Yakut S.S.R.',      into: 'Soviet Far East' },
+  { from: 'Afghanistan',       into: 'India' },
+  { from: 'Caucasus',          into: 'Ukraine S.S.R.' },
+  { from: 'Libya',             into: 'Anglo Sudan Egypt' },
+  { from: 'Rio del Oro',       into: 'French West Africa' },
+  { from: 'Angola',            into: 'Congo' },
+  { from: 'Mozambique',        into: 'Kenya-Rhodesia' },
+  { from: 'Gibraltar',         into: 'Spain' },
+];
 
 // --- Continent definitions ---
-// Updated for Risk-style play with unmerged territories and user-specified bonuses
+// Updated for Risk-style play with merged territories
+// Bonus = 3x number of territories in the continent
+// Note: After merges, territory names change (e.g., Sinkiang merged into China)
 const CONTINENT_DEFS = [
-  { name: 'North America', bonus: 15, territories: ['East US','West US','East Canada','West Canada','Mexico','Alaska','Cuba','Panama'] },
-  { name: 'South America', bonus: 6, territories: ['Brazil','Argentina-Chile','Peru','Columbia'] },
-  { name: 'Europe', bonus: 15, territories: ['United Kingdom','West Europe','Germany','South Europe','East Europe','Eire','Gibraltar','Spain','Sweden','Switzerland','Finland Norway'] },
-  { name: 'Soviet Union', bonus: 9, territories: ['Russia','Karelia S.S.R.','Caucasus','Ukraine S.S.R.','Kazakh S.S.R.','Novosibirsk','Evenki National Okrug','Yakut S.S.R.','Soviet Far East'] },
-  { name: 'Middle East', bonus: 6, territories: ['Turkey','Syria Jordan','Saudi Arabia','Persia','Afghanistan','India'] },
-  { name: 'North Africa', bonus: 6, territories: ['Algeria','Libya','Rio del Oro','French West Africa','Anglo Sudan Egypt'] },
-  { name: 'Sub-Saharan Africa', bonus: 9, territories: ['French Equatorial Africa','Congo','Angola','Kenya-Rhodesia','Mozambique','South Africa','Italian East Africa','Madagascar'] },
-  { name: 'Asia', bonus: 21, territories: ['Mongolia','Manchuria','Sinkiang','China','Kwangtung','French Indo China'] },
-  { name: 'Southeast Asia', bonus: 6, territories: ['Borneo Celebes','East Indies','Philippines','Okinawa'] },
-  { name: 'Oceania & Pacific', bonus: 6, territories: ['Australia','New Zealand','New Guinea','Solomon Islands','Caroline Islands','Hawaiian Islands','Midway','Wake Island'] },
-  { name: 'Japan', bonus: 4, territories: ['Japan'] },
+  { name: 'North America', territories: ['East US','West US','East Canada','West Canada','Mexico','Alaska','Cuba','Panama'] },                    // 8 territories = 24 bonus
+  { name: 'South America', territories: ['Brazil','Argentina-Chile','Peru','Columbia'] },                                                          // 4 territories = 12 bonus
+  { name: 'Europe', territories: ['United Kingdom','West Europe','Germany','South Europe','East Europe','Eire','Spain','Sweden','Switzerland','Finland Norway'] }, // 10 territories = 30 bonus
+  { name: 'Middle East', territories: ['Turkey','Syria Jordan','Saudi Arabia','Persia','India','Kazakh S.S.R.'] },                                 // 6 territories = 18 bonus
+  { name: 'Africa', territories: ['Algeria','Anglo Sudan Egypt','French West Africa','French Equatorial Africa','Congo','Kenya-Rhodesia','South Africa','Italian East Africa','Madagascar'] }, // 9 territories = 27 bonus
+  { name: 'Asia', territories: ['Russia','Karelia S.S.R.','Ukraine S.S.R.','Novosibirsk','Evenki National Okrug','Soviet Far East','Mongolia','Manchuria','China','Kwangtung','French Indo China'] }, // 11 territories = 33 bonus
+  { name: 'Oceania', territories: ['Japan','Borneo Celebes','East Indies','Philippines','Okinawa','Australia','New Zealand','New Guinea','Solomon Islands','Caroline Islands','Hawaiian Islands','Midway','Wake Island'] }, // 13 territories = 39 bonus
 ];
 
 // Build reverse lookup: territory name -> continent name
@@ -40,12 +48,9 @@ for (const c of CONTINENT_DEFS) {
 }
 
 // --- Polygon Union Algorithm ---
-// Removes shared internal edges when merging territory polygons
-// Uses simpler approach: just skip rendering internal boundaries at render time
-// For now, simply concatenate polygons and let renderer handle it
+// For merged territories, just concatenate polygons.
+// The renderer will handle hiding internal borders.
 function unionPolygons(polygons) {
-  // Simple approach: just return concatenated polygons
-  // The territory renderer will skip internal boundaries
   return polygons;
 }
 
@@ -172,6 +177,38 @@ function main() {
   const { territories, connections } = parseXML();
   console.log(`  Found ${Object.keys(territories).length} territories`);
 
+  // --- Add land bridge connections ---
+  // These create direct land connections across water
+  const LAND_BRIDGES = [
+    ['Eire', 'United Kingdom'],
+  ];
+
+  for (const [t1, t2] of LAND_BRIDGES) {
+    if (territories[t1] && territories[t2]) {
+      if (!connections[t1]) connections[t1] = new Set();
+      if (!connections[t2]) connections[t2] = new Set();
+      connections[t1].add(t2);
+      connections[t2].add(t1);
+      console.log(`  Added land bridge: ${t1} <-> ${t2}`);
+    }
+  }
+
+  // --- Remove unwanted connections ---
+  // Remove land bridges to Africa
+  const REMOVE_CONNECTIONS = [
+    ['Gibraltar', 'French West Africa'],
+    ['Gibraltar', 'Rio del Oro'],
+    ['Spain', 'French West Africa'],
+    ['Spain', 'Rio del Oro'],
+    ['Brazil', 'French West Africa'],
+    ['Brazil', 'Rio del Oro'],
+  ];
+
+  for (const [t1, t2] of REMOVE_CONNECTIONS) {
+    if (connections[t1]) connections[t1].delete(t2);
+    if (connections[t2]) connections[t2].delete(t1);
+  }
+
   // --- Apply territory merges ---
   const removedNames = new Set();
   for (const { from, into } of MERGES) {
@@ -254,10 +291,10 @@ function main() {
     return a.name.localeCompare(b.name);
   });
 
-  // Build continent data
+  // Build continent data (bonus = 3x territory count)
   const continents = CONTINENT_DEFS.map(c => ({
     name: c.name,
-    bonus: c.bonus,
+    bonus: c.territories.length * 3,
     territories: c.territories,
     color: getContinentColor(c.name),
   }));
@@ -298,20 +335,16 @@ function main() {
 }
 
 function getContinentColor(name) {
-  // Colors chosen to be distinct from faction colors:
-  // Factions: Russians(red), Germans(gray), British(gold), Japanese(orange), Americans(olive)
+  // Classic Risk / Axis & Allies inspired color palette
+  // Muted, earthy tones that are easy on the eyes
   const colors = {
-    'North America': '#1E90FF',      // Dodger blue - distinct from olive American
-    'South America': '#9932CC',      // Dark orchid purple
-    'Europe': '#4169E1',             // Royal blue
-    'Soviet Union': '#8B008B',       // Dark magenta
-    'Middle East': '#00CED1',        // Dark turquoise
-    'North Africa': '#FFD700',       // Gold - visible, distinct border
-    'Sub-Saharan Africa': '#32CD32', // Lime green
-    'Asia': '#BA55D3',               // Medium orchid
-    'Southeast Asia': '#00BFFF',     // Deep sky blue
-    'Oceania & Pacific': '#7B68EE',  // Medium slate blue
-    'Japan': '#FF69B4',              // Hot pink - distinct from Japanese orange
+    'North America': '#C4A35A',      // Tan/Gold (classic Risk yellow)
+    'South America': '#8B4513',      // Saddle brown (classic Risk red-brown)
+    'Europe': '#4682B4',             // Steel blue (classic Risk blue)
+    'Middle East': '#CD853F',        // Peru/tan (desert tones)
+    'Africa': '#D2691E',             // Chocolate brown
+    'Asia': '#6B8E23',               // Olive drab (military green)
+    'Oceania': '#708090',            // Slate gray (classic Risk purple-gray)
   };
   return colors[name] || '#888888';
 }

@@ -2,11 +2,58 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="vercel-toolbar" content="disable">
   <title>Tactical Risk</title>
+  <style>
+    vercel-live-feedback,[data-vercel-toolbar],[data-vercel-live-feedback]{display:none!important}
+    html,body{margin:0;padding:0;width:100%;height:100%;background:#1a1a2e;color:#e8dcc4;font-family:"Segoe UI",Tahoma,Geneva,Verdana,sans-serif}
+    #startup-loader{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#1a1a2e;padding:24px;padding-top:calc(24px + env(safe-area-inset-top,0px));padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
+    #startup-loader.is-done,#startup-loader[hidden]{display:none}
+    .tr-loader-card{width:min(420px,100%);text-align:center}
+    .tr-loader-kicker{margin:0 0 8px;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#c9a44a}
+    .tr-loader-title{margin:0 0 8px;font-size:32px;font-weight:700;color:#f4ead4;letter-spacing:.04em}
+    .tr-loader-tag{margin:0 0 28px;font-size:15px;color:#9aa3b5}
+    .tr-loader-bar{height:8px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;border:1px solid rgba(201,164,74,.35)}
+    .tr-loader-fill{height:100%;width:18%;background:linear-gradient(90deg,#8a6a24,#c9a44a);border-radius:inherit}
+    .tr-loader-status{margin:14px 0 0;font-size:14px;color:#c5c9d4}
+    .tr-loader-recover{margin-top:20px}
+    .tr-loader-recover[hidden]{display:none}
+    .tr-loader-recover p{margin:0 0 8px;font-size:14px;color:#e8dcc4}
+    .tr-loader-safe{color:#9aa3b5!important;font-size:13px!important}
+    #startup-continue,#startup-reload{min-height:44px;min-width:120px;margin:8px 6px 0;padding:0 18px;border:1px solid #c9a44a;border-radius:8px;background:#2a2438;color:#f4ead4;font-size:15px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent}
+    #startup-continue{background:transparent}
+    #startup-continue:focus-visible,#startup-reload:focus-visible{outline:2px solid #c9a44a;outline-offset:3px}
+    @media (prefers-reduced-motion:no-preference){
+      html:not([data-motion="reduced"]) .tr-loader-fill{transition:width .6s ease}
+      html:not([data-motion="reduced"]) #startup-loader:not(.is-done){animation:tr-loader-fade .25s ease}
+    }
+    @media (prefers-reduced-motion:reduce),html[data-motion="reduced"]{
+      .tr-loader-fill{transition:none}
+      #startup-loader{animation:none}
+    }
+    @keyframes tr-loader-fade{from{opacity:.72}to{opacity:1}}
+  </style>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <div id="startup-loader" role="status" aria-live="polite" aria-busy="true">
+    <div class="tr-loader-card">
+      <p class="tr-loader-kicker">Tactical Risk</p>
+      <h1 class="tr-loader-title">Tactical Risk</h1>
+      <p class="tr-loader-tag">World War II Grand Strategy</p>
+      <div class="tr-loader-bar" aria-hidden="true">
+        <div class="tr-loader-fill" id="startup-loader-fill"></div>
+      </div>
+      <p class="tr-loader-status" id="startup-loader-status">Opening briefing…</p>
+      <div class="tr-loader-recover" id="startup-loader-recover" hidden>
+        <p>Taking a little longer than usual.</p>
+        <p class="tr-loader-safe">Local saves and in-progress games stay on this device.</p>
+        <button type="button" id="startup-continue">Continue</button>
+        <button type="button" id="startup-reload">Reload</button>
+      </div>
+    </div>
+  </div>
   <div id="hud"></div>
   <canvas id="mapCanvas"></canvas>
   <div id="sidebar" class="hidden">
@@ -14,6 +61,97 @@
     <div id="sidebarContent"></div>
   </div>
   <canvas id="minimap"></canvas>
-  <script type="module" src="src/main.js"></script>
+  <!-- Optional turn-swap webhook: window.TACTICAL_RISK_TURN_NOTICE_URL = 'https://...'; unused if unset. Does not send WhatsApp from this page. -->
+  <script>
+    (function () {
+      var reduced = false;
+      try {
+        reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+      } catch (e) {}
+      if (reduced) document.documentElement.setAttribute('data-motion', 'reduced');
+      var fill = document.getElementById('startup-loader-fill');
+      var statusEl = document.getElementById('startup-loader-status');
+      var recover = document.getElementById('startup-loader-recover');
+      var loader = document.getElementById('startup-loader');
+      var reload = document.getElementById('startup-reload');
+      var cont = document.getElementById('startup-continue');
+      var started = Date.now();
+      var dismissed = false;
+      function setFill(n) {
+        if (fill) fill.style.width = Math.max(0, Math.min(100, n)) + '%';
+      }
+      function setStatus(text, progress) {
+        if (statusEl && text) statusEl.textContent = text;
+        if (progress != null) setFill(progress);
+      }
+      function showRecovery() {
+        if (dismissed || !recover) return;
+        recover.hidden = false;
+        setStatus('Taking a little longer…', 82);
+      }
+      function showError(message) {
+        if (statusEl) statusEl.textContent = message || 'Could not start Tactical Risk.';
+        if (recover) recover.hidden = false;
+        setFill(100);
+      }
+      function dismiss() {
+        if (dismissed || !loader) return;
+        dismissed = true;
+        loader.classList.add('is-done');
+        loader.setAttribute('hidden', '');
+        loader.setAttribute('aria-hidden', 'true');
+        loader.setAttribute('aria-busy', 'false');
+      }
+      if (reload) reload.addEventListener('click', function () { location.reload(); });
+      if (cont) cont.addEventListener('click', function () { dismiss(); });
+      setFill(18);
+      var timers = [
+        setTimeout(function () { if (!dismissed) setStatus('Loading the front…', 42); }, 2500),
+        setTimeout(function () { if (!dismissed) setStatus('Still loading…', 68); }, 8000),
+        setTimeout(function () { if (!dismissed) showRecovery(); }, 16000)
+      ];
+      window.__trStartupLoader = {
+        setStatus: setStatus,
+        showRecovery: showRecovery,
+        showError: showError,
+        dismiss: function () {
+          timers.forEach(function (id) { clearTimeout(id); });
+          dismiss();
+        },
+        startedAt: started
+      };
+    })();
+  </script>
+  <script>
+    window.__TR_GAME_VERSION = 'V2.81.57-dual-path.1';
+    document.documentElement.setAttribute('data-game-version', window.__TR_GAME_VERSION);
+    (function stampLoop() {
+      var v = window.__TR_GAME_VERSION;
+      if (!v) return;
+      document.documentElement.setAttribute('data-game-version', v);
+      document.querySelectorAll('.three-l0-ver, .three-lobby-ver, .lobby-version-badge').forEach(function (el) {
+        if (el && el.textContent !== v) el.textContent = v;
+      });
+    })();
+    setInterval(function () {
+      var v = window.__TR_GAME_VERSION;
+      if (!v) return;
+      document.querySelectorAll('.three-l0-ver, .three-lobby-ver').forEach(function (el) {
+        if (el && el.textContent !== v) el.textContent = v;
+      });
+    }, 400);
+    if (navigator.serviceWorker) {
+      navigator.serviceWorker.getRegistrations().then(function (regs) {
+        regs.forEach(function (reg) { reg.unregister(); });
+      }).catch(function () {});
+    }
+    if (window.caches && caches.keys) {
+      caches.keys().then(function (keys) {
+        keys.forEach(function (k) { caches.delete(k); });
+      }).catch(function () {});
+    }
+  </script>
+  <script type="module" src="src/main.js?v=V2.81.57-dual-path.1"></script>
 </body>
 </html>
+<!-- force redeploy -->

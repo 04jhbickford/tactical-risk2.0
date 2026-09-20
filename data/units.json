@@ -10,7 +10,7 @@
   "armour": {
     "cost": 5,
     "attack": 3,
-    "defense": 2,
+    "defense": 3,
     "movement": 2,
     "isLand": true,
     "image": "Tank.png"
@@ -45,7 +45,7 @@
     "defense": 3,
     "movement": 4,
     "isAir": true,
-    "image": "TacBomber.png"
+    "image": "Bomber.png"
   },
   "transport": {
     "cost": 7,
@@ -54,6 +54,7 @@
     "movement": 2,
     "isSea": true,
     "capacity": 2,
+    "canCarry": ["infantry", "armour", "artillery", "aaGun"],
     "image": "Transport.png"
   },
   "submarine": {
@@ -96,6 +97,7 @@
     "movement": 2,
     "isSea": true,
     "aircraftCapacity": 2,
+    "canCarry": ["fighter"],
     "image": "Carrier.png"
   },
   "factory": {

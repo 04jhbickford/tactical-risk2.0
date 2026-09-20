@@ -4,7 +4,7 @@
       "id": "classic",
       "name": "Classic WW2",
       "description": "Historical 1942 setup with 5 factions",
-      "enabled": false,
+      "enabled": true,
       "useHistoricalSetup": true
     },
     {
@@ -151,7 +151,7 @@
       "Evenki National Okrug": "Russians",
       "Finland Norway": "Germans",
       "French Equatorial Africa": "British",
-      "Kwangtung": "Japanese",
+      "French Indo China": "Japanese",
       "French West Africa": "British",
       "Germany": "Germans",
       "Spain": "British",
@@ -162,6 +162,7 @@
       "Karelia S.S.R.": "Russians",
       "Kazakh S.S.R.": "Russians",
       "Kenya-Rhodesia": "British",
+      "Kwangtung": "Japanese",
       "Libya": "Germans",
       "Madagascar": "British",
       "Manchuria": "Japanese",
@@ -342,10 +343,10 @@
           "owner": "Germans"
         }
       ],
-      "Kwangtung": [
+      "French Indo China": [
         {
           "type": "infantry",
-          "quantity": 4,
+          "quantity": 2,
           "owner": "Japanese"
         },
         {
@@ -462,6 +463,13 @@
           "type": "aaGun",
           "quantity": 1,
           "owner": "Russians"
+        }
+      ],
+      "Kwangtung": [
+        {
+          "type": "infantry",
+          "quantity": 2,
+          "owner": "Japanese"
         }
       ],
       "Libya": [

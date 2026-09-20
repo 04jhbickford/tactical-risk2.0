@@ -12,7 +12,7 @@ const OUT_DIR = path.join(ROOT, 'data');
 
 // Territory merge redirects (units from merged territories go to target)
 const TERRITORY_REDIRECTS = {
-  'French Indo China': 'Kwangtung',
+  // French Indo China is now separate
   'Sinkiang': 'China',
   'Mongolia': 'Manchuria',
   'Gibraltar': 'Spain',
