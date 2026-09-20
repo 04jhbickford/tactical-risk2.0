@@ -17,7 +17,7 @@ See `briefs/2026-09-20-boardgame-sandbox-ref/LOOKPASS.md`: seat cards Human / AI
 
 ## P0 — Confirm Attack @390 (tip .18 Viz PARTIAL)
 
-Tip `.18` combat ORIGIN→UNITS→DEST reached; gold **Confirm Attack** was clipped / not tappable because `#three-bottom` swallowed dest taps and peek/battle grew over the footer. Ported tip `.19` dock: `#three-sheet-stack` scrolls above a reserved Confirm footer; hit-test is Confirm (and Undo) only. Label is `Confirm Attack`. Classic Canvas untouched.
+Tip `.18` combat ORIGIN→UNITS→DEST reached; gold **Confirm Attack** was clipped / not tappable because `#three-bottom` swallowed dest taps and peek/battle grew over the footer. Ported tip `.19` dock (Viz PASS ~97%): `#three-sheet-stack` scrolls above a reserved Confirm footer; hit-test is Confirm (and Undo) only. Label is `Confirm Attack`. Classic Canvas untouched. Cite: `briefs/2026-09-20-main-art-three-ux/preview-solo-19/SCORE-solo-19.md`. Tip→main STOP.
 
 ## Known stubs (from tip .18)
 
