@@ -39,6 +39,15 @@ landings + Undo, one green Done, factory-adjacent carrier load. Stamp
 **V2.81.57-dual-path.10**. `.8` auth/Discord untouched. See
 `briefs/2026-09-20-discord-playtest-bugs/DUAL-PATH-9.md`.
 
+## dual-path.11 — Experimental desktop chrome (hold merge)
+
+James via Arc: Experimental felt like stretched thumb UI on laptop.
+Chrome-only. Dual-fork rules from `.02`–`.10` unchanged. Classic `/`
+untouched. Phone @390 keeps the bottom-sheet / compact-seat tree.
+
+See `briefs/2026-09-20-dual-path-three-ux/DESKTOP.md`. Stamp
+**V2.81.57-dual-path.11**. HOLD MERGE for Viz gate.
+
 ## dual-path.8 — durable Discord env + max persistence (hold merge)
 
 Webhook is Vercel sensitive env `DISCORD_TURN_WEBHOOK_URL` on Production + Preview. Client POSTs `/api/discord-turn-ping` payload only. Server soft-fails 200 if unconfigured. Quiet token refresh also on `online`; hydrate identity on resume. Stamp **V2.81.57-dual-path.8**.

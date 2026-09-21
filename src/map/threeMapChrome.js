@@ -340,9 +340,22 @@ function occupantChipLabel(diff) {
   return diff?.name || 'Human';
 }
 
+export function syncThreeShellWidth() {
+  if (typeof window === 'undefined' || !document?.documentElement) return 'phone';
+  const w = Number(window.innerWidth) || 0;
+  const bp = w >= 1024 ? 'desktop' : w >= 768 ? 'tablet' : 'phone';
+  document.documentElement.dataset.threeShell = bp;
+  return bp;
+}
+
 export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE' } = {}) {
   document.documentElement.classList.add('three-spike', 'ux-preview');
   document.documentElement.dataset.gameVersion = liveGameVersion();
+  syncThreeShellWidth();
+  if (typeof window !== 'undefined' && !window.__trThreeShellBound) {
+    window.__trThreeShellBound = true;
+    window.addEventListener('resize', syncThreeShellWidth, { passive: true });
+  }
   const style = document.createElement('style');
   style.textContent = `
     html.three-spike, html.three-spike body {
@@ -1259,8 +1272,169 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       .three-tech-grid { gap:4px; }
       .three-tech-tile { min-height:40px; padding:4px 6px; font-size:11px; }
     }
+    /* dual-path.11 — Experimental desktop chrome only.
+     * Steal: A&A Online / Root side rail + multi-col lobby (SANDBOX-RECS /
+     * LOBBY-SHELLS catalog; folder not in this checkout). Phone ≤480 stack
+     * stays the base tree — do not pull these rules backward. */
+    @media (min-width: 768px) {
+      #three-lobby {
+        padding-left:28px; padding-right:28px;
+      }
+      #three-lobby .three-lobby-home,
+      #three-lobby .three-lobby-howto,
+      #three-lobby .three-lobby-setup {
+        max-width:840px; width:100%;
+        margin-left:auto; margin-right:auto;
+      }
+      #three-lobby .three-lobby-actions {
+        display:grid; grid-template-columns:1fr 1fr; gap:10px;
+      }
+      #three-lobby .three-lobby-actions > :last-child:nth-child(odd) {
+        grid-column:1 / -1;
+      }
+      #three-lobby .three-lobby-seats {
+        display:grid; grid-template-columns:1fr 1fr; gap:8px;
+      }
+      #three-lobby button.three-lobby-card { min-height:92px; }
+      #three-lobby .three-lobby-form {
+        display:grid; grid-template-columns:1fr 1fr; gap:12px 16px;
+      }
+      #three-lobby .three-lobby-form .three-lobby-start,
+      #three-lobby .three-lobby-form .three-lobby-error {
+        grid-column:1 / -1;
+      }
+    }
+    @media (min-width: 1024px) {
+      html.three-spike { --three-rail:min(340px, 28vw); }
+      #three-l0 {
+        height:calc(44px + env(safe-area-inset-top, 0px));
+        padding-left:16px; padding-right:16px;
+      }
+      #three-l0 .three-l0-chip { min-height:32px; padding:0 10px; font-size:12px; }
+      #three-l0 .three-l0-help { width:32px; height:32px; }
+      #three-bottom {
+        top:calc(44px + env(safe-area-inset-top, 0px));
+        right:0; left:auto; bottom:0;
+        width:var(--three-rail);
+        max-height:none;
+        padding:12px 14px 14px;
+        gap:10px;
+        background:linear-gradient(270deg, rgba(22,26,28,0.72) 0%, rgba(22,26,28,0.42) 78%, rgba(22,26,28,0.00) 100%);
+      }
+      #three-sheet-stack {
+        max-height:none;
+        flex:1 1 auto;
+      }
+      #three-peek { padding:10px 12px; border-radius:14px; }
+      #three-peek strong { font-size:15px; }
+      #three-peek .three-peek-unit { width:56px; height:64px; }
+      #three-peek .three-peek-unit img { width:36px; height:36px; }
+      #three-battle { padding:10px 12px; border-radius:14px; }
+      #three-battle .three-lanes {
+        display:grid; grid-template-columns:1fr 1fr; gap:8px;
+      }
+      #three-confirm, #three-confirm.is-idle, #three-confirm:disabled {
+        min-height:44px; max-height:56px; font-size:15px; border-radius:12px;
+      }
+      #three-undo { min-height:44px; min-width:72px; font-size:13px; border-radius:12px; }
+      #three-zoom {
+        right:calc(var(--three-rail) + 14px);
+        bottom:20px;
+      }
+      html.three-spike.has-l1 #three-zoom,
+      html.three-spike.has-battle #three-zoom {
+        display:flex !important;
+        left:16px; right:auto; bottom:20px;
+      }
+      #three-zoom button { width:36px; height:36px; font-size:16px; }
+      #three-sheet {
+        left:auto; right:0; top:calc(44px + env(safe-area-inset-top, 0px));
+        bottom:0; width:var(--three-rail); max-height:none;
+        border-radius:16px 0 0 16px;
+        border-top:none;
+        border-left:1px solid rgba(255,255,255,0.12);
+        padding:18px 16px 16px;
+      }
+      #three-sheet button.three-sheet-row { min-height:36px; font-size:14px; }
+      #three-lobby {
+        padding:28px 40px 0;
+        background:rgba(16,20,22,0.88);
+      }
+      #three-lobby .three-lobby-home,
+      #three-lobby .three-lobby-howto,
+      #three-lobby .three-lobby-setup {
+        max-width:1120px;
+      }
+      #three-lobby .three-lobby-actions {
+        grid-template-columns:repeat(3, minmax(0, 1fr));
+      }
+      #three-lobby .three-lobby-actions > :last-child:nth-child(odd) {
+        grid-column:auto;
+      }
+      #three-lobby button.three-lobby-card {
+        flex-direction:column; align-items:flex-start;
+        min-height:148px; padding:18px; gap:10px;
+      }
+      #three-lobby .three-lobby-card-title { font-size:20px; }
+      #three-lobby .three-lobby-setup {
+        display:grid;
+        grid-template-columns:minmax(0, 1fr) 280px;
+        grid-template-rows:auto minmax(0, 1fr);
+        gap:0 28px;
+      }
+      #three-lobby .three-lobby-setup-head { grid-column:1 / -1; }
+      #three-lobby .three-lobby-main { grid-column:1; }
+      #three-lobby .three-lobby-footer {
+        grid-column:2; grid-row:2;
+        align-self:start;
+        border-top:0;
+        border-left:1px solid rgba(255,255,255,0.08);
+        padding:0 0 0 20px;
+        background:transparent;
+      }
+      #three-lobby .three-lobby-seat { min-height:36px; }
+      #three-lobby .three-lobby-seat-wrap { min-height:40px; }
+      #three-lobby .three-lobby-start { min-height:44px; }
+      #three-lobby .three-lobby-back { width:36px; height:36px; min-width:36px; }
+      #three-lobby .lobby-ux-btn { min-height:40px; }
+      #three-lobby .three-lobby-logo { font-size:40px; }
+      #three-tutorial {
+        inset:auto; top:50%; left:50%;
+        transform:translate(-50%, -50%);
+        width:min(560px, 86vw); max-height:min(80vh, 720px);
+        border-radius:16px;
+        border:1px solid rgba(255,255,255,0.12);
+        padding:28px;
+        box-shadow:0 24px 64px rgba(0,0,0,0.45);
+      }
+      #three-tutorial .three-tut-go { min-height:44px; }
+    }
+    @media (hover: hover) and (pointer: fine) {
+      #three-lobby button.three-lobby-card:hover:not(.is-off),
+      #three-lobby button.three-lobby-tile:hover,
+      #three-lobby .three-lobby-seat-wrap:hover,
+      #three-sheet button.three-sheet-row:hover,
+      #three-peek .three-peek-unit:hover,
+      #three-peek .three-tile:hover,
+      #three-battle .three-tile:hover,
+      .three-tech-tile:hover,
+      .three-ship:hover {
+        border-color:rgba(196,163,90,0.55);
+        background:rgba(196,163,90,0.12);
+      }
+      #three-zoom button:hover,
+      #three-l0 .three-l0-help:hover,
+      #three-menu-btn:hover {
+        border-color:rgba(196,163,90,0.45);
+        background:rgba(30,36,32,0.78);
+      }
+      #three-confirm.is-ready:not(:disabled):not(.is-idle):hover {
+        filter:brightness(1.06);
+      }
+    }
   `;
   document.head.appendChild(style);
+  syncThreeShellWidth();
 
   const l0 = document.createElement('div');
   l0.id = 'three-l0';

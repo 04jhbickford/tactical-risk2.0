@@ -2,6 +2,23 @@
 
 ---
 
+## 9.21.26.11 — Experimental desktop chrome (dual-path.11)
+
+James via Arc: Experimental on a laptop felt like stretched thumb UI.
+Wide chrome now uses a side rail + multi-column lobby. Phone @390 stays
+on the `.6`/`.10` bottom-sheet tree. Classic `/` untouched. Rules
+dual-fork from `.02`–`.10` not edited. Stamp V2.81.57-dual-path.11.
+HOLD MERGE. See `briefs/2026-09-20-dual-path-three-ux/DESKTOP.md`.
+
+### Smoke (this PR)
+
+- [ ] Classic `/` stamp `.11` after hard reload (layout unchanged)
+- [ ] Experimental `?ux=three` @390 lobby scroll / compact seats / Confirm
+- [ ] Experimental @1280 side rail + 3-col home / 2-col seats
+- [ ] `node tools/test-experimental-desktop-chrome.mjs` passes
+
+---
+
 ## 9.20.26.07 — mobilize fighters onto carrier in sea zone (dual-path.10)
 
 Playtest (Robfox007): bought 2 FTR + 1 CV; mobilize could not place new
