@@ -32,7 +32,7 @@ assert.match(html, /lockStamp/, 'HTML stamp cannot drop below .12');
 assert.match(html, /src="src\/main\.js\?v=V2\.81\.57-dual-path\.13"/);
 assert.doesNotMatch(html, /dual-path\.(?:[23456789]|10)['"]/);
 
-assert.equal(GAME_VERSION, 'V2.81.57-dual-path.13', 'stamp is dual-path.13');
+assert.equal(GAME_VERSION, 'V2.81.57-dual-path.14', 'stamp is dual-path.14');
 assert.equal(UX_LABEL_EXPERIMENTAL, 'Experimental UX');
 
 const lobbySrc = readFileSync(new URL('../src/ui/lobby.js', import.meta.url), 'utf8');

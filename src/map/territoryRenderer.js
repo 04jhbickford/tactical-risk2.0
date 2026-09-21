@@ -1,5 +1,6 @@
 // Renders territory overlays: ownership colors, outlines, continent borders, hover/selection, labels
 
+import { experimentalControlFlagSize, politicalControlMarks } from './politicalControl.js';
 import {
   isMobileShell,
   phoneLegalOutlineWidth,
@@ -403,6 +404,9 @@ export class TerritoryRenderer {
     for (const player of players) {
       if (player.flag && !this.flagImages[player.flag]) {
         const img = new Image();
+        img.onload = () => {
+          if (typeof this.onFlagsReady === 'function') this.onFlagsReady();
+        };
         img.src = `assets/flags/${player.flag}`;
         this.flagImages[player.flag] = img;
       }
@@ -571,61 +575,62 @@ export class TerritoryRenderer {
     ctx.stroke();
   }
 
-  /** Draw small flag markers on each territory to show ownership */
-  renderOwnershipFlags(ctx, zoom) {
+  /**
+   * Draw small flag markers on each owned land territory.
+   * Zero units still mark. Sea zones are skipped.
+   * options.always — Experimental fit can sit under the Classic 0.35 gate.
+   * options.includeCapitals — Classic capitals keep the star pass instead.
+   * options.aboveStacks — lift the chip off Experimental chits at the centroid.
+   */
+  renderOwnershipFlags(ctx, zoom, options = {}) {
     const mobile = isMobileShell();
-    if (!this.gameState || !shouldDrawPhoneOwnershipFlags(zoom, { mobile })) return;
+    const always = options.always === true;
+    if (!this.gameState) return;
+    if (!always && !shouldDrawPhoneOwnershipFlags(zoom, { mobile })) return;
 
-    const flagWidth = phoneOwnershipFlagSize(zoom, { mobile });
+    const flagWidth = always
+      ? experimentalControlFlagSize(zoom)
+      : phoneOwnershipFlagSize(zoom, { mobile });
     const flagHeight = flagWidth * 0.67;
 
-    for (const t of this.territories) {
-      if (t.isWater) continue;
+    for (const mark of politicalControlMarks(this.territories, this.gameState)) {
+      if (!options.includeCapitals && mark.isCapital) continue;
+      const t = this.territoryByName[mark.name];
+      if (!t || t.isWater) continue;
 
-      const owner = this.gameState.getOwner(t.name);
-      if (!owner) continue;
-
-      const player = this.gameState.getPlayer(owner);
-      if (!player || !player.flag) continue;
-
-      // Skip capitals - they get the big flag treatment
-      if (this.gameState.isCapital(t.name)) continue;
-
-      // Calculate center from all polygons for proper placement on merged territories
       let [cx, cy] = this._getTerritoryCenter(t);
       if (cx === null) continue;
 
-      // Apply per-territory offset if defined
       const offset = TerritoryRenderer.TERRITORY_OFFSETS[t.name];
       if (offset) {
         cx += offset.x;
         cy += offset.y;
       }
 
-      // Position centered above units (units are drawn at cy + 25)
       const x = cx;
-      const y = cy - 5;
+      // Classic: just above the unit stack (units are drawn at cy + 25).
+      const y = options.aboveStacks ? cy - flagHeight - 4 : cy - 5;
 
-      this._drawOwnershipFlag(ctx, x, y, flagWidth, flagHeight, player.flag, player.color);
+      this._drawOwnershipFlag(ctx, x, y, flagWidth, flagHeight, mark.flag, mark.color);
     }
   }
 
   _drawOwnershipFlag(ctx, x, y, width, height, flag, color) {
-    const img = this.flagImages[flag];
-    if (!img || !img.complete || img.naturalWidth === 0) return;
+    const img = flag ? this.flagImages[flag] : null;
+    const ready = !!(img && img.complete && img.naturalWidth > 0);
 
     ctx.save();
 
-    // Draw small colored border/background
+    // Faction-color plate is the control mark even before the flag decodes,
+    // and when a seat has no flag file. Empty land must not go blank.
     const padding = 2;
-    ctx.fillStyle = color;
+    ctx.fillStyle = color || '#4A4A4A';
     ctx.strokeStyle = 'rgba(0,0,0,0.6)';
     ctx.lineWidth = 1.5;
     ctx.shadowColor = 'rgba(0,0,0,0.4)';
     ctx.shadowBlur = 3;
     ctx.shadowOffsetY = 1;
 
-    // Draw rounded rect background
     ctx.beginPath();
     this._roundRect(ctx, x - width / 2 - padding, y - height / 2 - padding, width + padding * 2, height + padding * 2, 3);
     ctx.fill();
@@ -634,13 +639,12 @@ export class TerritoryRenderer {
     ctx.shadowBlur = 0;
     ctx.shadowOffsetY = 0;
 
-    // Draw flag image
-    ctx.drawImage(img, x - width / 2, y - height / 2, width, height);
-
-    // Subtle border around flag
-    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-    ctx.lineWidth = 0.5;
-    ctx.strokeRect(x - width / 2, y - height / 2, width, height);
+    if (ready) {
+      ctx.drawImage(img, x - width / 2, y - height / 2, width, height);
+      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(x - width / 2, y - height / 2, width, height);
+    }
 
     ctx.restore();
   }

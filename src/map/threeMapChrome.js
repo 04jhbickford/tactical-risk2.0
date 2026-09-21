@@ -2,6 +2,7 @@
 // Frosted L0/L1/L2 + exclusive Confirm gold. Board stays main Canvas art.
 
 import { GAME_VERSION, SCHEMA_VERSION } from '../version.js';
+import { peekControlLabel } from './politicalControl.js';
 import { formatUnitName } from '../utils/unitNames.js';
 import { getUnitIconPath } from '../utils/unitIcons.js';
 import { UX_LABEL_EXPERIMENTAL } from './presentationMode.js';
@@ -2286,7 +2287,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
         api.peek.textContent = '';
         delete api.peek.dataset.airLand;
       } else {
-        const owner = stacks[0]?.owner || (!land.isWater ? land.originalOwner : '');
+        const owner = peekControlLabel(land, stacks);
         const ipcLine = !land.isWater ? `${printIpc(land)} IPC` : '';
         const rosterTotal = stacks.reduce((n, s) => n + (s.quantity || 0), 0);
         const research = researchHint || land.name === 'Research';
@@ -2332,7 +2333,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
         api.syncLayers();
         return;
       }
-      const owner = stacks[0]?.owner || (!land.isWater ? land.originalOwner : '');
+      const owner = peekControlLabel(land, stacks);
       const unitLine = unitType ? `${formatUnitName(unitType)}` : '';
       const ipcLine = !land.isWater ? `${printIpc(land)} IPC` : '';
       const rosterTotal = stacks.reduce((n, s) => n + (s.quantity || 0), 0);
