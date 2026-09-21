@@ -4,9 +4,10 @@
 
 ## 9.20.26.08 / .09 — lobby Back + refresh (dual-path.12)
 
-Playtest (Robfox007): Host in a listed waiting Game Lobby tapped Back —
+Playtest (Robfox007 + Bastion): Host in a listed waiting Game Lobby tapped Back —
 Open Games flashed then the room snapped back. No exit. Refresh from that
-path landed on an open map as if the game had started.
+path landed on an open map as if the game had started. List in Open Games
+needed a second click.
 
 Shared `lastMatch` lobby-nav: explicit Back / Browse leave the VIEW (Firestore
 lobby stays listed). Snapshot flicker still restores (B41). Cold boot /
@@ -22,6 +23,7 @@ V2.81.57-dual-path.12.
 - [ ] Experimental `?ux=three` room Back → Play Online → Main; no snap-back
 - [ ] Experimental refresh / reopen → Main Menu
 - [ ] `.02`–`.07` + combat soft-lock still PASS (no rule rewrite)
+- [ ] Classic `/` + Experimental `?ux=three`: one **List in Open Games** click lists
 - [ ] `node tools/test-lobby-nav.mjs` passes
 
 ---

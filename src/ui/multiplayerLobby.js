@@ -925,7 +925,7 @@ export class MultiplayerLobby {
                   ${hostCta.label}
                 </button>
                 ${hostCta.hint ? `<p class="mp-action-hint">${hostCta.hint}</p>` : ''}
-                ${!lobby.isPublished ? `
+                ${isHost && !lobby.isPublished ? `
                   <button class="mp-action-btn secondary" data-action="publish">
                     List in Open Games
                   </button>
@@ -1088,13 +1088,22 @@ export class MultiplayerLobby {
       }
     });
 
-    // Publish lobby (make visible in Open Games, then go to browse)
-    this.el.querySelector('[data-action="publish"]')?.addEventListener('click', async () => {
+    // Publish lobby (one click lists; stay in the room)
+    this.el.querySelector('[data-action="publish"]')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      if (btn.disabled || this._publishing) return;
+      this._publishing = true;
+      btn.disabled = true;
+      const originalText = btn.textContent;
+      btn.textContent = 'Listing…';
       const result = await this.lobbyManager.publishLobby();
+      this._publishing = false;
       if (result.success) {
         this.mode = 'lobby';
         this._render();
       } else {
+        btn.disabled = false;
+        btn.textContent = originalText;
         alert(result.error);
       }
     });

@@ -209,6 +209,13 @@ export function createThreeMpSession({ setup, territories, continents }) {
     return lobby.addAIPlayer(difficulty, factionId, color || swatch.color);
   }
 
+  async function publishRoom() {
+    const result = await getLobbyManager().publishLobby();
+    if (!result.success) return { ok: false, error: result.error || 'Could not list' };
+    notify('lobby', { lobby: getLobbyManager().currentLobby });
+    return { ok: true, lobby: getLobbyManager().currentLobby };
+  }
+
   async function startRoom() {
     const result = await getLobbyManager().startGame();
     if (!result.success) return { ok: false, error: result.error || 'Start failed' };
@@ -345,6 +352,7 @@ export function createThreeMpSession({ setup, territories, continents }) {
     pickFaction,
     setDiscord,
     addAi,
+    publishRoom,
     startRoom,
     startMatch,
     subscribe,

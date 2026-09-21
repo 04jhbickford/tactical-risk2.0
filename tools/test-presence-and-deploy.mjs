@@ -127,7 +127,7 @@ const {
   resolveRejoinHydratePlan,
   shouldReuseInFlightMultiplayerStart,
 } = await import(pathToFileURL(join(root, 'src/multiplayer/lastMatch.js')));
-const { resolveHostLobbyPrimaryCta, resolveStartGameTarget, shouldCreateNewGameOnResume } =
+const { resolveHostLobbyPrimaryCta, resolveStartGameTarget, shouldCreateNewGameOnResume, shouldShowListInOpenGames } =
   await import(pathToFileURL(join(root, 'src/multiplayer/lobbyStart.js')));
 const { shouldPeekPhoneTray } =
   await import(pathToFileURL(join(root, 'src/ui/mobileShell.js')));
@@ -1473,6 +1473,16 @@ console.log('=== B38–B40 first host turn: panel, deploy pool, Start Game, relo
     lobbyMgrSrc.includes('if (!live.isPublished)')
     && lobbyMgrSrc.includes('lobbyUpdate.isPublished = true')
     && lobbyMgrSrc.includes('runTransaction'));
+  check('9.20.26.12: first List click patches isPublished locally',
+    shouldShowListInOpenGames({ isHost: true, isPublished: false }) === true
+    && shouldShowListInOpenGames({ isHost: true, isPublished: true }) === false
+    && shouldShowListInOpenGames({ isHost: false, isPublished: false }) === false
+    && /async publishLobby\([\s\S]*_patchCurrentLobby\([\s\S]*isPublished:\s*true/.test(lobbyMgrSrc)
+    && lobbySrc.includes("btn.textContent = 'Listing…'")
+    && lobbySrc.includes('isHost && !lobby.isPublished')
+    && readFileSync(join(root, 'src/map/threeMapChrome.js'), 'utf8').includes('data-lobby="mp-publish"')
+    && readFileSync(join(root, 'src/map/threeMpSession.js'), 'utf8').includes('publishRoom')
+    && readFileSync(join(root, 'src/map/threeSoloBoot.js'), 'utf8').includes('mp-publish'));
 
   check('B38: signed-in reload with last match auto-resumes',
     shouldAutoResumeLastMatch({

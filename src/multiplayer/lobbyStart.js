@@ -38,3 +38,12 @@ export function resolveStartGameTarget({
 export function shouldCreateNewGameOnResume() {
   return false;
 }
+
+// Host "List in Open Games" is a single publish. Show it until the
+// local lobby is already published (first click must be enough).
+export function shouldShowListInOpenGames({
+  isHost = false,
+  isPublished = false,
+} = {}) {
+  return !!isHost && !isPublished;
+}

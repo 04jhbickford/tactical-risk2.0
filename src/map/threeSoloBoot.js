@@ -392,6 +392,16 @@ export async function bootThreeSolo() {
       }).catch(() => {});
       return;
     }
+    if (kind === 'mp-publish') {
+      mp.publishRoom().then((res) => {
+        if (res && res.ok === false) lobby.mp.error = res.error || 'Could not list';
+        lobby.mp.lobby = res?.lobby || mp.currentLobby();
+        lobby.browsingAway = false;
+        lobby.screen = 'room';
+        paintLobbyNow();
+      }).catch(() => {});
+      return;
+    }
     if (kind === 'mp-signout') {
       mp.signOut().then(() => {
         lobby.mp.user = null;

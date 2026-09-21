@@ -22,6 +22,8 @@ const {
   resolveLobbyViewAfterLoss,
   resolveResumeFailureView,
 } = await import(pathToFileURL(join(root, 'src/multiplayer/lastMatch.js')));
+const { shouldShowListInOpenGames } =
+  await import(pathToFileURL(join(root, 'src/multiplayer/lobbyStart.js')));
 const {
   createSoloLobby,
   applyLobbyAction,
@@ -110,6 +112,14 @@ check('Play Online can still restore a waiting room',
     lastMatch: { lobbyCode: '6V9ZXK' },
   }) === 'lobby');
 
+console.log('=== Bastion list-in-open-games first click ===');
+check('host unpublished sees List',
+  shouldShowListInOpenGames({ isHost: true, isPublished: false }) === true);
+check('first successful publish hides List',
+  shouldShowListInOpenGames({ isHost: true, isPublished: true }) === false);
+check('guest never sees List',
+  shouldShowListInOpenGames({ isHost: false, isPublished: false }) === false);
+
 console.log('=== Experimental three chrome lobby ===');
 {
   const lobby = createSoloLobby({ risk: { factions: [{ id: 'Russians', name: 'Russians' }] } });
@@ -150,6 +160,13 @@ console.log('=== dual-fork wiring ===');
     && threeMp.includes('disconnectFromLobby({ notify: false })'));
   check('lobbyManager disconnect can stay silent',
     lobbyMgr.includes('disconnectFromLobby({ notify = true }'));
+  const chrome = readFileSync(join(root, 'src/map/threeMapChrome.js'), 'utf8');
+  check('first List click patches locally on both forks',
+    lobbyMgr.includes('_patchCurrentLobby(lobbyId, { isPublished: true })')
+    && classic.includes('isHost && !lobby.isPublished')
+    && chrome.includes('data-lobby="mp-publish"')
+    && threeMp.includes('publishRoom')
+    && threeBoot.includes("kind === 'mp-publish'"));
 }
 
 if (failures) {
