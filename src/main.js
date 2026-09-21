@@ -2540,23 +2540,20 @@ async function init() {
         isDraggingUnits = true;
         canvas.classList.add('dragging-units');
 
-        // Calculate valid destinations for all units in source territory
-        const isCombatMove = gameState.turnPhase === TURN_PHASES.COMBAT_MOVE;
-        dragValidDestinations = playerPanel._getValidDestinations(dragSourceTerritory, gameState.currentPlayer, isCombatMove);
-
-        // Select all player's units in the source territory for movement
+        // Select the stack BEFORE asking for dests. An empty selection used
+        // to preview every adjacent sea zone as a combat-move attack.
         const units = gameState.getUnitsAt(dragSourceTerritory.name) || [];
         const playerUnits = units.filter(u => u.owner === gameState.currentPlayer.id);
         playerPanel.setSelectedTerritory(dragSourceTerritory);
-
-        // Select all movable units
         playerPanel.moveSelectedUnits = {};
         for (const unit of playerUnits) {
           const def = unitDefs[unit.type];
-          if (def && (def.movement || 0) > 0) {
+          if (def && (def.movement || 0) > 0 && !unit.moved) {
             playerPanel.moveSelectedUnits[unit.type] = unit.quantity || 1;
           }
         }
+        const isCombatMove = gameState.turnPhase === TURN_PHASES.COMBAT_MOVE;
+        dragValidDestinations = playerPanel._getValidDestinations(dragSourceTerritory, gameState.currentPlayer, isCombatMove);
 
         camera.dirty = true;
       }
@@ -2708,12 +2705,14 @@ async function init() {
         playerPanel.movePendingDest = hit.name;
 
         // Confirm the move
-        const isCombatMove = gameState.turnPhase === TURN_PHASES.COMBAT_MOVE;
+        const unitsToMove = Object.entries(playerPanel.moveSelectedUnits || {})
+          .filter(([type, qty]) => Number(qty) > 0 && unitDefs[type])
+          .map(([type, quantity]) => ({ type, quantity: Number(quantity) }));
         const result = gameState.moveUnits(
           dragSourceTerritory.name,
           hit.name,
-          playerPanel.moveSelectedUnits,
-          isCombatMove
+          unitsToMove,
+          unitDefs,
         );
 
         if (result.success) {

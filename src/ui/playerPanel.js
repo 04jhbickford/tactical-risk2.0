@@ -66,7 +66,7 @@ import {
   mergeLandingSelections,
   resolveLandingDestination,
 } from '../state/airLanding.js';
-import { maxMoveSelection } from '../state/combatMoveEligibility.js';
+import { maxMoveSelection, moveSelectionProfile, seaZoneHasEnemyForAirAttack } from '../state/combatMoveEligibility.js';
 import {
   canPlaceAirOnCarrierInSeaZone,
   pendingAirCanLoadInSeaZone,
@@ -1595,6 +1595,49 @@ export class PlayerPanel {
     this.el.classList.add('hidden');
   }
 
+  _publishMoveGesture() {
+    const gs = this.gameState;
+    if (!gs) return;
+    if (!this._gestureRestored && gs.uiGesture?.fork === 'classic'
+      && gs.uiGesture.turnPhase === gs.turnPhase
+      && gs.uiGesture.playerId === gs.currentPlayer?.id) {
+      this._gestureRestored = true;
+      const saved = gs.uiGesture.selectedUnits || {};
+      if (!Object.values(this.moveSelectedUnits || {}).some((qty) => Number(qty) > 0)) {
+        this.moveSelectedUnits = { ...saved };
+        this.movePendingDest = gs.uiGesture.dest || null;
+        const from = gs.uiGesture.from;
+        if (from && this.territories?.[from]) this.selectedTerritory = this.territories[from];
+      }
+    }
+    const selectedUnits = {};
+    for (const [key, qty] of Object.entries(this.moveSelectedUnits || {})) {
+      if (Number(qty) > 0) selectedUnits[key] = Number(qty);
+    }
+    const landing = this.isAirLandingActive?.() ? {
+      origin: this.airLandingData?.combatTerritory || null,
+      index: this.airLandingIndex || 0,
+      selections: { ...(this.airLandingSelections || {}) },
+    } : null;
+    const active = Object.keys(selectedUnits).length > 0 || !!landing || !!this.movePendingDest;
+    gs.uiGestureActive = active;
+    const gesture = active ? {
+      active: true,
+      fork: 'classic',
+      from: this.selectedTerritory?.name || null,
+      selectedUnits,
+      dest: this.movePendingDest || null,
+      landing,
+      turnPhase: gs.turnPhase,
+      playerId: gs.currentPlayer?.id || null,
+    } : null;
+    const prev = JSON.stringify(gs.uiGesture || null);
+    const next = JSON.stringify(gesture);
+    if (prev === next) return;
+    gs.uiGesture = gesture;
+    if (!gs._suppressPersist && typeof gs.autoSave === 'function') gs.autoSave();
+  }
+
   _render() {
     try {
       this._renderUnsafe();
@@ -1612,6 +1655,7 @@ export class PlayerPanel {
       this.contentEl.innerHTML = '<div class="pp-loading">Loading match…</div>';
       return;
     }
+    this._publishMoveGesture();
 
     const player = this.gameState.currentPlayer;
     if (!player) {
@@ -3857,16 +3901,27 @@ export class PlayerPanel {
       }
     }
 
-    // If no units selected, show adjacent territories as preview
+    // If no units selected, show adjacent territories as preview.
+    // A land-only stack must not preview a sea zone as a combat-move attack.
     if (selectedUnits.length === 0 && selectedShipIds.length === 0 && selectedCargoUnits.length === 0) {
+      const movable = this._getMovableUnits(fromTerritory, player);
+      const previewPick = {};
+      for (const unit of movable) {
+        const key = unit.isCargo ? unit.cargoKey : (unit.isCarrierAircraft ? unit.cargoKey : (unit.isIndividual ? `ship:${unit.id}` : unit.type));
+        if (!key) continue;
+        previewPick[key] = (previewPick[key] || 0) + (Number(unit.quantity) || 0);
+      }
+      const preview = moveSelectionProfile(previewPick, this.unitDefs || {});
       for (const connName of from.connections || []) {
         const conn = this.territories[connName];
         if (!conn) continue;
+        if (isCombatMove && conn.isWater && preview.landOnly) continue;
+        if (isCombatMove && conn.isWater && !preview.airInclusive && !preview.sea) continue;
         // For sea zones, check for enemy units; for land, check ownership
         let isEnemy = false;
         if (conn.isWater) {
-          const seaUnits = this.gameState.getUnitsAt(connName) || [];
-          isEnemy = seaUnits.some(u => u.owner !== player.id && !this.gameState.areAllies(player.id, u.owner));
+          isEnemy = seaZoneHasEnemyForAirAttack(this.gameState, connName, player.id);
+          if (isCombatMove && !isEnemy && !preview.sea) continue;
         } else {
           const owner = this.gameState.getOwner(connName);
           isEnemy = owner && owner !== player.id && !this.gameState.areAllies(player.id, owner);
@@ -3929,6 +3984,9 @@ export class PlayerPanel {
           const seaUnits = this.gameState.getUnitsAt(connName) || [];
           const hasTransport = seaUnits.some(u => u.type === 'transport' && u.owner === player.id);
           if (hasTransport && !destinations.has(connName)) {
+            // Transport load is not a combat-move attack. Land-only never
+            // lists the sea zone as an attack dest (9.21.26.01).
+            if (isCombatMove && airUnits.length === 0) continue;
             // Calculate distance: steps to reach terrName + 1 for loading
             const distToTerr = reachable.get(terrName)?.distance || 0;
             const totalDist = terrName === fromTerritory.name ? 1 : distToTerr + 1;
@@ -3956,9 +4014,10 @@ export class PlayerPanel {
         // For sea zones, check for enemy units; for land, check ownership
         let isEnemy = false;
         if (conn.isWater) {
-          // Sea zone: check for enemy naval units
-          const seaUnits = this.gameState.getUnitsAt(terrName) || [];
-          isEnemy = seaUnits.some(u => u.owner !== player.id && !this.gameState.areAllies(player.id, u.owner));
+          // Sea zone attack only when air is in the selection and enemies are there.
+          if (!airUnits.length) continue;
+          isEnemy = seaZoneHasEnemyForAirAttack(this.gameState, terrName, player.id);
+          if (isCombatMove && !isEnemy) continue;
         } else {
           const owner = this.gameState.getOwner(terrName);
           isEnemy = owner && owner !== player.id && !this.gameState.areAllies(player.id, owner);

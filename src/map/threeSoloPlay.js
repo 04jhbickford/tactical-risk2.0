@@ -19,7 +19,7 @@ import {
 } from '../ui/combatUI.js';
 import { dequeueResolvedCombatHeads, applyTerritoryCapture } from '../state/combatFinalize.js';
 import { remainingAirLandingsToAssign } from '../state/airLanding.js';
-import { combatMoveReachableDests, maxMoveSelection } from '../state/combatMoveEligibility.js';
+import { combatMoveReachableDests, maxMoveSelection, moveSelectionProfile } from '../state/combatMoveEligibility.js';
 import { placementBudgetCopy } from '../state/placeQueue.js';
 import {
   canPlaceAirOnCarrierInSeaZone,
@@ -452,8 +452,8 @@ export function legalDests(play) {
       if (sea && t?.isWater && hasEnemyShips(play, to)) dests.add(to);
       if (air && !ground && !sea && isEnemyLand(play, to)) dests.add(to);
       if (ground && fromT?.isWater && !t?.isWater && isEnemyLand(play, to)) dests.add(to);
-      if (ground && t?.isWater && hasFriendlyTransport(play, to)) dests.add(to);
-      if (air && t?.isWater && hasFriendlyCarrier(play, to)) dests.add(to);
+      if (air && t?.isWater && hasEnemyShips(play, to)) dests.add(to);
+      if (air && t?.isWater && hasFriendlyCarrier(play, to) && !hasEnemyShips(play, to)) dests.add(to);
     }
     if (air && !ground && !sea) {
       let range = 1;
@@ -494,6 +494,14 @@ export function legalDests(play) {
   }
 
   dests.delete(from);
+  if (combat) {
+    const profile = moveSelectionProfile(picked, play.unitDefs);
+    if (profile.landOnly) {
+      for (const name of [...dests]) {
+        if (gs.territoryByName?.[name]?.isWater) dests.delete(name);
+      }
+    }
+  }
   return [...dests];
 }
 
@@ -775,6 +783,55 @@ export function syncPlay(play) {
   }
   if (phase === TURN_PHASES.COMBAT && isHumanTurn(play) && !play.battle && !play.landing && !isGameOver(play)) {
     enterCombat(play);
+  }
+  if (play.gameState && !play._gestureRestored) {
+    const saved = play.gameState.uiGesture;
+    if (saved?.active && saved.turnPhase === phase && saved.playerId === player && saved.fork !== 'classic') {
+      play.selected = saved.from || play.selected;
+      play.selectedUnits = { ...(saved.selectedUnits || {}) };
+      play.destPicked = saved.dest || null;
+      if (saved.landing) {
+        play.landing = {
+          ...saved.landing,
+          pick: { ...(saved.landing.pick || {}) },
+          airLeft: { ...(saved.landing.airLeft || {}) },
+          landable: [...(saved.landing.landable || [])],
+        };
+      }
+    }
+    play._gestureRestored = true;
+  }
+  if (play.gameState) {
+    const gesturing = !!(
+      pickedCount(play.selectedUnits)
+      || play.landing
+      || play.destPicked
+    );
+    play.gameState.uiGestureActive = gesturing;
+    const gesture = gesturing ? {
+      active: true,
+      fork: 'experimental',
+      from: play.selected || null,
+      selectedUnits: { ...(play.selectedUnits || {}) },
+      dest: play.destPicked || null,
+      landing: play.landing ? {
+        origin: play.landing.origin,
+        dest: play.landing.dest,
+        pick: { ...(play.landing.pick || {}) },
+        airLeft: { ...(play.landing.airLeft || {}) },
+        landable: [...(play.landing.landable || [])],
+      } : null,
+      turnPhase: phase,
+      playerId: player,
+    } : null;
+    const prev = JSON.stringify(play.gameState.uiGesture || null);
+    const next = JSON.stringify(gesture);
+    if (prev !== next) {
+      play.gameState.uiGesture = gesture;
+      if (!play.gameState._suppressPersist && typeof play.gameState.autoSave === 'function') {
+        play.gameState.autoSave();
+      }
+    }
   }
   refreshStage(play);
   return play;
@@ -1090,11 +1147,13 @@ function startAirLand(play) {
   const landable = new Set();
   for (const type of Object.keys(air)) {
     for (const opt of play.gameState.getAirLandingOptions(dest, type, play.unitDefs) || []) {
-      if (opt.territory && !opt.isCarrier) landable.add(opt.territory);
+      // Carriers count. Filtering them out left fighters over open water.
+      if (opt.territory) landable.add(opt.territory);
     }
   }
   if (!landable.size) {
     play.landing = null;
+    play.gameState.resolveLooseAirOverWater?.(play.unitDefs || {});
     enterCombat(play);
     return play;
   }

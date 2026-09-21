@@ -203,8 +203,16 @@ export function shouldApplyRemoteGameState({
   localVersion = 0,
   remoteCurrentPlayerId = null,
   localCurrentPlayerId = null,
+  remoteActionSeq = 0,
+  localActionSeq = 0,
+  localGestureActive = false,
   force = false,
 } = {}) {
+  const remoteSeq = Number(remoteActionSeq) || 0;
+  const localSeq = Number(localActionSeq) || 0;
+  // In-progress selection / unpushed moves win over a stale cloud snapshot.
+  if (localSeq > remoteSeq) return false;
+  if (localGestureActive && remoteSeq <= localSeq && !force) return false;
   if (force) return true;
   if (Number(remoteVersion) > Number(localVersion)) return true;
   if (remoteCurrentPlayerId && remoteCurrentPlayerId !== localCurrentPlayerId) {

@@ -2,6 +2,39 @@
 
 ---
 
+## 9.21.26.01–.04 — combat-move sea attack, air land, prior-turn air, save (dual-path.13)
+
+Playtest (Robfox007 + Bastion) on `V2.81.57-dual-path.12`. Discord turn pings stay paused.
+
+Shared rules, both forks:
+
+- **.01** Land-only combat move never lists or accepts a sea zone as an attack
+  dest. Air can still attack an enemy sea zone. Transport load stays a
+  non-combat load, not an Attack.
+- **.02** After combat and after NCM, loose fighters/bombers land on the
+  nearest friendly territory or a friendly carrier. No legal landing crashes
+  them. They cannot end the phase over open water. Experimental landing
+  includes carriers.
+- **.03** Turn start clears `moved` on carrier aircraft and cargo. A refresh
+  into Research/Purchase clears a stuck prior-turn flag. Failed sea landings
+  put the aircraft back instead of deleting them.
+- **.04** Every board notify bumps `actionSeq` and autosaves. A cloud snapshot
+  does not apply while a move/air gesture is in progress unless the remote
+  seq is strictly newer.
+
+Stamp `V2.81.57-dual-path.13`.
+
+### Smoke (this PR)
+
+- [ ] Classic `/` and Experimental `?ux=three`: land-only combat move does not offer East US Sea Zone as Attack; fighters still can
+- [ ] After combat, a fighter left in a sea zone is on land or a carrier before NCM; same after NCM
+- [ ] Next turn, that fighter can be selected and can attack
+- [ ] Refresh after a combat move restores the move; mid-selection is not replaced by an older snapshot
+- [x] `node tools/test-dual-path-13-playtest.mjs` passes (full `tools/test-*.mjs` suite too)
+- [x] Browser: Classic `/` and `?ux=three` both show `V2.81.57-dual-path.13`. Loaded modules: land-only combat dests are East Canada only; fighter dests still include East US Sea Zone. Full East-US click-path on a started 1942 match was not played through in the browser.
+
+---
+
 ## 9.20.26.08 / .09 — lobby Back + refresh (dual-path.12)
 
 Playtest (Robfox007 + Bastion): Host in a listed waiting Game Lobby tapped Back —

@@ -369,6 +369,9 @@ export class SyncManager {
       localVersion: this.localVersion,
       remoteCurrentPlayerId: newData?.currentPlayerId || null,
       localCurrentPlayerId: this._lastCurrentPlayerId || null,
+      remoteActionSeq: newData?.state?.actionSeq || 0,
+      localActionSeq: this.gameState?.actionSeq || 0,
+      localGestureActive: !!this.gameState?.uiGestureActive,
     });
   }
 
