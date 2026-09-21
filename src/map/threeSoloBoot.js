@@ -143,6 +143,7 @@ export async function bootThreeSolo() {
 
   const mapRenderer = new MapRenderer();
   const territoryRenderer = new TerritoryRenderer(territories, continents);
+  territoryRenderer.onFlagsReady = () => { camera.dirty = true; };
   const territoryMap = new TerritoryMap(territories);
   const factions = setup.classic?.factions || setup.factions || [];
   const factionColors = new Map(factions.map((f) => [f.id, f.color]));
@@ -766,6 +767,11 @@ export async function bootThreeSolo() {
       territoryRenderer.renderOwnershipOverlays(ctx, camera.zoom);
       territoryRenderer.renderTerrainTexture(ctx, camera.zoom);
       territoryRenderer.renderTerritoryOutlines(ctx, camera.zoom);
+      territoryRenderer.renderOwnershipFlags(ctx, camera.zoom, {
+        always: true,
+        includeCapitals: true,
+        aboveStacks: true,
+      });
       const marks = highlights(play);
       const byName = (name) => territories.find((t) => t.name === name);
       const wave = 0.5 + 0.5 * Math.sin(performance.now() / 280);

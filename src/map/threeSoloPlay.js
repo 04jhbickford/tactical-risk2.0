@@ -25,6 +25,7 @@ import {
   canPlaceAirOnCarrierInSeaZone,
   seaFirstUnitEntries,
 } from '../state/carrierPlacement.js';
+import { annotatePoliticalOwner } from './politicalControl.js';
 
 export const BATTLE_STEP = {
   AA_READY: 'aaReady',
@@ -2140,7 +2141,7 @@ export function chromeModel(play, territories = []) {
   const seaSelected = !!(landName && play.gameState.territoryByName?.[landName]?.isWater);
   const cargoName = movePhase && (destIsWater ? destName : (seaSelected ? landName : null));
   return {
-    land: sheetLand,
+    land: annotatePoliticalOwner(sheetLand, play.gameState),
     stacks: play.landing
       ? []
       : (landName

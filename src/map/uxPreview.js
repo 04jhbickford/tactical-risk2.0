@@ -23,6 +23,7 @@ import {
   reportStartupStatus,
 } from '../ui/startupLoader.js';
 import { GAME_VERSION, SCHEMA_VERSION } from '../version.js';
+import { annotatePoliticalOwner } from './politicalControl.js';
 import { isMaxBattleRequested } from './uxPreviewFlag.js';
 import {
   bindSealedActivate,
@@ -150,6 +151,7 @@ export async function bootUxPreview() {
 
   const mapRenderer = new MapRenderer();
   const territoryRenderer = new TerritoryRenderer(territories, continents);
+  territoryRenderer.onFlagsReady = () => { camera.dirty = true; };
   const territoryMap = new TerritoryMap(territories);
   const classicPlacements = { ...(setup.classic?.unitPlacements || {}) };
   const classicOwners = setup.classic?.territoryOwners || {};
@@ -161,6 +163,12 @@ export async function bootUxPreview() {
   const stressOn = maxBattle;
   const factions = setup.classic?.factions || setup.factions || [];
   const factionColors = new Map(factions.map((f) => [f.id, f.color]));
+  territoryRenderer.setGameState({
+    players: factions,
+    getOwner: (name) => owners[name] || null,
+    getPlayer: (id) => factions.find((f) => f.id === id) || null,
+    isCapital: () => false,
+  });
   const russians = factions.find((f) => f.id === 'Russians');
 
   const chrome = injectThreeChrome({
@@ -244,7 +252,10 @@ export async function bootUxPreview() {
       route = `Landed · ${play.landingDest}`;
     }
     chrome.paintPlay({
-      land: airLand ? (land || { name: 'Land aircraft' }) : land,
+      land: annotatePoliticalOwner(
+        airLand ? (land || { name: 'Land aircraft' }) : land,
+        territoryRenderer.gameState,
+      ),
       stacks: airLand ? [] : (land ? (placements[land.name] || []) : []),
       unitTypes: picked,
       steppers: airLand ? planeSteppers : steppers,
@@ -500,6 +511,11 @@ export async function bootUxPreview() {
       territoryRenderer.renderOwnershipOverlays(ctx, camera.zoom);
       territoryRenderer.renderTerrainTexture(ctx, camera.zoom);
       territoryRenderer.renderTerritoryOutlines(ctx, camera.zoom);
+      territoryRenderer.renderOwnershipFlags(ctx, camera.zoom, {
+        always: true,
+        includeCapitals: true,
+        aboveStacks: true,
+      });
       const marks = highlights(play);
       const byName = (name) => territories.find((t) => t.name === name);
       const wave = 0.5 + 0.5 * Math.sin(performance.now() / 280);

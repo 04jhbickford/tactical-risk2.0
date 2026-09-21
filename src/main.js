@@ -268,6 +268,7 @@ async function init() {
   let phoneSetupGestureStart = null;
   const mapRenderer = new MapRenderer();
   const territoryRenderer = new TerritoryRenderer(territories, continents);
+  territoryRenderer.onFlagsReady = kickPaint;
   const territoryMap = new TerritoryMap(territories);
 
   function resizeCanvas() {

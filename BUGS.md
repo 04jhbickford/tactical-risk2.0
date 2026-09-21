@@ -2,6 +2,35 @@
 
 ---
 
+## 9.21.26.05 — unoccupied land loses political control notation (dual-path.14)
+
+Playtest (Bastion / crusader_bastion) on `V2.81.57-dual-path.13`. Discord turn
+pings stay paused.
+
+1942 setup owns 15 land territories with zero units (Mexico, Brazil, Spain,
+…). Experimental `?ux=three` only painted a faction chit when a stack
+existed (`layoutAllPreviewStacks` skips empty lists), and the peek fell
+back to `originalOwner`. Classic already drew ownership flags from
+`getOwner` with no unit check, but a flag image that had not decoded yet
+drew nothing — so an empty tile could sit blank until the next dirty paint.
+
+Shared `politicalControlMarks`: seated land owner, including zero units.
+Neutral / uncontrolled stay unmarked. Sea zones are not marked. Classic
+keeps the flag pass (color plate if the flag file is not ready). Experimental
+boot and preview call that same pass (`always`, lifted off the chit).
+Peek names the political owner. Stamp `V2.81.57-dual-path.14`.
+
+### Smoke (this PR)
+
+- [x] Experimental `?ux=three&mode=classic&go=1`: empty Spain peek reads `British · 1 IPC`; map shows owner flags on empty land (Spain, Persia, and others in the Europe fit)
+- [x] Classic `/` local map: Mexico with its infantry removed still shows the German control flag. Stamp `V2.81.57-dual-path.14`. No three chrome
+- [x] Neutrals and sea zones are excluded by `politicalControlMark` (no new sea chip)
+- [x] `.13` regression: `node tools/test-dual-path-13-playtest.mjs`
+- [x] Discord turn ping stays soft-fail: `node tools/test-discord-turn-ping.mjs`
+- [x] `node tools/test-political-control.mjs`
+
+---
+
 ## 9.21.26.01–.04 — combat-move sea attack, air land, prior-turn air, save (dual-path.13)
 
 Playtest (Robfox007 + Bastion) on `V2.81.57-dual-path.12`. Discord turn pings stay paused.
