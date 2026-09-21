@@ -6,7 +6,7 @@ import { Camera, MAP_WIDTH } from './camera.js';
 import { MapRenderer } from './mapRenderer.js';
 import { TerritoryRenderer } from './territoryRenderer.js';
 import { TerritoryMap } from './territoryMap.js';
-import { injectThreeChrome, applyLiveStamp, liveGameVersion } from './threeMapChrome.js';
+import { injectThreeChrome, applyLiveStamp, liveGameVersion, resizeThreeMapCanvas } from './threeMapChrome.js';
 import {
   preloadUnitImages,
   renderPreviewStacks,
@@ -190,9 +190,7 @@ export async function bootThreeSolo() {
   await Promise.all([mapRenderer.load(), imagesReady]);
 
   function resizeCanvas() {
-    const dpr = devicePixelRatio || 1;
-    canvas.width = window.innerWidth * dpr;
-    canvas.height = window.innerHeight * dpr;
+    resizeThreeMapCanvas(canvas);
     camera.onResize();
   }
   resizeCanvas();

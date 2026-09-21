@@ -5,7 +5,7 @@ import { Camera, MAP_WIDTH, MAP_HEIGHT } from './camera.js';
 import { MapRenderer } from './mapRenderer.js';
 import { TerritoryRenderer } from './territoryRenderer.js';
 import { TerritoryMap } from './territoryMap.js';
-import { injectThreeChrome } from './threeMapChrome.js';
+import { injectThreeChrome, resizeThreeMapCanvas } from './threeMapChrome.js';
 import {
   lodBandFromZoom,
   preloadUnitImages,
@@ -178,9 +178,7 @@ export async function bootUxPreview() {
   await Promise.all([mapRenderer.load(), imagesReady]);
 
   function resizeCanvas() {
-    const dpr = devicePixelRatio || 1;
-    canvas.width = window.innerWidth * dpr;
-    canvas.height = window.innerHeight * dpr;
+    resizeThreeMapCanvas(canvas);
     camera.onResize();
   }
   resizeCanvas();

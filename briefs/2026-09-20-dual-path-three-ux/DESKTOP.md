@@ -1,47 +1,21 @@
 # dual-path.11 — Experimental desktop chrome
 
 Stamp: **V2.81.57-dual-path.11**. HOLD MERGE. Quiet James.
+Viz craft SoT: `briefs/2026-09-20-main-art-three-ux/DESKTOP-EXPERIMENTAL-CHROME-BRIEF.md`
+Addendum: `ADAPTIVE-LOBBY-CHECKLIST.md` **D1–D5**. METHOD class: chrome / P1.
 
-Experimental (`?ux=three`) was mobile-first. On a laptop the HUD was a
-stacked thumb dock; lobby was a single phone column. This tip is
-**chrome only** — same `GameState`, same dual-fork rules as `.10`.
+## Steal cite (READY)
 
-## Steal vs invent
+map center + left context rail + right actions rail + compact top ~48–56px; fixed map scale grow frame.
 
-Catalog folder `briefs/2026-09-20-boardgame-sandbox-ref/` still has no
-LOBBY-SHELLS / SANDBOX-RECS files (same as `.18` LOOKPASS). Patterns
-named there + A&A Online / Root desktop:
+Catalog `LOBBY-SHELLS` / `SANDBOX-RECS` files were not in checkout. Grammar stolen from that cite + A&A Online / Root desktop. **Invented:** `--three-top/left/right` + `#three-context` node + `resizeThreeMapCanvas` (Experimental only).
 
-**Stolen**
+## Kill
 
-- A&A Online / Root **side rail**: combat, deploy, air-land, Confirm dock
-  beside the map on wide (`≥1024`). Map keeps full height.
-- Root / `bgio-lobby-seat-picker` **multi-column lobby**: home tiles 2-col
-  at tablet, 3-col at desktop; seats 2-col; setup options as a right
-  column instead of a bottom sheet.
-- A&A combat lanes: attacker | defender side-by-side on the rail.
-- Mouse: hover wash on tiles (fine pointer only). Denser targets on
-  wide (36–44px). Phone keeps 44/56.
-- Breakpoints: phone base (≤480 / existing `@430`), tablet `768`,
-  desktop `1024+`. Progressive enhancement — phone CSS is unchanged.
-
-**Invented**
-
-- CSS custom property `--three-rail` and `data-three-shell` for QA
-  stills. No new grammar, no new stages, no new occupant kinds.
+full-width bottom sheet on desktop · tiny-map dashboard · New UX / Three.js copy.
 
 ## HARD LOCK
 
-- Classic queryless `/` is still Classic Canvas.
-- Experimental @390: lobby MAIN scroll + compact seats + Confirm Attack
-  footer reserved. Do not regress `.6` density or `.10` combat dock.
-- Dual-fork `.02`–`.07` / `.10` (capture, empty origin, unique air land,
-  Undo, one Done, FTR onto CV) not edited.
-
-## Proof
-
-- `node tools/test-experimental-desktop-chrome.mjs`
-- `node tools/test-experimental-setup-density.mjs`
-- `node tools/test-confirm-attack-cta.mjs`
-- `node tools/test-dual-path-mode.mjs`
-- Browser stills @390 and @1280 (see `stills/desktop-11-notes.json`)
+- Classic queryless `/` is still Classic Canvas (`main.js` window resize untouched).
+- @390 sheet grammar from `.6`/`.10` unchanged.
+- Dual-fork `.02`–`.07` / `.10` not edited.

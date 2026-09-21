@@ -348,6 +348,18 @@ export function syncThreeShellWidth() {
   return bp;
 }
 
+/** Experimental only. Size the backing store to the grow-frame, not the window. */
+export function resizeThreeMapCanvas(canvas) {
+  if (!canvas) return { width: 0, height: 0 };
+  const dpr = (typeof devicePixelRatio === 'number' && devicePixelRatio > 0) ? devicePixelRatio : 1;
+  const r = typeof canvas.getBoundingClientRect === 'function' ? canvas.getBoundingClientRect() : null;
+  const cssW = Math.max(1, r?.width || (typeof window !== 'undefined' ? window.innerWidth : 1));
+  const cssH = Math.max(1, r?.height || (typeof window !== 'undefined' ? window.innerHeight : 1));
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  return { width: canvas.width, height: canvas.height, cssW, cssH };
+}
+
 export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE' } = {}) {
   document.documentElement.classList.add('three-spike', 'ux-preview');
   document.documentElement.dataset.gameVersion = liveGameVersion();
@@ -1272,10 +1284,13 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       .three-tech-grid { gap:4px; }
       .three-tech-tile { min-height:40px; padding:4px 6px; font-size:11px; }
     }
-    /* dual-path.11 — Experimental desktop chrome only.
-     * Steal: A&A Online / Root side rail + multi-col lobby (SANDBOX-RECS /
-     * LOBBY-SHELLS catalog; folder not in this checkout). Phone ≤480 stack
-     * stays the base tree — do not pull these rules backward. */
+    /* dual-path.11 — TWO layouts, one product. Viz craft SoT LOCKED.
+     * Steal cite (READY): map center + left context rail + right actions
+     * rail + compact top ~48–56px; fixed map scale grow frame.
+     * Kill: full-width bottom sheet on desktop; tiny-map dashboard;
+     * legacy New UX label (player-facing name is Experimental UX).
+     * ≤767 / @390: sheet grammar unchanged. ≥1024: never phone UI scaled. */
+    #three-context { display:none; }
     @media (min-width: 768px) {
       #three-lobby {
         padding-left:28px; padding-right:28px;
@@ -1305,21 +1320,55 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       }
     }
     @media (min-width: 1024px) {
-      html.three-spike { --three-rail:min(340px, 28vw); }
+      html.three-spike {
+        --three-top:52px;
+        --three-left:220px;
+        --three-right:300px;
+      }
+      html.three-spike #mapCanvas {
+        top:var(--three-top); left:var(--three-left); right:var(--three-right); bottom:0;
+        width:auto; height:auto;
+      }
       #three-l0 {
-        height:calc(44px + env(safe-area-inset-top, 0px));
+        height:var(--three-top);
+        left:0; right:0;
         padding-left:16px; padding-right:16px;
       }
+      #three-l0 .three-l0-seat,
+      #three-l0 .three-l0-ipc { display:none; }
       #three-l0 .three-l0-chip { min-height:32px; padding:0 10px; font-size:12px; }
       #three-l0 .three-l0-help { width:32px; height:32px; }
+      #three-context {
+        display:flex; flex-direction:column; gap:10px;
+        position:absolute; z-index:28; pointer-events:auto;
+        top:var(--three-top); left:0; bottom:0;
+        width:var(--three-left);
+        padding:12px 12px 14px;
+        background:rgba(22,26,28,0.88);
+        border-right:1px solid rgba(255,255,255,0.10);
+        color:#E8E2D4;
+      }
+      #three-context .three-context-id {
+        display:flex; align-items:center; flex-wrap:wrap; gap:8px;
+      }
+      #three-context .three-l0-pip { width:12px; height:12px; border-radius:50%; }
+      #three-context strong { font:700 15px/1.2 -apple-system,"SF Pro Text",sans-serif; }
+      #three-context .three-context-ipc {
+        font:600 12px/1 -apple-system,sans-serif; color:#C4A35A;
+        font-variant-numeric:tabular-nums;
+      }
+      #three-context .three-context-note {
+        margin:0; font:400 12px/1.35 -apple-system,sans-serif; color:#c8c0b0;
+      }
       #three-bottom {
-        top:calc(44px + env(safe-area-inset-top, 0px));
+        top:var(--three-top);
         right:0; left:auto; bottom:0;
-        width:var(--three-rail);
+        width:var(--three-right);
         max-height:none;
-        padding:12px 14px 14px;
+        padding:12px 12px 14px;
         gap:10px;
-        background:linear-gradient(270deg, rgba(22,26,28,0.72) 0%, rgba(22,26,28,0.42) 78%, rgba(22,26,28,0.00) 100%);
+        background:rgba(22,26,28,0.88);
+        border-left:1px solid rgba(255,255,255,0.10);
       }
       #three-sheet-stack {
         max-height:none;
@@ -1338,19 +1387,20 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       }
       #three-undo { min-height:44px; min-width:72px; font-size:13px; border-radius:12px; }
       #three-zoom {
-        right:calc(var(--three-rail) + 14px);
-        bottom:20px;
+        left:calc(var(--three-left) + 12px);
+        right:auto; bottom:16px;
       }
       html.three-spike.has-l1 #three-zoom,
       html.three-spike.has-battle #three-zoom {
         display:flex !important;
-        left:16px; right:auto; bottom:20px;
+        left:calc(var(--three-left) + 12px);
+        right:auto; bottom:16px;
       }
       #three-zoom button { width:36px; height:36px; font-size:16px; }
       #three-sheet {
-        left:auto; right:0; top:calc(44px + env(safe-area-inset-top, 0px));
-        bottom:0; width:var(--three-rail); max-height:none;
-        border-radius:16px 0 0 16px;
+        left:auto; right:0; top:var(--three-top);
+        bottom:0; width:var(--three-right); max-height:none;
+        border-radius:0;
         border-top:none;
         border-left:1px solid rgba(255,255,255,0.12);
         padding:18px 16px 16px;
@@ -1358,7 +1408,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       #three-sheet button.three-sheet-row { min-height:36px; font-size:14px; }
       #three-lobby {
         padding:28px 40px 0;
-        background:rgba(16,20,22,0.96);
+        background:#14181a;
       }
       #three-lobby .three-lobby-ux,
       #three-lobby .lobby-ux-picker {
@@ -1457,6 +1507,19 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
   document.body.appendChild(l0);
   applyLiveStamp();
 
+  const context = document.createElement('aside');
+  context.id = 'three-context';
+  context.setAttribute('aria-label', 'Context');
+  context.innerHTML = `
+    <div class="three-context-id">
+      <span class="three-l0-pip" id="three-context-pip"></span>
+      <strong id="three-context-seat">${seat}</strong>
+      <span class="three-context-ipc" id="three-context-ipc">IPC ${ipc}</span>
+    </div>
+    <p class="three-context-note" id="three-context-note">Inspect a land for stacks.</p>
+  `;
+  document.body.appendChild(context);
+
   const strip = document.createElement('div');
   strip.id = 'three-phase-strip';
   strip.setAttribute('aria-live', 'polite');
@@ -1511,6 +1574,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
 
   const api = {
     l0,
+    context,
     zoom,
     bottom,
     sheet,
@@ -1557,12 +1621,20 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
     setSeat(name, color) {
       api.seatEl.textContent = name;
       if (color) api.pipEl.style.background = color;
+      const ctxSeat = context.querySelector('#three-context-seat');
+      const ctxPip = context.querySelector('#three-context-pip');
+      if (ctxSeat) ctxSeat.textContent = name;
+      if (color && ctxPip) ctxPip.style.background = color;
     },
     setPhase(word) {
       api.phaseEl.textContent = word;
+      const note = context.querySelector('#three-context-note');
+      if (note && word) note.textContent = word;
     },
     setIpc(n) {
       api.ipcEl.textContent = `IPC ${n}`;
+      const ctxIpc = context.querySelector('#three-context-ipc');
+      if (ctxIpc) ctxIpc.textContent = `IPC ${n}`;
     },
     syncLayers() {
       const l2 = sheet.classList.contains('is-open');

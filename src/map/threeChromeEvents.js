@@ -70,6 +70,7 @@ export function chromeHitRectsFrom(api = {}) {
   };
   push(api.zoom);
   push(api.l0);
+  push(api.context);
   if (api.isSheetOpen?.() || api.sheet?.classList?.contains('is-open')) {
     push(api.sheet);
   }
