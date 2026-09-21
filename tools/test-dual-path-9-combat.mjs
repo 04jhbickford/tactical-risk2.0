@@ -91,7 +91,7 @@ function makeGs({
 }
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-dual-path.11', GAME_VERSION === 'V2.81.57-dual-path.11');
+check('GAME_VERSION is V2.81.57-dual-path.12', GAME_VERSION === 'V2.81.57-dual-path.12');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== 9.20.26.02 / 35RB85 dequeue captures land leftover ===');

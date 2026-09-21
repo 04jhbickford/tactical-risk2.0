@@ -20,6 +20,7 @@ import {
 } from '../ui/startupLoader.js';
 import { GAME_VERSION } from '../version.js';
 import { createThreeMpSession } from './threeMpSession.js';
+import { shouldForceLobbyRoomOnSnapshot } from '../multiplayer/lastMatch.js';
 import { UX_CLASSIC, UX_THREE, navigateUxMode } from './presentationMode.js';
 import { bindDiscordTurnPing } from '../multiplayer/discordTurnPing.js';
 import { emitGameEvent } from '../multiplayer/gameEventLog.js';
@@ -345,10 +346,18 @@ export async function bootThreeSolo() {
       lobby.mp.lobby = payload.lobby || mp.currentLobby();
       lobby.mp.isHost = mp.isHostUser();
       lobby.mp.error = '';
-      if (lobby.mp.lobby) lobby.screen = 'room';
+      if (shouldForceLobbyRoomOnSnapshot({
+        browsingAway: !!lobby.browsingAway,
+        lobbyPresent: !!lobby.mp.lobby,
+        gameStarting: payload.lobby?.status === 'starting' && !!payload.lobby?.gameId,
+      })) {
+        lobby.screen = 'room';
+        lobby.browsingAway = false;
+      }
       if (lobby.open) paintLobbyNow();
     }
     if (kind === 'starting' && payload?.gameId) {
+      lobby.browsingAway = false;
       startMpMatch(payload.gameId, payload.lobby);
     }
   });
@@ -394,7 +403,13 @@ export async function bootThreeSolo() {
       }).catch(() => {});
       return;
     }
+    const leavingRoom = kind === 'screen' && lobby.screen === 'room' && value !== 'room';
     applyLobbyAction(lobby, kind, value);
+    if (leavingRoom) {
+      lobby.browsingAway = true;
+      lobby.mp.lobby = lobby.mp.lobby || mp.currentLobby();
+      mp.detachLobby();
+    }
     paintLobbyNow();
     if (kind === 'screen' && (value === 'online' || value === 'create' || value === 'join')) {
       void restoreOnlineAuth();
@@ -415,6 +430,7 @@ export async function bootThreeSolo() {
         return;
       }
       lobby.screen = 'room';
+      lobby.browsingAway = false;
       lobby.mp.lobby = result.lobby || mp.currentLobby();
       lobby.mp.isHost = true;
       paintLobbyNow();
@@ -432,6 +448,7 @@ export async function bootThreeSolo() {
       }
       if (result.started) return;
       lobby.screen = 'room';
+      lobby.browsingAway = false;
       lobby.mp.lobby = result.lobby || mp.currentLobby();
       lobby.mp.isHost = mp.isHostUser();
       paintLobbyNow();

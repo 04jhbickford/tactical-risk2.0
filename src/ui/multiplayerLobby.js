@@ -16,6 +16,9 @@ import {
   shouldLeaveLobbyView,
   shouldNavigateToHome,
   resolveLobbyViewAfterLoss,
+  resolveLobbyBackTarget,
+  shouldForceLobbyRoomOnSnapshot,
+  shouldHonorLobbyBack,
   shouldBlockCompetingEntryForms,
   resolveRejoinRecoveryUi,
   resolveReconnectCopy,
@@ -68,6 +71,7 @@ export class MultiplayerLobby {
     this.el = null;
     this.mode = 'menu'; // 'menu', 'create', 'join', 'lobby'
     this.unsubscribe = null;
+    this._browsingAway = false;
     this._create();
   }
 
@@ -98,6 +102,7 @@ export class MultiplayerLobby {
     }
     if (action === 'create') {
       if (this._blocksCompetingEntry()) return;
+      this._browsingAway = false;
       this.mode = 'create';
       this._render();
       return;
@@ -119,6 +124,7 @@ export class MultiplayerLobby {
 
   _openJoinByCode() {
     if (this._blocksCompetingEntry()) return;
+    this._browsingAway = false;
     if (this.mode === 'reconnect') this._fromReconnect = true;
     this.mode = 'join';
     this._render();
@@ -198,6 +204,7 @@ export class MultiplayerLobby {
     this.unsubscribe = this.lobbyManager.subscribe((lobby) => {
       // Check if game is starting
       if (lobby?.status === 'starting' && lobby.gameId) {
+        this._browsingAway = false;
         this.hide();
         if (this.onStart) {
           this.onStart(lobby.gameId, lobby);
@@ -205,18 +212,36 @@ export class MultiplayerLobby {
         return;
       }
 
+      // Host Back to Open Games is not flicker — stay on browse/menu.
+      if (this._browsingAway) {
+        if (!shouldForceLobbyRoomOnSnapshot({
+          browsingAway: true,
+          lobbyPresent: !!lobby,
+          gameStarting: lobby?.status === 'starting' && !!lobby.gameId,
+        })) {
+          return;
+        }
+      }
+
       // Update UI
       if (lobby) {
+        this._browsingAway = false;
         this.mode = 'lobby';
         this._render();
         return;
       }
 
       // B41: a null snapshot is not Leave. Stay in / restore the room.
-      if (!shouldLeaveLobbyView({ snapshotMissing: true, presenceFlicker: true })) {
+      // Explicit Back / Browse must not restore (9.20.26.08).
+      if (!shouldLeaveLobbyView({
+        snapshotMissing: true,
+        presenceFlicker: true,
+        explicitBrowse: !!this._browsingAway,
+      })) {
         const view = resolveLobbyViewAfterLoss({
           currentLobby: null,
           lastMatch: readLastMatch(),
+          explicitBrowse: !!this._browsingAway,
         });
         if (view === 'lobby' || view === 'game' || view === 'reconnect') {
           this.mode = view === 'reconnect' ? 'reconnect' : 'lobby';
@@ -590,6 +615,7 @@ export class MultiplayerLobby {
         // Bind click events for lobby items (resume buttons are bound separately)
         container.querySelectorAll('.mp-game-item[data-code]').forEach(item => {
           item.addEventListener('click', async () => {
+            this._browsingAway = false;
             const code = item.dataset.code;
             const result = await this.lobbyManager.joinLobby(code, null);
             if (!result.success) {
@@ -663,6 +689,7 @@ export class MultiplayerLobby {
     if (this._rejoining) return false;
     this._rejoining = true;
     this._rejoinError = '';
+    this._browsingAway = false;
     try {
       if (!this.authManager.isAuthReady()) {
         await this.authManager.whenReady();
@@ -704,6 +731,7 @@ export class MultiplayerLobby {
   }
 
   async _restoreLiveLobby() {
+    if (this._browsingAway) return false;
     if (this._restoringLobby) return false;
     this._restoringLobby = true;
     try {
@@ -745,11 +773,14 @@ export class MultiplayerLobby {
     const lobby = this.lobbyManager.getLobby();
     if (!lobby) {
       const last = readLastMatch();
-      if (!shouldLeaveLobbyView({ snapshotMissing: true })
-        && (last?.lobbyCode || last?.gameId)) {
+      if (!shouldLeaveLobbyView({
+        snapshotMissing: true,
+        explicitBrowse: !!this._browsingAway,
+      }) && (last?.lobbyCode || last?.gameId)) {
         return this._renderLobbyRestoring(user, last);
       }
-      this.mode = 'menu';
+      this.mode = this._browsingAway ? (this.mode === 'browse' ? 'browse' : 'menu') : 'menu';
+      if (this.mode === 'browse') return this._renderBrowse(user);
       return this._renderMenu(user);
     }
 
@@ -952,6 +983,7 @@ export class MultiplayerLobby {
         void this._restoreLiveLobby();
         return;
       }
+      this._browsingAway = true;
       this.hide();
       if (this.onBack) {
         this.onBack();
@@ -1015,12 +1047,18 @@ export class MultiplayerLobby {
       this._render();
     });
 
-    // Back to browse (for host returning to Open Games without leaving)
+    // Back to Open Games (host stays seated in Firestore; view leaves the room)
     this.el.querySelector('[data-action="back-to-browse"]')?.addEventListener('click', () => {
-      this.lobbyManager.disconnectFromLobby();
-      this.mode = 'browse';
+      if (!shouldHonorLobbyBack({ explicitBack: true })) return;
+      this._browsingAway = true;
+      const target = resolveLobbyBackTarget({
+        published: !!this.lobbyManager.getLobby()?.isPublished,
+        hasBrowse: true,
+      });
+      this.lobbyManager.disconnectFromLobby({ notify: false });
+      this.mode = target === 'browse' ? 'browse' : 'menu';
       this._render();
-      this._loadBrowseGames();
+      if (this.mode === 'browse') this._loadBrowseGames();
     });
 
     this.el.querySelector('[data-action="ready"]')?.addEventListener('click', async () => {
@@ -1192,6 +1230,7 @@ export class MultiplayerLobby {
     const submitBtn = form.querySelector('button[type="submit"]');
     if (submitBtn) submitBtn.disabled = true;
 
+    this._browsingAway = false;
     try {
       const result = await this.lobbyManager.createLobby(name, {
         maxPlayers,
@@ -1225,6 +1264,7 @@ export class MultiplayerLobby {
     const code = form.querySelector('#join-code').value.toUpperCase();
     const password = form.querySelector('#join-password').value;
 
+    this._browsingAway = false;
     const result = await this.lobbyManager.joinLobby(code, password || null);
 
     if (!result.success) {

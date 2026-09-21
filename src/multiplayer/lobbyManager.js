@@ -1014,14 +1014,15 @@ export class LobbyManager {
     return this.currentLobby;
   }
 
-  // Disconnect from lobby updates without leaving (used when going to browse view)
-  disconnectFromLobby() {
+  // Disconnect from lobby updates without leaving (used when going to browse view).
+  // notify:false = explicit Back — do not treat a null snapshot as flicker.
+  disconnectFromLobby({ notify = true } = {}) {
     if (this.lobbyUnsubscribe) {
       this.lobbyUnsubscribe();
       this.lobbyUnsubscribe = null;
     }
     this.currentLobby = null;
-    this._notifyListeners();
+    if (notify) this._notifyListeners();
   }
 
   // Check if current user is host

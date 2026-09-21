@@ -103,6 +103,10 @@ const {
   resolveResumeFailureView,
   shouldLeaveLobbyView,
   shouldNavigateToHome,
+  shouldHonorLobbyBack,
+  resolveLobbyBackTarget,
+  shouldForceLobbyRoomOnSnapshot,
+  shouldRestoreLobbyAfterDisconnect,
   shouldClearLobbyOnSnapshotError,
   shouldKeepLastKnownLobby,
   resolveLobbyViewAfterLoss,
@@ -178,7 +182,7 @@ const unitDefs = {
 };
 
 console.log('=== Version stamps ===');
-check('GAME_VERSION is V2.81.57-dual-path.11', GAME_VERSION === 'V2.81.57-dual-path.11');
+check('GAME_VERSION is V2.81.57-dual-path.12', GAME_VERSION === 'V2.81.57-dual-path.12');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== Presence: background must not delete or go offline ===');
@@ -1542,20 +1546,23 @@ console.log('=== B38–B40 first host turn: panel, deploy pool, Start Game, relo
     && shouldLeaveLobbyView({ snapshotMissing: true }) === false
     && shouldLeaveLobbyView({ presenceFlicker: true }) === false
     && shouldLeaveLobbyView({ sessionLost: true }) === false);
-  check('B41: only explicit Leave leaves the waiting room',
+  check('B41: only explicit Leave / Back / Browse leave the waiting-room VIEW',
     shouldLeaveLobbyView({ explicitLeave: true }) === true
-    && shouldLeaveLobbyView({ confirmedLeave: true }) === true);
-  check('B41: never navigate home while 6V9ZXK is remembered',
+    && shouldLeaveLobbyView({ confirmedLeave: true }) === true
+    && shouldLeaveLobbyView({ explicitBrowse: true }) === true
+    && shouldLeaveLobbyView({ explicitBack: true }) === true);
+  check('B41: flicker without Back does not navigate home',
+    shouldNavigateToHome({
+      lastMatch: { lobbyCode: '6V9ZXK' },
+    }) === false
+    && shouldNavigateToHome({ liveLobby: true }) === false);
+  check('9.20.26.08: explicit Back / Sign Out go home even if 6V9ZXK is remembered',
     shouldNavigateToHome({
       explicitExit: true,
       lastMatch: { lobbyCode: '6V9ZXK' },
-    }) === false
-    && shouldNavigateToHome({
-      lastMatch: { lobbyCode: '6V9ZXK' },
-    }) === false
-    && shouldNavigateToHome({ liveLobby: true, explicitExit: true }) === false);
-  check('B41: Sign Out may go home; empty lastMatch + Exit may go home',
-    shouldNavigateToHome({ confirmedSignOut: true, lastMatch: { lobbyCode: '6V9ZXK' } }) === true
+    }) === true
+    && shouldNavigateToHome({ liveLobby: true, explicitExit: true }) === true
+    && shouldNavigateToHome({ confirmedSignOut: true, lastMatch: { lobbyCode: '6V9ZXK' } }) === true
     && shouldNavigateToHome({ explicitExit: true, lastMatch: null }) === true);
   check('B41: snapshot error keeps the last known lobby',
     shouldClearLobbyOnSnapshotError() === false
@@ -1574,7 +1581,9 @@ console.log('=== B38–B40 first host turn: panel, deploy pool, Start Game, relo
       currentLobby: { code: '6V9ZXK' },
       lastMatch: null,
     }) === 'lobby'
-    && resolveLobbyViewAfterLoss({ explicitLeave: true }) === 'home');
+    && resolveLobbyViewAfterLoss({ explicitLeave: true }) === 'home'
+    && resolveLobbyViewAfterLoss({ explicitBrowse: true, lastMatch: { lobbyCode: '6V9ZXK' } }) === 'browse'
+    && resolveLobbyViewAfterLoss({ explicitBack: true, lastMatch: { lobbyCode: '6V9ZXK' } }) === 'home');
   {
     const store = new Map();
     const storage = {
@@ -1586,8 +1595,13 @@ console.log('=== B38–B40 first host turn: panel, deploy pool, Start Game, relo
     check('B41: waiting lobby is remembered without a gameId',
       saved?.lobbyCode === '6V9ZXK'
       && saved?.gameId === null
-      && readLastMatch(storage)?.lobbyCode === '6V9ZXK'
-      && shouldAutoResumeLastMatch({ signedIn: true, lastMatch: readLastMatch(storage) }) === true);
+      && readLastMatch(storage)?.lobbyCode === '6V9ZXK');
+    check('9.20.26.09: waiting lobbyCode does not auto-resume a map',
+      shouldAutoResumeLastMatch({ signedIn: true, lastMatch: readLastMatch(storage) }) === false
+      && shouldAutoResumeLastMatch({
+        signedIn: true,
+        lastMatch: { gameId: 'game_live', lobbyCode: '6V9ZXK' },
+      }) === true);
   }
   check('B41: waiting-lobby resume miss is lobby, not home',
     resolveResumeFailureView({
@@ -1620,6 +1634,31 @@ console.log('=== B38–B40 first host turn: panel, deploy pool, Start Game, relo
     && lobbySrc.includes('_restoreLiveLobby')
     && lobbySrc.includes('_renderLobbyRestoring')
     && lobbySrc.includes('shouldLeaveLobbyView'));
+  check('9.20.26.08: explicit Back is not flicker',
+    shouldHonorLobbyBack({ explicitBack: true }) === true
+    && shouldHonorLobbyBack({}) === false
+    && resolveLobbyBackTarget({ published: true, hasBrowse: true }) === 'browse'
+    && resolveLobbyBackTarget({ published: false, hasBrowse: false }) === 'online'
+    && shouldForceLobbyRoomOnSnapshot({ browsingAway: true, lobbyPresent: true }) === false
+    && shouldForceLobbyRoomOnSnapshot({ browsingAway: false, lobbyPresent: true }) === true
+    && shouldForceLobbyRoomOnSnapshot({
+      browsingAway: true,
+      lobbyPresent: true,
+      gameStarting: true,
+    }) === true
+    && shouldRestoreLobbyAfterDisconnect({ explicitBrowse: true }) === false
+    && shouldRestoreLobbyAfterDisconnect({}) === true);
+  check('9.20.26.08/.09: Classic + Experimental + boot wire shared lobby nav',
+    lobbySrc.includes('_browsingAway')
+    && lobbySrc.includes("disconnectFromLobby({ notify: false })")
+    && lobbySrc.includes('resolveLobbyBackTarget')
+    && lobbyMgrSrc.includes('disconnectFromLobby({ notify = true }')
+    && mainSrc.includes('bootResume')
+    && mainSrc.includes('shouldAutoResumeLastMatch')
+    && readFileSync(join(root, 'src/map/threeSoloBoot.js'), 'utf8').includes('shouldForceLobbyRoomOnSnapshot')
+    && readFileSync(join(root, 'src/map/threeSoloBoot.js'), 'utf8').includes('detachLobby')
+    && readFileSync(join(root, 'src/map/threeMpSession.js'), 'utf8').includes('detachLobby')
+    && readFileSync(join(root, 'src/map/threeSoloLobby.js'), 'utf8').includes('browsingAway'));
 }
 
 console.log('=== V2.81.42 My Games hygiene + presence comments ===');

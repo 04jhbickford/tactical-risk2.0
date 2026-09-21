@@ -309,6 +309,15 @@ export function createThreeMpSession({ setup, territories, continents }) {
     return getLobbyManager().currentLobby;
   }
 
+  // Leave the room VIEW without deleting the Firestore lobby (host Back).
+  function detachLobby() {
+    if (unsubscribeLobby) {
+      unsubscribeLobby();
+      unsubscribeLobby = null;
+    }
+    getLobbyManager().disconnectFromLobby({ notify: false });
+  }
+
   function localUser() {
     const user = getAuthManager().getUser();
     return isRealAuthIdentity(user) ? user : null;
@@ -340,6 +349,7 @@ export function createThreeMpSession({ setup, territories, continents }) {
     startMatch,
     subscribe,
     currentLobby,
+    detachLobby,
     localUser,
     localUserId: () => localUser()?.id || null,
     isHostUser,
