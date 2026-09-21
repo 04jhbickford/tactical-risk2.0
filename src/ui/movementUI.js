@@ -317,6 +317,7 @@ export class MovementUI {
     if (hasLandSelected && !hasSeaSelected && landMovementRange > 1) {
       // Allow water destination if there's a transport (for amphibious assault or non-combat)
       if (territory.isWater) {
+        if (isCombatMove && !hasAirSelected && !hasSeaSelected) return false;
         if (isAdjacent) {
           return this._canLoadOntoTransport(territory.name, player.id);
         }
@@ -357,6 +358,7 @@ export class MovementUI {
     // Land units entering water can load onto transports (both combat and non-combat)
     // Combat move loading is for amphibious assaults
     if (hasLandSelected && territory.isWater) {
+      if (isCombatMove && !hasAirSelected && !hasSeaSelected) return false;
       return this._canLoadOntoTransport(territory.name, player.id);
     }
 
@@ -574,6 +576,9 @@ export class MovementUI {
       for (const connName of connections) {
         const t = this.territoryByName[connName];
         if (t?.isWater && this._canLoadOntoTransport(connName, player.id)) {
+          // Combat-move land path does not list the sea zone as an attack.
+          // Non-combat may still load a transport. Air-only handled above.
+          if (isCombatMove) continue;
           if (!landDestinations.includes(connName)) {
             landDestinations.push(connName);
           }

@@ -245,8 +245,31 @@ export function applyAirLandingPlan({
   units[originTerritory] = originUnits;
 
   for (const item of plan) {
-    if (!item?.type || !item.destination || item.destination === originTerritory) {
-      if (item?.destination === originTerritory) {
+    if (!item?.type || !item.destination) continue;
+    if (item.destination === originTerritory) {
+      const here = territoryByName[item.destination];
+      if (here?.isWater) {
+        const takenHere = takeAirUnitsFromTerritory(originUnits, {
+          type: item.type,
+          owner,
+          quantity: item.quantity || 1,
+        });
+        const placedHere = addMovedAirToTerritory(units, {
+          destination: item.destination,
+          type: item.type,
+          owner,
+          quantity: takenHere,
+          destIsWater: true,
+          unitDefs,
+        });
+        if (placedHere > 0) {
+          applied.push({ ...item, quantity: placedHere });
+        } else if (takenHere > 0) {
+          originUnits.push({ type: item.type, quantity: takenHere, owner, moved: true });
+        } else {
+          applied.push({ ...item, stayed: true });
+        }
+      } else {
         applied.push({ ...item, stayed: true });
       }
       continue;
@@ -259,7 +282,7 @@ export function applyAirLandingPlan({
     if (taken <= 0) continue;
 
     const destT = territoryByName[item.destination];
-    addMovedAirToTerritory(units, {
+    const placed = addMovedAirToTerritory(units, {
       destination: item.destination,
       type: item.type,
       owner,
@@ -267,7 +290,16 @@ export function applyAirLandingPlan({
       destIsWater: !!destT?.isWater,
       unitDefs,
     });
-    applied.push({ ...item, quantity: taken });
+    const unplaced = taken - placed;
+    if (unplaced > 0) {
+      // A sea landing with no carrier room must not delete the aircraft.
+      const back = units[originTerritory] || [];
+      const existing = back.find((unit) => unit.type === item.type && unit.owner === owner && unit.moved);
+      if (existing) existing.quantity = (existing.quantity || 0) + unplaced;
+      else back.push({ type: item.type, quantity: unplaced, owner, moved: true });
+      units[originTerritory] = back;
+    }
+    if (placed > 0) applied.push({ ...item, quantity: placed });
   }
 
   return applied;
@@ -304,4 +336,37 @@ export function shouldDisableEndPhaseForCombat({
 
 export function selectedMoveCount(selected = {}) {
   return Object.values(selected || {}).reduce((sum, n) => sum + (Number(n) || 0), 0);
+}
+
+const KNOWN_AIR = new Set(['fighter', 'bomber', 'tacticalBomber']);
+
+export function isAirUnitType(type, unitDefs = {}) {
+  if (!type) return false;
+  if (unitDefs?.[type]?.isAir) return true;
+  return KNOWN_AIR.has(type);
+}
+
+// Fighters and bombers sitting in a sea zone as their own stack are over
+// open water. Aircraft stored on carrier.aircraft are already landed.
+export function looseAirOverWater(units = {}, territoryByName = {}, owner, unitDefs = {}) {
+  if (!owner) return [];
+  const stranded = [];
+  for (const [name, stacks] of Object.entries(units || {})) {
+    if (!territoryByName?.[name]?.isWater) continue;
+    for (const unit of stacks || []) {
+      if (!unit || unit.owner !== owner) continue;
+      if (!isAirUnitType(unit.type, unitDefs)) continue;
+      const quantity = Number(unit.quantity) || 0;
+      if (quantity <= 0) continue;
+      stranded.push({ territory: name, type: unit.type, quantity });
+    }
+  }
+  return stranded;
+}
+
+export function preferAirLandingOption(options = []) {
+  const list = options || [];
+  return list.find((opt) => opt?.territory && !opt.isCarrier)
+    || list.find((opt) => opt?.territory)
+    || null;
 }

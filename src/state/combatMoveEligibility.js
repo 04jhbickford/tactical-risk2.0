@@ -22,12 +22,61 @@ export function canEmptyTerritoryDuringCombatMove() {
   return true;
 }
 
+export function moveSelectionProfile(picked = {}, unitDefs = {}) {
+  let land = false;
+  let air = false;
+  let sea = false;
+  for (const [key, qty] of Object.entries(picked || {})) {
+    if (!(Number(qty) > 0)) continue;
+    if (key.startsWith('cargo:')) {
+      land = true;
+      continue;
+    }
+    if (key.startsWith('aircraft:')) {
+      air = true;
+      continue;
+    }
+    if (key.startsWith('ship:')) {
+      sea = true;
+      continue;
+    }
+    const def = unitDefs[key];
+    if (def?.isLand) land = true;
+    if (def?.isAir) air = true;
+    if (def?.isSea) sea = true;
+  }
+  return {
+    land,
+    air,
+    sea,
+    landOnly: land && !air && !sea,
+    airInclusive: air,
+  };
+}
+
+function zoneHasEnemyUnits(gameState, name, playerId) {
+  return (gameState.units?.[name] || []).some((unit) => (
+    unit
+    && unit.owner !== playerId
+    && !gameState.areAllies?.(playerId, unit.owner)
+    && (Number(unit.quantity) || 0) > 0
+    && unit.type !== 'factory'
+  ));
+}
+
+export function seaZoneHasEnemyForAirAttack(gameState, seaName, playerId) {
+  const zone = gameState?.territoryByName?.[seaName];
+  if (!zone?.isWater || !playerId) return false;
+  return zoneHasEnemyUnits(gameState, seaName, playerId);
+}
+
 export function combatMoveReachableDests(gameState, fromName, picked = {}, unitDefs = {}) {
   if (!gameState || !fromName) return [];
   const dests = new Map();
   const playerId = gameState.currentPlayer?.id;
   if (!playerId) return [];
 
+  const profile = moveSelectionProfile(picked, unitDefs);
   const selected = Object.entries(picked || {})
     .filter(([, n]) => Number(n) > 0)
     .map(([type, quantity]) => ({ type, quantity: Number(quantity), def: unitDefs[type] }));
@@ -49,7 +98,12 @@ export function combatMoveReachableDests(gameState, fromName, picked = {}, unitD
     const minMovement = Math.min(...airUnits.map((u) => u.def.movement || 4));
     const reachable = gameState.getReachableTerritoriesForAir(fromName, minMovement, playerId, true);
     for (const [name, info] of reachable) {
-      if (!dests.has(name)) dests.set(name, { name, distance: info.distance, via: 'air' });
+      if (dests.has(name)) continue;
+      const zone = gameState.territoryByName?.[name];
+      // Combat-move air may attack a sea zone only when something enemy is there.
+      // Empty ocean is not an attack dest (landing is a carrier or a later phase).
+      if (zone?.isWater && !seaZoneHasEnemyForAirAttack(gameState, name, playerId)) continue;
+      dests.set(name, { name, distance: info.distance, via: 'air', attack: true });
     }
   }
 
@@ -62,5 +116,20 @@ export function combatMoveReachableDests(gameState, fromName, picked = {}, unitD
   }
 
   dests.delete(fromName);
+
+  // Land-only stacks never attack a sea zone. Amphibious assault unloads
+  // onto a coastal land territory; a friendly transport load is not an attack.
+  if (profile.landOnly) {
+    for (const [name, info] of [...dests.entries()]) {
+      if (gameState.territoryByName?.[name]?.isWater && info.via !== 'transport') {
+        dests.delete(name);
+      }
+    }
+  }
+
   return [...dests.values()];
+}
+
+export function landOnlySeaAttackIllegal(profile, destIsWater) {
+  return !!(profile?.landOnly && destIsWater);
 }

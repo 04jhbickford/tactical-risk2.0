@@ -14,10 +14,14 @@ import {
   applyAirLandingPlan,
   buildLandingPlan,
   clearPendingLandingDestinations,
+  looseAirOverWater,
   markPendingAirLandingsApplied,
+  preferAirLandingOption,
+  takeAirUnitsFromTerritory,
   unappliedLandingPlan,
   upsertPendingAirLanding,
 } from './airLanding.js';
+import { landOnlySeaAttackIllegal, moveSelectionProfile } from './combatMoveEligibility.js';
 import { emitGameEvent, summarizeUnits } from '../multiplayer/gameEventLog.js';
 import { omitUndefinedDeep } from './persistState.js';
 import { captureIfAttackerHolds, finalizeAttackerHoldsOnBoard } from './combatFinalize.js';
@@ -760,7 +764,10 @@ export class GameState {
 
     // Get origin tracking info - if no origin tracked, assume unit started here
     const originInfo = this.airUnitOrigins[territory]?.[unitType];
-    const distanceTraveled = originInfo?.distance || 0;
+    // A failed path search stores 999. Treating that as "already flew the
+    // whole map" left fighters with 0 landing range over open water.
+    const rawDistance = originInfo?.distance || 0;
+    const distanceTraveled = rawDistance >= 999 ? 0 : rawDistance;
     // Apply Long Range Aircraft tech bonus (+2 movement for fighters and bombers)
     const hasLongRange = this.hasTech(player.id, 'longRangeAircraft');
     const baseMovement = unitDef.movement || 4;
@@ -2331,10 +2338,20 @@ export class GameState {
     }
 
     let currentIndex = TURN_PHASE_ORDER.indexOf(this.turnPhase);
+    const leavingPhase = this.turnPhase;
 
     // Fail-closed: named post-combat landings apply on any advance
     // (COMBAT→NCM and leftover NCM overlay → mobilize).
     this.applyPendingAirLandings({ notify: false });
+
+    // Loose air over water is legal during the phase (battle hex, or an NCM
+    // hop). Landing/crash runs only when that phase actually ends. Doing it
+    // before the combat-queue guard pulled attackers out of an unresolved
+    // battle and then refused to leave COMBAT (9.21.26.02).
+    const landLooseAirIfLeavingAirPhase = () => {
+      if (leavingPhase !== TURN_PHASES.COMBAT && leavingPhase !== TURN_PHASES.NON_COMBAT_MOVE) return;
+      this.resolveLooseAirOverWater(this._unitDefs || this.unitDefs || {});
+    };
 
     while (currentIndex < TURN_PHASE_ORDER.length - 1) {
       currentIndex++;
@@ -2374,6 +2391,7 @@ export class GameState {
             return; // Don't advance, stay in mobilize phase
           }
         }
+        landLooseAirIfLeavingAirPhase();
         this._collectIncome();
         // Auto-advance to next player
         this.nextTurn();
@@ -2386,6 +2404,8 @@ export class GameState {
         this.undoLockMoveCount = this.moveHistory.length;
       }
 
+      // COMBAT→NCM and NCM→mobilize: aircraft cannot remain over open water.
+      landLooseAirIfLeavingAirPhase();
       // Set the phase and break
       this.turnPhase = nextPhase;
       break;
@@ -2507,6 +2527,21 @@ export class GameState {
         }
       } else if (!isAdjacent) {
         return { success: false, error: 'Sea zones not connected for naval units' };
+      }
+    }
+
+    // Land-only combat move cannot attack a sea zone. Loading onto a friendly
+    // transport (amphibious) is the only water dest, and only when one exists.
+    if (isCombatMove && toT?.isWater && airUnits.length === 0 && landUnits.length > 0 && seaUnits.length === 0) {
+      const profile = moveSelectionProfile(
+        Object.fromEntries(landUnits.map((unit) => [unit.type, unit.quantity])),
+        unitDefs,
+      );
+      const hasFriendlyTransport = (this.units[toTerritory] || []).some((unit) => (
+        unit.type === 'transport' && unit.owner === player.id && (Number(unit.quantity) || 0) > 0
+      ));
+      if (landOnlySeaAttackIllegal(profile, true) && !hasFriendlyTransport) {
+        return { success: false, error: 'Land units cannot attack a sea zone' };
       }
     }
 
@@ -4063,6 +4098,22 @@ export class GameState {
       for (const unit of units) {
         delete unit.moved;
         delete unit.movementUsed;
+        // Fighters that landed on a carrier keep their own moved flag.
+        // Clearing only the carrier left prior-turn air unable to attack.
+        if (Array.isArray(unit.aircraft)) {
+          for (const craft of unit.aircraft) {
+            if (!craft) continue;
+            delete craft.moved;
+            delete craft.movementUsed;
+          }
+        }
+        if (Array.isArray(unit.cargo)) {
+          for (const item of unit.cargo) {
+            if (!item) continue;
+            delete item.moved;
+            delete item.movementUsed;
+          }
+        }
       }
 
       // Consolidate duplicate stacks (same type + owner, no special properties)
@@ -5253,6 +5304,67 @@ export class GameState {
     };
   }
 
+  // Fighters/bombers cannot end combat or NCM over open water.
+  // Land on the nearest legal territory, else a friendly carrier, else crash.
+  resolveLooseAirOverWater(unitDefs = this._unitDefs || this.unitDefs || {}) {
+    const player = this.currentPlayer;
+    if (!player) return { landed: 0, crashed: 0 };
+    const loose = looseAirOverWater(this.units, this.territoryByName, player.id, unitDefs);
+    let landed = 0;
+    let crashed = 0;
+    for (const group of loose) {
+      let left = group.quantity;
+      let guard = 0;
+      while (left > 0 && guard++ < 40) {
+        const options = this.getAirLandingOptions(group.territory, group.type, unitDefs) || [];
+        const choice = preferAirLandingOption(options);
+        const sameHex = choice?.territory === group.territory;
+        if (!choice?.territory || (sameHex && !choice.isCarrier)) {
+          const origin = this.units[group.territory] || [];
+          const taken = takeAirUnitsFromTerritory(origin, {
+            type: group.type,
+            owner: player.id,
+            quantity: left,
+          });
+          this.units[group.territory] = origin;
+          crashed += taken;
+          left = 0;
+          break;
+        }
+        const applied = applyAirLandingPlan({
+          units: this.units,
+          territoryByName: this.territoryByName,
+          originTerritory: group.territory,
+          owner: player.id,
+          plan: [{
+            id: `${group.type}_land_${guard}`,
+            type: group.type,
+            quantity: 1,
+            destination: choice.territory,
+          }],
+          unitDefs,
+        });
+        const moved = (applied || []).reduce((sum, item) => sum + (item.stayed ? 0 : (item.quantity || 0)), 0);
+        if (moved <= 0) {
+          const origin = this.units[group.territory] || [];
+          const taken = takeAirUnitsFromTerritory(origin, {
+            type: group.type,
+            owner: player.id,
+            quantity: 1,
+          });
+          this.units[group.territory] = origin;
+          crashed += taken;
+          left -= taken;
+          continue;
+        }
+        landed += moved;
+        left -= moved;
+      }
+    }
+    if (landed > 0 || crashed > 0) this._notify();
+    return { landed, crashed };
+  }
+
   // === PENDING AIR LANDINGS ===
 
   // Add air units needing landing from a completed combat
@@ -5393,6 +5505,12 @@ export class GameState {
 
   _notify() {
     if (this._notifyPauseDepth > 0) return;
+    // Every board change persists. Remote apply sets _suppressPersist so a
+    // snapshot echo cannot bump actionSeq and then refuse the next snapshot.
+    if (!this._suppressPersist) {
+      this.actionSeq = (Number(this.actionSeq) || 0) + 1;
+      this.autoSave();
+    }
     for (const cb of this._listeners) {
       cb(this);
     }
@@ -5441,6 +5559,10 @@ export class GameState {
       // Default false = AI pauses when no human is present. Old clients ignore
       // the extra field; a missing field loads as false. See aiPolicy.js.
       aiRunsWhenUnattended: this.aiRunsWhenUnattended ?? false,
+      // Monotonic board revision. A cloud snapshot with a lower seq must not
+      // clobber in-progress moves (9.21.26.04).
+      actionSeq: Number(this.actionSeq) || 0,
+      uiGesture: this.uiGesture || null,
       // Additive: post-combat air landing plan. Must survive a mid-landing
       // reload so Confirm / NCM can still move the aircraft.
       pendingAirLandings: (this.pendingAirLandings || []).map((entry) => ({
@@ -5452,6 +5574,15 @@ export class GameState {
 
   loadFromJSON(data) {
     if (data.version < 3) throw new Error('Incompatible save version');
+    this._suppressPersist = true;
+    try {
+      this._loadFromJSONBody(data);
+    } finally {
+      this._suppressPersist = false;
+    }
+  }
+
+  _loadFromJSONBody(data) {
     const prevPlayerId = this.currentPlayer?.id;
     const prevPlacedThisRound = this.unitsPlacedThisRound || 0;
     const prevPlacementRound = this.placementRound || 0;
@@ -5541,6 +5672,18 @@ export class GameState {
       originTerritory: entry.originTerritory,
       units: (entry.units || []).map((unit) => ({ ...unit })),
     }));
+    this.actionSeq = Number(data.actionSeq) || 0;
+    this.uiGesture = data.uiGesture || null;
+    this.uiGestureActive = !!(
+      this.uiGesture?.active
+      || (this.uiGesture?.selectedUnits && Object.values(this.uiGesture.selectedUnits).some((n) => Number(n) > 0))
+      || this.uiGesture?.landing
+    );
+    // Start-of-turn phases have no legal "already moved" air. A stuck moved
+    // flag from the previous turn made Attack a no-op (9.21.26.03).
+    if (this.turnPhase === TURN_PHASES.DEVELOP_TECH || this.turnPhase === TURN_PHASES.PURCHASE) {
+      this._clearMovedFlags();
+    }
     this.amphibiousTerritories = new Set();
     this.amphibiousAssaultDetails = {};
     this.moveHistory = [];
