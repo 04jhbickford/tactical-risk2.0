@@ -353,8 +353,20 @@ export function resizeThreeMapCanvas(canvas) {
   if (!canvas) return { width: 0, height: 0 };
   const dpr = (typeof devicePixelRatio === 'number' && devicePixelRatio > 0) ? devicePixelRatio : 1;
   const r = typeof canvas.getBoundingClientRect === 'function' ? canvas.getBoundingClientRect() : null;
-  const cssW = Math.max(1, r?.width || (typeof window !== 'undefined' ? window.innerWidth : 1));
-  const cssH = Math.max(1, r?.height || (typeof window !== 'undefined' ? window.innerHeight : 1));
+  let cssW = Number(r?.width) || 0;
+  let cssH = Number(r?.height) || 0;
+  if (typeof window !== 'undefined' && typeof getComputedStyle === 'function' && document?.documentElement) {
+    const cs = getComputedStyle(document.documentElement);
+    const top = parseFloat(cs.getPropertyValue('--three-top')) || 0;
+    const left = parseFloat(cs.getPropertyValue('--three-left')) || 0;
+    const right = parseFloat(cs.getPropertyValue('--three-right')) || 0;
+    const frameW = Math.max(0, (window.innerWidth || 0) - left - right);
+    const frameH = Math.max(0, (window.innerHeight || 0) - top);
+    if (frameW > 0 && (cssW < 32 || cssW + 1 < frameW)) cssW = frameW;
+    if (frameH > 0 && (cssH < 32 || cssH + 1 < frameH)) cssH = frameH;
+  }
+  cssW = Math.max(1, cssW || (typeof window !== 'undefined' ? window.innerWidth : 1));
+  cssH = Math.max(1, cssH || (typeof window !== 'undefined' ? window.innerHeight : 1));
   canvas.width = Math.round(cssW * dpr);
   canvas.height = Math.round(cssH * dpr);
   return { width: canvas.width, height: canvas.height, cssW, cssH };
@@ -1327,7 +1339,8 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       }
       html.three-spike #mapCanvas {
         top:var(--three-top); left:var(--three-left); right:var(--three-right); bottom:0;
-        width:auto; height:auto;
+        width:calc(100% - var(--three-left) - var(--three-right));
+        height:calc(100% - var(--three-top));
       }
       #three-l0 {
         height:var(--three-top);

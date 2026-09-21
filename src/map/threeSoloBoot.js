@@ -492,6 +492,7 @@ export async function bootThreeSolo() {
     selected = null;
     lobby.open = false;
     chrome.setLobbyOpen(false);
+    resizeCanvas();
     gameState.autoSave();
     paintChrome();
     fitEurope();
@@ -520,6 +521,7 @@ export async function bootThreeSolo() {
     selected = null;
     lobby.open = false;
     chrome.setLobbyOpen(false);
+    resizeCanvas();
     if (result.isHost) {
       if (aiController) aiController.setGameState(gameState);
       else wireAI();
