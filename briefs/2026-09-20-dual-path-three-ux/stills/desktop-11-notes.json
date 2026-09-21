@@ -1,6 +1,9 @@
 {
   "stamp": "V2.81.57-dual-path.11",
   "holdMerge": true,
+  "ready": true,
+  "vizGate": "1280x800",
+  "stealCite": "map center + left context rail + right actions rail + compact top ~48–56px; fixed map scale grow frame",
   "viewports": {
     "phone": {
       "width": 390,
@@ -8,10 +11,10 @@
       "shell": "phone",
       "pass": true,
       "notes": [
-        "Experimental home stays a stacked flex column (not 3-col).",
-        "Setup MAIN 14,66,362x657 + footer 14,723,362x121 — matches .6 density JSON.",
-        "Seats stacked, min-height 44px, footer outside MAIN, touch-action pan-y.",
-        "In-game bottom dock full-width (0,738,390x106); Confirm 56px. Not a side rail."
+        "Experimental home stays a stacked flex column (cards 14,277/369/461 362×84 — not 3-col).",
+        "Setup MAIN 14,66,362×657 overflow:auto touch-action:pan-y + footer 14,723,362×121 — matches .6 density JSON.",
+        "Seats stacked, min-height 44px. Context rail display:none.",
+        "In-game bottom dock full-width 0,738,390×106; Confirm 56px. Not a side rail."
       ]
     },
     "desktop": {
@@ -20,16 +23,20 @@
       "shell": "desktop",
       "pass": true,
       "notes": [
-        "Home actions grid 3×366px tiles.",
-        "Setup grid 812 + 280; seats 2-col 402px; Teams/Start right column.",
-        "In-game #three-bottom rail 940,44,340×757; Confirm 44px at 954,743.",
-        "Research / purchase / combat sheets dock in the rail. Map keeps full height."
+        "Home actions 3-col 367×148. Label Experimental UX. No New UX / Three.js.",
+        "Setup grid 812 + 280; seats 2-col 402px; Teams/Start right column. Lobby opaque #14181a.",
+        "In-game grow-frame map 220,52,760×749 (backing 760×749). Left #three-context 0,52,220×749. Right #three-bottom 980,52,300×749.",
+        "Compact top #three-l0 1280×52. Confirm 44px at 993,743. Menu sheet docks 980,52,300×749 — not full-width bottom.",
+        "Map is the largest region (568866 > context 164672 > actions 224552)."
       ]
     },
     "classic": {
       "queryless": true,
       "threeSpike": false,
+      "context": false,
+      "bottom": false,
       "stamp": "V2.81.57-dual-path.11",
+      "mapDesktop": { "x": 0, "y": 0, "w": 1280, "h": 801 },
       "pass": true
     }
   },
