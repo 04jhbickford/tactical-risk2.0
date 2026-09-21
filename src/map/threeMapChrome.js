@@ -1049,6 +1049,13 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
     #three-lobby .three-lobby-start:disabled {
       background:#334155; color:#64748b; cursor:default;
     }
+    #three-lobby .three-lobby-list {
+      display:block; width:100%; min-height:48px; margin-top:4px;
+      border:1px solid rgba(196,163,90,0.45); border-radius:12px;
+      background:transparent; color:#C4A35A;
+      font:700 14px/1 -apple-system,"SF Pro Text",sans-serif;
+      letter-spacing:0.04em; text-transform:uppercase; cursor:pointer;
+    }
     #three-lobby .three-lobby-form {
       display:flex; flex-direction:column; gap:12px; padding:8px 4px 16px;
     }
@@ -1860,6 +1867,11 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
                 ${mpError ? `<p class="three-lobby-error">${mpError}</p>` : ''}
               </div>
               <div class="three-lobby-footer">
+                ${host && !room.isPublished ? `
+                  <button type="button" class="three-lobby-list" data-lobby="mp-publish">
+                    List in Open Games
+                  </button>
+                ` : ''}
                 <button type="button" class="three-lobby-start" data-lobby="mp-start" ${host && roomPlayers.length >= 2 && roomPlayers.every((p) => p.factionId) ? '' : 'disabled'}>
                   ${host ? `Start Game (${roomPlayers.length})` : 'Waiting for host'}
                 </button>

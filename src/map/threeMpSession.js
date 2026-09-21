@@ -209,6 +209,13 @@ export function createThreeMpSession({ setup, territories, continents }) {
     return lobby.addAIPlayer(difficulty, factionId, color || swatch.color);
   }
 
+  async function publishRoom() {
+    const result = await getLobbyManager().publishLobby();
+    if (!result.success) return { ok: false, error: result.error || 'Could not list' };
+    notify('lobby', { lobby: getLobbyManager().currentLobby });
+    return { ok: true, lobby: getLobbyManager().currentLobby };
+  }
+
   async function startRoom() {
     const result = await getLobbyManager().startGame();
     if (!result.success) return { ok: false, error: result.error || 'Start failed' };
@@ -309,6 +316,15 @@ export function createThreeMpSession({ setup, territories, continents }) {
     return getLobbyManager().currentLobby;
   }
 
+  // Leave the room VIEW without deleting the Firestore lobby (host Back).
+  function detachLobby() {
+    if (unsubscribeLobby) {
+      unsubscribeLobby();
+      unsubscribeLobby = null;
+    }
+    getLobbyManager().disconnectFromLobby({ notify: false });
+  }
+
   function localUser() {
     const user = getAuthManager().getUser();
     return isRealAuthIdentity(user) ? user : null;
@@ -336,10 +352,12 @@ export function createThreeMpSession({ setup, territories, continents }) {
     pickFaction,
     setDiscord,
     addAi,
+    publishRoom,
     startRoom,
     startMatch,
     subscribe,
     currentLobby,
+    detachLobby,
     localUser,
     localUserId: () => localUser()?.id || null,
     isHostUser,

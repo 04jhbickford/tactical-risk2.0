@@ -844,10 +844,15 @@ export class LobbyManager {
     }
 
     try {
-      await updateDoc(doc(this.db, 'lobbies', this.currentLobby.id), {
+      const lobbyId = this.currentLobby.id;
+      await updateDoc(doc(this.db, 'lobbies', lobbyId), {
         isPublished: true,
         updatedAt: serverTimestamp()
       });
+      // First click must list immediately — do not wait for the snapshot
+      // (9.20.26.12 / Bastion second-click).
+      this._patchCurrentLobby(lobbyId, { isPublished: true });
+      this._notifyListeners();
       return { success: true };
     } catch (error) {
       console.error('Error publishing lobby:', error);
@@ -1014,14 +1019,15 @@ export class LobbyManager {
     return this.currentLobby;
   }
 
-  // Disconnect from lobby updates without leaving (used when going to browse view)
-  disconnectFromLobby() {
+  // Disconnect from lobby updates without leaving (used when going to browse view).
+  // notify:false = explicit Back — do not treat a null snapshot as flicker.
+  disconnectFromLobby({ notify = true } = {}) {
     if (this.lobbyUnsubscribe) {
       this.lobbyUnsubscribe();
       this.lobbyUnsubscribe = null;
     }
     this.currentLobby = null;
-    this._notifyListeners();
+    if (notify) this._notifyListeners();
   }
 
   // Check if current user is host

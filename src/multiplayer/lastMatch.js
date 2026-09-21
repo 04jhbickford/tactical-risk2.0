@@ -187,7 +187,9 @@ export function shouldOpenMyGames(action) {
 
 // B37: browser autocomplete treated Game Code as a name (BICKFO) and
 // the lobby password as a saved login. Off + unique names; never prefill.
-// Reload of a signed-in tab must open the live match, not home (B38).
+// Reload of a signed-in tab must open a STARTED match, not home (B38).
+// A waiting lobby (lobbyCode only) is not a started map — refresh/reopen
+// returns Main Menu (9.20.26.09). Play Online can still re-enter the room.
 export function shouldAutoResumeLastMatch({
   signedIn = false,
   lastMatch = null,
@@ -195,7 +197,7 @@ export function shouldAutoResumeLastMatch({
 } = {}) {
   if (explicitExit) return false;
   if (!signedIn) return false;
-  return !!(lastMatch?.gameId || lastMatch?.lobbyCode);
+  return !!lastMatch?.gameId;
 }
 
 // Remembered last match is a resume hint, not a reason to pin the
@@ -217,17 +219,52 @@ export function resolveResumeFailureView({
 }
 
 // Waiting-room dump (B41): same family as B38. Presence/snapshot flicker
-// and a discarded-tab restart are not Leave. Only Leave / Sign Out leave.
+// and a discarded-tab restart are not Leave. Explicit Back / Browse / Leave
+// / Sign Out leave the VIEW (the Firestore lobby stays listed).
 export function shouldLeaveLobbyView({
   explicitLeave = false,
   confirmedLeave = false,
+  explicitBrowse = false,
+  explicitBack = false,
   sessionLost = false,
   snapshotError = false,
   snapshotMissing = false,
   presenceFlicker = false,
 } = {}) {
-  if (explicitLeave || confirmedLeave) return true;
+  if (explicitLeave || confirmedLeave || explicitBrowse || explicitBack) return true;
   return false;
+}
+
+// Host Back from a published waiting room is a view change, not flicker.
+export function shouldHonorLobbyBack({ explicitBack = false } = {}) {
+  return explicitBack === true;
+}
+
+export function resolveLobbyBackTarget({
+  published = false,
+  hasBrowse = true,
+} = {}) {
+  if (published && hasBrowse) return 'browse';
+  return 'online';
+}
+
+export function shouldForceLobbyRoomOnSnapshot({
+  browsingAway = false,
+  lobbyPresent = false,
+  gameStarting = false,
+} = {}) {
+  if (gameStarting) return true;
+  if (browsingAway) return false;
+  return !!lobbyPresent;
+}
+
+export function shouldRestoreLobbyAfterDisconnect({
+  explicitBrowse = false,
+  explicitBack = false,
+  explicitLeave = false,
+} = {}) {
+  if (explicitBrowse || explicitBack || explicitLeave) return false;
+  return true;
 }
 
 export function shouldNavigateToHome({
@@ -236,10 +273,10 @@ export function shouldNavigateToHome({
   lastMatch = null,
   liveLobby = false,
 } = {}) {
-  if (confirmedSignOut) return true;
+  if (confirmedSignOut || explicitExit) return true;
   if (liveLobby) return false;
   if (lastMatch?.gameId || lastMatch?.lobbyCode) return false;
-  return explicitExit === true;
+  return false;
 }
 
 export function shouldClearLobbyOnSnapshotError() {
@@ -258,12 +295,16 @@ export function shouldKeepLastKnownLobby({
 }
 
 // If the client loses the lobby view, restore the live room — never home.
+// Explicit Back / Browse are not loss: honor the requested screen.
 export function resolveLobbyViewAfterLoss({
   currentLobby = null,
   lastMatch = null,
   explicitLeave = false,
+  explicitBrowse = false,
+  explicitBack = false,
 } = {}) {
-  if (explicitLeave) return 'home';
+  if (explicitLeave || explicitBack) return 'home';
+  if (explicitBrowse) return 'browse';
   if (currentLobby) return 'lobby';
   if (lastMatch?.gameId) return 'game';
   if (lastMatch?.lobbyCode) return 'lobby';

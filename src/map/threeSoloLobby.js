@@ -138,6 +138,7 @@ export function createSoloLobby(setup, search = '') {
     factions,
     lastAi: {},
     showHowTo: false,
+    browsingAway: false,
     cargo: !!parsed.cargo,
   };
   for (const f of factions) {
@@ -149,7 +150,11 @@ export function createSoloLobby(setup, search = '') {
 }
 
 export function setLobbyScreen(lobby, screen) {
-  if (LOBBY_SCREENS.includes(screen)) lobby.screen = screen;
+  if (LOBBY_SCREENS.includes(screen)) {
+    if (lobby.screen === 'room' && screen !== 'room') lobby.browsingAway = true;
+    if (screen === 'room') lobby.browsingAway = false;
+    lobby.screen = screen;
+  }
   if (screen === 'howto') lobby.showHowTo = true;
   if (screen === 'main' || screen === 'setup') lobby.showHowTo = false;
   return lobby;
@@ -362,5 +367,6 @@ export function lobbyInspect(lobby) {
     canStart: lobbyCanStart(lobby),
     startLabel: lobbyStartLabel(lobby),
     showHowTo: !!lobby?.showHowTo,
+    browsingAway: !!lobby?.browsingAway,
   };
 }

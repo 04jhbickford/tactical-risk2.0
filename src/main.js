@@ -2094,6 +2094,9 @@ async function init() {
         return false;
       }
       if (hydrated.kind === 'game' && hydrated.game) {
+        const status = hydrated.game.status;
+        if (status === 'waiting') return false;
+        if (status && !shouldReconnectToGame({ exists: true, status })) return false;
         await startMultiplayerGame(hydrated.gameId || hydrated.game.id, hydrated.game);
         return !!(gameState?.players?.length);
       }
@@ -2225,11 +2228,15 @@ async function init() {
     if (lobby && !lobby.el?.classList.contains('hidden')) lobby._render();
   });
 
-  // B38: a signed-in reload should reopen the live match. Do not pin the
-  // branded loader across tile fetches + Firebase restore — that left
-  // "Still loading…" / Reload as the only way back (V2.81.47).
+  // B38: a signed-in reload should reopen a STARTED match. A waiting
+  // lobby (lobbyCode only) is not a started map — stay on Main Menu
+  // (9.20.26.09). Do not pin the branded loader across tile fetches.
   const lastAtBoot = readLastMatch();
-  if (lastAtBoot?.gameId || lastAtBoot?.lobbyCode) {
+  const bootResume = shouldAutoResumeLastMatch({
+    signedIn: true,
+    lastMatch: lastAtBoot,
+  });
+  if (bootResume) {
     lobby.hide();
     reportStartupStatus('Rejoining match…', 70);
     if (!shouldHoldLoaderForLastMatchResume()) {
@@ -2250,7 +2257,7 @@ async function init() {
   }
 
   let resumedLastMatch = false;
-  if (isFirebaseConfigured() && (lastAtBoot?.gameId || lastAtBoot?.lobbyCode)) {
+  if (isFirebaseConfigured() && bootResume) {
     try {
       resumedLastMatch = await resumeLastMatch({ interactive: false });
     } catch (err) {
