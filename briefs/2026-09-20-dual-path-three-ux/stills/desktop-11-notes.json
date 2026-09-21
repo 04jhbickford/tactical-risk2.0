@@ -1,0 +1,54 @@
+{
+  "stamp": "V2.81.57-dual-path.11",
+  "holdMerge": true,
+  "ready": true,
+  "vizGate": "1280x800",
+  "stealCite": "map center + left context rail + right actions rail + compact top ~48–56px; fixed map scale grow frame",
+  "viewports": {
+    "phone": {
+      "width": 390,
+      "height": 844,
+      "shell": "phone",
+      "pass": true,
+      "notes": [
+        "Experimental home stays a stacked flex column (cards 14,277/369/461 362×84 — not 3-col).",
+        "Setup MAIN 14,66,362×657 overflow:auto touch-action:pan-y + footer 14,723,362×121 — matches .6 density JSON.",
+        "Seats stacked, min-height 44px. Context rail display:none.",
+        "In-game bottom dock full-width 0,738,390×106; Confirm 56px. Not a side rail."
+      ]
+    },
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "shell": "desktop",
+      "pass": true,
+      "notes": [
+        "Home actions 3-col 367×148. Label Experimental UX. No New UX / Three.js.",
+        "Setup grid 812 + 280; seats 2-col 402px; Teams/Start right column. Lobby opaque #14181a.",
+        "In-game grow-frame map 220,52,760×749 (backing 760×749). Left #three-context 0,52,220×749. Right #three-bottom 980,52,300×749.",
+        "Compact top #three-l0 1280×52. Confirm 44px at 993,743. Menu sheet docks 980,52,300×749 — not full-width bottom.",
+        "Map is the largest region (568866 > context 164672 > actions 224552)."
+      ]
+    },
+    "classic": {
+      "queryless": true,
+      "threeSpike": false,
+      "context": false,
+      "bottom": false,
+      "stamp": "V2.81.57-dual-path.11",
+      "mapDesktop": { "x": 0, "y": 0, "w": 1280, "h": 801 },
+      "pass": true
+    }
+  },
+  "files": [
+    "classic-home-1280.png",
+    "classic-home-390.png",
+    "experimental-home-1280.png",
+    "experimental-setup-1280.png",
+    "experimental-ingame-rail-1280.png",
+    "experimental-purchase-rail-1280.png",
+    "experimental-home-390.png",
+    "experimental-setup-390.png",
+    "experimental-ingame-390.png"
+  ]
+}

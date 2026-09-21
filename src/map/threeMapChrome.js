@@ -340,9 +340,46 @@ function occupantChipLabel(diff) {
   return diff?.name || 'Human';
 }
 
+export function syncThreeShellWidth() {
+  if (typeof window === 'undefined' || !document?.documentElement) return 'phone';
+  const w = Number(window.innerWidth) || 0;
+  const bp = w >= 1024 ? 'desktop' : w >= 768 ? 'tablet' : 'phone';
+  document.documentElement.dataset.threeShell = bp;
+  return bp;
+}
+
+/** Experimental only. Size the backing store to the grow-frame, not the window. */
+export function resizeThreeMapCanvas(canvas) {
+  if (!canvas) return { width: 0, height: 0 };
+  const dpr = (typeof devicePixelRatio === 'number' && devicePixelRatio > 0) ? devicePixelRatio : 1;
+  const r = typeof canvas.getBoundingClientRect === 'function' ? canvas.getBoundingClientRect() : null;
+  let cssW = Number(r?.width) || 0;
+  let cssH = Number(r?.height) || 0;
+  if (typeof window !== 'undefined' && typeof getComputedStyle === 'function' && document?.documentElement) {
+    const cs = getComputedStyle(document.documentElement);
+    const top = parseFloat(cs.getPropertyValue('--three-top')) || 0;
+    const left = parseFloat(cs.getPropertyValue('--three-left')) || 0;
+    const right = parseFloat(cs.getPropertyValue('--three-right')) || 0;
+    const frameW = Math.max(0, (window.innerWidth || 0) - left - right);
+    const frameH = Math.max(0, (window.innerHeight || 0) - top);
+    if (frameW > 0 && (cssW < 32 || cssW + 1 < frameW)) cssW = frameW;
+    if (frameH > 0 && (cssH < 32 || cssH + 1 < frameH)) cssH = frameH;
+  }
+  cssW = Math.max(1, cssW || (typeof window !== 'undefined' ? window.innerWidth : 1));
+  cssH = Math.max(1, cssH || (typeof window !== 'undefined' ? window.innerHeight : 1));
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  return { width: canvas.width, height: canvas.height, cssW, cssH };
+}
+
 export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE' } = {}) {
   document.documentElement.classList.add('three-spike', 'ux-preview');
   document.documentElement.dataset.gameVersion = liveGameVersion();
+  syncThreeShellWidth();
+  if (typeof window !== 'undefined' && !window.__trThreeShellBound) {
+    window.__trThreeShellBound = true;
+    window.addEventListener('resize', syncThreeShellWidth, { passive: true });
+  }
   const style = document.createElement('style');
   style.textContent = `
     html.three-spike, html.three-spike body {
@@ -1259,8 +1296,213 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       .three-tech-grid { gap:4px; }
       .three-tech-tile { min-height:40px; padding:4px 6px; font-size:11px; }
     }
+    /* dual-path.11 — TWO layouts, one product. Viz craft SoT LOCKED.
+     * Steal cite (READY): map center + left context rail + right actions
+     * rail + compact top ~48–56px; fixed map scale grow frame.
+     * Kill: full-width bottom sheet on desktop; tiny-map dashboard;
+     * legacy New UX label (player-facing name is Experimental UX).
+     * ≤767 / @390: sheet grammar unchanged. ≥1024: never phone UI scaled. */
+    #three-context { display:none; }
+    @media (min-width: 768px) {
+      #three-lobby {
+        padding-left:28px; padding-right:28px;
+      }
+      #three-lobby .three-lobby-home,
+      #three-lobby .three-lobby-howto,
+      #three-lobby .three-lobby-setup {
+        max-width:840px; width:100%;
+        margin-left:auto; margin-right:auto;
+      }
+      #three-lobby .three-lobby-actions {
+        display:grid; grid-template-columns:1fr 1fr; gap:10px;
+      }
+      #three-lobby .three-lobby-actions > :last-child:nth-child(odd) {
+        grid-column:1 / -1;
+      }
+      #three-lobby .three-lobby-seats {
+        display:grid; grid-template-columns:1fr 1fr; gap:8px;
+      }
+      #three-lobby button.three-lobby-card { min-height:92px; }
+      #three-lobby .three-lobby-form {
+        display:grid; grid-template-columns:1fr 1fr; gap:12px 16px;
+      }
+      #three-lobby .three-lobby-form .three-lobby-start,
+      #three-lobby .three-lobby-form .three-lobby-error {
+        grid-column:1 / -1;
+      }
+    }
+    @media (min-width: 1024px) {
+      html.three-spike {
+        --three-top:52px;
+        --three-left:220px;
+        --three-right:300px;
+      }
+      html.three-spike #mapCanvas {
+        top:var(--three-top); left:var(--three-left); right:var(--three-right); bottom:0;
+        width:calc(100% - var(--three-left) - var(--three-right));
+        height:calc(100% - var(--three-top));
+      }
+      #three-l0 {
+        height:var(--three-top);
+        left:0; right:0;
+        padding-left:16px; padding-right:16px;
+      }
+      #three-l0 .three-l0-seat,
+      #three-l0 .three-l0-ipc { display:none; }
+      #three-l0 .three-l0-chip { min-height:32px; padding:0 10px; font-size:12px; }
+      #three-l0 .three-l0-help { width:32px; height:32px; }
+      #three-context {
+        display:flex; flex-direction:column; gap:10px;
+        position:absolute; z-index:28; pointer-events:auto;
+        top:var(--three-top); left:0; bottom:0;
+        width:var(--three-left);
+        padding:12px 12px 14px;
+        background:rgba(22,26,28,0.88);
+        border-right:1px solid rgba(255,255,255,0.10);
+        color:#E8E2D4;
+      }
+      #three-context .three-context-id {
+        display:flex; align-items:center; flex-wrap:wrap; gap:8px;
+      }
+      #three-context .three-l0-pip { width:12px; height:12px; border-radius:50%; }
+      #three-context strong { font:700 15px/1.2 -apple-system,"SF Pro Text",sans-serif; }
+      #three-context .three-context-ipc {
+        font:600 12px/1 -apple-system,sans-serif; color:#C4A35A;
+        font-variant-numeric:tabular-nums;
+      }
+      #three-context .three-context-note {
+        margin:0; font:400 12px/1.35 -apple-system,sans-serif; color:#c8c0b0;
+      }
+      #three-bottom {
+        top:var(--three-top);
+        right:0; left:auto; bottom:0;
+        width:var(--three-right);
+        max-height:none;
+        padding:12px 12px 14px;
+        gap:10px;
+        background:rgba(22,26,28,0.88);
+        border-left:1px solid rgba(255,255,255,0.10);
+      }
+      #three-sheet-stack {
+        max-height:none;
+        flex:1 1 auto;
+      }
+      #three-peek { padding:10px 12px; border-radius:14px; }
+      #three-peek strong { font-size:15px; }
+      #three-peek .three-peek-unit { width:56px; height:64px; }
+      #three-peek .three-peek-unit img { width:36px; height:36px; }
+      #three-battle { padding:10px 12px; border-radius:14px; }
+      #three-battle .three-lanes {
+        display:grid; grid-template-columns:1fr 1fr; gap:8px;
+      }
+      #three-confirm, #three-confirm.is-idle, #three-confirm:disabled {
+        min-height:44px; max-height:56px; font-size:15px; border-radius:12px;
+      }
+      #three-undo { min-height:44px; min-width:72px; font-size:13px; border-radius:12px; }
+      #three-zoom {
+        left:calc(var(--three-left) + 12px);
+        right:auto; bottom:16px;
+      }
+      html.three-spike.has-l1 #three-zoom,
+      html.three-spike.has-battle #three-zoom {
+        display:flex !important;
+        left:calc(var(--three-left) + 12px);
+        right:auto; bottom:16px;
+      }
+      #three-zoom button { width:36px; height:36px; font-size:16px; }
+      #three-sheet {
+        left:auto; right:0; top:var(--three-top);
+        bottom:0; width:var(--three-right); max-height:none;
+        border-radius:0;
+        border-top:none;
+        border-left:1px solid rgba(255,255,255,0.12);
+        padding:18px 16px 16px;
+      }
+      #three-sheet button.three-sheet-row { min-height:36px; font-size:14px; }
+      #three-lobby {
+        padding:28px 40px 0;
+        background:#14181a;
+      }
+      #three-lobby .three-lobby-ux,
+      #three-lobby .lobby-ux-picker {
+        max-width:440px;
+        margin-left:auto; margin-right:auto;
+      }
+      #three-lobby .three-lobby-home,
+      #three-lobby .three-lobby-howto,
+      #three-lobby .three-lobby-setup {
+        max-width:1120px;
+      }
+      #three-lobby .three-lobby-actions {
+        grid-template-columns:repeat(3, minmax(0, 1fr));
+      }
+      #three-lobby .three-lobby-actions > :last-child:nth-child(odd) {
+        grid-column:auto;
+      }
+      #three-lobby button.three-lobby-card {
+        flex-direction:column; align-items:flex-start;
+        min-height:148px; padding:18px; gap:10px;
+      }
+      #three-lobby .three-lobby-card-title { font-size:20px; }
+      #three-lobby .three-lobby-setup {
+        display:grid;
+        grid-template-columns:minmax(0, 1fr) 280px;
+        grid-template-rows:auto minmax(0, 1fr);
+        gap:0 28px;
+      }
+      #three-lobby .three-lobby-setup-head { grid-column:1 / -1; }
+      #three-lobby .three-lobby-main { grid-column:1; }
+      #three-lobby .three-lobby-footer {
+        grid-column:2; grid-row:2;
+        align-self:start;
+        border-top:0;
+        border-left:1px solid rgba(255,255,255,0.08);
+        padding:0 0 0 20px;
+        background:transparent;
+      }
+      #three-lobby .three-lobby-seat { min-height:36px; }
+      #three-lobby .three-lobby-seat-wrap { min-height:40px; }
+      #three-lobby .three-lobby-start { min-height:44px; }
+      #three-lobby .three-lobby-back { width:36px; height:36px; min-width:36px; }
+      #three-lobby .lobby-ux-btn { min-height:40px; }
+      #three-lobby .three-lobby-logo { font-size:40px; }
+      #three-tutorial {
+        inset:auto; top:50%; left:50%;
+        transform:translate(-50%, -50%);
+        width:min(560px, 86vw); max-height:min(80vh, 720px);
+        border-radius:16px;
+        border:1px solid rgba(255,255,255,0.12);
+        padding:28px;
+        box-shadow:0 24px 64px rgba(0,0,0,0.45);
+      }
+      #three-tutorial .three-tut-go { min-height:44px; }
+    }
+    @media (hover: hover) and (pointer: fine) {
+      #three-lobby button.three-lobby-card:hover:not(.is-off),
+      #three-lobby button.three-lobby-tile:hover,
+      #three-lobby .three-lobby-seat-wrap:hover,
+      #three-sheet button.three-sheet-row:hover,
+      #three-peek .three-peek-unit:hover,
+      #three-peek .three-tile:hover,
+      #three-battle .three-tile:hover,
+      .three-tech-tile:hover,
+      .three-ship:hover {
+        border-color:rgba(196,163,90,0.55);
+        background:rgba(196,163,90,0.12);
+      }
+      #three-zoom button:hover,
+      #three-l0 .three-l0-help:hover,
+      #three-menu-btn:hover {
+        border-color:rgba(196,163,90,0.45);
+        background:rgba(30,36,32,0.78);
+      }
+      #three-confirm.is-ready:not(:disabled):not(.is-idle):hover {
+        filter:brightness(1.06);
+      }
+    }
   `;
   document.head.appendChild(style);
+  syncThreeShellWidth();
 
   const l0 = document.createElement('div');
   l0.id = 'three-l0';
@@ -1277,6 +1519,19 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
   `;
   document.body.appendChild(l0);
   applyLiveStamp();
+
+  const context = document.createElement('aside');
+  context.id = 'three-context';
+  context.setAttribute('aria-label', 'Context');
+  context.innerHTML = `
+    <div class="three-context-id">
+      <span class="three-l0-pip" id="three-context-pip"></span>
+      <strong id="three-context-seat">${seat}</strong>
+      <span class="three-context-ipc" id="three-context-ipc">IPC ${ipc}</span>
+    </div>
+    <p class="three-context-note" id="three-context-note">Inspect a land for stacks.</p>
+  `;
+  document.body.appendChild(context);
 
   const strip = document.createElement('div');
   strip.id = 'three-phase-strip';
@@ -1332,6 +1587,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
 
   const api = {
     l0,
+    context,
     zoom,
     bottom,
     sheet,
@@ -1378,12 +1634,20 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
     setSeat(name, color) {
       api.seatEl.textContent = name;
       if (color) api.pipEl.style.background = color;
+      const ctxSeat = context.querySelector('#three-context-seat');
+      const ctxPip = context.querySelector('#three-context-pip');
+      if (ctxSeat) ctxSeat.textContent = name;
+      if (color && ctxPip) ctxPip.style.background = color;
     },
     setPhase(word) {
       api.phaseEl.textContent = word;
+      const note = context.querySelector('#three-context-note');
+      if (note && word) note.textContent = word;
     },
     setIpc(n) {
       api.ipcEl.textContent = `IPC ${n}`;
+      const ctxIpc = context.querySelector('#three-context-ipc');
+      if (ctxIpc) ctxIpc.textContent = `IPC ${n}`;
     },
     syncLayers() {
       const l2 = sheet.classList.contains('is-open');

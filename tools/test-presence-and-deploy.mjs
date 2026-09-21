@@ -178,7 +178,7 @@ const unitDefs = {
 };
 
 console.log('=== Version stamps ===');
-check('GAME_VERSION is V2.81.57-dual-path.10', GAME_VERSION === 'V2.81.57-dual-path.10');
+check('GAME_VERSION is V2.81.57-dual-path.11', GAME_VERSION === 'V2.81.57-dual-path.11');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== Presence: background must not delete or go offline ===');

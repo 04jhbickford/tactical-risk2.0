@@ -2,6 +2,23 @@
 
 ---
 
+## 9.21.26.11 — Experimental desktop chrome (dual-path.11)
+
+Wide chrome is grow-frame dual rails (not phone UI scaled to 1280).
+Phone @390 stays on the `.6`/`.10` bottom-sheet tree. Classic `/`
+untouched. Rules dual-fork from `.02`–`.10` not edited. Stamp
+V2.81.57-dual-path.11. READY stills. HOLD MERGE. Parent wakes Viz.
+See `briefs/2026-09-20-dual-path-three-ux/DESKTOP.md`.
+
+### Smoke (this PR)
+
+- [x] Classic `/` stamp `.11` — no `three-spike`; map 1280×801
+- [x] Experimental `?ux=three` @390 — MAIN 14,66,362×657; Confirm 56px; bottom 0,738,390×106
+- [x] Experimental @1280 — map 220,52,760×749; left 220; right 300; top 52; 3-col home
+- [x] `node tools/test-experimental-desktop-chrome.mjs` passes
+
+---
+
 ## 9.20.26.07 — mobilize fighters onto carrier in sea zone (dual-path.10)
 
 Playtest (Robfox007): bought 2 FTR + 1 CV; mobilize could not place new
