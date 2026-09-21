@@ -34,11 +34,14 @@ Waiting `lobbyCode` returns Main Menu. Play Online can still re-enter.
 **Expect:** Refresh from a waiting lobby → Main Menu on both forks. Started
 games still resume.
 
-Local smoke (lobbyCode-only lastMatch `6V9ZXK`):
+Local + LIVE smoke (lobbyCode-only lastMatch `6V9ZXK` on
+`https://tactical-risk20.vercel.app/` stamp `.12`):
 - Classic `/` → Main Menu (Local Play). See `classic-main-after-lobbycode-refresh.png`
+- Classic Play Online (auth) → Back to Menu stays home. See
+  `classic-back-to-main.png`. Host-room Back **NOT-REACHED** (no Firebase creds).
 - Experimental `?ux=three` → Main overlay (Local Play / Play Online). See
-  `experimental-main-after-refresh.png`. Room Back / Play Online Back stays
-  on Main (`experimental-back-to-main.png`).
+  `experimental-main-after-refresh.png`. Play Online Back stays on Main
+  (`experimental-back-to-main.png`). Host-room Back **NOT-REACHED**.
 
 ## Bastion — List in Open Games needs a second click
 
