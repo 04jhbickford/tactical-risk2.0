@@ -1358,7 +1358,12 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       #three-sheet button.three-sheet-row { min-height:36px; font-size:14px; }
       #three-lobby {
         padding:28px 40px 0;
-        background:rgba(16,20,22,0.88);
+        background:rgba(16,20,22,0.96);
+      }
+      #three-lobby .three-lobby-ux,
+      #three-lobby .lobby-ux-picker {
+        max-width:440px;
+        margin-left:auto; margin-right:auto;
       }
       #three-lobby .three-lobby-home,
       #three-lobby .three-lobby-howto,

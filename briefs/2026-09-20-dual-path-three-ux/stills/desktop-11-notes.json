@@ -1,0 +1,47 @@
+{
+  "stamp": "V2.81.57-dual-path.11",
+  "holdMerge": true,
+  "viewports": {
+    "phone": {
+      "width": 390,
+      "height": 844,
+      "shell": "phone",
+      "pass": true,
+      "notes": [
+        "Experimental home stays a stacked flex column (not 3-col).",
+        "Setup MAIN 14,66,362x657 + footer 14,723,362x121 — matches .6 density JSON.",
+        "Seats stacked, min-height 44px, footer outside MAIN, touch-action pan-y.",
+        "In-game bottom dock full-width (0,738,390x106); Confirm 56px. Not a side rail."
+      ]
+    },
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "shell": "desktop",
+      "pass": true,
+      "notes": [
+        "Home actions grid 3×366px tiles.",
+        "Setup grid 812 + 280; seats 2-col 402px; Teams/Start right column.",
+        "In-game #three-bottom rail 940,44,340×757; Confirm 44px at 954,743.",
+        "Research / purchase / combat sheets dock in the rail. Map keeps full height."
+      ]
+    },
+    "classic": {
+      "queryless": true,
+      "threeSpike": false,
+      "stamp": "V2.81.57-dual-path.11",
+      "pass": true
+    }
+  },
+  "files": [
+    "classic-home-1280.png",
+    "classic-home-390.png",
+    "experimental-home-1280.png",
+    "experimental-setup-1280.png",
+    "experimental-ingame-rail-1280.png",
+    "experimental-purchase-rail-1280.png",
+    "experimental-home-390.png",
+    "experimental-setup-390.png",
+    "experimental-ingame-390.png"
+  ]
+}
