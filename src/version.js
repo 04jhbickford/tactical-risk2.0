@@ -3,7 +3,7 @@
 // multiplayer core (syncManager) can both import it without coupling UI code
 // into the sync path. Bump GAME_VERSION for every deployed change.
 
-export const GAME_VERSION = 'V2.81.57-unified.2';
+export const GAME_VERSION = 'V2.81.57-unified.3';
 
 // Schema version of the serialized game state (mirrors gameState.toJSON().version).
 // Bump only when the persisted state shape changes; a mismatch here is a harder

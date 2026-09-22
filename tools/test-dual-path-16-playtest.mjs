@@ -1,4 +1,4 @@
-// V2.81.57-unified.2 — per-row combat undo, waiting-lobby My Games.
+// V2.81.57-unified.3 — per-row combat undo, waiting-lobby My Games.
 // Classic | Experimental picker is restored in .17.
 // Run: node tools/test-dual-path-16-playtest.mjs
 
@@ -44,10 +44,10 @@ const bootSrc = readFileSync(join(root, 'src/map/threeSoloBoot.js'), 'utf8');
 const playSrc = readFileSync(join(root, 'src/map/threeSoloPlay.js'), 'utf8');
 const lobbyScreens = readFileSync(join(root, 'src/map/threeSoloLobby.js'), 'utf8');
 
-assert.equal(GAME_VERSION, 'V2.81.57-unified.2');
+assert.equal(GAME_VERSION, 'V2.81.57-unified.3');
 assert.equal(SCHEMA_VERSION, 11);
-assert.match(html, /content="V2\.81\.57-unified\.2"/);
-assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.2'/);
+assert.match(html, /content="V2\.81\.57-unified\.3"/);
+assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.3'/);
 
 function fresh() {
   const territories = [
@@ -111,17 +111,21 @@ function qty(gs, terr, type) {
   const first = gs._pushMove({
     from: 'A', to: 'B', units: [{ type: 'infantry', quantity: 1 }], player: 'p1',
   });
-  gs._pushMove({
+  const second = gs._pushMove({
     from: 'B', to: 'C', units: [{ type: 'infantry', quantity: 1 }], player: 'p1',
   });
   assert.deepEqual(cascadeUndoIndexes(gs.moveHistory, 0), [1, 0]);
-  const undone = gs.undoMoveById(first);
+  const blocked = gs.undoMoveById(first);
+  assert.equal(blocked.success, false, 'earlier hop does not wipe the later move');
+  assert.equal(gs.moveHistory.length, 2);
+  assert.equal(qty(gs, 'C', 'infantry'), 1);
+  const undone = gs.undoMoveById(second);
   assert.equal(undone.success, true);
-  assert.equal(undone.undone, 2, 'continuation chain reverts newest first');
-  assert.equal(qty(gs, 'A', 'infantry'), 1);
-  assert.equal(qty(gs, 'B', 'infantry'), 0);
+  assert.equal(undone.undone, 1, 'clicked row only');
+  assert.equal(qty(gs, 'B', 'infantry'), 1);
   assert.equal(qty(gs, 'C', 'infantry'), 0);
-  assert.equal(gs.moveHistory.length, 0);
+  assert.equal(gs.moveHistory.length, 1);
+  assert.equal(gs.moveHistory[0].id, first);
 }
 
 {

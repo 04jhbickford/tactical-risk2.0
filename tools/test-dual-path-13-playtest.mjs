@@ -78,7 +78,7 @@ function board() {
 }
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-unified.2', GAME_VERSION === 'V2.81.57-unified.2');
+check('GAME_VERSION is V2.81.57-unified.3', GAME_VERSION === 'V2.81.57-unified.3');
 
 console.log('=== 9.21.26.01 land-only sea zone is not a combat attack ===');
 {
@@ -175,10 +175,13 @@ console.log('=== 9.21.26.03 prior-turn air can attack again ===');
   check('carrier fighter moved flag cleared', !craft?.moved);
 
   gs.turnPhase = TURN_PHASES.COMBAT_MOVE;
+  gs.units['East Europe'] = [{ type: 'infantry', quantity: 1, owner: 'ger' }];
   const play = createSoloPlay(gs, unitDefs);
   play.selected = 'East Canada';
   play.selectedUnits = { fighter: 1 };
-  check('prior-turn fighter can target East Europe', legalDests(play).includes('East Europe'));
+  check('prior-turn fighter can target occupied East Europe', legalDests(play).includes('East Europe'));
+  gs.units['East Europe'] = [];
+  check('fighter cannot occupy empty East Europe', !legalDests(play).includes('East Europe'));
   const stacks = eligibleStacks(play, 'East Canada');
   check('fighter stack is selectable', stacks.some((s) => s.type === 'fighter'));
 }
@@ -189,6 +192,12 @@ console.log('=== 9.21.26.04 actions persist and snapshots do not clobber a gestu
   const before = Number(gs.actionSeq) || 0;
   const sitting = (gs.units['East Canada'] || []).find((u) => u.type === 'fighter');
   if (sitting) delete sitting.moved;
+  gs.units['East Europe'] = [{ type: 'infantry', quantity: 1, owner: 'ger' }];
+  const empty = board();
+  const emptyFighter = (empty.units['East Canada'] || []).find((u) => u.type === 'fighter');
+  if (emptyFighter) delete emptyFighter.moved;
+  const refused = empty.moveUnits('East Canada', 'East Europe', [{ type: 'fighter', quantity: 1 }], unitDefs);
+  check('fighter cannot occupy empty enemy land', refused.success === false);
   const moved = gs.moveUnits('East Canada', 'East Europe', [{ type: 'fighter', quantity: 1 }], unitDefs);
   check('combat-move fighter attack saved a success', moved.success === true);
   check('actionSeq advanced', Number(gs.actionSeq) > before);

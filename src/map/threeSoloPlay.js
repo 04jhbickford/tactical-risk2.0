@@ -20,7 +20,7 @@ import {
 import { dequeueResolvedCombatHeads, applyTerritoryCapture } from '../state/combatFinalize.js';
 import { hasLegalAirLandingFrom, remainingAirLandingsToAssign, wasFriendlyAtTurnStart } from '../state/airLanding.js';
 import { factoriesAdjacentToSeaZone } from '../state/mobilizeSource.js';
-import { combatMoveReachableDests, maxMoveSelection, moveSelectionProfile } from '../state/combatMoveEligibility.js';
+import { airCombatMoveMayOccupy, combatMoveReachableDests, maxMoveSelection, moveSelectionProfile } from '../state/combatMoveEligibility.js';
 import { formatRecentMove, listAddressableMoveRows } from '../state/undoPolicy.js';
 import { placementBudgetCopy } from '../state/placeQueue.js';
 import {
@@ -488,8 +488,9 @@ export function legalDests(play) {
       const t = gs.territoryByName[to];
       if (ground && !t?.isWater && isEnemyLand(play, to)) dests.add(to);
       if (sea && t?.isWater && hasEnemyShips(play, to)) dests.add(to);
-      if (air && !ground && !sea && isEnemyLand(play, to) && airAttackOk(to, 1)) dests.add(to);
+      if (air && !ground && !sea && isEnemyLand(play, to) && hasEnemyShips(play, to) && airAttackOk(to, 1)) dests.add(to);
       if (ground && fromT?.isWater && !t?.isWater && isEnemyLand(play, to)) dests.add(to);
+      if (ground && !fromT?.isWater && t?.isWater && hasFriendlyTransport(play, to) && !hasEnemyShips(play, to)) dests.add(to);
       if (air && t?.isWater && hasEnemyShips(play, to) && airAttackOk(to, 1)) dests.add(to);
       if (air && t?.isWater && hasFriendlyCarrier(play, to) && !hasEnemyShips(play, to)) dests.add(to);
     }
@@ -497,6 +498,7 @@ export function legalDests(play) {
       const reach = gs.getReachableTerritoriesForAir(from, airRange, gs.currentPlayer.id, true);
       for (const [name, info] of reach) {
         if (!isEnemyLand(play, name)) continue;
+        if (!airCombatMoveMayOccupy(gs, name, gs.currentPlayer.id)) continue;
         if (!airAttackOk(name, info?.distance || 0)) continue;
         dests.add(name);
       }
@@ -534,7 +536,9 @@ export function legalDests(play) {
     const profile = moveSelectionProfile(picked, play.unitDefs);
     if (profile.landOnly) {
       for (const name of [...dests]) {
-        if (gs.territoryByName?.[name]?.isWater) dests.delete(name);
+        if (!gs.territoryByName?.[name]?.isWater) continue;
+        if (hasFriendlyTransport(play, name) && !hasEnemyShips(play, name)) continue;
+        dests.delete(name);
       }
     }
   }

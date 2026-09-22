@@ -76,6 +76,7 @@ import {
   resolveLandingDestination,
 } from '../state/airLanding.js';
 import {
+  airCombatMoveMayOccupy,
   airSelectionType,
   maxMoveSelection,
   moveSelectionProfile,
@@ -2424,7 +2425,7 @@ export class PlayerPanel {
         }
 
         // Combat / non-combat moves are addressable. Each unlocked row undoes
-        // that move (and any later continuation). Undo all clears the suffix.
+        // only that move. Undo all clears the unlocked suffix.
         this.gameState._ensureMoveIds?.();
         const moveRows = listAddressableMoveRows(this.gameState.moveHistory, {
           turnPhase,
@@ -4099,9 +4100,14 @@ export class PlayerPanel {
           const seaUnits = this.gameState.getUnitsAt(connName) || [];
           const hasTransport = seaUnits.some(u => u.type === 'transport' && u.owner === player.id);
           if (hasTransport && !destinations.has(connName)) {
-            // Transport load is not a combat-move attack. Land-only never
-            // lists the sea zone as an attack dest (9.21.26.01).
-            if (isCombatMove && airUnits.length === 0) continue;
+            // A hostile sea is not a land-unit attack (9.21.26.01). A friendly
+            // transport with room is a load, including during combat move.
+            const hostileSea = seaUnits.some(u => (
+              u.owner !== player.id
+              && !this.gameState.areAllies(player.id, u.owner)
+              && (u.quantity || 0) > 0
+            ));
+            if (hostileSea) continue;
             // Calculate distance: steps to reach terrName + 1 for loading
             const distToTerr = reachable.get(terrName)?.distance || 0;
             const totalDist = terrName === fromTerritory.name ? 1 : distToTerr + 1;
@@ -4139,6 +4145,7 @@ export class PlayerPanel {
         }
         if (isCombatMove) {
           const remaining = minMovement - (info.distance || 0);
+          if (!conn.isWater && !airCombatMoveMayOccupy(this.gameState, terrName, player.id)) continue;
           if (!hasLegalAirLandingFrom(
             this.gameState, terrName, remaining, airUnits[0].type, this.unitDefs, player.id,
           )) continue;

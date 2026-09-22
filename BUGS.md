@@ -2,6 +2,25 @@
 
 ---
 
+## 9.22.26 — unified.3 playtest fix pack
+
+Stamp `V2.81.57-unified.3`. Schema stays 11.
+
+- [x] **9.22.26.03** Sea Confirm Attack still commits. North Sea → Baltic with an enemy fleet is an attack, ships stop, and a lower `actionSeq` snapshot does not reload the origin. Drag-confirm no longer throws in the move log.
+- [x] **9.22.26.02** Deploy undo then place elsewhere round-trips through `toJSON`. A stale place snapshot with an older `actionSeq` does not come back.
+- [x] **9.22.26.04** Combat-move Undo reverts only the clicked row. A later hop stays until its own Undo. Undo all still clears the unlocked suffix.
+- [x] **9.22.26.05** Land units can load onto a friendly transport during combat move. A hostile sea zone is still not a land attack.
+- [x] **9.22.26.06** Amphibious unload onto an empty hostile coast captures it. Unload onto a defended coast queues the battle.
+- [x] **9.22.26.07** Aircraft cannot combat-move onto empty enemy or neutral land. Occupied enemy land is still an attack. They still need a legal landing.
+- [x] **9.22.26.01-UX** Desktop right-click on a legal combat-move or non-combat destination confirms the selected units. Left-click does not move them.
+- [x] **9.22.26.08** Faction and color re-renders keep the lobby scroller. Setup and the multiplayer room are top-aligned scrollers (`overflow-anchor: none`) and blur the clicked control before rebuild.
+- [x] **9.22.26.09** Unit drag starts only on a selected unit. Other presses pan. An illegal drop does not move the stack.
+- [x] **9.22.26.10** Island-capital AI buys a transport and a submarine (a second transport once an escort exists) into the capital sea, loads infantry, unloads onto an adjacent enemy coast, and queues a factory on a foothold landmass. A capital landmass of 5 or more stays on the land-army purchase list. Fuller Groq personality modes are follow-up.
+
+Receipt: `node tools/test-unified-3-playtest.mjs`.
+
+---
+
 ## 9.22.26 — unified.2 live fix pack (HOLD MERGE)
 
 Stamp `V2.81.57-unified.2`. Do not ship until Arc/James says so.
