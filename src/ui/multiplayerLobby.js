@@ -23,6 +23,7 @@ import {
   resolveRejoinRecoveryUi,
   resolveReconnectCopy,
   shouldForgetLastMatchOnDismissRejoin,
+  resolveMyGamesEntryAction,
 } from '../multiplayer/lastMatch.js';
 import { resolveHostLobbyPrimaryCta } from '../multiplayer/lobbyStart.js';
 import { seatNamesForOpenGameCard } from '../multiplayer/lobbySeats.js';
@@ -560,14 +561,20 @@ export class MultiplayerLobby {
               const isMyTurn = game.currentPlayerId === user?.id;
               const round = game.state?.round || 1;
               const isStarting = game.status === 'starting';
+              const rowAction = resolveMyGamesEntryAction({
+                kind: 'game',
+                status: game.status,
+                stateVersion: game.stateVersion,
+                hasState: !!game.state,
+              });
               return `
                 <div class="mp-game-row own-lobby">
-                  <button class="mp-game-item ${isMyTurn ? 'my-turn' : ''}" data-resume-game-id="${game.id}">
+                  <button class="mp-game-item ${isMyTurn ? 'my-turn' : ''}" data-resume-game-id="${game.id}" data-row-action="${rowAction.action}" data-lobby-code="${game.lobbyCode || game.lobbyData?.code || ''}">
                     <div class="mp-game-info">
                       <span class="mp-game-name">${playerNames || 'Game in progress'}</span>
                       <span class="mp-game-details">${isStarting ? 'Starting' : `Round ${round}`} · ${seatNames.length || players.length} players</span>
                     </div>
-                    <span class="mp-game-join">${isMyTurn ? 'Your Turn!' : 'Resume'}</span>
+                    <span class="mp-game-join">${isMyTurn && rowAction.action === 'rejoin-map' ? 'Your Turn!' : rowAction.label}</span>
                   </button>
                 </div>
               `;
@@ -661,14 +668,32 @@ export class MultiplayerLobby {
   // Wire up "Your games in progress" rows in the Open Games view
   _bindResumeGameButtons(container, myGames) {
     container.querySelectorAll('[data-resume-game-id]').forEach(item => {
-      item.addEventListener('click', () => {
+      item.addEventListener('click', async () => {
         const gameId = item.dataset.resumeGameId;
         const game = myGames.find(g => g.id === gameId);
-        if (game) {
-          this.hide();
-          if (this.onStart) {
-            this.onStart(gameId, game);
+        if (!game) return;
+        const decision = resolveMyGamesEntryAction({
+          kind: 'game',
+          status: game.status,
+          stateVersion: game.stateVersion,
+          hasState: !!game.state,
+        });
+        if (decision.action === 'open-lobby') {
+          const code = game.lobbyCode || game.lobbyData?.code || item.dataset.lobbyCode;
+          if (!code) return;
+          const joined = await this.lobbyManager.joinLobby(code, null);
+          if (!joined.success) {
+            alert(joined.error);
+            return;
           }
+          this._browsingAway = false;
+          this.mode = 'lobby';
+          this._render();
+          return;
+        }
+        this.hide();
+        if (this.onStart) {
+          this.onStart(gameId, game);
         }
       });
     });

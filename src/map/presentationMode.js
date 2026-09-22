@@ -1,7 +1,7 @@
-// Durable Classic | New UX fork.
-// Queryless / cold load is always Classic Canvas (fail-closed).
-// sessionStorage New UX is set only when the user clicks New UX.
-// Reading a URL with no ux/three query clears session + local sticky keys.
+// Durable Classic | Experimental fork.
+// Queryless / cold load is Experimental (`three`). Classic stays on the
+// explicit deep link `?ux=classic` only — the lobby does not offer it.
+// A URL with no ux/three query does not stick Classic.
 
 export const UX_STORAGE_KEY = 'tacticalRisk_uxMode';
 export const UX_CLASSIC = 'classic';
@@ -83,17 +83,16 @@ export function resolveUxMode(search = typeof location !== 'undefined' ? locatio
   const three = String(params.get('three') || '').toLowerCase();
 
   if (CLASSIC.has(ux)) {
-    clearUxMode();
+    // Deep link only. Do not persist — queryless stays Experimental.
     return UX_CLASSIC;
   }
   if (ON.has(ux) || ON.has(three)) {
-    // Query carries New UX. Do not persist — queryless must return Classic.
     return UX_THREE;
   }
 
-  // Cold / queryless: Classic always. Visiting ?ux=three must not stick.
+  // Default entry is Experimental. Classic is not a sticky leftover.
   if (!hasUxQuery(params)) clearUxMode();
-  return UX_CLASSIC;
+  return UX_THREE;
 }
 
 export function isThreeUx(search) {

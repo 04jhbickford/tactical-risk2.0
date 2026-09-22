@@ -24,6 +24,7 @@ import {
   wasFriendlyAtTurnStart,
 } from './airLanding.js';
 import { landOnlySeaAttackIllegal, moveSelectionProfile } from './combatMoveEligibility.js';
+import { cascadeUndoIndexes } from './moveUndo.js';
 import { emitGameEvent, summarizeUnits } from '../multiplayer/gameEventLog.js';
 import { omitUndefinedDeep } from './persistState.js';
 import { captureIfAttackerHolds, finalizeAttackerHoldsOnBoard } from './combatFinalize.js';
@@ -3109,7 +3110,7 @@ export class GameState {
     }
 
     // Record move with full info for undo
-    this.moveHistory.push({
+    this._pushMove({
       from: fromTerritory,
       to: toTerritory,
       units: unitsToMove.map(u => ({ ...u })),
@@ -3186,31 +3187,98 @@ export class GameState {
     };
   }
 
-  // Undo the last movement (during combat or non-combat move phase)
-  undoLastMove() {
+  _pushMove(entry) {
+    if (!this.moveHistory) this.moveHistory = [];
+    this._moveSerial = (Number(this._moveSerial) || 0) + 1;
+    const id = entry?.id || `mv${this._moveSerial}`;
+    this.moveHistory.push({ ...entry, id });
+    return id;
+  }
+
+  _ensureMoveIds() {
+    if (!this.moveHistory) this.moveHistory = [];
+    for (let i = 0; i < this.moveHistory.length; i++) {
+      const move = this.moveHistory[i];
+      if (move && !move.id) {
+        this._moveSerial = (Number(this._moveSerial) || 0) + 1;
+        move.id = `mv${this._moveSerial}`;
+      }
+    }
+  }
+
+  _movementUndoPhaseError() {
     if (this.turnPhase === TURN_PHASES.COMBAT) {
       return { success: false, error: 'Cannot undo after combat resolve' };
     }
     if (this.turnPhase !== TURN_PHASES.COMBAT_MOVE && this.turnPhase !== TURN_PHASES.NON_COMBAT_MOVE) {
       return { success: false, error: 'Can only undo during movement phases' };
     }
+    return null;
+  }
 
-    if (this.moveHistory.length <= (this.undoLockMoveCount || 0)) {
+  // Undo the newest movement. Same phase lock as before.
+  undoLastMove() {
+    const blocked = this._movementUndoPhaseError();
+    if (blocked) return blocked;
+    if ((this.moveHistory?.length || 0) <= (this.undoLockMoveCount || 0)) {
       return { success: false, error: 'Cannot undo a committed combat move' };
     }
+    return this.undoMoveAt(this.moveHistory.length - 1);
+  }
 
-    if (this.moveHistory.length === 0) {
-      return { success: false, error: 'No moves to undo' };
+  undoMoveById(id) {
+    this._ensureMoveIds();
+    const want = String(id || '');
+    let index = this.moveHistory.findIndex((m) => m && m.id === want);
+    if (index < 0) {
+      const legacy = /^idx-(\d+)$/.exec(want);
+      if (legacy) index = Number(legacy[1]);
     }
+    if (index < 0) return { success: false, error: 'Move not found' };
+    return this.undoMoveAt(index);
+  }
 
-    const lastMove = this.moveHistory.pop();
+  // Revert every unlocked combat / non-combat move, newest first.
+  undoAllMoves() {
+    let undone = 0;
+    let guard = 0;
+    while ((this.moveHistory?.length || 0) > (this.undoLockMoveCount || 0) && guard < 40) {
+      guard += 1;
+      const before = this.moveHistory.length;
+      const result = this.undoLastMove();
+      if (!result?.success) break;
+      undone += result.undone || 1;
+      if (this.moveHistory.length >= before) break;
+    }
+    return { success: undone > 0, undone };
+  }
+
+  // Undo one listed row. Later moves that continued those units revert first.
+  undoMoveAt(index) {
+    const blocked = this._movementUndoPhaseError();
+    if (blocked) return blocked;
+    this._ensureMoveIds();
+    const lock = this.undoLockMoveCount || 0;
+    if (!Number.isInteger(index) || index < lock || index >= this.moveHistory.length) {
+      return { success: false, error: 'Cannot undo a committed combat move' };
+    }
+    const order = cascadeUndoIndexes(this.moveHistory, index);
     const player = this.currentPlayer;
-
-    if (lastMove.player !== player.id) {
-      // Shouldn't happen, but restore and return
-      this.moveHistory.push(lastMove);
-      return { success: false, error: 'Cannot undo other player moves' };
+    if (!player) return { success: false, error: 'No current player' };
+    for (const i of order) {
+      if (this.moveHistory[i]?.player !== player.id) {
+        return { success: false, error: 'Cannot undo other player moves' };
+      }
     }
+    const moves = order.map((i) => this.moveHistory[i]);
+    for (const i of order) this.moveHistory.splice(i, 1);
+    for (const move of moves) this._applyMoveUndo(move);
+    this._notify();
+    return { success: true, undone: moves.length, id: moves[moves.length - 1]?.id || null };
+  }
+
+  _applyMoveUndo(lastMove) {
+    const player = this.currentPlayer;
 
     // Move units back from destination to source
     const toUnits = this.units[lastMove.to] || [];
@@ -3252,8 +3320,6 @@ export class GameState {
       if (remainingFriendly.length === 0 && this.amphibiousTerritories) {
         this.amphibiousTerritories.delete(lastMove.to);
       }
-
-      this._notify();
       return { success: true };
     }
 
@@ -3410,8 +3476,6 @@ export class GameState {
         delete this.airUnitOrigins[lastMove.to];
       }
     }
-
-    this._notify();
     return { success: true };
   }
 
@@ -5080,7 +5144,7 @@ export class GameState {
 
     // Track in move history for undo - mark as amphibious unload
     if (unloadedUnits.length > 0) {
-      this.moveHistory.push({
+      this._pushMove({
         from: seaZone,
         to: coastalTerritory,
         units: unloadedUnits,
@@ -5175,7 +5239,7 @@ export class GameState {
     }
 
     // Track in move history for undo - mark as amphibious unload
-    this.moveHistory.push({
+    this._pushMove({
       from: seaZone,
       to: coastalTerritory,
       units: [{ type: unitType, quantity: 1 }],

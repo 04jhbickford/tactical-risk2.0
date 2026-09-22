@@ -3,6 +3,9 @@
 // are not undoable. Does not change map or combat math.
 
 import { GAME_PHASES, TURN_PHASES } from './gameState.js';
+import { cascadeUndoIndexes, moveContinues } from './moveUndo.js';
+
+export { cascadeUndoIndexes, moveContinues };
 
 export function canUndoLastMove({
   turnPhase = null,
@@ -13,6 +16,70 @@ export function canUndoLastMove({
     return false;
   }
   return Number(moveHistoryLength) > Number(undoLockMoveCount || 0);
+}
+
+export function canUndoMoveAt({
+  index = -1,
+  turnPhase = null,
+  moveHistoryLength = 0,
+  undoLockMoveCount = 0,
+} = {}) {
+  if (!canUndoLastMove({ turnPhase, moveHistoryLength, undoLockMoveCount })) return false;
+  const i = Number(index);
+  if (!Number.isInteger(i) || i < 0 || i >= Number(moveHistoryLength)) return false;
+  return i >= Number(undoLockMoveCount || 0);
+}
+
+export function listAddressableMoveRows(moveHistory, {
+  undoLockMoveCount = 0,
+  turnPhase = null,
+} = {}) {
+  const history = Array.isArray(moveHistory) ? moveHistory : [];
+  const rows = [];
+  for (let i = history.length - 1; i >= 0; i--) {
+    const move = history[i];
+    if (!move) continue;
+    rows.push({
+      id: move.id || `idx-${i}`,
+      index: i,
+      move,
+      canUndo: canUndoMoveAt({
+        index: i,
+        turnPhase,
+        moveHistoryLength: history.length,
+        undoLockMoveCount,
+      }),
+    });
+  }
+  return rows;
+}
+
+export function formatRecentMove(move) {
+  if (!move || typeof move !== 'object') return '';
+
+  const units = Array.isArray(move.units) ? move.units : [];
+  const unitStr = units
+    .filter(u => u && typeof u.type === 'string' && u.type.length > 0)
+    .map(u => {
+      const qty = Number(u.quantity);
+      const n = Number.isFinite(qty) && qty > 0 ? qty : 1;
+      return `${n}${u.type.charAt(0)}`;
+    })
+    .join(',');
+
+  const from = typeof move.from === 'string' ? move.from : '';
+  const to = typeof move.to === 'string' ? move.to : '';
+
+  if (unitStr && from && to) return `${unitStr}: ${from} → ${to}`;
+  if (unitStr) return unitStr;
+
+  if (Array.isArray(move.shipIds) && move.shipIds.length > 0 && from && to) {
+    const n = move.shipIds.length;
+    return `${n} ship${n === 1 ? '' : 's'}: ${from} → ${to}`;
+  }
+
+  if (from && to) return `${from} → ${to}`;
+  return '';
 }
 
 export function resolveUndoAction({

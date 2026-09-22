@@ -20,7 +20,7 @@ export {
 export const LOBBY_DIFFICULTIES = ['easy', 'medium', 'hard'];
 export const LOBBY_OCCUPANT_KINDS = ['human', 'ai', 'empty'];
 export const LOBBY_MODES = ['classic', 'risk'];
-export const LOBBY_SCREENS = ['main', 'setup', 'howto', 'online', 'create', 'join', 'room'];
+export const LOBBY_SCREENS = ['main', 'setup', 'howto', 'online', 'create', 'join', 'room', 'games'];
 export const LOBBY_MODE_LABELS = {
   classic: 'Classic 1942',
   risk: 'Risk',

@@ -61,6 +61,8 @@ import {
   inspectPlay,
   highlights,
   undoLast,
+  undoMoveById,
+  undoAllMoves,
   pickShip,
   applyCargoSeed,
   LAND_TEAL,
@@ -258,6 +260,7 @@ export async function bootThreeSolo() {
       phaseStrip: model.phaseStrip,
       phaseStripCurrent: model.phaseStripCurrent,
       canUndo: model.canUndo,
+      moves: model.moves,
       cargo: model.cargo,
       targetShipId: model.targetShipId,
       researchHint: model.researchHint,
@@ -290,6 +293,18 @@ export async function bootThreeSolo() {
   };
   chrome.onUndo = () => {
     undoLast(play);
+    selected = landByName(play.selected);
+    paintChrome();
+    camera.dirty = true;
+  };
+  chrome.onUndoMove = (id) => {
+    undoMoveById(play, id);
+    selected = landByName(play.selected);
+    paintChrome();
+    camera.dirty = true;
+  };
+  chrome.onUndoAll = () => {
+    undoAllMoves(play);
     selected = landByName(play.selected);
     paintChrome();
     camera.dirty = true;
@@ -368,6 +383,31 @@ export async function bootThreeSolo() {
       navigateUxMode(UX_CLASSIC);
       return;
     }
+    if (kind === 'mp-row') {
+      const [action, token] = String(value || '').split('|');
+      if (action === 'open-lobby' && token) {
+        mp.joinGame({ code: token }).then((result) => {
+          if (!result?.ok) {
+            lobby.mp.error = result?.error || 'Could not open lobby';
+            paintLobbyNow();
+            return;
+          }
+          if (result.started) return;
+          lobby.screen = 'room';
+          lobby.browsingAway = false;
+          lobby.mp.lobby = result.lobby || mp.currentLobby();
+          lobby.mp.isHost = mp.isHostUser();
+          lobby.mp.error = '';
+          paintLobbyNow();
+        });
+        return;
+      }
+      if (action === 'rejoin-map' && token) {
+        const row = (lobby.mp.entries || []).find((e) => e.id === token);
+        startMpMatch(token, row?.game || { id: token, lobbyCode: row?.code || null });
+      }
+      return;
+    }
     if (kind === 'mp-faction') {
       mp.pickFaction(value).then((res) => {
         if (res && res.success === false) lobby.mp.error = res.error || 'Could not sit';
@@ -424,6 +464,19 @@ export async function bootThreeSolo() {
     paintLobbyNow();
     if (kind === 'screen' && (value === 'online' || value === 'create' || value === 'join')) {
       void restoreOnlineAuth();
+    }
+    if (kind === 'screen' && value === 'games') {
+      lobby.mp.entries = null;
+      lobby.mp.error = '';
+      paintLobbyNow();
+      mp.listMyGames().then((entries) => {
+        lobby.mp.entries = entries;
+        if (lobby.screen === 'games') paintLobbyNow();
+      }).catch((err) => {
+        lobby.mp.error = err?.message || 'Could not load My Games';
+        lobby.mp.entries = [];
+        if (lobby.screen === 'games') paintLobbyNow();
+      });
     }
   };
   chrome.onLobbyForm = async (kind, form) => {

@@ -555,8 +555,16 @@ async function init() {
         break;
 
       case 'undo-move':
-        const undoResult = gameState.undoLastMove();
+        const undoResult = data?.moveId
+          ? gameState.undoMoveById(data.moveId)
+          : gameState.undoLastMove();
         if (undoResult.success) {
+          camera.dirty = true;
+        }
+        break;
+
+      case 'undo-all-moves':
+        if (gameState.undoAllMoves().success) {
           camera.dirty = true;
         }
         break;
@@ -2033,6 +2041,15 @@ async function init() {
                 multiplayerLobby.show();
               }
             );
+            gameListUI.onOpenLobby = () => {
+              ensureMultiplayerLobby();
+              multiplayerLobby._browsingAway = false;
+              const live = lobbyManager.getLobby();
+              multiplayerLobby.mode = live && (!live.status || live.status === 'waiting')
+                ? 'lobby'
+                : 'menu';
+              multiplayerLobby.show();
+            };
           }
           multiplayerLobby.hide();
           gameListUI.show();

@@ -21,6 +21,7 @@ import { dequeueResolvedCombatHeads, applyTerritoryCapture } from '../state/comb
 import { hasLegalAirLandingFrom, remainingAirLandingsToAssign, wasFriendlyAtTurnStart } from '../state/airLanding.js';
 import { factoriesAdjacentToSeaZone } from '../state/mobilizeSource.js';
 import { combatMoveReachableDests, maxMoveSelection, moveSelectionProfile } from '../state/combatMoveEligibility.js';
+import { formatRecentMove, listAddressableMoveRows } from '../state/undoPolicy.js';
 import { placementBudgetCopy } from '../state/placeQueue.js';
 import {
   canPlaceAirOnCarrierInSeaZone,
@@ -1602,6 +1603,24 @@ export function canUndo(play) {
   return false;
 }
 
+export function undoMoveById(play, id) {
+  if (!play?.gameState) return play;
+  play.gameState.undoMoveById?.(id);
+  play.selectedUnits = {};
+  play.destPicked = null;
+  play.targetShipId = null;
+  return play;
+}
+
+export function undoAllMoves(play) {
+  if (!play?.gameState) return play;
+  play.gameState.undoAllMoves?.();
+  play.selectedUnits = {};
+  play.destPicked = null;
+  play.targetShipId = null;
+  return play;
+}
+
 export function undoLast(play) {
   if (!canUndo(play)) return play;
   if (play.income) {
@@ -2225,6 +2244,14 @@ export function chromeModel(play, territories = []) {
     phaseStripCurrent: strip.current,
     highlights: marks,
     canUndo: canUndo(play),
+    moves: movePhase ? listAddressableMoveRows(play.gameState.moveHistory, {
+      turnPhase: phase,
+      undoLockMoveCount: play.gameState.undoLockMoveCount || 0,
+    }).map((row) => ({
+      id: row.id,
+      canUndo: row.canUndo,
+      label: formatRecentMove(row.move),
+    })).filter((row) => row.label) : [],
     cargo: cargoName ? cargoManifest(play, cargoName) : [],
     targetShipId: play.targetShipId || null,
     researchHint: phase === TURN_PHASES.DEVELOP_TECH && !play.tech?.rolls && !play.tech?.breakthrough,

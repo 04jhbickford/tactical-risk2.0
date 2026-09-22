@@ -57,7 +57,16 @@ import {
   flushPeekState,
   looksBrokenBarHtml,
 } from './peekFlush.js';
-import { resolveUndoAction, canUndoLastMove, shouldPassPlacementTurn, shouldApplyUndoAction } from '../state/undoPolicy.js';
+import {
+  resolveUndoAction,
+  canUndoLastMove,
+  shouldPassPlacementTurn,
+  shouldApplyUndoAction,
+  listAddressableMoveRows,
+  formatRecentMove,
+} from '../state/undoPolicy.js';
+
+export { formatRecentMove };
 import {
   shouldOfferEndPhaseDuringMove,
   shouldDisableEndPhaseForCombat,
@@ -535,36 +544,6 @@ export function shouldShowPhoneSetupUndo({
     canUndoCapital,
   });
   return resolved.show && (resolved.action === 'undo-placement' || resolved.action === 'undo-capital');
-}
-
-// Display string for a combat-move history row. Empty string = do not render
-// a row (missing units/from/to). Does not change undo or combat resolution.
-export function formatRecentMove(move) {
-  if (!move || typeof move !== 'object') return '';
-
-  const units = Array.isArray(move.units) ? move.units : [];
-  const unitStr = units
-    .filter(u => u && typeof u.type === 'string' && u.type.length > 0)
-    .map(u => {
-      const qty = Number(u.quantity);
-      const n = Number.isFinite(qty) && qty > 0 ? qty : 1;
-      return `${n}${u.type.charAt(0)}`;
-    })
-    .join(',');
-
-  const from = typeof move.from === 'string' ? move.from : '';
-  const to = typeof move.to === 'string' ? move.to : '';
-
-  if (unitStr && from && to) return `${unitStr}: ${from} → ${to}`;
-  if (unitStr) return unitStr;
-
-  if (Array.isArray(move.shipIds) && move.shipIds.length > 0 && from && to) {
-    const n = move.shipIds.length;
-    return `${n} ship${n === 1 ? '' : 's'}: ${from} → ${to}`;
-  }
-
-  if (from && to) return `${from} → ${to}`;
-  return '';
 }
 
 export class PlayerPanel {
@@ -2425,36 +2404,29 @@ export class PlayerPanel {
           html += this._renderRocketsUI(player);
         }
 
-        // Recent moves: undo the last one during combat or non-combat move.
-        // Hidden after combat resolve (locked stack / COMBAT phase).
-        const moveHistory = this.gameState.moveHistory || [];
-        const showMoveUndo = canUndoLastMove({
+        // Combat / non-combat moves are addressable. Each unlocked row undoes
+        // that move (and any later continuation). Undo all clears the suffix.
+        this.gameState._ensureMoveIds?.();
+        const moveRows = listAddressableMoveRows(this.gameState.moveHistory, {
           turnPhase,
-          moveHistoryLength: moveHistory.length,
           undoLockMoveCount: this.gameState.undoLockMoveCount || 0,
-        });
-        if ((turnPhase === TURN_PHASES.COMBAT_MOVE || turnPhase === TURN_PHASES.NON_COMBAT_MOVE)
-          && moveHistory.length > 0) {
-          const recentMoves = moveHistory.slice(-5).reverse();
-          const rows = [];
-          for (let i = 0; i < recentMoves.length; i++) {
-            const desc = formatRecentMove(recentMoves[i]);
-            if (!desc) continue;
-            rows.push({ desc, isLast: i === 0 });
-          }
-          if (rows.length > 0) {
-            html += `
+        }).map((row) => ({ ...row, desc: formatRecentMove(row.move) })).filter((row) => row.desc);
+        const undoableCount = moveRows.filter((row) => row.canUndo).length;
+        if (moveRows.length > 0) {
+          html += `
             <div class="pp-move-history">
-              <div class="pp-move-header">Recent Moves</div>`;
-            for (const row of rows) {
-              html += `
-              <div class="pp-move-item ${row.isLast ? 'last' : ''}">
-                <span class="pp-move-desc">${row.desc}</span>
-                ${row.isLast && showMoveUndo ? `<button class="pp-undo-btn" data-action="undo-move">↩</button>` : ''}
+              <div class="pp-move-header">
+                <span>Combat moves</span>
+                ${undoableCount > 0 ? `<button class="pp-undo-btn pp-undo-all" data-action="undo-all-moves">Undo all</button>` : ''}
               </div>`;
-            }
-            html += `</div>`;
+          for (const row of moveRows) {
+            html += `
+              <div class="pp-move-item ${row.canUndo ? 'last' : ''}">
+                <span class="pp-move-desc">${row.desc}</span>
+                ${row.canUndo ? `<button class="pp-undo-btn" data-action="undo-move" data-move-id="${row.id}">Undo</button>` : ''}
+              </div>`;
           }
+          html += `</div>`;
         }
       }
 
@@ -5329,7 +5301,14 @@ export class PlayerPanel {
 
         if (action === 'undo-move') {
           if (this.onAction) {
-            this.onAction('undo-move', {});
+            this.onAction('undo-move', { moveId: btn.dataset.moveId || null });
+          }
+          return;
+        }
+
+        if (action === 'undo-all-moves') {
+          if (this.onAction) {
+            this.onAction('undo-all-moves', {});
           }
           return;
         }
