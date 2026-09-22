@@ -10,7 +10,7 @@ import { UX_LABEL_EXPERIMENTAL } from '../src/map/presentationMode.js';
 import { createSoloLobby, applyLobbyAction, seatOccupantView } from '../src/map/threeSoloLobby.js';
 import { injectThreeChrome } from '../src/map/threeMapChrome.js';
 
-assert.equal(GAME_VERSION, 'V2.81.57-dual-path.17', 'stamp is dual-path.17');
+assert.equal(GAME_VERSION, 'V2.81.57-dual-path.18', 'stamp is dual-path.18');
 assert.equal(UX_LABEL_EXPERIMENTAL, 'Experimental UX');
 
 const chromeSrc = readFileSync(new URL('../src/map/threeMapChrome.js', import.meta.url), 'utf8');
