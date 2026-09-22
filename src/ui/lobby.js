@@ -8,12 +8,6 @@
 // importers but leave GAME_VERSION undefined inside this module.
 import { GAME_VERSION } from '../version.js';
 import { isMobileShell } from './mobileShell.js';
-import {
-  UX_CLASSIC,
-  UX_THREE,
-  lobbyInterfaceChoices,
-  navigateUxMode,
-} from '../map/presentationMode.js';
 export { GAME_VERSION };
 
 // Native <select> option taps land on the card under the popup.
@@ -138,21 +132,8 @@ export class Lobby {
   }
 
   _renderUxPicker() {
-    const choice = lobbyInterfaceChoices(UX_CLASSIC);
-    const button = (item, action, extra = '') => `
-      <button type="button" class="lobby-ux-btn${extra}${item.pressed ? ' is-on' : ''}" data-action="ux-${action}" aria-pressed="${item.pressed ? 'true' : 'false'}">
-        <span class="lobby-ux-title">${item.label}</span>
-        <span class="lobby-ux-desc">${item.desc}</span>
-      </button>`;
-    return `
-      <div class="lobby-ux-picker" role="group" aria-label="Interface">
-        <p class="lobby-ux-kicker">Interface</p>
-        <div class="lobby-ux-row">
-          ${button(choice.classic, 'classic')}
-          ${button(choice.experimental, 'three', ' lobby-ux-btn-new')}
-        </div>
-      </div>
-    `;
+    // Unified.1 — Interface Classic|Experimental picker removed.
+    return '';
   }
 
   _renderMobileMainMenu() {
@@ -167,7 +148,6 @@ export class Lobby {
           <span class="lobby-version-badge">${GAME_VERSION}</span>
         </div>
 
-        ${this._renderUxPicker()}
         <p class="lobby-phone-path">Start here</p>
         <div class="lobby-phone-actions">
           <button class="lobby-phone-card" data-action="local-play">
@@ -588,14 +568,6 @@ export class Lobby {
   }
 
   _bindEvents() {
-    this.el.querySelector('[data-action="ux-classic"]')?.addEventListener('click', () => {
-      navigateUxMode(UX_CLASSIC);
-    });
-
-    this.el.querySelector('[data-action="ux-three"]')?.addEventListener('click', () => {
-      navigateUxMode(UX_THREE);
-    });
-
     this.el.querySelector('[data-action="local-play"]')?.addEventListener('click', () => {
       this.mode = 'local-setup';
       this._render();

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="vercel-toolbar" content="disable">
-  <meta name="tr-game-version" content="V2.81.57-dual-path.19">
+  <meta name="tr-game-version" content="V2.81.57-unified.1">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <title>Tactical Risk</title>
@@ -37,7 +37,7 @@
     }
     @keyframes tr-loader-fade{from{opacity:.72}to{opacity:1}}
   </style>
-  <link rel="stylesheet" href="style.css?v=V2.81.57-dual-path.19">
+  <link rel="stylesheet" href="style.css?v=V2.81.57-unified.1">
 </head>
 <body>
   <div id="startup-loader" role="status" aria-live="polite" aria-busy="true">
@@ -127,18 +127,31 @@
     })();
   </script>
   <script>
-    window.__TR_GAME_VERSION = 'V2.81.57-dual-path.19';
+    window.__TR_GAME_VERSION = 'V2.81.57-unified.1';
     document.documentElement.setAttribute('data-game-version', window.__TR_GAME_VERSION);
     (function lockStamp() {
-      var LOCKED = 'V2.81.57-dual-path.19';
+      var LOCKED = 'V2.81.57-unified.1';
+      function family(v) {
+        var s = String(v || '');
+        if (/unified\./.test(s)) return 'unified';
+        if (/dual-path\./.test(s)) return 'dual-path';
+        if (/ux-solo\./.test(s)) return 'ux-solo';
+        return '';
+      }
       function patch(v) {
-        var m = /(?:ux-solo|dual-path)\.(\d+)/.exec(String(v || ''));
+        var m = /(?:ux-solo|dual-path|unified)\.(\d+)/.exec(String(v || ''));
         return m ? Number(m[1]) : NaN;
       }
       function prefer(v) {
+        var lockedFam = family(LOCKED);
+        var vFam = family(v);
+        // Unified beats dual-path / ux-solo leftovers in CDN race.
+        if (lockedFam === 'unified' && vFam && vFam !== 'unified') return LOCKED;
         var a = patch(LOCKED);
         var b = patch(v);
-        if (Number.isFinite(a) && Number.isFinite(b) && b > a) return String(v);
+        if (lockedFam && vFam === lockedFam && Number.isFinite(a) && Number.isFinite(b) && b > a) {
+          return String(v);
+        }
         return LOCKED;
       }
       function paint() {
@@ -163,7 +176,7 @@
       }).catch(function () {});
     }
   </script>
-  <script type="module" src="src/main.js?v=V2.81.57-dual-path.19"></script>
+  <script type="module" src="src/main.js?v=V2.81.57-unified.1"></script>
 </body>
 </html>
-<!-- force redeploy dual-path.19 lockStamp -->
+<!-- force redeploy unified.1 lockStamp -->

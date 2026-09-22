@@ -1998,6 +1998,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
             </div>
             ${(() => {
               const choice = lobbyInterfaceChoices(UX_THREE);
+              if (!choice?.classic || !choice?.experimental) return '';
               const button = (item, extra = '') => `
                 <button type="button" class="lobby-ux-btn${extra}${item.pressed ? ' is-on' : ''}" data-lobby="ux" data-value="${item.id}" aria-pressed="${item.pressed ? 'true' : 'false'}">
                   <span class="lobby-ux-title">${item.label}</span>

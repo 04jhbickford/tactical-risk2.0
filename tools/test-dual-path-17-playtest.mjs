@@ -1,4 +1,4 @@
-// V2.81.57-dual-path.19 — Unlist Game vs Main Menu (9.21.26.13).
+// V2.81.57-unified.1 — Unlist Game vs Main Menu (9.21.26.13).
 // Unlist writes isPublished false (drops Open Games). Main Menu navigates
 // and leaves the listed flag alone. Both forks share the helper.
 // Run: node tools/test-dual-path-17-playtest.mjs
@@ -32,10 +32,10 @@ const mgr = readFileSync(join(root, 'src/multiplayer/lobbyManager.js'), 'utf8');
 const lobbySrc = readFileSync(join(root, 'src/ui/lobby.js'), 'utf8');
 const ping = readFileSync(join(root, 'src/multiplayer/discordTurnPing.js'), 'utf8');
 
-assert.equal(GAME_VERSION, 'V2.81.57-dual-path.19');
+assert.equal(GAME_VERSION, 'V2.81.57-unified.1');
 assert.equal(SCHEMA_VERSION, 11);
-assert.match(html, /content="V2\.81\.57-dual-path\.19"/);
-assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-dual-path\.19'/);
+assert.match(html, /content="V2\.81\.57-unified\.1"/);
+assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.1'/);
 
 function listedRow() {
   return {
@@ -183,25 +183,22 @@ assert.doesNotMatch(bootUnlist, /detachLobby\(/);
 
 assert.equal(resolveMyGamesEntryAction({ kind: 'lobby', status: 'waiting' }).action, 'open-lobby');
 assert.equal(resolveMyGamesEntryAction({ kind: 'lobby', status: 'waiting' }).label, 'Resume lobby');
-assert.match(lobbySrc, /data-action="ux-classic"/);
-assert.match(lobbySrc, /data-action="ux-three"/);
-assert.match(lobbySrc, /lobbyInterfaceChoices\(UX_CLASSIC\)/);
-assert.match(chrome, /data-lobby="ux"/);
-assert.match(chrome, /lobbyInterfaceChoices\(UX_THREE\)/);
-assert.match(boot, /kind === 'ux'/);
-assert.match(boot, /navigateUxMode/);
-assert.equal(resolveUxMode(''), UX_THREE);
+assert.doesNotMatch(lobbySrc, /data-action="ux-classic"/);
+assert.doesNotMatch(lobbySrc, /data-action="ux-three"/);
+assert.match(lobbySrc, /Interface Classic\|Experimental picker removed/);
+assert.match(chrome, /lobbyInterfaceChoices\(UX_THREE\)/); // dead path ok
+assert.match(boot, /navigateUxMode|bootThreeSolo/); // modules remain, not booted
+assert.equal(resolveUxMode(''), UX_CLASSIC);
 assert.equal(resolveUxMode('?ux=classic'), UX_CLASSIC);
+assert.equal(resolveUxMode('?ux=three'), UX_CLASSIC);
 const classicPick = lobbyInterfaceChoices(UX_CLASSIC);
 const experimentalPick = lobbyInterfaceChoices(UX_THREE);
-assert.equal(classicPick.classic.pressed, true);
-assert.equal(classicPick.classic.label, 'Classic');
-assert.equal(classicPick.experimental.pressed, false);
-assert.equal(classicPick.experimental.label, 'Experimental UX');
-assert.equal(experimentalPick.experimental.pressed, true);
-assert.equal(experimentalPick.classic.pressed, false);
-assert.match(applyUxQuery(UX_CLASSIC, 'https://tactical-risk20.vercel.app/'), /ux=classic/);
-assert.match(applyUxQuery(UX_THREE, 'https://tactical-risk20.vercel.app/?ux=classic'), /ux=three/);
+assert.equal(classicPick.classic, null);
+assert.equal(classicPick.experimental, null);
+assert.equal(experimentalPick.classic, null);
+assert.equal(experimentalPick.experimental, null);
+assert.doesNotMatch(applyUxQuery(UX_CLASSIC, 'https://tactical-risk20.vercel.app/?ux=classic'), /ux=classic|ux=three/);
+assert.doesNotMatch(applyUxQuery(UX_THREE, 'https://tactical-risk20.vercel.app/?ux=classic'), /ux=three/);
 
 assert.match(ping, /export function bindDiscordTurnPing/);
 assert.doesNotMatch(ping, /DISCORD_TURN_PINGS_ENABLED\s*=\s*true/);
