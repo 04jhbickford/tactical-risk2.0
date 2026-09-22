@@ -14,7 +14,7 @@ import {
 import { createSoloLobby } from '../src/map/threeSoloLobby.js';
 import { injectThreeChrome } from '../src/map/threeMapChrome.js';
 
-assert.equal(GAME_VERSION, 'V2.81.57-dual-path.17', 'stamp is dual-path.17');
+assert.equal(GAME_VERSION, 'V2.81.57-dual-path.18', 'stamp is dual-path.18');
 assert.equal(UX_LABEL_EXPERIMENTAL, 'Experimental UX');
 assert.equal(resolveUxMode('?ux=three'), UX_THREE, '?ux=three still opens Experimental UX');
 assert.match(applyUxQuery(UX_THREE, 'https://example.test/'), /ux=three/);

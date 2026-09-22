@@ -200,7 +200,7 @@ const check = (label, cond) => {
 };
 
 console.log('=== Version stamps ===');
-check('GAME_VERSION is V2.81.57-dual-path.17', GAME_VERSION === 'V2.81.57-dual-path.17');
+check('GAME_VERSION is V2.81.57-dual-path.18', GAME_VERSION === 'V2.81.57-dual-path.18');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== resolveMapRightEdge ===');
@@ -1111,9 +1111,10 @@ check('phone placement hints say Tap, desktop stay Click',
     /\.lobby-phone-seat \{[\s\S]*?padding:\s*0/.test(phoneBlock)
     && /\.lobby-phone-factions \{[\s\S]*?gap:\s*8px/.test(phoneBlock)
     && /gap:\s*4px/.test(phoneBlock.match(/\.lobby-phone-faction-main \{[\s\S]*?\}/)?.[0] || ''));
-  check('deploy chips wrap inside the 500 frame',
-    /\.phone-peek-row \{[\s\S]*?flex-wrap:\s*wrap/.test(phoneBlock)
-    && /\.phone-peek-row \{[\s\S]*?overflow-x:\s*hidden/.test(phoneBlock));
+  check('deploy chips scroll horizontally inside the 500 frame',
+    /\.phone-peek-row \{[\s\S]*?flex-wrap:\s*nowrap/.test(phoneBlock)
+    && /\.phone-peek-row \{[\s\S]*?overflow-x:\s*auto/.test(phoneBlock)
+    && /\.phone-peek-tile \{/.test(phoneBlock));
   check('in-game labels ellipsize instead of overlapping',
     /\.phone-menu-title \{[\s\S]*?text-overflow:\s*ellipsis/.test(phoneBlock)
     && /\.territory-tooltip \.tt-header[\s\S]*?text-overflow:\s*ellipsis/.test(phoneBlock)
@@ -1364,10 +1365,12 @@ check('Confirm names the pair',
 }
 {
   const panelSrc = readFileSync(join(root, 'src/ui/playerPanel.js'), 'utf8');
-  check('peek hit-test is tray verbs + peek row, not the leftover-tall footer box',
+  check('peek hit-test is tray verbs + peek tiles, not the leftover-tall footer box',
     /\[data-action="confirm-placement"\]/.test(panelSrc)
     && /\[data-action="phone-select-unit"\]/.test(panelSrc)
-    && /\.phone-peek-row/.test(panelSrc)
+    && /\[data-action="move-unit"\]/.test(panelSrc)
+    && /\.phone-peek-tile/.test(panelSrc)
+    && /\.phone-peek-step/.test(panelSrc)
     && /\.phone-peek-pair-hint/.test(panelSrc)
     && /\.pp-peek-cta-row/.test(panelSrc)
     && !/\.pp-bottom-actions, \.pp-seat-chip/.test(panelSrc));
@@ -1640,10 +1643,11 @@ console.log('=== V2.81.17 James lock — one grammar across land+unit phases ===
     && /_commitPhoneIconMove/.test(panelSrc)
     && /shouldHidePhonePairConfirm/.test(panelSrc)
     && /shouldStagePhoneMoveIcon/.test(panelSrc));
-  check('peek row / hint / CTA accept touch without eating named-land taps',
-    /player-panel--peek \.phone-peek-row[\s\S]*?pointer-events:\s*auto/.test(phoneBlock)
-    && /player-panel--peek \.phone-peek-pair-hint[\s\S]*?pointer-events:\s*auto/.test(phoneBlock)
+  check('peek tiles / steppers / CTA accept touch without eating named-land taps',
+    /player-panel--peek \.phone-peek-tile[\s\S]*?pointer-events:\s*auto/.test(phoneBlock)
+    && /player-panel--peek \.phone-peek-step[\s\S]*?pointer-events:\s*auto/.test(phoneBlock)
     && /player-panel--peek \.pp-peek-cta-row[\s\S]*?pointer-events:\s*auto/.test(phoneBlock)
+    && /\.phone-peek-row \{[\s\S]*?pointer-events:\s*none/.test(phoneBlock)
     && /player-panel--peek \.pp-bottom-actions[\s\S]*?pointer-events:\s*none/.test(phoneBlock));
   check('SCHEMA_VERSION stays 11 after the grammar sweep',
     SCHEMA_VERSION === 11);

@@ -683,8 +683,15 @@ export class PlayerPanel {
     }
     if (!isMobileShell() || !this.el.classList.contains('player-panel--peek')) return;
 
+    // In-tile steppers own the gesture — never treat them as unit-select
+    // (that would also stage via pair commit and leak map clicks).
+    if (e.target?.closest?.('.phone-peek-step, .phone-peek-tile-steps')) {
+      e.stopPropagation();
+      return;
+    }
+
     const unitBtn = e.target?.closest?.('[data-action="phone-select-unit"]');
-    if (unitBtn && !unitBtn.disabled) {
+    if (unitBtn && !unitBtn.disabled && !e.target?.closest?.('.phone-peek-step')) {
       this._selectPhonePairUnit(unitBtn.dataset.unit);
       return;
     }
@@ -730,11 +737,14 @@ export class PlayerPanel {
           '[data-action="place-queue"]',
           '[data-action="place-queue-max"]',
           '[data-action="buy-unit"]',
+          '[data-action="move-unit"]',
+          '[data-action="tech-dice-delta"]',
           '[data-action="undo-placement"]',
           '[data-action="undo"]',
           '[data-action="finish-placement"]',
           '[data-action="next-phase"]',
-          '.phone-peek-row',
+          '.phone-peek-tile',
+          '.phone-peek-step',
           '.phone-peek-pair-hint',
           '.pp-peek-cta-row',
           '.pp-seat-chip',
@@ -3296,10 +3306,55 @@ export class PlayerPanel {
     return html;
   }
 
+  _phonePeekShort(type) {
+    const map = {
+      infantry: 'INF', armour: 'TNK', artillery: 'ART', fighter: 'FTR',
+      bomber: 'BMB', tacticalBomber: 'TAC', transport: 'TRN', submarine: 'SUB',
+      destroyer: 'DD', cruiser: 'CA', battleship: 'BB', carrier: 'CV',
+      factory: 'FAC', aaGun: 'AA',
+    };
+    return map[type] || String(type || '?').slice(0, 3).toUpperCase();
+  }
+
+  // Experimental-style tile: icon + short label + in-tile −/count/+.
+  // Mobile peek only — desktop unit rows stay unchanged.
+  _phonePeekTileHtml({
+    unitType,
+    unitKey = unitType,
+    imageSrc = '',
+    picked = 0,
+    have = 0,
+    selected = false,
+    selectAction = '',
+    stepAction = '',
+    minusOff = false,
+    plusOff = false,
+    countLabel = null,
+  } = {}) {
+    const name = formatUnitName(unitType);
+    const short = this._phonePeekShort(unitType);
+    const on = selected || picked > 0 ? ' is-on' : '';
+    const label = countLabel != null ? countLabel : `${picked}/${have}`;
+    const selectAttr = selectAction
+      ? `data-action="${selectAction}" data-unit="${unitKey}"`
+      : `data-unit="${unitKey}"`;
+    const steps = stepAction
+      ? `<div class="phone-peek-tile-steps">
+          <button type="button" class="phone-peek-step" data-action="${stepAction}" data-unit="${unitKey}" data-delta="-1" ${minusOff ? 'disabled' : ''} aria-label="Fewer ${name}">−</button>
+          <b>${label}</b>
+          <button type="button" class="phone-peek-step" data-action="${stepAction}" data-unit="${unitKey}" data-delta="1" ${plusOff ? 'disabled' : ''} aria-label="More ${name}">+</button>
+        </div>`
+      : `<div class="phone-peek-tile-steps"><b>${label}</b></div>`;
+    return `<div class="phone-peek-tile${on}" ${selectAttr} role="group" aria-label="${name}">
+      ${imageSrc ? `<img src="${imageSrc}" alt="" class="phone-peek-icon">` : ''}
+      <em>${short}</em>
+      ${steps}
+    </div>`;
+  }
+
   _renderPhonePeekRow(player, phase, turnPhase) {
     if (!shouldShowPhonePeekUnitRow({ mobile: true, phase, turnPhase })) return '';
     let chips = '';
-    let qty = '';
     let pairHint = '';
 
     const pairLand = resolvePhoneDeployLandName({
@@ -3325,12 +3380,15 @@ export class PlayerPanel {
       }
       for (const unit of units) {
         const imageSrc = getUnitIconPath(unit.type, player.id);
-        const selected = this.selectedUnitType === unit.type ? ' selected' : '';
-        chips += `
-          <button type="button" class="phone-peek-chip${selected}" data-action="phone-select-unit" data-unit="${unit.type}" aria-label="${formatUnitName(unit.type)}">
-            ${imageSrc ? `<img src="${imageSrc}" alt="" class="phone-peek-icon">` : ''}
-            <span class="phone-peek-count">${unit.quantity}</span>
-          </button>`;
+        chips += this._phonePeekTileHtml({
+          unitType: unit.type,
+          imageSrc,
+          picked: this.selectedUnitType === unit.type ? 1 : 0,
+          have: unit.quantity,
+          selected: this.selectedUnitType === unit.type,
+          selectAction: 'phone-select-unit',
+          countLabel: String(unit.quantity),
+        });
       }
     } else if (phase === GAME_PHASES.PLAYING && turnPhase === TURN_PHASES.PURCHASE) {
       pairHint = resolvePhonePeekHint(phase, turnPhase, this.selectedUnitType, {
@@ -3346,15 +3404,23 @@ export class PlayerPanel {
         if (def.isSea && hasSeaZones) return true;
         return false;
       });
-      for (const [unitType] of units) {
+      const ipcs = this.gameState.getIPCs(player.id);
+      for (const [unitType, def] of units) {
         const imageSrc = getUnitIconPath(unitType, player.id);
         const qty = pending.find(p => p.type === unitType)?.quantity || 0;
-        const selected = this.selectedUnitType === unitType ? ' selected' : '';
-        chips += `
-          <button type="button" class="phone-peek-chip${qty > 0 ? ' has-qty' : ''}${selected}" data-action="buy-unit" data-unit="${unitType}" data-delta="1" aria-label="Buy ${unitType}">
-            ${imageSrc ? `<img src="${imageSrc}" alt="" class="phone-peek-icon">` : ''}
-            ${qty > 0 ? `<span class="phone-peek-count">${qty}</span>` : ''}
-          </button>`;
+        const cost = Number(def?.cost) || 0;
+        const canAfford = cost <= 0 || ipcs >= cost;
+        chips += this._phonePeekTileHtml({
+          unitType,
+          imageSrc,
+          picked: qty,
+          have: qty,
+          selected: this.selectedUnitType === unitType || qty > 0,
+          stepAction: 'buy-unit',
+          minusOff: qty <= 0,
+          plusOff: !canAfford,
+          countLabel: String(qty),
+        });
       }
     } else if (phase === GAME_PHASES.PLAYING && turnPhase === TURN_PHASES.MOBILIZE) {
       pairHint = resolvePhonePeekHint(phase, turnPhase, this.selectedUnitType, {
@@ -3364,12 +3430,15 @@ export class PlayerPanel {
       for (const unit of pending) {
         if (!unit.quantity) continue;
         const imageSrc = getUnitIconPath(unit.type, player.id);
-        const selected = this.selectedUnitType === unit.type ? ' selected' : '';
-        chips += `
-          <button type="button" class="phone-peek-chip${selected}" data-action="phone-select-unit" data-unit="${unit.type}" aria-label="${formatUnitName(unit.type)}">
-            ${imageSrc ? `<img src="${imageSrc}" alt="" class="phone-peek-icon">` : ''}
-            <span class="phone-peek-count">${unit.quantity}</span>
-          </button>`;
+        chips += this._phonePeekTileHtml({
+          unitType: unit.type,
+          imageSrc,
+          picked: 0,
+          have: unit.quantity,
+          selected: this.selectedUnitType === unit.type,
+          selectAction: 'phone-select-unit',
+          countLabel: String(unit.quantity),
+        });
       }
     } else if (phase === GAME_PHASES.PLAYING
       && (turnPhase === TURN_PHASES.COMBAT_MOVE || turnPhase === TURN_PHASES.NON_COMBAT_MOVE)) {
@@ -3388,35 +3457,40 @@ export class PlayerPanel {
         seen.add(unitKey);
         const imageSrc = getUnitIconPath(unit.type, player.id);
         const staged = Number(this.moveSelectedUnits?.[unitKey]) || 0;
-        const selected = staged > 0
-          || this.selectedUnitType === unitKey
-          || this.selectedUnitType === unit.type
-          ? ' selected' : '';
-        const hasQty = staged > 0 ? ' has-qty' : '';
-        const qty = staged > 0
-          ? staged
-          : remainingEligibleOfType({ available: unit.quantity });
-        chips += `
-          <button type="button" class="phone-peek-chip${selected}${hasQty}" data-action="phone-select-unit" data-unit="${unitKey}" aria-label="${formatUnitName(unit.type)}">
-            ${imageSrc ? `<img src="${imageSrc}" alt="" class="phone-peek-icon">` : ''}
-            <span class="phone-peek-count">${qty}</span>
-          </button>`;
+        const have = remainingEligibleOfType({ available: unit.quantity });
+        chips += this._phonePeekTileHtml({
+          unitType: unit.type,
+          unitKey,
+          imageSrc,
+          picked: staged,
+          have,
+          selected: staged > 0
+            || this.selectedUnitType === unitKey
+            || this.selectedUnitType === unit.type,
+          selectAction: 'phone-select-unit',
+          stepAction: 'move-unit',
+          minusOff: staged <= 0,
+          plusOff: staged >= have,
+        });
       }
     } else if (shouldShowTechResearch(phase, turnPhase)) {
       const n = this.techDiceCount || 0;
       const ipcs = this.gameState.getIPCs(player.id);
       const maxDice = Math.floor(ipcs / 5);
       pairHint = resolvePhonePeekHint(phase, turnPhase, null, { techDiceCount: n });
-      chips += `<button type="button" class="phone-peek-chip" data-action="tech-dice-delta" data-delta="-1" aria-label="Fewer research dice" ${n <= 0 ? 'disabled' : ''}>−</button>`;
-      chips += `<span class="phone-peek-chip phone-peek-tech-count" aria-live="polite">${n}</span>`;
-      chips += `<button type="button" class="phone-peek-chip" data-action="tech-dice-delta" data-delta="1" aria-label="Add research die" ${n >= maxDice ? 'disabled' : ''}>+</button>`;
+      chips += `<div class="phone-peek-tile phone-peek-tile--tech is-on" role="group" aria-label="Research dice">
+        <em>DIE</em>
+        <div class="phone-peek-tile-steps">
+          <button type="button" class="phone-peek-step" data-action="tech-dice-delta" data-delta="-1" aria-label="Fewer research dice" ${n <= 0 ? 'disabled' : ''}>−</button>
+          <b class="phone-peek-tech-count" aria-live="polite">${n}</b>
+          <button type="button" class="phone-peek-step" data-action="tech-dice-delta" data-delta="1" aria-label="Add research die" ${n >= maxDice ? 'disabled' : ''}>+</button>
+        </div>
+      </div>`;
     }
 
-    if (!chips && !qty && !pairHint) return '';
+    if (!chips && !pairHint) return '';
     const hint = pairHint ? `<div class="phone-peek-pair-hint">${pairHint}</div>` : '';
-    const row = qty
-      ? `<div class="phone-peek-tools"><div class="phone-peek-row">${chips}</div>${qty}</div>`
-      : (chips ? `<div class="phone-peek-row">${chips}</div>` : '');
+    const row = chips ? `<div class="phone-peek-row phone-peek-row--tiles">${chips}</div>` : '';
     return `${hint}${row}`;
   }
 
@@ -5064,12 +5138,17 @@ export class PlayerPanel {
           const unitKey = btn.dataset.unit; // Can be "infantry", "ship:12345", or "cargo:12345:infantry"
           const delta = parseInt(btn.dataset.delta, 10);
           const current = this.moveSelectedUnits[unitKey] || 0;
-          const movable = this._getMovableUnits(this.selectedTerritory, this.gameState.currentPlayer);
+          // Peek tiles stage from the phone-pair land; desktop rows use selectedTerritory.
+          const from = (isMobileShell() && this._phoneDeployDest?.())
+            || this.selectedTerritory;
+          if (from && from !== this.selectedTerritory) this.selectedTerritory = from;
+          const movable = this._getMovableUnits(from, this.gameState.currentPlayer);
           // Find max qty - match by key (type for regular, "ship:id" for individual, "cargoKey" for cargo)
           const unitEntry = movable.find(u => moveUnitKey(u) === unitKey);
           const maxQty = unitEntry?.quantity || 0;
           const newQty = Math.max(0, Math.min(maxQty, current + delta));
           this.moveSelectedUnits[unitKey] = newQty;
+          if (newQty > 0) this.selectedUnitType = unitKey;
           this._scheduleRender();
           return;
         }
