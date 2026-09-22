@@ -1,8 +1,9 @@
 // Discord turn ping for Classic + New UX. Soft-fail only — never blocks play.
 // Production path: POST /api/discord-turn-ping with the seat payload.
 // The webhook lives in Vercel env DISCORD_TURN_WEBHOOK_URL — never on the client.
-// Dedupe key: (gameId, turnIndex, seatId). Skip AI. One untagged fallback
-// when the seat has no snowflake.
+// Dedupe key: (gameId, turnIndex, seatId). Skip AI. Mention the next human
+// by snowflake (explicit id, else the alias map). Summarize the prior seat
+// from turnEvents. Untagged fallback when no snowflake matches.
 
 export const DISCORD_TURN_CHANNEL_ID = '1551283474303025292';
 export const DISCORD_SEEN_KEY = 'tacticalRisk_discordTurnPingSeen';
@@ -21,6 +22,243 @@ export function parseDiscordSeatInput(raw) {
   const id = normalizeDiscordSnowflake(text);
   if (id) return { discordUserId: id, discordName: '' };
   return { discordUserId: '', discordName: text };
+}
+
+export const DISCORD_TURN_CONTENT_MAX = 1800;
+
+// Board Game Central. Explicit discordUserId wins; this map is the fallback
+// when the lobby only stored a display name, username, seat label, or handle.
+export const DISCORD_ALIAS_MAP = Object.freeze([
+  {
+    snowflake: '261711980526567428',
+    aliases: ['bastion', 'crusader_bastion', 'sean', 'benson'],
+  },
+  {
+    snowflake: '600101834727620620',
+    aliases: ['rwts', 'robert', 'watts', 'robfox007'],
+  },
+]);
+
+const UNIT_LOSS_LABELS = {
+  infantry: 'inf',
+  armour: 'tank',
+  tank: 'tank',
+  artillery: 'art',
+  fighter: 'ftr',
+  bomber: 'bmr',
+  tacticalBomber: 'tac',
+  transport: 'trn',
+  transportPlane: 'tpt',
+  submarine: 'sub',
+  destroyer: 'dd',
+  cruiser: 'ca',
+  battleship: 'bb',
+  carrier: 'cv',
+  aaGun: 'aa',
+  factory: 'fac',
+};
+
+function normAlias(raw) {
+  return String(raw ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/^@+/, '')
+    .replace(/[_\-]+/g, ' ')
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function aliasTokens(raw) {
+  return normAlias(raw).split(' ').filter(Boolean);
+}
+
+export function lookupDiscordAlias(raw) {
+  const tokens = new Set(aliasTokens(raw));
+  if (!tokens.size) return '';
+  for (const row of DISCORD_ALIAS_MAP) {
+    for (const alias of row.aliases) {
+      const need = aliasTokens(alias);
+      if (need.length && need.every((token) => tokens.has(token))) return row.snowflake;
+    }
+  }
+  return '';
+}
+
+function identityCandidates(source) {
+  if (source == null) return [];
+  if (typeof source === 'string') return [source];
+  return [
+    source.discordUserId,
+    source.discordName,
+    source.discordHandle,
+    source.displayName,
+    source.name,
+    source.username,
+    source.seatLabel,
+    source.label,
+    source.id,
+  ];
+}
+
+export function resolveDiscordSnowflake(source) {
+  const fields = identityCandidates(source);
+  const explicit = normalizeDiscordSnowflake(
+    source && typeof source === 'object' ? source.discordUserId : '',
+  );
+  if (explicit) return explicit;
+  for (const raw of fields) {
+    const id = normalizeDiscordSnowflake(raw);
+    if (id) return id;
+  }
+  for (const raw of fields) {
+    const hit = lookupDiscordAlias(raw);
+    if (hit) return hit;
+  }
+  return '';
+}
+
+function parseLossMap(raw) {
+  if (raw == null || raw === '') return null;
+  if (typeof raw === 'number') {
+    if (!Number.isFinite(raw) || raw <= 0) return null;
+    return { bare: raw, types: null };
+  }
+  if (typeof raw === 'string') {
+    if (!/^\d+$/.test(raw.trim())) return null;
+    const n = Number(raw);
+    return n > 0 ? { bare: n, types: null } : null;
+  }
+  if (Array.isArray(raw)) {
+    const types = {};
+    for (const row of raw) {
+      const type = row?.type;
+      const n = Number(row?.quantity ?? row?.count);
+      if (!type || !Number.isFinite(n) || n <= 0) continue;
+      types[type] = (types[type] || 0) + n;
+    }
+    return Object.keys(types).length ? { bare: 0, types } : null;
+  }
+  if (typeof raw === 'object') {
+    const types = {};
+    for (const [type, value] of Object.entries(raw)) {
+      const n = Number(value);
+      if (!type || !Number.isFinite(n) || n <= 0) continue;
+      types[type] = (types[type] || 0) + n;
+    }
+    return Object.keys(types).length ? { bare: 0, types } : null;
+  }
+  return null;
+}
+
+function addLosses(bucket, raw) {
+  const parsed = parseLossMap(raw);
+  if (!parsed) return;
+  if (parsed.types) {
+    bucket.types = bucket.types || {};
+    for (const [type, n] of Object.entries(parsed.types)) {
+      bucket.types[type] = (bucket.types[type] || 0) + n;
+    }
+  }
+  if (parsed.bare > 0) bucket.bare += parsed.bare;
+}
+
+function formatLossPhrase(bucket, prefix) {
+  if (!bucket) return '';
+  const parts = [];
+  if (bucket.types) {
+    const rows = Object.entries(bucket.types)
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    for (const [type, n] of rows) {
+      parts.push(`${n} ${UNIT_LOSS_LABELS[type] || type}`);
+    }
+  }
+  if (bucket.bare > 0) parts.push(String(bucket.bare));
+  if (!parts.length) return '';
+  return `${prefix} ${parts.join(', ')}`;
+}
+
+function uniqueNames(list) {
+  const out = [];
+  const seen = new Set();
+  for (const name of list) {
+    const text = String(name || '').trim();
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    out.push(text);
+  }
+  return out;
+}
+
+function joinTerritories(names, verb) {
+  const unique = uniqueNames(names);
+  if (!unique.length) return '';
+  const shown = unique.slice(0, 6);
+  const extra = unique.length - shown.length;
+  const list = shown.join(', ');
+  return extra > 0 ? `${verb} ${list} +${extra}` : `${verb} ${list}`;
+}
+
+export function formatTurnPingSummary(events, { actorId = '' } = {}) {
+  if (!Array.isArray(events) || events.length === 0) return '';
+  const actor = String(actorId || '').trim();
+  const gained = [];
+  const gaveUp = [];
+  const own = { bare: 0, types: null };
+  const opp = { bare: 0, types: null };
+  for (const ev of events) {
+    if (!ev || typeof ev !== 'object') continue;
+    const involved = !actor
+      || ev.playerId === actor
+      || ev.toPlayer === actor
+      || ev.fromPlayer === actor
+      || ev.attackerId === actor
+      || ev.defenderId === actor;
+    if (!involved) continue;
+    if (ev.type === 'territory_captured' && ev.territory) {
+      const took = !actor || ev.toPlayer === actor || ev.playerId === actor;
+      const lost = !!actor && ev.fromPlayer === actor && ev.toPlayer && ev.toPlayer !== actor;
+      if (lost) gaveUp.push(ev.territory);
+      else if (took) gained.push(ev.territory);
+    } else if (ev.type === 'combat') {
+      const actorDefended = !!actor
+        && ev.playerId !== actor
+        && (ev.defenderId === actor || ev.fromPlayer === actor);
+      if (actorDefended) {
+        addLosses(own, ev.defenderLosses);
+        addLosses(opp, ev.attackerLosses);
+      } else if (!actor || ev.playerId === actor || ev.attackerId === actor) {
+        addLosses(own, ev.attackerLosses);
+        addLosses(opp, ev.defenderLosses);
+      }
+    }
+  }
+  return [
+    joinTerritories(gained, 'Took'),
+    joinTerritories(gaveUp, 'gave up'),
+    formatLossPhrase(own, 'lost'),
+    formatLossPhrase(opp, 'opponent lost'),
+  ].filter(Boolean).join(', ');
+}
+
+export function turnEventCount(gameState) {
+  if (!gameState) return 0;
+  if (typeof gameState.getTurnEventsLastIndex === 'function') {
+    const n = Number(gameState.getTurnEventsLastIndex());
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+  return Array.isArray(gameState.turnEvents) ? gameState.turnEvents.length : 0;
+}
+
+export function turnEventsSince(gameState, index) {
+  if (!gameState) return [];
+  const start = Math.max(0, Number(index) || 0);
+  if (typeof gameState.getTurnEventsSince === 'function') {
+    const rows = gameState.getTurnEventsSince(start);
+    return Array.isArray(rows) ? rows : [];
+  }
+  const all = Array.isArray(gameState.turnEvents) ? gameState.turnEvents : [];
+  return all.slice(Math.min(start, all.length));
 }
 
 export function turnIndexOf({ round = 0, currentPlayerIndex = 0 } = {}) {
@@ -71,19 +309,51 @@ export function buildDeepLink({
   return url.toString();
 }
 
+function cleanBit(raw) {
+  return String(raw ?? '').replace(/\s+/g, ' ').trim();
+}
+
 export function buildDiscordTurnContent({
   discordUserId = '',
   faction = '',
   phase = '',
   deepLink = '',
+  summary = '',
+  displayName = '',
+  username = '',
+  discordName = '',
+  seatLabel = '',
 } = {}) {
-  const snowflake = normalizeDiscordSnowflake(discordUserId);
-  const who = faction || 'seat';
-  const bits = [who];
-  if (phase) bits.push(phase);
-  if (deepLink) bits.push(deepLink);
-  const line = bits.join(' · ');
-  return snowflake ? `<@${snowflake}> ${line}` : line;
+  const snowflake = resolveDiscordSnowflake({
+    discordUserId,
+    displayName,
+    name: displayName,
+    username,
+    discordName,
+    seatLabel,
+  });
+  const bits = [cleanBit(faction) || 'seat'];
+  const phaseBit = cleanBit(phase);
+  if (phaseBit) bits.push(phaseBit);
+  const headText = bits.join(' · ');
+  const link = cleanBit(deepLink);
+  let sum = cleanBit(summary);
+  const prefix = snowflake ? `<@${snowflake}> ` : '';
+  const linkPart = link ? ` · ${link}` : '';
+  let line = sum ? `${prefix}${headText} · ${sum}${linkPart}` : `${prefix}${headText}${linkPart}`;
+  if (line.length > DISCORD_TURN_CONTENT_MAX && sum) {
+    const budget = DISCORD_TURN_CONTENT_MAX - prefix.length - headText.length - linkPart.length - 3;
+    if (budget > 8) {
+      sum = `${sum.slice(0, budget - 1).trimEnd()}…`;
+      line = `${prefix}${headText} · ${sum}${linkPart}`;
+    } else {
+      line = `${prefix}${headText}${linkPart}`;
+    }
+  }
+  if (line.length > DISCORD_TURN_CONTENT_MAX) {
+    line = `${line.slice(0, DISCORD_TURN_CONTENT_MAX - 1)}…`;
+  }
+  return line;
 }
 
 export function shouldPingHumanSeat({
@@ -202,14 +472,20 @@ export function discordPingPayload({
   phase = '',
   deepLink = '',
   uxMode = '',
+  summary = '',
 } = {}) {
   return {
     gameId: String(gameId || ''),
     turnIndex: Number(turnIndex) || 0,
     seatId: String(seatId || player?.id || player?.oderId || ''),
-    discordUserId: player?.discordUserId || '',
+    discordUserId: resolveDiscordSnowflake(player),
+    displayName: player?.displayName || player?.name || '',
+    username: player?.username || '',
+    discordName: player?.discordName || player?.discordHandle || '',
+    seatLabel: player?.seatLabel || player?.label || player?.id || '',
     faction: factionLabelOf(player),
     phase: String(phase || ''),
+    summary: String(summary || ''),
     deepLink: String(deepLink || ''),
     uxMode: String(uxMode || ''),
     isAI: !!player?.isAI,
@@ -246,6 +522,7 @@ export function maybePostDiscordTurnPing({
   phase = '',
   deepLink = '',
   uxMode = '',
+  summary = '',
   seen = null,
   storage = null,
   post = null,
@@ -260,14 +537,20 @@ export function maybePostDiscordTurnPing({
       player, gameId, turnIndex, seatId, seen: seenKeys,
     });
     if (!gate.ok) return { ok: false, reason: gate.reason };
+    const discordUserId = resolveDiscordSnowflake(player);
     const content = buildDiscordTurnContent({
-      discordUserId: player?.discordUserId,
+      discordUserId,
       faction: factionLabelOf(player),
       phase,
+      summary,
       deepLink,
+      displayName: player?.displayName || player?.name || '',
+      username: player?.username || '',
+      discordName: player?.discordName || player?.discordHandle || '',
+      seatLabel: player?.seatLabel || player?.label || player?.id || '',
     });
     const payload = discordPingPayload({
-      player, gameId, turnIndex, seatId, phase, deepLink, uxMode,
+      player, gameId, turnIndex, seatId, phase, deepLink, uxMode, summary,
     });
 
     const finish = (posted) => {
@@ -325,16 +608,21 @@ export function bindDiscordTurnPing(gameState, {
     return () => {};
   }
   let lastSeat = seatKeyOf(gameState);
+  let eventCursor = turnEventCount(gameState);
   return gameState.subscribe(() => {
     try {
       const nextSeat = seatKeyOf(gameState);
       if (!nextSeat || nextSeat === lastSeat) return;
-      const hadPrev = !!lastSeat;
+      const prevSeat = lastSeat;
+      const hadPrev = !!prevSeat;
       lastSeat = nextSeat;
+      const priorEvents = turnEventsSince(gameState, eventCursor);
+      eventCursor = turnEventCount(gameState);
       if (!hadPrev) return;
       if (isApplyingRemote()) return;
       const player = gameState.currentPlayer;
       const uxMode = getUxMode();
+      const summary = formatTurnPingSummary(priorEvents, { actorId: prevSeat });
       const result = maybePostDiscordTurnPing({
         player,
         gameId: getGameId() || '',
@@ -344,6 +632,7 @@ export function bindDiscordTurnPing(gameState, {
         }),
         seatId: nextSeat,
         phase: phaseLabelOf(gameState),
+        summary,
         deepLink: buildDeepLink({
           origin: getOrigin(),
           uxMode,
