@@ -2,15 +2,78 @@
 // Reads DISCORD_TURN_WEBHOOK_URL from server env (Preview + Production).
 // Never ships the URL to the client. Never logs or echoes it.
 // Soft-fail only (always 200 for POST). Body: gameId, turnIndex, seatId,
-// discordUserId, faction, phase, deepLink.
+// discordUserId, faction, phase, summary, deepLink. Name fields are a
+// fallback when discordUserId is empty.
 
 const seen = new Set();
+const CONTENT_MAX = 1800;
+
+const DISCORD_ALIAS_MAP = Object.freeze([
+  {
+    snowflake: '261711980526567428',
+    aliases: ['Bastion', 'crusader_bastion', 'Sean Benson'],
+  },
+  {
+    snowflake: '600101834727620620',
+    aliases: ['rwts', 'Robert Watts', 'Robfox007', 'robfox007'],
+  },
+]);
 
 function normalizeDiscordSnowflake(raw) {
   const s = String(raw ?? '').trim();
   if (/^\d{5,22}$/.test(s)) return s;
   const mention = s.match(/^<@!?(\d{5,22})>$/);
   return mention ? mention[1] : '';
+}
+
+function normAlias(raw) {
+  return String(raw ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/^@+/, '')
+    .replace(/[_\-]+/g, ' ')
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function lookupDiscordAlias(raw) {
+  const text = normAlias(raw);
+  if (!text) return '';
+  for (const row of DISCORD_ALIAS_MAP) {
+    for (const alias of row.aliases) {
+      const a = normAlias(alias);
+      if (!a) continue;
+      if (text === a || ` ${text} `.includes(` ${a} `)) return row.snowflake;
+    }
+  }
+  return '';
+}
+
+function resolveDiscordSnowflake(body) {
+  const explicit = normalizeDiscordSnowflake(body?.discordUserId);
+  if (explicit) return explicit;
+  const fields = [
+    body?.discordUserId,
+    body?.discordName,
+    body?.displayName,
+    body?.username,
+    body?.seatLabel,
+    body?.name,
+  ];
+  for (const raw of fields) {
+    const id = normalizeDiscordSnowflake(raw);
+    if (id) return id;
+  }
+  for (const raw of fields) {
+    const hit = lookupDiscordAlias(raw);
+    if (hit) return hit;
+  }
+  return '';
+}
+
+function cleanBit(raw) {
+  return String(raw ?? '').replace(/\s+/g, ' ').trim();
 }
 
 function pingDedupeKey({ gameId = '', turnIndex = 0, seatId = '' } = {}) {
@@ -22,14 +85,43 @@ function buildDiscordTurnContent({
   faction = '',
   phase = '',
   deepLink = '',
+  summary = '',
+  displayName = '',
+  username = '',
+  discordName = '',
+  seatLabel = '',
 } = {}) {
-  const snowflake = normalizeDiscordSnowflake(discordUserId);
-  const who = faction || 'seat';
-  const bits = [who];
-  if (phase) bits.push(phase);
-  if (deepLink) bits.push(deepLink);
-  const line = bits.join(' · ');
-  return snowflake ? `<@${snowflake}> ${line}` : line;
+  const snowflake = resolveDiscordSnowflake({
+    discordUserId,
+    displayName,
+    username,
+    discordName,
+    seatLabel,
+    name: displayName,
+  });
+  const who = cleanBit(faction) || 'seat';
+  const head = [who, 'your turn'];
+  const phaseBit = cleanBit(phase);
+  if (phaseBit && phaseBit.toLowerCase() !== 'your turn') head.push(phaseBit);
+  const headText = head.join(' · ');
+  const link = cleanBit(deepLink);
+  let sum = cleanBit(summary);
+  const prefix = snowflake ? `<@${snowflake}> ` : '';
+  const linkPart = link ? ` · ${link}` : '';
+  let line = sum ? `${prefix}${headText} · ${sum}${linkPart}` : `${prefix}${headText}${linkPart}`;
+  if (line.length > CONTENT_MAX && sum) {
+    const budget = CONTENT_MAX - prefix.length - headText.length - linkPart.length - 3;
+    if (budget > 8) {
+      sum = `${sum.slice(0, budget - 1).trimEnd()}…`;
+      line = `${prefix}${headText} · ${sum}${linkPart}`;
+    } else {
+      line = `${prefix}${headText}${linkPart}`;
+    }
+  }
+  if (line.length > CONTENT_MAX) {
+    line = `${line.slice(0, CONTENT_MAX - 1)}…`;
+  }
+  return line;
 }
 
 function readWebhookUrl() {
@@ -92,7 +184,12 @@ module.exports = async function handler(req, res) {
     discordUserId: body.discordUserId,
     faction: body.faction || seatId,
     phase: body.phase || '',
+    summary: body.summary || '',
     deepLink: body.deepLink || '',
+    displayName: body.displayName || '',
+    username: body.username || '',
+    discordName: body.discordName || '',
+    seatLabel: body.seatLabel || '',
   });
 
   try {

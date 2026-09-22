@@ -2,6 +2,18 @@
 
 ---
 
+## 9.22.26 — unified.5 Discord turn ping
+
+Stamp `V2.81.57-unified.5`. Schema stays 11.
+
+- [x] #turn-ping @-mentions the next human. An explicit `discordUserId` wins. Otherwise a Board Game Central alias map matches display name, username, seat label, and Discord handle: Bastion / crusader_bastion / Sean Benson, and rwts / Robert Watts / Robfox007.
+- [x] The same notice adds a short prior-turn summary from `turnEvents` (territories taken or given up, unit losses by type when the combat log recorded them) plus the existing `?code=` resume link. Unknown deltas are left out.
+- [x] AI seats still skip. A missing webhook still soft-fails 200 and is never logged.
+
+Receipt: `node tools/test-discord-turn-ping.mjs`.
+
+---
+
 ## 9.22.26 — unified.4 island-capital definition
 
 Stamp `V2.81.57-unified.4`. Schema stays 11.
