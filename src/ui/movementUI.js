@@ -2,7 +2,7 @@
 
 import { TURN_PHASES } from '../state/gameState.js';
 import { getUnitIconPath } from '../utils/unitIcons.js';
-import { combatMoveReachableDests, maxMoveSelection } from '../state/combatMoveEligibility.js';
+import { combatMoveReachableDests, maxMoveSelection, seaZoneHasEnemyForAirAttack } from '../state/combatMoveEligibility.js';
 import { hasLegalAirLandingFrom, wasFriendlyAtTurnStart } from '../state/airLanding.js';
 
 export class MovementUI {
@@ -1311,7 +1311,11 @@ export class MovementUI {
     let confirmHtml = '';
     if (this.pendingDestination) {
       const destOwner = this.gameState.getOwner(this.pendingDestination);
-      const isEnemyDest = destOwner && destOwner !== player.id && !this.gameState.areAllies(player.id, destOwner);
+      const seaAttack = !!this.territoryByName[this.pendingDestination]?.isWater
+        && seaZoneHasEnemyForAirAttack(this.gameState, this.pendingDestination, player.id);
+      const isEnemyDest = seaAttack || (
+        destOwner && destOwner !== player.id && !this.gameState.areAllies(player.id, destOwner)
+      );
       const confirmBtnText = isEnemyDest ? 'Confirm Attack' : 'Confirm Move';
       confirmHtml = `
         <div class="mp-confirm-section sticky">

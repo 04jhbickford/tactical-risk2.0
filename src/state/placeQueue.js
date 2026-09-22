@@ -109,6 +109,8 @@ export function resolveDeployedThisRoundAfterLoad({
   prevPlacementRound,
   nextPlacementRound,
   localPlacedOwnerId = null,
+  remoteActionSeq = 0,
+  localActionSeq = 0,
 } = {}) {
   const remoteNum = remotePlacedThisRound == null
     ? 0
@@ -127,6 +129,11 @@ export function resolveDeployedThisRoundAfterLoad({
   // B35: a spectated 6/6 belongs to the previous seat. Do not keep it
   // when YOUR TURN arrives (even if currentPlayer was already flipped).
   if (localPlacedOwnerId && nextPlayerId && localPlacedOwnerId !== nextPlayerId) {
+    return remoteNum;
+  }
+  // A newer board revision is an undo (or a later place), not a stale 0.
+  // B28 Math.max stays for the same-or-older snapshot only.
+  if ((Number(remoteActionSeq) || 0) > (Number(localActionSeq) || 0)) {
     return remoteNum;
   }
   return Math.max(localNum, remoteNum);

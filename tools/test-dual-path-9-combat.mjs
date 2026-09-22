@@ -91,7 +91,7 @@ function makeGs({
 }
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-unified.1', GAME_VERSION === 'V2.81.57-unified.1');
+check('GAME_VERSION is V2.81.57-unified.2', GAME_VERSION === 'V2.81.57-unified.2');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== 9.20.26.02 / 35RB85 dequeue captures land leftover ===');

@@ -2,6 +2,18 @@
 
 ---
 
+## 9.22.26 — unified.2 live fix pack (HOLD MERGE)
+
+Stamp `V2.81.57-unified.2`. Do not ship until Arc/James says so.
+
+- [x] Sea Confirm Attack (North Sea → Baltic): hostile sea is an attack, ships stop, confirm pushes immediately, a lower `actionSeq` snapshot cannot reload the origin stack.
+- [x] Deploy Undo persists `placementHistory` plus units / pool / deployed count and `pushStateNow`. A newer remote seq trusts a remote 0 (B28 still keeps a same-seq stale 0).
+- [x] Lobby faction/color re-render restores `.lobby-content-wrapper` scrollTop.
+- [x] **9.21.26.13 re-verify on unified.1/2.** Room chrome was not dropped. **Unlist Game** (host) writes `isPublished: false` and stays in the room. **Main Menu** calls `disconnectFromLobby({ notify: false })` then the local main menu, and does not write the listed flag. No new lobby IA. Right-click non-combat/amphib confirm is out of scope.
+- [x] Discord turn notice is `faction · phase · deep link`, mention only when a snowflake is present. Missing `DISCORD_TURN_WEBHOOK_URL` stays `{ reason: 'unconfigured' }`.
+
+---
+
 ## 9.21.26.13 — dual-path.17 lobby chrome
 
 Stamp `V2.81.57-dual-path.17`. Turn-change Discord pings stay paused.

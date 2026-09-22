@@ -970,6 +970,12 @@ export class PlayerPanel {
     this.onAction = callback;
   }
 
+  clearPendingPlacementOverlay() {
+    this.placementQueue = {};
+    this._lastQueueUnitType = null;
+    this._queueLockType = null;
+  }
+
   setSelectedTerritory(territory, { immediate = true } = {}) {
     // Reset movement state when territory changes. Do NOT clear the
     // placement queue — a spurious retarget (B16) was wiping staged units

@@ -24,10 +24,12 @@ function buildDiscordTurnContent({
   deepLink = '',
 } = {}) {
   const snowflake = normalizeDiscordSnowflake(discordUserId);
-  const head = snowflake
-    ? `<@${snowflake}> your turn — ${faction} · ${phase}`
-    : `your turn — ${faction} · ${phase}`;
-  return [head, deepLink].filter(Boolean).join('\n');
+  const who = faction || 'seat';
+  const bits = [who];
+  if (phase) bits.push(phase);
+  if (deepLink) bits.push(deepLink);
+  const line = bits.join(' · ');
+  return snowflake ? `<@${snowflake}> ${line}` : line;
 }
 
 function readWebhookUrl() {

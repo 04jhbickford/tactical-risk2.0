@@ -8,6 +8,7 @@
 // importers but leave GAME_VERSION undefined inside this module.
 import { GAME_VERSION } from '../version.js';
 import { isMobileShell } from './mobileShell.js';
+import { captureLobbyScroll, restoreLobbyScroll } from './lobbyScroll.js';
 export { GAME_VERSION };
 
 // Native <select> option taps land on the card under the popup.
@@ -102,6 +103,7 @@ export class Lobby {
   }
 
   _render() {
+    const savedScroll = captureLobbyScroll(this.el);
     let content = '';
     const phone = isMobileShell();
 
@@ -128,7 +130,11 @@ export class Lobby {
       </div>
     `;
 
+    restoreLobbyScroll(this.el, savedScroll);
     this._bindEvents();
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => restoreLobbyScroll(this.el, savedScroll));
+    }
   }
 
   _renderUxPicker() {
@@ -601,6 +607,7 @@ export class Lobby {
     // _render() cannot unseat (first "Tap to add" looked swallowed).
     this.el.querySelectorAll('.player-card.modern, .lobby-phone-faction').forEach(card => {
       const onToggle = (e) => {
+        e?.preventDefault?.();
         if (e.target.closest('.player-name-input')) return;
         if (e.target.closest('.ai-select')) return;
         if (e.target.closest('.color-picker')) return;
@@ -647,6 +654,7 @@ export class Lobby {
 
       dropdown?.querySelectorAll('.color-option').forEach(opt => {
         opt.addEventListener('click', (e) => {
+          e.preventDefault();
           e.stopPropagation();
           const colorId = opt.dataset.colorId;
           const colorDef = FACTION_COLORS.find(c => c.id === colorId);

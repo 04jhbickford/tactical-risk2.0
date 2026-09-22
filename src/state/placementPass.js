@@ -229,9 +229,13 @@ export function deferredSnapshotShouldApply({
   localVersion = 0,
   remotePlayerId = null,
   localPlayerId = null,
+  remoteActionSeq = 0,
+  localActionSeq = 0,
 } = {}) {
   const remote = Number(remoteVersion) || 0;
   const local = Number(localVersion) || 0;
+  // In-flight place/move echo must not wipe a newer local undo or attack.
+  if ((Number(localActionSeq) || 0) > (Number(remoteActionSeq) || 0)) return false;
   if (remote < local) return false;
   if (remote > local) return true;
   return !!(remotePlayerId && localPlayerId && remotePlayerId !== localPlayerId);

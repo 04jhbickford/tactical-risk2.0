@@ -695,7 +695,11 @@ async function init() {
 
       case 'undo-placement':
         if (gameState.undoPlacement()) {
+          playerPanel.clearPendingPlacementOverlay?.();
           camera.dirty = true;
+          // Debounced push loses the race to the pre-undo snapshot, so the
+          // next hydrate paints the troops Undo just removed.
+          if (syncManager) await syncManager.pushStateNow();
         }
         break;
 
@@ -847,6 +851,7 @@ async function init() {
                 selectedTerritory = null;
                 playerPanel.setSelectedTerritory(null);
               }
+              if (syncManager) await syncManager.pushStateNow();
             }
           } else {
             // Regular move
@@ -863,6 +868,9 @@ async function init() {
                 selectedTerritory = null;
                 playerPanel.setSelectedTerritory(null);
               }
+              // Sea→sea Confirm Attack must hit the cloud before a host or
+              // in-flight snapshot reloads the origin stack.
+              if (syncManager) await syncManager.pushStateNow();
             } else {
               console.warn('Move failed:', result.error);
             }
@@ -1388,6 +1396,7 @@ async function init() {
           localUserId: playerPanel.localUserId || syncManager.userId,
           currentPlayerOderId: gameState.currentPlayer?.oderId,
         }));
+        playerPanel.clearPendingPlacementOverlay?.();
 
         // Update player panel to reflect turn change
         playerPanel._render();
@@ -1877,6 +1886,7 @@ async function init() {
         } else {
           actionLog.logMove(moveInfo.from, moveInfo.to, moveInfo.units, player);
         }
+        syncManager?.pushStateNow?.();
       }
     });
     movementUI.onCancel = () => {

@@ -23,7 +23,7 @@ import {
   upsertPendingAirLanding,
   wasFriendlyAtTurnStart,
 } from './airLanding.js';
-import { landOnlySeaAttackIllegal, moveSelectionProfile } from './combatMoveEligibility.js';
+import { landOnlySeaAttackIllegal, moveSelectionProfile, seaZoneHasEnemyForAirAttack } from './combatMoveEligibility.js';
 import { cascadeUndoIndexes } from './moveUndo.js';
 import { emitGameEvent, summarizeUnits } from '../multiplayer/gameEventLog.js';
 import { omitUndefinedDeep } from './persistState.js';
@@ -953,15 +953,10 @@ export class GameState {
       // Can only move through water
       if (territory !== fromTerritory && !t.isWater) continue;
 
-      // Check for enemy units blocking movement (hostile sea zone)
-      const owner = this.getOwner(territory);
-      const units = this.units[territory] || [];
-      const hasEnemyFleet = units.some(u => {
-        if (u.owner === playerId || this.areAllies(playerId, u.owner)) return false;
-        const def = this.territoryByName[territory]?.isWater && u.type;
-        // Enemy combat ships block passage
-        return u.type !== 'transport'; // Transports don't block
-      });
+      // Hostile sea zone: any enemy unit (including transports) is a battle.
+      // Origin is not hostile for pathing — you may still leave it.
+      const hasEnemyFleet = territory !== fromTerritory
+        && seaZoneHasEnemyForAirAttack(this, territory, playerId);
 
       // Don't add starting territory to results
       if (territory !== fromTerritory) {
@@ -976,9 +971,10 @@ export class GameState {
       // Stop if we've reached max movement
       if (distance >= movementRange) continue;
 
-      // In combat move: can move through hostile zones
-      // In non-combat move: hostile zones block further movement
-      if (!isCombatMove && hasEnemyFleet && territory !== fromTerritory) continue;
+      // Must stop on entering a hostile sea zone. Combat move used to path
+      // through, so Confirm Attack could leave the ships uncommitted and a
+      // later snapshot drew them back in the origin zone.
+      if (hasEnemyFleet) continue;
 
       // Get all connections
       const connections = this.getConnections(territory);
@@ -2554,15 +2550,17 @@ export class GameState {
     const isAdjacent = connections.includes(toTerritory);
     const isLandBridge = this.hasLandBridge(fromTerritory, toTerritory);
 
-    // Check destination ownership
+    // Check destination ownership. Sea zones are unowned, so an enemy fleet
+    // is what makes sea→sea a combat-move attack.
     const toOwner = this.getOwner(toTerritory);
     const isEnemy = toOwner && toOwner !== player.id && !this.areAllies(player.id, toOwner);
     const isAllied = toOwner && toOwner !== player.id && this.areAllies(player.id, toOwner);
+    const hostileSea = !!(toT?.isWater && seaZoneHasEnemyForAirAttack(this, toTerritory, player.id));
 
     // Non-combat move rules
     if (isNonCombatMove) {
-      // Cannot enter enemy territory
-      if (isEnemy) {
+      // Cannot enter enemy territory or a sea zone that still has enemies
+      if (isEnemy || hostileSea) {
         return { success: false, error: 'Cannot enter enemy territory in non-combat move' };
       }
       // Can freely pass through allied territories
@@ -2786,9 +2784,15 @@ export class GameState {
         // Remove from source
         fromUnits.splice(shipIdx, 1);
 
-        // Add to destination with movement tracked
-        ship.movementUsed = movementUsed + 1;
-        ship.moved = ship.movementUsed >= maxMove; // Mark fully moved when out of movement
+        // Add to destination with movement tracked. Entering a hostile sea
+        // zone ends the ship's move (A&A must-stop) so Confirm Attack commits.
+        if (isCombatMove && hostileSea) {
+          ship.movementUsed = maxMove;
+          ship.moved = true;
+        } else {
+          ship.movementUsed = movementUsed + 1;
+          ship.moved = ship.movementUsed >= maxMove;
+        }
         toUnits.push(ship);
         movedShipIds.push(shipId);
       }
@@ -3001,8 +3005,9 @@ export class GameState {
 
           for (const [srcMovementStr, quantity] of Object.entries(takenByMovementUsed)) {
             const srcMovement = parseInt(srcMovementStr);
-            const newMovementUsed = srcMovement + 1;
-            const isFullyMoved = newMovementUsed >= maxMovement;
+            const stopForBattle = isCombatMove && hostileSea;
+            const newMovementUsed = stopForBattle ? maxMovement : srcMovement + 1;
+            const isFullyMoved = stopForBattle || newMovementUsed >= maxMovement;
 
             // Find matching stack at destination with same movement state
             const destUnit = toUnits.find(u =>
@@ -3161,7 +3166,7 @@ export class GameState {
     }
 
     this._notify();
-    const isAttack = isCombatMove && isEnemy && !captured;
+    const isAttack = isCombatMove && (isEnemy || hostileSea) && !captured;
     emitGameEvent(isAttack ? 'attack' : 'move', {
       gameState: this,
       territory: toTerritory,
@@ -5802,6 +5807,8 @@ export class GameState {
       placementRound: this.placementRound,
       // Additive (no schema bump): mid-wave rejoin must restore the 6-unit cap.
       unitsPlacedThisRound: this.unitsPlacedThisRound || 0,
+      // Additive (no schema bump): undo must survive refresh and peer hydrate.
+      placementHistory: (this.placementHistory || []).map((row) => ({ ...row })),
       // v8: Save air unit origin tracking for proper landing calculation after load
       airUnitOrigins: this.airUnitOrigins,
       friendlyTerritoriesAtTurnStart: Array.from(this.friendlyTerritoriesAtTurnStart || []),
@@ -5842,6 +5849,7 @@ export class GameState {
     const prevPlayerId = this.currentPlayer?.id;
     const prevPlacedThisRound = this.unitsPlacedThisRound || 0;
     const prevPlacementRound = this.placementRound || 0;
+    const prevActionSeq = Number(this.actionSeq) || 0;
     this.gameMode = data.gameMode;
     this.alliancesEnabled = data.alliancesEnabled ?? (data.gameMode === 'classic');
     this.teamsEnabled = data.teamsEnabled ?? false;
@@ -5875,6 +5883,7 @@ export class GameState {
     this.placementRound = data.placementRound || 0;
     // Same seat + stale remote 0/missing must not wipe a local 1/6 (B28).
     const nextPlayerId = this.players?.[this.currentPlayerIndex]?.id;
+    const remoteActionSeq = Number(data.actionSeq) || 0;
     this.unitsPlacedThisRound = resolveDeployedThisRoundAfterLoad({
       prevPlayerId,
       nextPlayerId,
@@ -5883,7 +5892,14 @@ export class GameState {
       prevPlacementRound,
       nextPlacementRound: this.placementRound,
       localPlacedOwnerId: this.unitsPlacedThisRoundOwnerId,
+      remoteActionSeq,
+      localActionSeq: prevActionSeq,
     });
+    if (remoteActionSeq >= prevActionSeq) {
+      this.placementHistory = Array.isArray(data.placementHistory)
+        ? data.placementHistory.map((row) => ({ ...row }))
+        : [];
+    }
     this.unitsPlacedThisRoundOwnerId = this.unitsPlacedThisRound > 0
       ? (this.unitsPlacedThisRoundOwnerId && this.unitsPlacedThisRoundOwnerId === nextPlayerId
         ? this.unitsPlacedThisRoundOwnerId
