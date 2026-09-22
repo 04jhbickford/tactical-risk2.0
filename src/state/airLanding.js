@@ -1,3 +1,5 @@
+import { seaZoneCarrierCapacity } from './carrierPlacement.js';
+
 // Post-combat air landing plan + board apply.
 // Selections must live on GameState (not only the combat overlay) so a
 // Confirm, a phase advance, or a multiplayer reload still lands the aircraft.
@@ -369,4 +371,58 @@ export function preferAirLandingOption(options = []) {
   return list.find((opt) => opt?.territory && !opt.isCarrier)
     || list.find((opt) => opt?.territory)
     || null;
+}
+
+// Land that was friendly when the turn began. A territory taken this turn
+// is not a legal air landing, even after the owner flag flips.
+export function wasFriendlyAtTurnStart(gameState, name, playerId) {
+  if (!gameState || !name || !playerId) return false;
+  if (gameState.capturedThisTurn instanceof Set && gameState.capturedThisTurn.has(name)) {
+    return false;
+  }
+  const friendly = gameState.friendlyTerritoriesAtTurnStart;
+  if (friendly instanceof Set && friendly.size > 0) return friendly.has(name);
+  const owner = gameState.getOwner?.(name);
+  return owner === playerId || !!gameState.areAllies?.(playerId, owner);
+}
+
+function carrierRoom(gameState, seaName, playerId, unitType, unitDefs) {
+  return seaZoneCarrierCapacity(gameState, seaName, playerId, unitDefs, unitType) > 0;
+}
+
+// After flying `remaining` movement from `origin`, can this aircraft end
+// on start-of-turn friendly land or a friendly carrier?
+export function hasLegalAirLandingFrom(gameState, origin, remaining, unitType, unitDefs, playerId) {
+  if (!gameState || !origin || !unitType || !playerId) return false;
+  const left = Number(remaining);
+  if (!Number.isFinite(left) || left < 0) return false;
+  const here = gameState.territoryByName?.[origin];
+  if (here?.isWater && carrierRoom(gameState, origin, playerId, unitType, unitDefs)) return true;
+  if (!here?.isWater && wasFriendlyAtTurnStart(gameState, origin, playerId)) return true;
+  if (left <= 0 || typeof gameState.getReachableTerritoriesForAir !== 'function') return false;
+  const reachable = gameState.getReachableTerritoriesForAir(origin, left, playerId, false);
+  for (const [name, info] of reachable) {
+    if ((info?.distance || 0) > left) continue;
+    const dest = gameState.territoryByName?.[name];
+    if (dest?.isWater) {
+      if (carrierRoom(gameState, name, playerId, unitType, unitDefs)) return true;
+    } else if (wasFriendlyAtTurnStart(gameState, name, playerId)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Combat finalize rebuilds a sea zone from the overlay copy and drops
+// aircraft that landing just pushed onto the live carrier.
+export function mergeLiveCarrierLoads(liveUnits = [], nextUnits = []) {
+  const aircraftById = new Map();
+  for (const unit of liveUnits || []) {
+    if (!unit?.id || unit.type !== 'carrier' || !Array.isArray(unit.aircraft)) continue;
+    aircraftById.set(unit.id, unit.aircraft.map((craft) => ({ ...craft })));
+  }
+  return (nextUnits || []).map((unit) => {
+    if (!unit?.id || !aircraftById.has(unit.id)) return unit;
+    return { ...unit, aircraft: aircraftById.get(unit.id) };
+  });
 }

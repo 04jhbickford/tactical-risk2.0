@@ -18,7 +18,8 @@ import {
   formatPhoneCombatHeroOdds,
 } from '../ui/combatUI.js';
 import { dequeueResolvedCombatHeads, applyTerritoryCapture } from '../state/combatFinalize.js';
-import { remainingAirLandingsToAssign } from '../state/airLanding.js';
+import { hasLegalAirLandingFrom, remainingAirLandingsToAssign, wasFriendlyAtTurnStart } from '../state/airLanding.js';
+import { factoriesAdjacentToSeaZone } from '../state/mobilizeSource.js';
 import { combatMoveReachableDests, maxMoveSelection, moveSelectionProfile } from '../state/combatMoveEligibility.js';
 import { placementBudgetCopy } from '../state/placeQueue.js';
 import {
@@ -285,6 +286,27 @@ function stackQty(stacks, type, owner = null) {
     .reduce((n, s) => n + (Number(s.quantity) || 0), 0);
 }
 
+function carrierAirStacks(play, name) {
+  const player = play.gameState.currentPlayer;
+  if (!player || !name) return [];
+  const qty = {};
+  for (const ship of play.gameState.units[name] || []) {
+    if (ship.type !== 'carrier' || ship.owner !== player.id) continue;
+    for (const craft of ship.aircraft || []) {
+      if (!craft || craft.moved) continue;
+      if (craft.owner && craft.owner !== player.id) continue;
+      const type = craft.type || 'fighter';
+      qty[type] = (qty[type] || 0) + (Number(craft.quantity) || 1);
+    }
+  }
+  return Object.entries(qty).map(([type, quantity]) => ({
+    type,
+    quantity,
+    owner: player.id,
+    carrierAir: true,
+  }));
+}
+
 function movableStacks(play, name) {
   const player = play.gameState.currentPlayer;
   if (!player || !name) return [];
@@ -295,11 +317,11 @@ function movableStacks(play, name) {
     && u.type !== 'factory'
     && u.type !== 'aaGun'
   ));
-  const cargo = cargoStacks(play, name);
-  if (!cargo.length) return onHex;
+  const extra = [...cargoStacks(play, name), ...carrierAirStacks(play, name)];
+  if (!extra.length) return onHex;
   const merged = [...onHex];
-  for (const stack of cargo) {
-    const hit = merged.find((u) => u.type === stack.type);
+  for (const stack of extra) {
+    const hit = merged.find((u) => u.type === stack.type && !u.id);
     if (hit) hit.quantity = (Number(hit.quantity) || 0) + stack.quantity;
     else merged.push({ ...stack });
   }
@@ -447,25 +469,35 @@ export function legalDests(play) {
     for (const hit of combatMoveReachableDests(gs, from, picked, play.unitDefs)) {
       dests.add(hit.name);
     }
+    let airRange = 1;
+    let airType = 'fighter';
+    for (const [type, qty] of Object.entries(picked)) {
+      if (Number(qty) > 0 && play.unitDefs[type]?.isAir) {
+        const move = Number(play.unitDefs[type].movement) || 1;
+        if (move >= airRange) {
+          airRange = move;
+          airType = type;
+        }
+      }
+    }
+    const airAttackOk = (to, distance) => hasLegalAirLandingFrom(
+      gs, to, airRange - distance, airType, play.unitDefs, gs.currentPlayer.id,
+    );
     for (const to of adj) {
       const t = gs.territoryByName[to];
       if (ground && !t?.isWater && isEnemyLand(play, to)) dests.add(to);
       if (sea && t?.isWater && hasEnemyShips(play, to)) dests.add(to);
-      if (air && !ground && !sea && isEnemyLand(play, to)) dests.add(to);
+      if (air && !ground && !sea && isEnemyLand(play, to) && airAttackOk(to, 1)) dests.add(to);
       if (ground && fromT?.isWater && !t?.isWater && isEnemyLand(play, to)) dests.add(to);
-      if (air && t?.isWater && hasEnemyShips(play, to)) dests.add(to);
+      if (air && t?.isWater && hasEnemyShips(play, to) && airAttackOk(to, 1)) dests.add(to);
       if (air && t?.isWater && hasFriendlyCarrier(play, to) && !hasEnemyShips(play, to)) dests.add(to);
     }
     if (air && !ground && !sea) {
-      let range = 1;
-      for (const [type, qty] of Object.entries(picked)) {
-        if (Number(qty) > 0 && play.unitDefs[type]?.isAir) {
-          range = Math.max(range, Number(play.unitDefs[type].movement) || 1);
-        }
-      }
-      const reach = gs.getReachableTerritoriesForAir(from, range, gs.currentPlayer.id, true);
-      for (const name of reach.keys()) {
-        if (isEnemyLand(play, name)) dests.add(name);
+      const reach = gs.getReachableTerritoriesForAir(from, airRange, gs.currentPlayer.id, true);
+      for (const [name, info] of reach) {
+        if (!isEnemyLand(play, name)) continue;
+        if (!airAttackOk(name, info?.distance || 0)) continue;
+        dests.add(name);
       }
     }
   }
@@ -475,7 +507,7 @@ export function legalDests(play) {
       const t = gs.territoryByName[to];
       if (ground && !t?.isWater && isFriendlyLand(play, to)) dests.add(to);
       if (sea && t?.isWater && !isEnemyLand(play, to)) dests.add(to);
-      if (air && !ground && !sea && isFriendlyLand(play, to)) dests.add(to);
+      if (air && !ground && !sea && !t?.isWater && wasFriendlyAtTurnStart(gs, to, gs.currentPlayer.id)) dests.add(to);
       if (ground && fromT?.isWater && !t?.isWater && isFriendlyLand(play, to)) dests.add(to);
       if (ground && t?.isWater && hasFriendlyTransport(play, to)) dests.add(to);
       if (air && t?.isWater && hasFriendlyCarrier(play, to)) dests.add(to);
@@ -489,7 +521,9 @@ export function legalDests(play) {
       }
       const reach = gs.getReachableTerritoriesForAir(from, range, gs.currentPlayer.id, false);
       for (const name of reach.keys()) {
-        if (isFriendlyLand(play, name)) dests.add(name);
+        const zone = gs.territoryByName[name];
+        if (zone?.isWater) continue;
+        if (wasFriendlyAtTurnStart(gs, name, gs.currentPlayer.id)) dests.add(name);
       }
     }
   }
@@ -1253,9 +1287,26 @@ export function tapLand(play, name) {
     return play;
   }
   if (phase === TURN_PHASES.MOBILIZE) {
+    const gs = play.gameState;
+    const playerId = gs.currentPlayer?.id;
+    const destWater = play.destPicked && gs.territoryByName?.[play.destPicked]?.isWater;
+    if (destWater) {
+      const factories = factoriesAdjacentToSeaZone(gs, play.destPicked, playerId);
+      if (factories.includes(name)) {
+        play.mobilizeFactory = name;
+        play.selected = name;
+        refreshStage(play);
+        return play;
+      }
+    }
     if (legalPlaceDests(play).includes(name)) {
+      if (play.destPicked !== name) play.mobilizeFactory = null;
       play.destPicked = name;
       play.selected = name;
+      if (gs.territoryByName?.[name]?.isWater) {
+        const factories = factoriesAdjacentToSeaZone(gs, name, playerId);
+        if (factories.length === 1) play.mobilizeFactory = factories[0];
+      }
     } else {
       play.selected = name;
     }
@@ -1458,7 +1509,9 @@ function placePending(play) {
   for (const [type, qty] of seaFirstUnitEntries(play.selectedUnits, play.unitDefs)) {
     let left = Number(qty) || 0;
     while (left > 0) {
-      const result = play.gameState.mobilizeUnit(type, play.destPicked, play.unitDefs);
+      const result = play.gameState.mobilizeUnit(type, play.destPicked, play.unitDefs, {
+        sourceFactory: play.mobilizeFactory || null,
+      });
       if (result?.success === false) break;
       left -= 1;
     }
@@ -1495,7 +1548,18 @@ export function confirmEnabled(play) {
     return canEndPhase(play);
   }
   if (phase === TURN_PHASES.MOBILIZE) {
-    if (play.destPicked && pickedCount(play.selectedUnits)) return true;
+    if (play.destPicked && pickedCount(play.selectedUnits)) {
+      const water = play.gameState.territoryByName?.[play.destPicked]?.isWater;
+      if (water) {
+        const factories = factoriesAdjacentToSeaZone(
+          play.gameState,
+          play.destPicked,
+          play.gameState.currentPlayer?.id,
+        );
+        if (factories.length > 1 && !play.mobilizeFactory) return false;
+      }
+      return true;
+    }
     return canEndPhase(play);
   }
   if (phase === TURN_PHASES.COMBAT_MOVE || phase === TURN_PHASES.NON_COMBAT_MOVE) {
@@ -2115,7 +2179,9 @@ export function chromeModel(play, territories = []) {
     const shop = shopCapacity(play);
     route = `${shop.used}/${shop.max} queued`;
   }   else if (phase === TURN_PHASES.MOBILIZE && play.destPicked) {
-    route = `Place · ${play.destPicked}`;
+    route = play.mobilizeFactory
+      ? `Place · ${play.destPicked} from ${play.mobilizeFactory}`
+      : `Place · ${play.destPicked}`;
   } else if (play.gameState.phase === GAME_PHASES.CAPITAL_PLACEMENT && play.destPicked) {
     route = `Capital · ${play.destPicked}`;
   } else if (play.gameState.phase === GAME_PHASES.UNIT_PLACEMENT && play.destPicked) {

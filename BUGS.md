@@ -2,6 +2,25 @@
 
 ---
 
+## 9.21.26.06–.11 — dual-path.15 playtest cluster
+
+Stamp `V2.81.57-dual-path.15`. Classic `/` and Experimental `?ux=three` share the engine. Turn-change Discord pings stay paused.
+
+- [x] **9.21.26.10** Carrier fighters are a selectable combat move. `moveUnits` launches the shortfall off `carrier.aircraft`. Classic keys `aircraft:` rows; Experimental `movableStacks` includes them. Sea-zone Attack uses enemy ships, not a land owner.
+- [x] **9.21.26.11** Combat-move air dests require a legal landing inside movement left (start-of-turn friendly land or a carrier). West Mediterranean → West US is distance 4 on the real map, so range alone used to offer it with 0 left. Moved aircraft with no origin no longer get a fresh full move from the battle hex.
+- [x] **9.21.26.08** Choosing the battle sea zone loads onto the carrier and is not a crash. Classic `_finalizeCombat` merges the live `carrier.aircraft` back onto the overlay rebuild.
+- [x] **9.21.26.09 / 09b** Sea mobilize spends a factory cap and individualizes the carrier. Two factories on one sea zone return `ambiguous` until `sourceFactory` is chosen (Classic picker, Experimental tap).
+- [x] **9.21.26.06** Snapshots swallowed while `isPushing` are flushed after the push when the remote doc is newer or the seat changed.
+- [x] **9.21.26.07** Air cannot NCM onto land captured this turn. Leaving combat or NCM relocates or crashes that air. `capturedThisTurn` clears on `nextTurn`.
+- [x] Captured factory cap verified: not the player's `capitalTerritory`, so the limit is 5.
+- [ ] **9.21.26.12** Out-of-order / per-row undo of combat moves. History is still a stack (`undoLastMove`). Deferred.
+- [ ] Naval battle report defender dice. Experimental `battleCard` already shows atk/def lanes. Classic defender dice stay in the expanded casualty view. Deferred.
+- [ ] **9.21.26.05 Rob** My Games must not act as Rejoin on a waiting lobby. Distinct from the dual-path.14 ownership chrome that shared the .05 label. Deferred.
+
+Receipt: `node tools/test-dual-path-15-playtest.mjs`.
+
+---
+
 ## 9.21.26.05 — unoccupied land loses political control notation (dual-path.14)
 
 Playtest (Bastion / crusader_bastion) on `V2.81.57-dual-path.13`. Discord turn

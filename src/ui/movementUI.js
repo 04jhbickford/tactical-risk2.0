@@ -3,6 +3,7 @@
 import { TURN_PHASES } from '../state/gameState.js';
 import { getUnitIconPath } from '../utils/unitIcons.js';
 import { combatMoveReachableDests, maxMoveSelection } from '../state/combatMoveEligibility.js';
+import { hasLegalAirLandingFrom, wasFriendlyAtTurnStart } from '../state/airLanding.js';
 
 export class MovementUI {
   constructor() {
@@ -548,6 +549,22 @@ export class MovementUI {
             .reduce((sum, [_, qty]) => sum + qty, 0);
 
           return capacity >= selectedAirCount;
+        }
+        if (isCombatMove) {
+          const dist = reachable.get(destName)?.distance || 0;
+          const airType = Object.entries(this.selectedUnits)
+            .find(([type, qty]) => qty > 0 && this.unitDefs[type]?.isAir)?.[0];
+          return hasLegalAirLandingFrom(
+            this.gameState,
+            destName,
+            airMovementRange - dist,
+            airType,
+            this.unitDefs,
+            player?.id,
+          );
+        }
+        if (isNonCombat && !wasFriendlyAtTurnStart(this.gameState, destName, player?.id)) {
+          return false;
         }
         return true;
       });
