@@ -217,6 +217,39 @@ console.log('=== lobby scroll + confirm push are wired ===');
     lobby.includes('data-action="unlist"') && lobby.includes('data-action="main-menu"'));
 }
 
+console.log('=== 9.21.26.13 re-verify on unified shell (no new lobby IA) ===');
+{
+  const lobby = readFileSync(join(process.cwd(), 'src/ui/multiplayerLobby.js'), 'utf8');
+  const start = readFileSync(join(process.cwd(), 'src/multiplayer/lobbyStart.js'), 'utf8');
+  const mgr = readFileSync(join(process.cwd(), 'src/multiplayer/lobbyManager.js'), 'utf8');
+  const main = readFileSync(join(process.cwd(), 'src/main.js'), 'utf8');
+  check('labels are still Unlist Game and Main Menu',
+    start.includes("LOBBY_UNLIST_LABEL = 'Unlist Game'")
+    && start.includes("LOBBY_MAIN_MENU_LABEL = 'Main Menu'"));
+  check('unified room paints those labels',
+    lobby.includes('roomChrome.unlist.label') && lobby.includes('roomChrome.mainMenu.label'));
+  const unlistFn = mgr.slice(mgr.indexOf('async unlistLobby'), mgr.indexOf('async startGame'));
+  check('Unlist writes isPublished false and does not leave or delete',
+    /isPublished:\s*false/.test(unlistFn) && !/deleteDoc|leaveLobby/.test(unlistFn));
+  const unlistUi = lobby.slice(
+    lobby.indexOf('[data-action="unlist"]'),
+    lobby.indexOf('[data-action="main-menu"]'),
+  );
+  check('Unlist stays in the room',
+    unlistUi.includes('unlistLobby()') && unlistUi.includes("this.mode = 'lobby'"));
+  const menuUi = lobby.slice(
+    lobby.indexOf('[data-action="main-menu"]'),
+    lobby.indexOf('[data-action="back-to-browse"]'),
+  );
+  check('Main Menu disconnects the view and does not unlist',
+    menuUi.includes('disconnectFromLobby({ notify: false })')
+    && !menuUi.includes('unlistLobby('));
+  check('unified boot does not start the Experimental shell',
+    !main.includes('threeSoloBoot') && !main.includes('bootThreeSolo'));
+  check('empty onBack still opens the local Main Menu',
+    main.includes('shouldNavigateToHome({') && main.includes('lobby.show()'));
+}
+
 if (failures) {
   console.error(`\n${failures} failed`);
   process.exit(1);
