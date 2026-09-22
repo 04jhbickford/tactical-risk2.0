@@ -2,7 +2,7 @@
 
 import { TURN_PHASES } from '../state/gameState.js';
 import { getUnitIconPath } from '../utils/unitIcons.js';
-import { combatMoveReachableDests, maxMoveSelection, seaZoneHasEnemyForAirAttack } from '../state/combatMoveEligibility.js';
+import { airCombatMoveMayOccupy, combatMoveReachableDests, maxMoveSelection, seaZoneHasEnemyForAirAttack } from '../state/combatMoveEligibility.js';
 import { hasLegalAirLandingFrom, wasFriendlyAtTurnStart } from '../state/airLanding.js';
 
 export class MovementUI {
@@ -311,6 +311,7 @@ export class MovementUI {
 
         return capacity >= selectedAirCount;
       }
+      if (isCombatMove && !airCombatMoveMayOccupy(this.gameState, territory.name, player.id)) return false;
       return true;
     }
 
@@ -318,11 +319,12 @@ export class MovementUI {
     if (hasLandSelected && !hasSeaSelected && landMovementRange > 1) {
       // Allow water destination if there's a transport (for amphibious assault or non-combat)
       if (territory.isWater) {
-        if (isCombatMove && !hasAirSelected && !hasSeaSelected) return false;
-        if (isAdjacent) {
+        if (!isAdjacent) return false;
+        if (isCombatMove && !hasAirSelected && !hasSeaSelected) {
+          if (this._seaZoneIsHostile(territory.name, player.id)) return false;
           return this._canLoadOntoTransport(territory.name, player.id);
         }
-        return false;
+        return this._canLoadOntoTransport(territory.name, player.id);
       }
       return this.gameState.canLandUnitReach(
         this.selectedFrom.name,
@@ -359,13 +361,17 @@ export class MovementUI {
     // Land units entering water can load onto transports (both combat and non-combat)
     // Combat move loading is for amphibious assaults
     if (hasLandSelected && territory.isWater) {
-      if (isCombatMove && !hasAirSelected && !hasSeaSelected) return false;
+      if (this._seaZoneIsHostile(territory.name, player.id)) return false;
       return this._canLoadOntoTransport(territory.name, player.id);
     }
 
     if (hasSeaSelected && !territory.isWater) return false;
 
     return true;
+  }
+
+  _seaZoneIsHostile(seaZoneName, playerId) {
+    return seaZoneHasEnemyForAirAttack(this.gameState, seaZoneName, playerId);
   }
 
   // Check if selected land units can load onto transports in a sea zone

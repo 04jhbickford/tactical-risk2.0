@@ -33,6 +33,7 @@ import {
 import { TerritoryTooltip } from './ui/territoryTooltip.js';
 import { PurchasePopup } from './ui/purchasePopup.js';
 import { MovementUI } from './ui/movementUI.js';
+import { pointerStartsUnitDrag, rightClickConfirmsMove } from './ui/mapPointer.js';
 import { CombatUI } from './ui/combatUI.js';
 import { TechUI } from './ui/techUI.js';
 import { PlacementUI } from './ui/placementUI.js';
@@ -755,78 +756,23 @@ async function init() {
 
             // Handle cargo unloads (specific units selected for amphibious assault)
             if (data.cargoUnloads?.length > 0) {
-              // Check if destination is non-friendly territory (for amphibious assault marking)
-              // This includes enemy territories AND undefended/neutral territories
-              const destOwner = gameState.getOwner(data.to);
-              const isNonFriendlyTerritory = !destOwner ||
-                (destOwner !== gameState.currentPlayer.id && !gameState.areAllies(gameState.currentPlayer.id, destOwner));
-
               for (const cargoUnload of data.cargoUnloads) {
-                const transport = transports.find(t => t.id === cargoUnload.transportId);
-                if (transport && transport.cargo) {
-                  // Find and unload the specific units from this transport
-                  // IMPORTANT: Cargo items are stored individually (no quantity field)
-                  // So we need to remove multiple items if unloading multiple units
-                  let remaining = cargoUnload.quantity;
-                  let unloadedCount = 0;
-
-                  while (remaining > 0) {
-                    const cargoIdx = transport.cargo.findIndex(c => c.type === cargoUnload.unitType);
-                    if (cargoIdx < 0) break; // No more of this unit type
-
-                    const cargoItem = transport.cargo[cargoIdx];
-                    const itemQty = cargoItem.quantity || 1;
-                    const toUnload = Math.min(remaining, itemQty);
-
-                    // Remove from transport
-                    if (toUnload >= itemQty) {
-                      transport.cargo.splice(cargoIdx, 1);
-                    } else {
-                      cargoItem.quantity = itemQty - toUnload;
-                    }
-
-                    remaining -= toUnload;
-                    unloadedCount += toUnload;
-                  }
-
-                  if (unloadedCount > 0) {
-                    // Mark transport as moved (can't move again this turn)
-                    transport.moved = true;
-
-                    // Add to destination (mark units as moved)
-                    const destUnits = gameState.units[data.to] || [];
-                    const existingUnit = destUnits.find(u => u.type === cargoUnload.unitType && u.owner === gameState.currentPlayer.id && u.moved);
-                    if (existingUnit) {
-                      existingUnit.quantity = (existingUnit.quantity || 1) + unloadedCount;
-                    } else {
-                      destUnits.push({
-                        type: cargoUnload.unitType,
-                        owner: gameState.currentPlayer.id,
-                        quantity: unloadedCount,
-                        moved: true
-                      });
-                    }
-                    gameState.units[data.to] = destUnits;
-
-                    // Mark as amphibious assault if unloading to non-friendly territory during combat move
-                    if (isNonFriendlyTerritory && gameState.turnPhase === TURN_PHASES.COMBAT_MOVE) {
-                      if (!gameState.amphibiousTerritories) gameState.amphibiousTerritories = new Set();
-                      gameState.amphibiousTerritories.add(data.to);
-                    }
-
-                    // Track for move history (for undo)
-                    if (!gameState.moveHistory) gameState.moveHistory = [];
-                    gameState.moveHistory.push({
-                      from: data.from,
-                      to: data.to,
-                      units: [{ type: cargoUnload.unitType, quantity: unloadedCount }],
-                      transportId: cargoUnload.transportId,
-                      isAmphibious: true
-                    });
-
-                    unloadedUnits.push({ type: cargoUnload.unitType, quantity: unloadedCount });
-                    anySuccess = true;
-                  }
+                let remaining = cargoUnload.quantity;
+                while (remaining > 0) {
+                  const live = (gameState.getUnitsAt(data.from) || [])
+                    .filter(u => u.type === 'transport' && u.owner === gameState.currentPlayer.id);
+                  const transportIdx = live.findIndex(t => t.id === cargoUnload.transportId);
+                  if (transportIdx < 0) break;
+                  const result = gameState.unloadSingleUnit(
+                    data.from,
+                    transportIdx,
+                    cargoUnload.unitType,
+                    data.to,
+                  );
+                  if (!result?.success) break;
+                  remaining -= 1;
+                  unloadedUnits.push({ type: cargoUnload.unitType, quantity: 1 });
+                  anySuccess = true;
                 }
               }
             }
@@ -2506,36 +2452,60 @@ async function init() {
       }, PHONE_INSPECT_HOLD_MS);
     }
 
-    // Check if we should start a unit drag (during movement phases)
-    if (gameState && e.button === 0) {
-      const turnPhase = gameState.turnPhase;
-      const isMovementPhase =
-        turnPhase === TURN_PHASES.COMBAT_MOVE ||
-        turnPhase === TURN_PHASES.NON_COMBAT_MOVE ||
-        turnPhase === TURN_PHASES.CONDUCT_COMBAT; // For retreat
-
-      if (isMovementPhase && !gameState.currentPlayer?.isAI) {
-        const world = camera.screenToWorld(e.clientX, e.clientY);
-        const wrappedX = wrapX(world.x);
-        const hit = territoryMap.hitTest(wrappedX, world.y);
-
-        if (hit) {
-          const units = gameState.getUnitsAt(hit.name);
-          const playerUnits = units?.filter(u => u.owner === gameState.currentPlayer.id) || [];
-
-          if (playerUnits.length > 0) {
-            // Store potential drag start
-            dragStartPos = { x: e.clientX, y: e.clientY };
-            dragSourceTerritory = hit;
-            dragCurrentPos = { x: e.clientX, y: e.clientY };
-          }
-        }
+    // Unit drag only when the press starts on a unit that is already
+    // selected. Any other press pans the map (9.22.26.09).
+    let unitDragGesture = false;
+    if (gameState && e.button === 0 && !gameState.currentPlayer?.isAI) {
+      const world = camera.screenToWorld(e.clientX, e.clientY);
+      const wrappedX = wrapX(world.x);
+      const hit = territoryMap.hitTest(wrappedX, world.y);
+      const unitHit = unitRenderer?.hitTestUnit(wrappedX, world.y, camera.zoom);
+      unitDragGesture = pointerStartsUnitDrag({
+        button: e.button,
+        turnPhase: gameState.turnPhase,
+        isAI: !!gameState.currentPlayer?.isAI,
+        unitHit,
+        selectedUnits: playerPanel.moveSelectedUnits,
+        currentPlayerId: gameState.currentPlayer?.id,
+      });
+      if (unitDragGesture && hit) {
+        dragStartPos = { x: e.clientX, y: e.clientY };
+        dragSourceTerritory = hit;
+        dragCurrentPos = { x: e.clientX, y: e.clientY };
       }
     }
 
     beginPhoneSetupGesture(e);
-    camera.onMouseDown(e);
-    canvas.classList.add('panning');
+    if (!unitDragGesture) {
+      camera.onMouseDown(e);
+      canvas.classList.add('panning');
+    }
+  });
+
+  // Desktop combat / non-combat: right-click a legal destination confirms
+  // the selected units. Left-click only selects the territory.
+  canvas.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    if (!gameState || gameState.currentPlayer?.isAI) return;
+    const selected = playerPanel.moveSelectedUnits || {};
+    const hasSelection = Object.values(selected).some((qty) => Number(qty) > 0);
+    const world = camera.screenToWorld(e.clientX, e.clientY);
+    const hit = territoryMap.hitTest(wrapX(world.x), world.y);
+    const from = playerPanel.selectedTerritory;
+    const isCombatMove = gameState.turnPhase === TURN_PHASES.COMBAT_MOVE;
+    const dests = (hit && from)
+      ? playerPanel._getValidDestinations(from, gameState.currentPlayer, isCombatMove)
+      : [];
+    const destLegal = !!(hit && dests.some((d) => d.name === hit.name));
+    if (!rightClickConfirmsMove({
+      button: 2,
+      turnPhase: gameState.turnPhase,
+      hasSelection,
+      destLegal,
+    })) return;
+    playerPanel.movePendingDest = hit.name;
+    playerPanel._dispatchAction({ dataset: { action: 'confirm-move' } });
+    camera.dirty = true;
   });
 
   canvas.addEventListener('pointerdown', (e) => {
@@ -2568,22 +2538,12 @@ async function init() {
       const distance = Math.sqrt(dx * dx + dy * dy);
 
       if (distance > DRAG_THRESHOLD) {
-        // Start dragging
+        // Start dragging the units already selected. Do not widen the
+        // selection to the whole stack (9.22.26.09).
         isDraggingUnits = true;
         canvas.classList.add('dragging-units');
+        canvas.classList.remove('panning');
 
-        // Select the stack BEFORE asking for dests. An empty selection used
-        // to preview every adjacent sea zone as a combat-move attack.
-        const units = gameState.getUnitsAt(dragSourceTerritory.name) || [];
-        const playerUnits = units.filter(u => u.owner === gameState.currentPlayer.id);
-        playerPanel.setSelectedTerritory(dragSourceTerritory);
-        playerPanel.moveSelectedUnits = {};
-        for (const unit of playerUnits) {
-          const def = unitDefs[unit.type];
-          if (def && (def.movement || 0) > 0 && !unit.moved) {
-            playerPanel.moveSelectedUnits[unit.type] = unit.quantity || 1;
-          }
-        }
         const isCombatMove = gameState.turnPhase === TURN_PHASES.COMBAT_MOVE;
         dragValidDestinations = playerPanel._getValidDestinations(dragSourceTerritory, gameState.currentPlayer, isCombatMove);
 
@@ -2749,14 +2709,13 @@ async function init() {
 
         if (result.success) {
           actionLog.logMove(
-            gameState.currentPlayer,
             dragSourceTerritory.name,
             hit.name,
-            Object.entries(playerPanel.moveSelectedUnits)
-              .filter(([_, qty]) => qty > 0)
-              .map(([type, qty]) => ({ type, quantity: qty })),
-            result.isAttack
+            unitsToMove,
+            gameState.currentPlayer,
           );
+          // Illegal drops never reach here — the stack stays on the source.
+          syncManager?.pushStateNow?.();
         }
 
         // Reset movement state

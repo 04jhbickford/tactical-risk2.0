@@ -15,7 +15,7 @@ import {
 import { createSoloLobby } from '../src/map/threeSoloLobby.js';
 import { injectThreeChrome } from '../src/map/threeMapChrome.js';
 
-assert.equal(GAME_VERSION, 'V2.81.57-unified.2', 'stamp is unified.2');
+assert.equal(GAME_VERSION, 'V2.81.57-unified.3', 'stamp is unified.2');
 assert.equal(UX_LABEL_EXPERIMENTAL, 'Experimental UX');
 assert.equal(resolveUxMode('?ux=three'), UX_CLASSIC, '?ux=three redirects to Classic');
 assert.doesNotMatch(applyUxQuery(UX_THREE, 'https://example.test/'), /ux=three/);

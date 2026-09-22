@@ -23,7 +23,7 @@ import {
   upsertPendingAirLanding,
   wasFriendlyAtTurnStart,
 } from './airLanding.js';
-import { landOnlySeaAttackIllegal, moveSelectionProfile, seaZoneHasEnemyForAirAttack } from './combatMoveEligibility.js';
+import { airCombatMoveMayOccupy, landOnlySeaAttackIllegal, moveSelectionProfile, seaZoneHasEnemyForAirAttack } from './combatMoveEligibility.js';
 import { cascadeUndoIndexes } from './moveUndo.js';
 import { emitGameEvent, summarizeUnits } from '../multiplayer/gameEventLog.js';
 import { omitUndefinedDeep } from './persistState.js';
@@ -2715,6 +2715,11 @@ export class GameState {
       if (!toT?.isWater && !wasFriendlyAtTurnStart(this, toTerritory, player.id) && !(isCombatMove && isEnemy)) {
         return { success: false, error: 'Air cannot land on a territory captured this turn' };
       }
+      // Empty enemy or neutral land is not a combat-move attack. Aircraft
+      // do not conquer it and must not end the move sitting on it.
+      if (isCombatMove && !toT?.isWater && !airCombatMoveMayOccupy(this, toTerritory, player.id)) {
+        return { success: false, error: 'Aircraft cannot attack or occupy an empty territory' };
+      }
       if (isCombatMove && !hasLegalAirLandingFrom(
         this, toTerritory, airRemaining, airUnit.type, unitDefs, player.id,
       )) {
@@ -3258,7 +3263,35 @@ export class GameState {
     return { success: undone > 0, undone };
   }
 
-  // Undo one listed row. Later moves that continued those units revert first.
+  _moveHasLaterContinuation(index) {
+    const earlier = this.moveHistory?.[index];
+    if (!earlier) return false;
+    for (let i = index + 1; i < this.moveHistory.length; i++) {
+      if (cascadeUndoIndexes(this.moveHistory, index).includes(i) && i !== index) return true;
+    }
+    return false;
+  }
+
+  _moveUnitsStillAtDestination(move) {
+    if (!move) return false;
+    const toUnits = this.units?.[move.to] || [];
+    if (move.shipIds?.length) {
+      return move.shipIds.every((id) => toUnits.some((u) => u.id === id));
+    }
+    if (move.isAmphibious || move.loadedOntoTransport || move.loadedOntoCarrier) return true;
+    const units = Array.isArray(move.units) ? move.units : [];
+    if (!units.length) return false;
+    for (const unit of units) {
+      const need = Number(unit.quantity) || 1;
+      const have = toUnits
+        .filter((stack) => stack.type === unit.type && stack.owner === move.player && !stack.id)
+        .reduce((sum, stack) => sum + (Number(stack.quantity) || 0), 0);
+      if (have < need) return false;
+    }
+    return true;
+  }
+
+  // Undo one listed row. Later moves stay until their own Undo is clicked.
   undoMoveAt(index) {
     const blocked = this._movementUndoPhaseError();
     if (blocked) return blocked;
@@ -3267,7 +3300,13 @@ export class GameState {
     if (!Number.isInteger(index) || index < lock || index >= this.moveHistory.length) {
       return { success: false, error: 'Cannot undo a committed combat move' };
     }
-    const order = cascadeUndoIndexes(this.moveHistory, index);
+    // 9.22.26.04: the clicked row is the only undo. A later hop of the same
+    // units is a different row. If those units have already left this
+    // destination, refuse instead of reverting the rest of the stack.
+    if (this._moveHasLaterContinuation(index) && !this._moveUnitsStillAtDestination(this.moveHistory[index])) {
+      return { success: false, error: 'Undo the later move of these units first' };
+    }
+    const order = [index];
     const player = this.currentPlayer;
     if (!player) return { success: false, error: 'No current player' };
     for (const i of order) {
@@ -3324,6 +3363,9 @@ export class GameState {
       const remainingFriendly = toUnits.filter(u => u.owner === player.id);
       if (remainingFriendly.length === 0 && this.amphibiousTerritories) {
         this.amphibiousTerritories.delete(lastMove.to);
+      }
+      if (lastMove.captured && lastMove.previousOwner && this.territoryState[lastMove.to]) {
+        this.territoryState[lastMove.to].owner = lastMove.previousOwner;
       }
       return { success: true };
     }
@@ -4886,6 +4928,37 @@ export class GameState {
 
   // --- Transport & Carrier System ---
 
+  // Land units that unload into an empty hostile territory take it.
+  // A territory that still has defenders stays for the combat phase.
+  _captureEmptyHostileLand(territoryName) {
+    if (this.turnPhase !== TURN_PHASES.COMBAT_MOVE) return null;
+    const zone = this.territoryByName?.[territoryName];
+    if (!zone || zone.isWater) return null;
+    const player = this.currentPlayer;
+    if (!player) return null;
+    const owner = this.getOwner(territoryName);
+    const hostile = !!(owner && owner !== player.id && !this.areAllies(player.id, owner));
+    if (owner && !hostile) return null;
+    const defenders = (this.units[territoryName] || []).some((unit) => (
+      unit
+      && unit.owner !== player.id
+      && !this.areAllies(player.id, unit.owner)
+      && (Number(unit.quantity) || 0) > 0
+      && unit.type !== 'factory'
+    ));
+    if (defenders) return null;
+    if (!this.territoryState[territoryName]) this.territoryState[territoryName] = {};
+    this.territoryState[territoryName].owner = player.id;
+    if (!(this.capturedThisTurn instanceof Set)) this.capturedThisTurn = new Set();
+    this.capturedThisTurn.add(territoryName);
+    let cardAwarded = null;
+    if (!this.conqueredThisTurn[player.id]) {
+      this.conqueredThisTurn[player.id] = true;
+      cardAwarded = this.awardRiskCard(player.id);
+    }
+    return { captured: true, previousOwner: owner || null, cardAwarded };
+  }
+
   // Load a unit onto a transport in the same sea zone
   loadTransport(seaZone, transportIndex, unitType, landTerritory, unitDefs) {
     const player = this.currentPlayer;
@@ -5147,6 +5220,8 @@ export class GameState {
       }
     }
 
+    const capture = this._captureEmptyHostileLand(coastalTerritory);
+
     // Track in move history for undo - mark as amphibious unload
     if (unloadedUnits.length > 0) {
       this._pushMove({
@@ -5156,6 +5231,8 @@ export class GameState {
         player: player.id,
         isAmphibious: true,
         transportId: transport.id,
+        captured: !!capture?.captured,
+        previousOwner: capture?.previousOwner || null,
       });
     }
 
@@ -5243,6 +5320,8 @@ export class GameState {
       }
     }
 
+    const capture = this._captureEmptyHostileLand(coastalTerritory);
+
     // Track in move history for undo - mark as amphibious unload
     this._pushMove({
       from: seaZone,
@@ -5251,6 +5330,8 @@ export class GameState {
       player: player.id,
       isAmphibious: true,
       transportId: transport.id,
+      captured: !!capture?.captured,
+      previousOwner: capture?.previousOwner || null,
     });
 
     this._notify();

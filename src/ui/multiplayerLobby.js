@@ -264,6 +264,10 @@ export class MultiplayerLobby {
 
   _render() {
     const savedScroll = captureLobbyScroll(this.el);
+    const focused = typeof document !== 'undefined' ? document.activeElement : null;
+    if (focused && this.el?.contains?.(focused) && typeof focused.blur === 'function') {
+      focused.blur();
+    }
     const user = this.authManager.getUser();
 
     let content = '';
