@@ -56,7 +56,7 @@ import { withTimeout } from './utils/timeout.js';
 import { HUD } from './ui/hud.js';
 import { Minimap } from './ui/minimap.js';
 import { Lobby } from './ui/lobby.js';
-import { isPocketPreviewRequested, resolveUxMode, UX_THREE } from './map/presentationMode.js';
+import { redirectUxAliasesIfNeeded } from './map/presentationMode.js';
 import { GAME_VERSION } from './version.js';
 
 function paintGameStamp() {
@@ -1622,7 +1622,7 @@ async function init() {
     if (typeof unbindDiscordTurnPing === 'function') unbindDiscordTurnPing();
     unbindDiscordTurnPing = bindDiscordTurnPing(gameState, {
       getGameId: () => currentGameCode || '',
-      getUxMode: () => resolveUxMode(),
+      getUxMode: () => 'classic',
       getOrigin: () => (typeof location !== 'undefined' ? `${location.origin}${location.pathname}` : ''),
       isApplyingRemote: () => !!syncManager?.isLoading?.(),
       onResult: (result) => {
@@ -3281,14 +3281,8 @@ async function init() {
   dismissStartupLoader();
 }
 
-if (resolveUxMode() === UX_THREE) {
-  const boot = isPocketPreviewRequested()
-    ? import('./map/uxPreview.js').then((mod) => mod.bootUxPreview())
-    : import('./map/threeSoloBoot.js').then((mod) => mod.bootThreeSolo());
-  boot.catch((err) => {
-    console.error('Failed to start Experimental UX:', err);
-    reportStartupError('Could not start Experimental UX. Classic Canvas is unchanged at / or ?ux=classic.');
-  });
+if (redirectUxAliasesIfNeeded()) {
+  // Experimental / classic query aliases rewrite to the unified shell URL.
 } else {
   init().catch((err) => {
     console.error('Failed to initialize:', err);

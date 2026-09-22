@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 import { GAME_VERSION } from '../src/version.js';
 import {
   UX_LABEL_EXPERIMENTAL,
+  UX_CLASSIC,
   UX_THREE,
   resolveUxMode,
   applyUxQuery,
@@ -14,10 +15,10 @@ import {
 import { createSoloLobby } from '../src/map/threeSoloLobby.js';
 import { injectThreeChrome } from '../src/map/threeMapChrome.js';
 
-assert.equal(GAME_VERSION, 'V2.81.57-dual-path.19', 'stamp is dual-path.19');
+assert.equal(GAME_VERSION, 'V2.81.57-unified.1', 'stamp is unified.1');
 assert.equal(UX_LABEL_EXPERIMENTAL, 'Experimental UX');
-assert.equal(resolveUxMode('?ux=three'), UX_THREE, '?ux=three still opens Experimental UX');
-assert.match(applyUxQuery(UX_THREE, 'https://example.test/'), /ux=three/);
+assert.equal(resolveUxMode('?ux=three'), UX_CLASSIC, '?ux=three redirects to Classic');
+assert.doesNotMatch(applyUxQuery(UX_THREE, 'https://example.test/'), /ux=three/);
 
 const setup = JSON.parse(readFileSync(new URL('../data/setup.json', import.meta.url), 'utf8'));
 const lobby = createSoloLobby(setup, '?ux=three');
@@ -52,8 +53,8 @@ const lobbySrc = readFileSync(new URL('../src/ui/lobby.js', import.meta.url), 'u
 const classicCanvas = readFileSync(new URL('../src/map/mapRenderer.js', import.meta.url), 'utf8');
 
 assert.match(chromeSrc, /Experimental UX|UX_LABEL_EXPERIMENTAL/);
-assert.match(lobbySrc, /data-action="ux-classic"/);
-assert.match(lobbySrc, /data-action="ux-three"/);
+assert.doesNotMatch(lobbySrc, /data-action="ux-classic"/);
+assert.doesNotMatch(lobbySrc, /data-action="ux-three"/);
 assert.match(chromeSrc, /data-lobby="ux"/);
 assert.doesNotMatch(chromeSrc, /New UX \(Three\.js\)/);
 assert.doesNotMatch(lobbySrc, /New UX \(Three\.js\)/);

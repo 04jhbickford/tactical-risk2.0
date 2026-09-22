@@ -1,11 +1,12 @@
-// Durable Classic | Experimental fork.
-// Queryless / cold load is Experimental (`three`). The lobby offers both
-// as explicit choices. Classic is `?ux=classic` (not a sticky leftover).
+// Unified product shell (post dual-path). Classic Canvas + mobile chrome is
+// the only player-facing path. Experimental (`three`) deep links redirect here.
+// threeSolo* modules remain in-tree for history / conservative cleanup — they
+// are not booted from main.js after V2.81.57-unified.1.
 
 export const UX_STORAGE_KEY = 'tacticalRisk_uxMode';
 export const UX_CLASSIC = 'classic';
 export const UX_THREE = 'three';
-// Player-facing label. Mode key stays `three` so ?ux=three deep links work.
+/** @deprecated Label kept for any leftover copy; picker is gone. */
 export const UX_LABEL_EXPERIMENTAL = 'Experimental UX';
 
 const ON = new Set(['1', 'true', 'yes', 'three', 'new', 'newux']);
@@ -14,10 +15,6 @@ const CLASSIC = new Set(['0', 'false', 'no', 'classic', 'canvas', 'off']);
 function paramsOf(search = '') {
   const q = String(search || '');
   return new URLSearchParams(q.startsWith('?') ? q : (q ? `?${q}` : ''));
-}
-
-function hasUxQuery(params) {
-  return params.has('ux') || params.has('three');
 }
 
 export function clearUxMode() {
@@ -34,64 +31,34 @@ export function clearUxMode() {
   return UX_CLASSIC;
 }
 
-export function persistUxMode(mode) {
-  if (mode !== UX_THREE) return clearUxMode();
-  try {
-    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(UX_STORAGE_KEY, UX_THREE);
-  } catch {
-    /* private mode */
-  }
-  return UX_THREE;
+export function persistUxMode(_mode) {
+  // Unified: never sticky-persist Experimental.
+  return clearUxMode();
 }
 
-export function applyUxQuery(mode, href = typeof location !== 'undefined' ? location.href : 'http://localhost/') {
+/** Canonical URL for the unified shell — strips ux/three/solo Experimental aliases. */
+export function applyUxQuery(_mode, href = typeof location !== 'undefined' ? location.href : 'http://localhost/') {
   const url = new URL(href, 'http://localhost/');
-  if (mode === UX_THREE) {
-    url.searchParams.set('ux', UX_THREE);
-    url.searchParams.delete('three');
-  } else if (mode === UX_CLASSIC) {
-    // Explicit lobby choice. Queryless `/` stays Experimental, so Classic
-    // must keep `?ux=classic` or the click reloads back into Experimental.
-    url.searchParams.set('ux', UX_CLASSIC);
-    url.searchParams.delete('three');
-    url.searchParams.delete('solo');
-  } else {
-    url.searchParams.delete('ux');
-    url.searchParams.delete('three');
-    url.searchParams.delete('solo');
-  }
+  url.searchParams.delete('ux');
+  url.searchParams.delete('three');
+  url.searchParams.delete('solo');
   return url.toString();
 }
 
-// Shared Classic | Experimental lobby picker. Both forks render this.
-export function lobbyInterfaceChoices(active = UX_THREE) {
-  const classicOn = active === UX_CLASSIC;
-  return {
-    classic: {
-      id: UX_CLASSIC,
-      label: 'Classic',
-      desc: 'Canvas',
-      pressed: classicOn,
-    },
-    experimental: {
-      id: UX_THREE,
-      label: UX_LABEL_EXPERIMENTAL,
-      desc: 'Three chrome',
-      pressed: !classicOn,
-    },
-  };
+/** @deprecated Picker removed in unified.1 — returns empty so callers paint nothing. */
+export function lobbyInterfaceChoices(_active = UX_CLASSIC) {
+  return { classic: null, experimental: null };
 }
 
-export function navigateUxMode(mode) {
-  const next = mode === UX_THREE ? persistUxMode(UX_THREE) : clearUxMode();
-  if (typeof location === 'undefined') return next;
-  const dest = applyUxQuery(next, location.href);
+export function navigateUxMode(_mode) {
+  clearUxMode();
+  if (typeof location === 'undefined') return UX_CLASSIC;
+  const dest = applyUxQuery(UX_CLASSIC, location.href);
   if (dest !== location.href) location.assign(dest);
   else location.reload();
-  return next;
+  return UX_CLASSIC;
 }
 
-// Pocket demo only — never the lobby-driven New UX path.
 export function isPocketPreviewRequested(search = typeof location !== 'undefined' ? location.search : '') {
   const params = paramsOf(search);
   const pocket = String(params.get('pocket') || '').toLowerCase();
@@ -101,24 +68,38 @@ export function isPocketPreviewRequested(search = typeof location !== 'undefined
   return ON.has(pocket) || ON.has(max) || ON.has(stress) || demo === 'max' || demo === 'fat' || demo === 'big';
 }
 
+/**
+ * Unified resolver: always Classic. Experimental query aliases still parse as
+ * "requested three" only so boot can strip them via redirectUxAliasesIfNeeded.
+ */
 export function resolveUxMode(search = typeof location !== 'undefined' ? location.search : '') {
   const params = paramsOf(search);
   const ux = String(params.get('ux') || '').toLowerCase();
   const three = String(params.get('three') || '').toLowerCase();
-
-  if (CLASSIC.has(ux)) {
-    // Deep link only. Do not persist — queryless stays Experimental.
+  // Ignore leftover Classic/Experimental sticky storage.
+  clearUxMode();
+  if (ON.has(ux) || ON.has(three) || CLASSIC.has(ux)) {
+    // Deep links exist — product is unified Classic either way.
     return UX_CLASSIC;
   }
-  if (ON.has(ux) || ON.has(three)) {
-    return UX_THREE;
-  }
-
-  // Default entry is Experimental. Classic is not a sticky leftover.
-  if (!hasUxQuery(params)) clearUxMode();
-  return UX_THREE;
+  return UX_CLASSIC;
 }
 
-export function isThreeUx(search) {
-  return resolveUxMode(search) === UX_THREE;
+export function isThreeUx(search = typeof location !== 'undefined' ? location.search : '') {
+  return false;
+}
+
+/** If URL still carries Experimental aliases, rewrite to clean unified URL. */
+export function redirectUxAliasesIfNeeded(href = typeof location !== 'undefined' ? location.href : '') {
+  if (typeof location === 'undefined') return false;
+  const url = new URL(href || location.href, location.origin);
+  const ux = String(url.searchParams.get('ux') || '').toLowerCase();
+  const three = String(url.searchParams.get('three') || '').toLowerCase();
+  const solo = url.searchParams.has('solo');
+  const dirty = ON.has(ux) || CLASSIC.has(ux) || ON.has(three) || solo;
+  if (!dirty) return false;
+  const clean = applyUxQuery(UX_CLASSIC, url.toString());
+  if (clean === location.href) return false;
+  location.replace(clean);
+  return true;
 }
