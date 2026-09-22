@@ -435,8 +435,9 @@ export class AIController {
     let remaining = ipcs;
     const purchased = [];
 
-    // Island capitals buy a transport and an escort before a land army.
-    // Continental capitals keep the existing priority list.
+    // Island capitals (no land step, including land bridges) buy a
+    // transport and an escort before a land army. Japan, the UK, and
+    // Eire can walk, so they keep the normal purchase list.
     if (islandStart && !strategy.threatenedCapital && capitalZone) {
       const sea = adjacentSeas(this.gameState.territoryByName, capital)[0];
       const owned = this.gameState.getPlayerTerritories?.(player.id) || [];

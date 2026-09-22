@@ -2,6 +2,16 @@
 
 ---
 
+## 9.22.26 — unified.4 island-capital definition
+
+Stamp `V2.81.57-unified.4`. Schema stays 11.
+
+- [x] **9.22.26.10 follow-up** Island capital means land units on that territory have no land step, including land bridges. Loading a transport is the only land-unit move, and only when a transport is there. Japan, the United Kingdom, and Eire can walk, so they use the normal purchase AI. Australia can walk to East Indies and New Zealand, so it is not an island capital either. The graph’s sea-locked territories are Borneo Celebes, Caroline Islands, Hawaiian Islands, Midway, New Guinea, Okinawa, Philippines, Solomon Islands, and Wake Island. None of the five setup capitals are in that set.
+
+Receipt: `node tools/test-unified-3-playtest.mjs`.
+
+---
+
 ## 9.22.26 — unified.3 playtest fix pack
 
 Stamp `V2.81.57-unified.3`. Schema stays 11.

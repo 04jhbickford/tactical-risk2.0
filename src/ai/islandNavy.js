@@ -1,21 +1,41 @@
-// Island-start AI (9.22.26.10).
-// A capital whose land component is small cannot walk to the rest of the
-// map, so the purchase plan leads with a transport and a cheap escort.
-// Continental capitals are left to the existing land-army plan.
+// Island-capital AI (9.22.26.10, redefined for unified.4).
+// Bastion: an island capital is one where land units have no movement
+// except loading a transport, when one is available. Land adjacency
+// includes land bridges, so Japan (Manchuria), the United Kingdom
+// (Eire, Finland Norway, West Europe), and Eire are not island capitals.
+// The set is derived from the movement graph. No faction list.
 
-export const ISLAND_LANDMASS_MAX = 4;
+import { LAND_BRIDGES } from '../state/gameState.js';
+
 const ESCORT_TYPES = ['submarine', 'destroyer', 'cruiser', 'battleship', 'carrier'];
 
-export function landmassNames(territoryByName, startName) {
+/** Land territories a land unit can step to, including land bridges. */
+export function landMoveTargets(territoryByName, landName, landBridges = LAND_BRIDGES) {
+  const land = territoryByName?.[landName];
+  if (!land || land.isWater) return [];
+  const names = new Set();
+  for (const conn of land.connections || []) {
+    const next = territoryByName?.[conn];
+    if (next && !next.isWater) names.add(conn);
+  }
+  for (const pair of landBridges || []) {
+    const other = pair[0] === landName ? pair[1] : pair[1] === landName ? pair[0] : null;
+    if (!other || other === landName) continue;
+    if (territoryByName?.[other]?.isWater) continue;
+    names.add(other);
+  }
+  return [...names];
+}
+
+export function landmassNames(territoryByName, startName, landBridges = LAND_BRIDGES) {
   const start = territoryByName?.[startName];
   if (!start || start.isWater) return [];
   const seen = new Set([startName]);
   const queue = [startName];
   while (queue.length) {
     const name = queue.pop();
-    for (const conn of territoryByName[name]?.connections || []) {
-      const next = territoryByName[conn];
-      if (!next || next.isWater || seen.has(conn)) continue;
+    for (const conn of landMoveTargets(territoryByName, name, landBridges)) {
+      if (!territoryByName?.[conn] || seen.has(conn)) continue;
       seen.add(conn);
       queue.push(conn);
     }
@@ -23,9 +43,15 @@ export function landmassNames(territoryByName, startName) {
   return [...seen];
 }
 
-export function isIslandCapital(territoryByName, capitalName, maxSize = ISLAND_LANDMASS_MAX) {
-  const mass = landmassNames(territoryByName, capitalName);
-  return mass.length > 0 && mass.length <= maxSize;
+/**
+ * True when a land unit on this capital has no legal land step.
+ * The only remaining land-unit move is loading a transport in an
+ * adjacent sea zone, and only when a transport is there.
+ */
+export function isIslandCapital(territoryByName, capitalName, landBridges = LAND_BRIDGES) {
+  const land = territoryByName?.[capitalName];
+  if (!land || land.isWater) return false;
+  return landMoveTargets(territoryByName, capitalName, landBridges).length === 0;
 }
 
 export function adjacentSeas(territoryByName, landName) {
