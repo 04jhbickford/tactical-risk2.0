@@ -68,7 +68,7 @@ const sample = buildDiscordTurnContent({
   }),
 });
 check('sample mention + deep link',
-  sample === '<@123456789012345678> Russians · your turn · Combat Move · https://tactical-risk20.vercel.app/?code=ABC123');
+  sample === '<@123456789012345678> Russians · Combat Move · https://tactical-risk20.vercel.app/?code=ABC123');
 check('unified deep link has no ux query', !sample.includes('ux='));
 console.log('SAMPLE_PING:\n' + sample);
 
@@ -78,22 +78,27 @@ const fallback = buildDiscordTurnContent({
   phase: 'Purchase',
   deepLink: 'https://tactical-risk20.vercel.app/?code=ZZZZZZ',
 });
-check('untagged fallback', fallback === 'British · your turn · Purchase · https://tactical-risk20.vercel.app/?code=ZZZZZZ');
+check('untagged fallback', fallback === 'British · Purchase · https://tactical-risk20.vercel.app/?code=ZZZZZZ');
 
 check('blank phase does not leave a dangling dot',
-  buildDiscordTurnContent({ faction: 'Russians', phase: '' }) === 'Russians · your turn');
+  buildDiscordTurnContent({ faction: 'Russians', phase: '' }) === 'Russians');
 
 check('alias Bastion', resolveDiscordSnowflake({ name: 'Bastion' }) === '261711980526567428');
 check('alias crusader_bastion', resolveDiscordSnowflake({ discordName: '@crusader_bastion' }) === '261711980526567428');
+check('alias sean', resolveDiscordSnowflake({ displayName: 'Sean' }) === '261711980526567428');
+check('alias benson', resolveDiscordSnowflake({ name: 'Benson' }) === '261711980526567428');
 check('alias Sean Benson', resolveDiscordSnowflake({ displayName: 'sean benson' }) === '261711980526567428');
 check('alias rwts', resolveDiscordSnowflake({ username: 'RWTS' }) === '600101834727620620');
+check('alias robert', resolveDiscordSnowflake({ name: 'Robert' }) === '600101834727620620');
+check('alias watts', resolveDiscordSnowflake({ displayName: 'Watts' }) === '600101834727620620');
 check('alias Robert Watts', resolveDiscordSnowflake({ displayName: 'Robert Watts' }) === '600101834727620620');
 check('alias Robfox007', resolveDiscordSnowflake({ seatLabel: 'Robfox007' }) === '600101834727620620');
 check('alias robfox007', resolveDiscordSnowflake({ name: 'robfox007' }) === '600101834727620620');
 check('explicit snowflake beats alias',
   resolveDiscordSnowflake({ discordUserId: '123456789012345678', name: 'Bastion' }) === '123456789012345678');
 check('unknown name stays untagged', resolveDiscordSnowflake({ name: 'James' }) === '');
-check('partial name is not an alias', resolveDiscordSnowflake({ name: 'Robert' }) === '');
+check('token prefix is not an alias', resolveDiscordSnowflake({ name: 'Roberts' }) === '');
+check('crusader alone is not Bastion', resolveDiscordSnowflake({ name: 'crusader' }) === '');
 
 const summary = formatTurnPingSummary([
   {
@@ -152,11 +157,12 @@ check('empty turn omits summary', formatTurnPingSummary([], { actorId: 'Germans'
 const enriched = buildDiscordTurnContent({
   displayName: 'Bastion',
   faction: 'Germans',
+  phase: 'Combat Move',
   summary: 'Took Ukraine, lost 3 inf',
   deepLink: 'https://tactical-risk20.vercel.app/?code=HENV42',
 });
-check('mention + summary + resume link',
-  enriched === '<@261711980526567428> Germans · your turn · Took Ukraine, lost 3 inf · https://tactical-risk20.vercel.app/?code=HENV42');
+check('mention + phase + summary + resume link',
+  enriched === '<@261711980526567428> Germans · Combat Move · Took Ukraine, lost 3 inf · https://tactical-risk20.vercel.app/?code=HENV42');
 const huge = buildDiscordTurnContent({
   discordUserId: '261711980526567428',
   faction: 'Germans',
@@ -219,7 +225,7 @@ const fb = await maybePostDiscordTurnPing({
   storage: store,
   post: async (url, content) => { posts.push({ url, content }); return { ok: true }; },
 });
-check('unlinked fallback once', fb.ok === true && posts[1].content.startsWith('British · your turn · Purchase'));
+check('unlinked fallback once', fb.ok === true && posts[1].content.startsWith('British · Purchase'));
 
 const noProxy = await maybePostDiscordTurnPing({
   player: { id: 'Americans', isAI: false },
@@ -310,7 +316,7 @@ summaryGs.currentPlayerIndex = 1;
 summaryListeners[0]();
 check('bind mentions next player from alias and summarizes prior turn',
   summaryPosts.length === 1
-  && summaryPosts[0] === '<@261711980526567428> Germans · your turn · Combat Move · Took Ukraine, lost 3 inf · https://tactical-risk20.vercel.app/?code=HENV42');
+  && summaryPosts[0] === '<@261711980526567428> Germans · Combat Move · Took Ukraine, lost 3 inf · https://tactical-risk20.vercel.app/?code=HENV42');
 
 const apiPath = new URL('../api/discord-turn-ping.js', import.meta.url);
 check('serverless api file exists', existsSync(apiPath));
@@ -434,8 +440,9 @@ await handler({
 const sentBody = JSON.parse(sent.body);
 check('configured posts {content} and reports sent',
   sent.statusCode === 200 && sentBody.ok === true && sentBody.reason === 'sent' && postedContent);
-check('configured body is mention · your turn · phase · link',
-  postedBody.includes('<@123456789012345678> Russians · your turn · Combat Move · https://tactical-risk20.vercel.app/?code=G9'));
+check('configured body is mention · faction · phase · link',
+  postedBody.includes('<@123456789012345678> Russians · Combat Move · https://tactical-risk20.vercel.app/?code=G9')
+  && !postedBody.includes('your turn'));
 const aliased = mockRes();
 await handler({
   method: 'POST',
@@ -444,7 +451,8 @@ await handler({
     seatId: 'Germans',
     turnIndex: 8,
     faction: 'Germans',
-    displayName: 'Bastion',
+    phase: 'Combat Move',
+    displayName: 'Sean',
     summary: 'Took Ukraine, lost 3 inf',
     deepLink: 'https://tactical-risk20.vercel.app/?code=HENV42',
   },
@@ -453,7 +461,7 @@ const aliasedBody = JSON.parse(aliased.body);
 check('api aliases the next player and includes summary + link',
   aliased.statusCode === 200
   && aliasedBody.ok === true
-  && postedBody.includes('<@261711980526567428> Germans · your turn · Took Ukraine, lost 3 inf · https://tactical-risk20.vercel.app/?code=HENV42'));
+  && postedBody.includes('<@261711980526567428> Germans · Combat Move · Took Ukraine, lost 3 inf · https://tactical-risk20.vercel.app/?code=HENV42'));
 check('api alias response has no webhook',
   !JSON.stringify(aliasedBody).includes('http')
   && !JSON.stringify(aliasedBody).toLowerCase().includes('webhook'));

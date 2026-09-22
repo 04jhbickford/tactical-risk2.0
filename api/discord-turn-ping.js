@@ -11,11 +11,11 @@ const CONTENT_MAX = 1800;
 const DISCORD_ALIAS_MAP = Object.freeze([
   {
     snowflake: '261711980526567428',
-    aliases: ['Bastion', 'crusader_bastion', 'Sean Benson'],
+    aliases: ['bastion', 'crusader_bastion', 'sean', 'benson'],
   },
   {
     snowflake: '600101834727620620',
-    aliases: ['rwts', 'Robert Watts', 'Robfox007', 'robfox007'],
+    aliases: ['rwts', 'robert', 'watts', 'robfox007'],
   },
 ]);
 
@@ -37,14 +37,17 @@ function normAlias(raw) {
     .trim();
 }
 
+function aliasTokens(raw) {
+  return normAlias(raw).split(' ').filter(Boolean);
+}
+
 function lookupDiscordAlias(raw) {
-  const text = normAlias(raw);
-  if (!text) return '';
+  const tokens = new Set(aliasTokens(raw));
+  if (!tokens.size) return '';
   for (const row of DISCORD_ALIAS_MAP) {
     for (const alias of row.aliases) {
-      const a = normAlias(alias);
-      if (!a) continue;
-      if (text === a || ` ${text} `.includes(` ${a} `)) return row.snowflake;
+      const need = aliasTokens(alias);
+      if (need.length && need.every((token) => tokens.has(token))) return row.snowflake;
     }
   }
   return '';
@@ -99,11 +102,10 @@ function buildDiscordTurnContent({
     seatLabel,
     name: displayName,
   });
-  const who = cleanBit(faction) || 'seat';
-  const head = [who, 'your turn'];
+  const bits = [cleanBit(faction) || 'seat'];
   const phaseBit = cleanBit(phase);
-  if (phaseBit && phaseBit.toLowerCase() !== 'your turn') head.push(phaseBit);
-  const headText = head.join(' · ');
+  if (phaseBit) bits.push(phaseBit);
+  const headText = bits.join(' · ');
   const link = cleanBit(deepLink);
   let sum = cleanBit(summary);
   const prefix = snowflake ? `<@${snowflake}> ` : '';
