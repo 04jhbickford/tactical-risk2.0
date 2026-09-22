@@ -32,7 +32,7 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-check('stamp is unified.1', GAME_VERSION === 'V2.81.57-unified.1');
+check('stamp is unified.2', GAME_VERSION === 'V2.81.57-unified.2');
 check('channel id documented', DISCORD_TURN_CHANNEL_ID === '1551283474303025292');
 check('Classic lobby field', classicLobby.includes('mp-discord-input') && classicLobby.includes('data-action="discord-id"'));
 check('New UX lobby field', threeChrome.includes('data-lobby-discord') && threeChrome.includes('three-lobby-discord'));
@@ -60,24 +60,25 @@ const sample = buildDiscordTurnContent({
   phase: 'Combat Move',
   deepLink: buildDeepLink({
     origin: 'https://tactical-risk20.vercel.app/',
-    uxMode: 'three',
+    uxMode: 'classic',
     gameCode: 'ABC123',
   }),
 });
 check('sample mention + deep link',
-  sample === '<@123456789012345678> your turn — Russians · Combat Move\nhttps://tactical-risk20.vercel.app/?ux=three&code=ABC123');
+  sample === '<@123456789012345678> Russians · Combat Move · https://tactical-risk20.vercel.app/?code=ABC123');
+check('unified deep link has no ux query', !sample.includes('ux='));
 console.log('SAMPLE_PING:\n' + sample);
 
 const fallback = buildDiscordTurnContent({
   discordUserId: '',
   faction: 'British',
   phase: 'Purchase',
-  deepLink: 'https://tactical-risk20.vercel.app/?ux=classic&code=ZZZZZZ',
+  deepLink: 'https://tactical-risk20.vercel.app/?code=ZZZZZZ',
 });
-check('untagged fallback', fallback.startsWith('your turn — British · Purchase'));
+check('untagged fallback', fallback === 'British · Purchase · https://tactical-risk20.vercel.app/?code=ZZZZZZ');
 
 check('blank phase does not leave a dangling dot',
-  buildDiscordTurnContent({ faction: 'Russians', phase: '' }) === 'your turn — Russians');
+  buildDiscordTurnContent({ faction: 'Russians', phase: '' }) === 'Russians');
 check('setup turnPhase labels Initial Deployment',
   phaseLabelOf({ phase: 'unit_placement', turnPhase: 'setup' }) === 'Initial Deployment');
 check('playing uses getTurnPhaseName',
@@ -131,7 +132,7 @@ const fb = await maybePostDiscordTurnPing({
   storage: store,
   post: async (url, content) => { posts.push({ url, content }); return { ok: true }; },
 });
-check('unlinked fallback once', fb.ok === true && posts[1].content.startsWith('your turn — British'));
+check('unlinked fallback once', fb.ok === true && posts[1].content.startsWith('British · Purchase'));
 
 const noProxy = await maybePostDiscordTurnPing({
   player: { id: 'Americans', isAI: false },
@@ -258,8 +259,10 @@ check('api incomplete is 200', incomplete.statusCode === 200 && JSON.parse(incom
 process.env.DISCORD_TURN_WEBHOOK_URL = 'https://example.test/discord-hook';
 const prevFetch = globalThis.fetch;
 let postedContent = false;
+let postedBody = '';
 globalThis.fetch = async (_url, init) => {
-  postedContent = /"content"/.test(String(init?.body || ''));
+  postedBody = String(init?.body || '');
+  postedContent = /"content"/.test(postedBody);
   return { ok: true };
 };
 const sent = mockRes();
@@ -271,13 +274,16 @@ await handler({
     turnIndex: 4,
     faction: 'Russians',
     phase: 'Combat Move',
-    deepLink: 'https://tactical-risk20.vercel.app/?ux=classic&code=G9',
+    deepLink: 'https://tactical-risk20.vercel.app/?code=G9',
     discordUserId: '123456789012345678',
   },
 }, sent);
 const sentBody = JSON.parse(sent.body);
 check('configured posts {content} and reports sent',
   sent.statusCode === 200 && sentBody.ok === true && sentBody.reason === 'sent' && postedContent);
+check('configured body is faction · phase · link',
+  postedBody.includes('<@123456789012345678> Russians · Combat Move · https://tactical-risk20.vercel.app/?code=G9')
+  && !postedBody.includes('your turn'));
 check('sent response never includes webhook',
   !JSON.stringify(sentBody).toLowerCase().includes('webhook')
   && !JSON.stringify(sentBody).includes('example.test'));

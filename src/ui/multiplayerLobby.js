@@ -4,6 +4,7 @@
 import { getLobbyManager } from '../multiplayer/lobbyManager.js';
 import { getAuthManager } from '../multiplayer/auth.js';
 import { GAME_VERSION } from './lobby.js';
+import { captureLobbyScroll, restoreLobbyScroll } from './lobbyScroll.js';
 import { possessivePhrase } from '../utils/possessive.js';
 import {
   readLastMatch,
@@ -262,6 +263,7 @@ export class MultiplayerLobby {
   }
 
   _render() {
+    const savedScroll = captureLobbyScroll(this.el);
     const user = this.authManager.getUser();
 
     let content = '';
@@ -299,7 +301,11 @@ export class MultiplayerLobby {
       </div>
     `;
 
+    restoreLobbyScroll(this.el, savedScroll);
     this._bindEvents();
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => restoreLobbyScroll(this.el, savedScroll));
+    }
   }
 
   _renderMenu(user) {
@@ -890,7 +896,7 @@ export class MultiplayerLobby {
                 const isTaken = takenFactions.has(faction.id) && currentPlayer?.factionId !== faction.id;
                 const isSelected = currentPlayer?.factionId === faction.id;
                 return `
-                  <button class="mp-faction-btn ${isSelected ? 'selected' : ''} ${isTaken ? 'taken' : ''}"
+                  <button type="button" class="mp-faction-btn ${isSelected ? 'selected' : ''} ${isTaken ? 'taken' : ''}"
                           data-faction="${faction.id}" ${isTaken ? 'disabled' : ''}>
                     <img src="assets/flags/${faction.flag}" alt="${faction.name}">
                     <span>${faction.name}</span>
@@ -907,7 +913,7 @@ export class MultiplayerLobby {
                 const isTaken = takenColors.has(colorDef.color) && currentPlayer?.color !== colorDef.color;
                 const isSelected = currentPlayer?.color === colorDef.color;
                 return `
-                  <button class="mp-color-btn ${isSelected ? 'selected' : ''} ${isTaken ? 'taken' : ''}"
+                  <button type="button" class="mp-color-btn ${isSelected ? 'selected' : ''} ${isTaken ? 'taken' : ''}"
                           data-color="${colorDef.color}" ${isTaken ? 'disabled' : ''}
                           style="background: ${colorDef.color}" title="${colorDef.name}">
                     ${isSelected ? '<svg viewBox="0 0 24 24" fill="white" width="16" height="16"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>' : ''}
@@ -1191,7 +1197,8 @@ export class MultiplayerLobby {
     });
 
     this.el.querySelectorAll('.mp-faction-btn:not([disabled])').forEach(btn => {
-      btn.addEventListener('click', async () => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
         const factionId = btn.dataset.faction;
         const currentPlayer = this.lobbyManager.getCurrentPlayer();
         await this.lobbyManager.selectFaction(factionId, currentPlayer?.color);
@@ -1200,7 +1207,8 @@ export class MultiplayerLobby {
 
     // Color selection
     this.el.querySelectorAll('.mp-color-btn:not([disabled])').forEach(btn => {
-      btn.addEventListener('click', async () => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
         const color = btn.dataset.color;
         const currentPlayer = this.lobbyManager.getCurrentPlayer();
         await this.lobbyManager.selectFaction(currentPlayer?.factionId, color);

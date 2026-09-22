@@ -22,17 +22,19 @@ Bare ES modules: browser code cannot read Vercel env. The secret stays on the Ve
 
 ## Sample ping
 
-```
-<@123456789012345678> your turn — Russians · Combat Move
-https://tactical-risk20.vercel.app/?ux=three&code=ABC123
-```
-
-Unlinked seat (no snowflake): one untagged fallback, then deduped.
+Very simple (V2.81.57-unified.2). One line: optional mention, faction, phase, deep link. No "your turn" prose. Deep link is `?code=` only (unified shell strips `?ux=`).
 
 ```
-your turn — British · Purchase
-https://tactical-risk20.vercel.app/?ux=classic&code=ZZZZZZ
+<@123456789012345678> Russians · Combat Move · https://tactical-risk20.vercel.app/?code=ABC123
 ```
+
+Unlinked seat (no snowflake): one untagged line, then deduped.
+
+```
+British · Purchase · https://tactical-risk20.vercel.app/?code=ZZZZZZ
+```
+
+Turn pings stay off until a human sets `DISCORD_TURN_WEBHOOK_URL` on Production and Preview and redeploys. Missing env returns `{ ok: false, reason: 'unconfigured' }` HTTP 200. Do not commit a webhook URL.
 
 Diagnostics: game event `kind: 'ui'` `{ action: 'discordTurnPing', reason }`.
 

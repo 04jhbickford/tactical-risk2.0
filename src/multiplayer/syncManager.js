@@ -518,8 +518,15 @@ export class SyncManager {
       const snapshot = await transaction.get(gameRef);
       if (!snapshot.exists()) return null;
 
-      const remoteVersion = snapshot.data().stateVersion || 0;
-      if (remoteVersion > this.localVersion) {
+      const remoteDoc = snapshot.data();
+      const remoteVersion = remoteDoc.stateVersion || 0;
+      const remoteSeq = Number(remoteDoc.state?.actionSeq) || 0;
+      const localSeq = Number(this.gameState?.actionSeq) || 0;
+      // A higher version with an older board revision is a stale clobber
+      // (host AI-authority push, or an in-flight pre-confirm write). The
+      // active client's newer actionSeq must win or Confirm Attack / Undo
+      // snap back to the previous cloud doc.
+      if (remoteVersion > this.localVersion && remoteSeq >= localSeq) {
         console.warn(`[Sync] Push aborted: remote v${remoteVersion} > local v${this.localVersion}`);
         return -1;
       }
@@ -565,7 +572,17 @@ export class SyncManager {
       const data = snapshot.data();
       this.applyHostFromDoc(data);
       const remoteVersion = data.stateVersion || 0;
-      if (force || remoteVersion > this.localVersion) {
+      const apply = shouldApplyRemoteGameState({
+        remoteVersion,
+        localVersion: this.localVersion,
+        remoteCurrentPlayerId: data.currentPlayerId || null,
+        localCurrentPlayerId: this._lastCurrentPlayerId || null,
+        remoteActionSeq: data.state?.actionSeq || 0,
+        localActionSeq: this.gameState?.actionSeq || 0,
+        localGestureActive: !!this.gameState?.uiGestureActive,
+        force,
+      });
+      if (apply && (force || remoteVersion > this.localVersion)) {
         console.log(`[Sync] Reloading remote state: local v${this.localVersion} -> remote v${remoteVersion}${force ? ' (force)' : ''}`);
         this.localVersion = remoteVersion;
         if (data.state) {
@@ -639,6 +656,8 @@ export class SyncManager {
       localVersion: this.localVersion,
       remotePlayerId: remoteSeat,
       localPlayerId: localSeat,
+      remoteActionSeq: deferred.state?.actionSeq || 0,
+      localActionSeq: this.gameState?.actionSeq || 0,
     })) return;
     console.log(`[Sync] Applying snapshot deferred while pushing: v${this.localVersion} -> v${deferred.stateVersion}, seat ${localSeat} -> ${remoteSeat}`);
     this.localVersion = Math.max(this.localVersion, deferred.stateVersion || 0);

@@ -65,8 +65,8 @@ export function buildDeepLink({
   } catch {
     url = new URL('https://tactical-risk20.vercel.app/');
   }
-  if (uxMode === 'three') url.searchParams.set('ux', 'three');
-  else url.searchParams.set('ux', 'classic');
+  // Unified shell strips ?ux= on load. The notice link is the game code only.
+  void uxMode;
   if (gameCode) url.searchParams.set('code', String(gameCode).toUpperCase());
   return url.toString();
 }
@@ -79,11 +79,11 @@ export function buildDiscordTurnContent({
 } = {}) {
   const snowflake = normalizeDiscordSnowflake(discordUserId);
   const who = faction || 'seat';
-  const tail = phase ? ` · ${phase}` : '';
-  const head = snowflake
-    ? `<@${snowflake}> your turn — ${who}${tail}`
-    : `your turn — ${who}${tail}`;
-  return [head, deepLink].filter(Boolean).join('\n');
+  const bits = [who];
+  if (phase) bits.push(phase);
+  if (deepLink) bits.push(deepLink);
+  const line = bits.join(' · ');
+  return snowflake ? `<@${snowflake}> ${line}` : line;
 }
 
 export function shouldPingHumanSeat({
