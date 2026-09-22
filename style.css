@@ -3282,13 +3282,14 @@ iframe[title="Vercel Live Feedback"] {
 /* Lobby Actions */
 .mp-lobby-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   padding-top: 16px;
   border-top: 1px solid rgba(148, 163, 184, 0.1);
 }
 
 .mp-action-btn {
-  flex: 1;
+  flex: 1 1 160px;
   padding: 14px 20px;
   border-radius: 10px;
   font-size: 14px;

@@ -1,4 +1,5 @@
-// V2.81.57-dual-path.16 — per-row combat undo, waiting-lobby My Games, hide Classic.
+// V2.81.57-dual-path.17 — per-row combat undo, waiting-lobby My Games.
+// Classic | Experimental picker is restored in .17.
 // Run: node tools/test-dual-path-16-playtest.mjs
 
 import assert from 'node:assert/strict';
@@ -43,10 +44,10 @@ const bootSrc = readFileSync(join(root, 'src/map/threeSoloBoot.js'), 'utf8');
 const playSrc = readFileSync(join(root, 'src/map/threeSoloPlay.js'), 'utf8');
 const lobbyScreens = readFileSync(join(root, 'src/map/threeSoloLobby.js'), 'utf8');
 
-assert.equal(GAME_VERSION, 'V2.81.57-dual-path.16');
+assert.equal(GAME_VERSION, 'V2.81.57-dual-path.17');
 assert.equal(SCHEMA_VERSION, 11);
-assert.match(html, /content="V2\.81\.57-dual-path\.16"/);
-assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-dual-path\.16'/);
+assert.match(html, /content="V2\.81\.57-dual-path\.17"/);
+assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-dual-path\.17'/);
 
 function fresh() {
   const territories = [
@@ -235,8 +236,9 @@ assert.match(bootSrc, /joinGame/);
 assert.match(lobbyScreens, /'games'/);
 assert.match(chromeSrc, /value: 'games'/);
 assert.match(chromeSrc, /title: 'My Games'/);
-assert.doesNotMatch(lobbySrc, /data-action="ux-classic"|data-action="ux-three"/);
-assert.doesNotMatch(chromeSrc, /data-lobby="ux"/);
+assert.match(lobbySrc, /data-action="ux-classic"/);
+assert.match(lobbySrc, /data-action="ux-three"/);
+assert.match(chromeSrc, /data-lobby="ux"/);
 assert.match(chromeSrc, /Classic 1942/);
 assert.equal(resolveUxMode(''), UX_THREE);
 assert.equal(resolveUxMode('?ux=classic'), UX_CLASSIC);

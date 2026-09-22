@@ -1,7 +1,6 @@
 // Durable Classic | Experimental fork.
-// Queryless / cold load is Experimental (`three`). Classic stays on the
-// explicit deep link `?ux=classic` only — the lobby does not offer it.
-// A URL with no ux/three query does not stick Classic.
+// Queryless / cold load is Experimental (`three`). The lobby offers both
+// as explicit choices. Classic is `?ux=classic` (not a sticky leftover).
 
 export const UX_STORAGE_KEY = 'tacticalRisk_uxMode';
 export const UX_CLASSIC = 'classic';
@@ -50,12 +49,37 @@ export function applyUxQuery(mode, href = typeof location !== 'undefined' ? loca
   if (mode === UX_THREE) {
     url.searchParams.set('ux', UX_THREE);
     url.searchParams.delete('three');
+  } else if (mode === UX_CLASSIC) {
+    // Explicit lobby choice. Queryless `/` stays Experimental, so Classic
+    // must keep `?ux=classic` or the click reloads back into Experimental.
+    url.searchParams.set('ux', UX_CLASSIC);
+    url.searchParams.delete('three');
+    url.searchParams.delete('solo');
   } else {
     url.searchParams.delete('ux');
     url.searchParams.delete('three');
     url.searchParams.delete('solo');
   }
   return url.toString();
+}
+
+// Shared Classic | Experimental lobby picker. Both forks render this.
+export function lobbyInterfaceChoices(active = UX_THREE) {
+  const classicOn = active === UX_CLASSIC;
+  return {
+    classic: {
+      id: UX_CLASSIC,
+      label: 'Classic',
+      desc: 'Canvas',
+      pressed: classicOn,
+    },
+    experimental: {
+      id: UX_THREE,
+      label: UX_LABEL_EXPERIMENTAL,
+      desc: 'Three chrome',
+      pressed: !classicOn,
+    },
+  };
 }
 
 export function navigateUxMode(mode) {

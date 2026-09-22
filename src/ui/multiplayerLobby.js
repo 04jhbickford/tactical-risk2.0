@@ -25,7 +25,12 @@ import {
   shouldForgetLastMatchOnDismissRejoin,
   resolveMyGamesEntryAction,
 } from '../multiplayer/lastMatch.js';
-import { resolveHostLobbyPrimaryCta } from '../multiplayer/lobbyStart.js';
+import {
+  lobbyChromeStatusAfter,
+  resolveHostLobbyPrimaryCta,
+  resolveLobbyRoomChrome,
+  shouldShowListInOpenGames,
+} from '../multiplayer/lobbyStart.js';
 import { seatNamesForOpenGameCard } from '../multiplayer/lobbySeats.js';
 import { parseDiscordSeatInput, rememberDiscordSeat } from '../multiplayer/discordTurnPing.js';
 import { resolveHostAwayBanner } from '../ui/hudClarity.js';
@@ -930,9 +935,19 @@ export class MultiplayerLobby {
             ? `<button class="mp-action-btn secondary" data-action="back-to-browse">← Back</button>`
             : ''
           }
-          <button class="mp-action-btn ${isHost && lobby.isPublished ? 'danger-outline' : 'secondary'}" data-action="leave">
-            ${isHost && lobby.isPublished ? 'Delete Lobby' : 'Leave Lobby'}
-          </button>
+          ${(() => {
+            const roomChrome = resolveLobbyRoomChrome({
+              isHost,
+              isPublished: !!lobby.isPublished,
+            });
+            const unlistBtn = roomChrome.unlist.visible
+              ? `<button class="mp-action-btn danger-outline" data-action="unlist">${roomChrome.unlist.label}</button>`
+              : '';
+            const mainMenuBtn = roomChrome.mainMenu.visible
+              ? `<button class="mp-action-btn secondary" data-action="main-menu">${roomChrome.mainMenu.label}</button>`
+              : '';
+            return `${unlistBtn}${mainMenuBtn}`;
+          })()}
           ${(() => {
             const isFull = lobby.players.length >= lobby.settings.maxPlayers;
             const allHaveFactions = lobby.players.every(p => p.factionId);
@@ -950,7 +965,7 @@ export class MultiplayerLobby {
                   ${hostCta.label}
                 </button>
                 ${hostCta.hint ? `<p class="mp-action-hint">${hostCta.hint}</p>` : ''}
-                ${isHost && !lobby.isPublished ? `
+                ${shouldShowListInOpenGames({ isHost, isPublished: !!lobby.isPublished }) ? `
                   <button class="mp-action-btn secondary" data-action="publish">
                     List in Open Games
                   </button>
@@ -1065,11 +1080,46 @@ export class MultiplayerLobby {
       }
     });
 
-    this.el.querySelector('[data-action="leave"]')?.addEventListener('click', async () => {
-      if (!shouldLeaveLobbyView({ explicitLeave: true })) return;
-      await this.lobbyManager.leaveLobby();
-      this.mode = 'menu';
-      this._render();
+    this.el.querySelector('[data-action="unlist"]')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      if (btn.disabled || this._unlisting) return;
+      const live = this.lobbyManager.getLobby();
+      const outcome = lobbyChromeStatusAfter({
+        action: 'unlist',
+        isPublished: !!live?.isPublished,
+        isHost: this.lobbyManager.isHost(),
+      });
+      if (!outcome.allowed || outcome.navigate) return;
+      this._unlisting = true;
+      btn.disabled = true;
+      const originalText = btn.textContent;
+      btn.textContent = 'Unlisting…';
+      const result = await this.lobbyManager.unlistLobby();
+      this._unlisting = false;
+      if (result.success) {
+        this.mode = 'lobby';
+        this._render();
+      } else {
+        btn.disabled = false;
+        btn.textContent = originalText;
+        alert(result.error || 'Could not unlist');
+      }
+    });
+
+    // Main Menu leaves the room VIEW. Listed/unlisted is not written.
+    this.el.querySelector('[data-action="main-menu"]')?.addEventListener('click', () => {
+      const live = this.lobbyManager.getLobby();
+      const before = !!live?.isPublished;
+      const outcome = lobbyChromeStatusAfter({
+        action: 'main-menu',
+        isPublished: before,
+        isHost: this.lobbyManager.isHost(),
+      });
+      if (outcome.navigate !== 'main' || outcome.changed || outcome.isPublished !== before) return;
+      this._browsingAway = true;
+      this.lobbyManager.disconnectFromLobby({ notify: false });
+      this.hide();
+      if (this.onBack) this.onBack();
     });
 
     // Back to Open Games (host stays seated in Firestore; view leaves the room)

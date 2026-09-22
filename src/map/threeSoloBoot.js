@@ -23,6 +23,7 @@ import { createThreeMpSession } from './threeMpSession.js';
 import { shouldForceLobbyRoomOnSnapshot } from '../multiplayer/lastMatch.js';
 import { UX_CLASSIC, UX_THREE, navigateUxMode } from './presentationMode.js';
 import { bindDiscordTurnPing } from '../multiplayer/discordTurnPing.js';
+import { lobbyChromeStatusAfter } from '../multiplayer/lobbyStart.js';
 import { emitGameEvent } from '../multiplayer/gameEventLog.js';
 import {
   bindSealedActivate,
@@ -379,8 +380,8 @@ export async function bootThreeSolo() {
   });
 
   chrome.onLobbyChange = (kind, value) => {
-    if (kind === 'ux' && value === 'classic') {
-      navigateUxMode(UX_CLASSIC);
+    if (kind === 'ux' && (value === 'classic' || value === 'three')) {
+      navigateUxMode(value === 'classic' ? UX_CLASSIC : UX_THREE);
       return;
     }
     if (kind === 'mp-row') {
@@ -441,6 +442,45 @@ export async function bootThreeSolo() {
         lobby.screen = 'room';
         paintLobbyNow();
       }).catch(() => {});
+      return;
+    }
+    if (kind === 'mp-unlist') {
+      const before = !!lobby.mp.lobby?.isPublished;
+      const outcome = lobbyChromeStatusAfter({
+        action: 'unlist',
+        isPublished: before,
+        isHost: !!mp.isHostUser(),
+      });
+      if (!outcome.allowed || outcome.navigate) return;
+      mp.unlistRoom().then((res) => {
+        if (res && res.ok === false) {
+          lobby.mp.error = res.error || 'Could not unlist';
+          lobby.mp.lobby = mp.currentLobby() || lobby.mp.lobby;
+        } else {
+          const live = res?.lobby || mp.currentLobby();
+          lobby.mp.lobby = live
+            ? { ...live, isPublished: false }
+            : (lobby.mp.lobby ? { ...lobby.mp.lobby, isPublished: false } : live);
+        }
+        lobby.browsingAway = false;
+        lobby.screen = 'room';
+        paintLobbyNow();
+      }).catch(() => {});
+      return;
+    }
+    if (kind === 'mp-main-menu') {
+      const before = !!lobby.mp.lobby?.isPublished;
+      const outcome = lobbyChromeStatusAfter({
+        action: 'main-menu',
+        isPublished: before,
+        isHost: !!mp.isHostUser(),
+      });
+      if (outcome.navigate !== 'main' || outcome.changed || outcome.isPublished !== before) return;
+      applyLobbyAction(lobby, 'screen', 'main');
+      lobby.browsingAway = true;
+      if (lobby.mp.lobby) lobby.mp.lobby = { ...lobby.mp.lobby, isPublished: before };
+      mp.detachLobby();
+      paintLobbyNow();
       return;
     }
     if (kind === 'mp-signout') {

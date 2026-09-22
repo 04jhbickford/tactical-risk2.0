@@ -216,6 +216,17 @@ export function createThreeMpSession({ setup, territories, continents }) {
     return { ok: true, lobby: getLobbyManager().currentLobby };
   }
 
+  async function unlistRoom() {
+    const result = await getLobbyManager().unlistLobby();
+    if (!result.success) return { ok: false, error: result.error || 'Could not unlist' };
+    notify('lobby', { lobby: getLobbyManager().currentLobby });
+    return {
+      ok: true,
+      lobby: getLobbyManager().currentLobby,
+      isPublished: false,
+    };
+  }
+
   async function startRoom() {
     const result = await getLobbyManager().startGame();
     if (!result.success) return { ok: false, error: result.error || 'Start failed' };
@@ -360,6 +371,7 @@ export function createThreeMpSession({ setup, territories, continents }) {
     setDiscord,
     addAi,
     publishRoom,
+    unlistRoom,
     startRoom,
     startMatch,
     subscribe,
