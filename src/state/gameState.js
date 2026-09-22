@@ -14,12 +14,14 @@ import {
   applyAirLandingPlan,
   buildLandingPlan,
   clearPendingLandingDestinations,
+  hasLegalAirLandingFrom,
   looseAirOverWater,
   markPendingAirLandingsApplied,
   preferAirLandingOption,
   takeAirUnitsFromTerritory,
   unappliedLandingPlan,
   upsertPendingAirLanding,
+  wasFriendlyAtTurnStart,
 } from './airLanding.js';
 import { landOnlySeaAttackIllegal, moveSelectionProfile } from './combatMoveEligibility.js';
 import { emitGameEvent, summarizeUnits } from '../multiplayer/gameEventLog.js';
@@ -27,9 +29,16 @@ import { omitUndefinedDeep } from './persistState.js';
 import { captureIfAttackerHolds, finalizeAttackerHoldsOnBoard } from './combatFinalize.js';
 import {
   canPlaceAirOnCarrierInSeaZone,
+  countCarrierAir,
   loadOneAirOntoCarrier,
+  takeAirFromCarriers,
   unloadOneAirFromCarrier,
 } from './carrierPlacement.js';
+import {
+  factoryProductionLimit,
+  factoryProductionUsed,
+  resolveSeaMobilizeFactory,
+} from './mobilizeSource.js';
 
 export const GAME_PHASES = {
   LOBBY: 'lobby',
@@ -755,7 +764,7 @@ export class GameState {
 
   // Get valid landing territories for air unit after combat
   // IMPORTANT: Air units can ONLY land in territories that were friendly at the START of the turn
-  getAirLandingOptions(territory, unitType, unitDefs) {
+  getAirLandingOptions(territory, unitType, unitDefs, { allowFreshMove = false } = {}) {
     const player = this.currentPlayer;
     if (!player) return [];
 
@@ -773,11 +782,16 @@ export class GameState {
     const baseMovement = unitDef.movement || 4;
     const totalMovement = hasLongRange ? baseMovement + 2 : baseMovement;
     const remainingMovement = Math.max(0, totalMovement - distanceTraveled);
+    const movedWithoutOrigin = !originInfo && (this.units[territory] || []).some((unit) => (
+      unit.type === unitType && unit.owner === player.id && unit.moved
+    ));
 
-    // Get all territories within remaining movement
-    // If unit moved and has no remaining movement, it can only stay in current territory
-    // If unit didn't move (no origin tracked), use full movement
-    const searchRange = distanceTraveled > 0 ? remainingMovement : totalMovement;
+    // Moved aircraft with no origin must not be granted a fresh full move
+    // in the landing picker (9.21.26.11 excess options). Automatic
+    // phase-exit landing may still search, or those fighters only crash.
+    const searchRange = distanceTraveled > 0
+      ? remainingMovement
+      : (movedWithoutOrigin && !allowFreshMove ? 0 : totalMovement);
     const reachable = this.getReachableTerritoriesForAir(territory, searchRange, player.id, false);
     const validLandings = [];
 
@@ -786,20 +800,8 @@ export class GameState {
       console.warn(`Air landing: No reachable territories from ${territory} with range ${searchRange}`);
     }
 
-    // Get territories that were friendly at turn start
-    let friendlyAtStart = this.friendlyTerritoriesAtTurnStart || new Set();
-
-    // Fallback: if friendlyTerritoriesAtTurnStart is empty, use current ownership
-    // This can happen with older saves or if initialization failed
-    if (friendlyAtStart.size === 0) {
-      console.warn('Air landing: friendlyTerritoriesAtTurnStart is empty, using current ownership as fallback');
-      friendlyAtStart = new Set();
-      for (const [terrName, state] of Object.entries(this.territoryState)) {
-        if (state.owner === player.id || this.areAllies(player.id, state.owner)) {
-          friendlyAtStart.add(terrName);
-        }
-      }
-    }
+    // Get territories that were friendly at turn start. Just-captured land
+    // stays illegal even when the saved set is empty (9.21.26.07).
 
     // CRITICAL FIX: Also check the CURRENT territory (starting position) for carrier landing
     // getReachableTerritoriesForAir excludes the starting territory, but air units CAN land
@@ -825,7 +827,7 @@ export class GameState {
     for (const [destName, info] of reachable) {
       // CRITICAL: Only allow landing in territories that were friendly at the START of the turn
       // Newly captured territories are NOT valid landing spots (unless using fallback)
-      const wasFriendlyAtStart = friendlyAtStart.has(destName);
+      const wasFriendlyAtStart = wasFriendlyAtTurnStart(this, destName, player.id);
 
       // Skip if not friendly at turn start (unless it's a carrier which moves with the fleet)
       const destT = this.territoryByName[destName];
@@ -884,26 +886,30 @@ export class GameState {
     const totalDistanceTraveled = previousDistance + newDistance;
     const remainingMovement = Math.max(0, totalMovement - totalDistanceTraveled);
 
-    // Check if there are valid landing spots within remaining movement
-    // Get territories that were friendly at turn start
-    let friendlyAtStart = this.friendlyTerritoriesAtTurnStart || new Set();
-    if (friendlyAtStart.size === 0) {
-      // Fallback: use current ownership
-      for (const [terrName, state] of Object.entries(this.territoryState)) {
-        if (state.owner === player.id || this.areAllies(player.id, state.owner)) {
-          friendlyAtStart.add(terrName);
-        }
+    // The arrival hex itself is a landing when it was friendly at turn start
+    // or already holds a friendly carrier. Just-captured land is not.
+    const arrived = this.territoryByName[toTerritory];
+    if (!arrived?.isWater && wasFriendlyAtTurnStart(this, toTerritory, player.id)) {
+      return { canLand: true, remainingMovement };
+    }
+    if (arrived?.isWater) {
+      const here = this.units[toTerritory] || [];
+      const carriersHere = here.filter(u => u.type === 'carrier' && u.owner === player.id);
+      const carrierDef = unitDefs.carrier;
+      if (carrierDef?.canCarry?.includes(unitType) && carriersHere.some((carrier) => {
+        const aboard = carrier.aircraft || [];
+        return aboard.length < (carrierDef.aircraftCapacity || 2);
+      })) {
+        return { canLand: true, remainingMovement };
       }
     }
 
-    // Check if any landing options exist
     const reachable = this.getReachableTerritoriesForAir(toTerritory, remainingMovement, player.id, false);
 
     for (const [destName] of reachable) {
       const destT = this.territoryByName[destName];
 
       if (destT?.isWater) {
-        // Check for friendly carriers
         const seaUnits = this.units[destName] || [];
         const carriers = seaUnits.filter(u => u.type === 'carrier' && u.owner === player.id);
         if (carriers.length > 0) {
@@ -912,7 +918,7 @@ export class GameState {
             return { canLand: true, remainingMovement };
           }
         }
-      } else if (friendlyAtStart.has(destName)) {
+      } else if (wasFriendlyAtTurnStart(this, destName, player.id)) {
         return { canLand: true, remainingMovement };
       }
     }
@@ -1859,7 +1865,7 @@ export class GameState {
   }
 
   // Mobilize a single pending unit to a territory (MOBILIZE phase)
-  mobilizeUnit(unitType, territoryName, unitDefs) {
+  mobilizeUnit(unitType, territoryName, unitDefs, options = {}) {
     const player = this.currentPlayer;
     if (!player) return { success: false, error: 'No current player' };
 
@@ -1876,11 +1882,56 @@ export class GameState {
 
     // Validate placement location
     if (unitDef.isSea) {
-      // Naval units: placed on sea zones adjacent to territories with factories
+      // Naval units: placed on sea zones adjacent to territories with factories.
+      // The producing factory's cap is spent, and a shared sea zone must name
+      // which factory (9.21.26.09 / 09b).
       const validSeaZones = this._getValidNavalPlacementZones(player.id);
       if (!validSeaZones.has(territoryName)) {
         return { success: false, error: 'Naval units must be placed on sea zones adjacent to territories with factories' };
       }
+      const resolved = resolveSeaMobilizeFactory(
+        this, territoryName, player.id, options.sourceFactory || null,
+      );
+      if (!resolved.ok) {
+        return {
+          success: false,
+          error: resolved.error,
+          factories: resolved.factories,
+          ambiguous: !!resolved.ambiguous,
+        };
+      }
+      const limit = factoryProductionLimit(resolved.factory, capital);
+      const used = factoryProductionUsed(this.mobilizationHistory, resolved.factory, player.id);
+      if (used >= limit) {
+        return { success: false, error: `Factory production limit reached (${limit} units per turn)` };
+      }
+      const cost = pending.cost || unitDef.cost;
+      pending.quantity--;
+      if (pending.quantity <= 0) {
+        const idx = this.pendingPurchases.indexOf(pending);
+        this.pendingPurchases.splice(idx, 1);
+      }
+      const units = this.units[territoryName] || [];
+      units.push({
+        type: unitType,
+        quantity: 1,
+        owner: player.id,
+        ...(unitType === 'carrier' ? { aircraft: [] } : {}),
+        ...(unitType === 'transport' ? { cargo: [] } : {}),
+      });
+      this.units[territoryName] = units;
+      if (unitType === 'carrier' || unitType === 'transport') {
+        this._individualizeShip(territoryName, unitType, player.id);
+      }
+      this.mobilizationHistory.push({
+        territory: territoryName,
+        unitType,
+        owner: player.id,
+        cost,
+        sourceFactory: resolved.factory,
+      });
+      this._notify();
+      return { success: true, sourceFactory: resolved.factory };
     } else if (unitDef.isAir && this.territoryByName[territoryName]?.isWater) {
       // 9.20.26.07 — fighters may mobilize onto a friendly carrier in a
       // factory-adjacent sea zone (same dests as new ships).
@@ -1891,6 +1942,22 @@ export class GameState {
           success: false,
           error: 'Aircraft must be placed on a factory or a friendly carrier in a sea zone adjacent to a factory',
         };
+      }
+      const resolved = resolveSeaMobilizeFactory(
+        this, territoryName, player.id, options.sourceFactory || null,
+      );
+      if (!resolved.ok) {
+        return {
+          success: false,
+          error: resolved.error,
+          factories: resolved.factories,
+          ambiguous: !!resolved.ambiguous,
+        };
+      }
+      const airLimit = factoryProductionLimit(resolved.factory, capital);
+      const airUsed = factoryProductionUsed(this.mobilizationHistory, resolved.factory, player.id);
+      if (airUsed >= airLimit) {
+        return { success: false, error: `Factory production limit reached (${airLimit} units per turn)` };
       }
 
       const cost = pending.cost || unitDef.cost;
@@ -1921,6 +1988,7 @@ export class GameState {
         owner: player.id,
         cost,
         onCarrier: true,
+        sourceFactory: resolved.factory,
       });
       this._notify();
       return { success: true };
@@ -1960,10 +2028,10 @@ export class GameState {
       // Factory production limit check
       // Capital factories can produce 20 units per turn, non-capital 5 units
       const isCapitalFactory = territoryName === capital;
-      const productionLimit = isCapitalFactory ? 20 : 5;
-      const unitsPlacedHere = (this.mobilizationHistory || [])
-        .filter(h => h.territory === territoryName && h.owner === player.id)
-        .length;
+      const productionLimit = factoryProductionLimit(territoryName, capital);
+      const unitsPlacedHere = factoryProductionUsed(
+        this.mobilizationHistory, territoryName, player.id,
+      );
       if (unitsPlacedHere >= productionLimit) {
         return { success: false, error: `Factory production limit reached (${productionLimit} units per turn for ${isCapitalFactory ? 'capital' : 'non-capital'} factories)` };
       }
@@ -2263,6 +2331,7 @@ export class GameState {
     this.placementHistory = [];
     this.mobilizationHistory = []; // Reset mobilization undo history for new turn
     this.airUnitOrigins = {}; // Reset air unit tracking for new turn
+    this.capturedThisTurn = new Set();
 
     // Track territories that are friendly at the START of this turn (for air landing)
     this._initFriendlyTerritoriesAtTurnStart();
@@ -2350,7 +2419,9 @@ export class GameState {
     // battle and then refused to leave COMBAT (9.21.26.02).
     const landLooseAirIfLeavingAirPhase = () => {
       if (leavingPhase !== TURN_PHASES.COMBAT && leavingPhase !== TURN_PHASES.NON_COMBAT_MOVE) return;
-      this.resolveLooseAirOverWater(this._unitDefs || this.unitDefs || {});
+      const defs = this._unitDefs || this.unitDefs || {};
+      this.relocateAirFromCapturedLand(defs);
+      this.resolveLooseAirOverWater(defs);
     };
 
     while (currentIndex < TURN_PHASE_ORDER.length - 1) {
@@ -2639,6 +2710,18 @@ export class GameState {
         return { success: false, error: `${airUnit.type} cannot reach ${toTerritory} (movement: ${movementRange})` };
       }
 
+      const airDistance = this._calculateAirDistance(fromTerritory, toTerritory);
+      const airRemaining = movementRange - airDistance;
+      // Just-captured land is friendly to ground units only (9.21.26.07).
+      if (!toT?.isWater && !wasFriendlyAtTurnStart(this, toTerritory, player.id) && !(isCombatMove && isEnemy)) {
+        return { success: false, error: 'Air cannot land on a territory captured this turn' };
+      }
+      if (isCombatMove && !hasLegalAirLandingFrom(
+        this, toTerritory, airRemaining, airUnit.type, unitDefs, player.id,
+      )) {
+        return { success: false, error: `${airUnit.type} cannot land after reaching ${toTerritory}` };
+      }
+
       // Check if landing on water (needs carrier OR attacking enemy naval units)
       if (toT?.isWater) {
         const seaUnits = this.units[toTerritory] || [];
@@ -2739,6 +2822,7 @@ export class GameState {
       });
     }
 
+    const launchedFromCarrier = {};
     for (const moveUnit of unitsToMove) {
       const unitDef = unitDefs[moveUnit.type];
       if (!unitDef) continue;
@@ -2754,6 +2838,26 @@ export class GameState {
         }
         return true;
       };
+
+      // Fighters selected on a carrier are not loose stacks. Launch the
+      // shortfall off friendly carriers in this sea zone (9.21.26.10).
+      if (unitDef.isAir && fromT?.isWater) {
+        const loose = fromUnits
+          .filter((u) => u.type === moveUnit.type && u.owner === player.id && hasRemainingMovement(u) && !u.id)
+          .reduce((sum, u) => sum + (u.quantity || 0), 0);
+        if (loose < moveUnit.quantity) {
+          const need = moveUnit.quantity - loose;
+          const aboard = countCarrierAir(this, fromTerritory, moveUnit.type, player.id);
+          if (loose + aboard < moveUnit.quantity) {
+            return { success: false, error: `Not enough ${moveUnit.type} to move` };
+          }
+          const got = takeAirFromCarriers(this, fromTerritory, moveUnit.type, player.id, need);
+          if (got > 0) {
+            fromUnits.push({ type: moveUnit.type, quantity: got, owner: player.id });
+            launchedFromCarrier[moveUnit.type] = (launchedFromCarrier[moveUnit.type] || 0) + got;
+          }
+        }
+      }
 
       // Find ALL matching units (grouped) that can provide units
       // This handles multiple stacks with different movementUsed values
@@ -3015,6 +3119,7 @@ export class GameState {
       previousOwner: isEnemy ? toOwner : null,
       loadedOntoTransport: loadingOntoTransport, // Track for undo - remove from cargo
       loadedOntoCarrier: landingOnCarrier, // Track for undo - remove from aircraft
+      launchedFromCarrier: Object.keys(launchedFromCarrier).length > 0 ? launchedFromCarrier : undefined,
       blitzedCaptures: blitzedCaptures.length > 0 ? blitzedCaptures : undefined, // Track blitzed territories for undo
     });
 
@@ -3253,6 +3358,26 @@ export class GameState {
             quantity: moveUnit.quantity,
             owner: player.id,
           });
+        }
+      }
+      const launched = lastMove.launchedFromCarrier || null;
+      if (launched) {
+        const defs = this._unitDefs || this.unitDefs || {
+          carrier: { aircraftCapacity: 2, canCarry: ['fighter', 'tacticalBomber'] },
+        };
+        for (const [type, qty] of Object.entries(launched)) {
+          let left = Number(qty) || 0;
+          const loose = fromUnits.find((u) => u.type === type && u.owner === player.id && !u.id);
+          if (!loose || left <= 0) continue;
+          const take = Math.min(loose.quantity || 0, left);
+          loose.quantity -= take;
+          if (loose.quantity <= 0) {
+            const idx = fromUnits.indexOf(loose);
+            if (idx >= 0) fromUnits.splice(idx, 1);
+          }
+          for (let i = 0; i < take; i++) {
+            loadOneAirOntoCarrier(this, lastMove.from, type, player.id, defs);
+          }
         }
       }
     }
@@ -5304,6 +5429,71 @@ export class GameState {
     };
   }
 
+  // Air that survived on land taken this turn must leave before the phase
+  // ends. Bots never open the landing picker (9.21.26.07).
+  relocateAirFromCapturedLand(unitDefs = this._unitDefs || this.unitDefs || {}) {
+    const player = this.currentPlayer;
+    if (!player) return { moved: 0, crashed: 0 };
+    let moved = 0;
+    let crashed = 0;
+    for (const [name, stacks] of Object.entries(this.units || {})) {
+      const territory = this.territoryByName?.[name];
+      if (!territory || territory.isWater) continue;
+      if (wasFriendlyAtTurnStart(this, name, player.id)) continue;
+      for (const unit of [...(stacks || [])]) {
+        if (unit.owner !== player.id || !unitDefs[unit.type]?.isAir) continue;
+        let left = unit.quantity || 0;
+        let guard = 0;
+        while (left > 0 && guard++ < 40) {
+          const options = (this.getAirLandingOptions(name, unit.type, unitDefs, {
+            allowFreshMove: true,
+          }) || []).filter((opt) => opt.territory && opt.territory !== name);
+          const choice = preferAirLandingOption(options);
+          if (!choice?.territory) {
+            const origin = this.units[name] || [];
+            crashed += takeAirUnitsFromTerritory(origin, {
+              type: unit.type,
+              owner: player.id,
+              quantity: left,
+            });
+            this.units[name] = origin;
+            left = 0;
+            break;
+          }
+          const applied = applyAirLandingPlan({
+            units: this.units,
+            territoryByName: this.territoryByName,
+            originTerritory: name,
+            owner: player.id,
+            plan: [{
+              id: `${unit.type}_cap_${guard}`,
+              type: unit.type,
+              quantity: 1,
+              destination: choice.territory,
+            }],
+            unitDefs,
+          });
+          const n = (applied || []).reduce((sum, item) => sum + (item.stayed ? 0 : (item.quantity || 0)), 0);
+          if (n <= 0) {
+            const origin = this.units[name] || [];
+            const taken = takeAirUnitsFromTerritory(origin, {
+              type: unit.type,
+              owner: player.id,
+              quantity: 1,
+            });
+            this.units[name] = origin;
+            crashed += taken;
+            left -= taken;
+            continue;
+          }
+          moved += n;
+          left -= n;
+        }
+      }
+    }
+    return { moved, crashed };
+  }
+
   // Fighters/bombers cannot end combat or NCM over open water.
   // Land on the nearest legal territory, else a friendly carrier, else crash.
   resolveLooseAirOverWater(unitDefs = this._unitDefs || this.unitDefs || {}) {
@@ -5316,7 +5506,9 @@ export class GameState {
       let left = group.quantity;
       let guard = 0;
       while (left > 0 && guard++ < 40) {
-        const options = this.getAirLandingOptions(group.territory, group.type, unitDefs) || [];
+        const options = this.getAirLandingOptions(group.territory, group.type, unitDefs, {
+          allowFreshMove: true,
+        }) || [];
         const choice = preferAirLandingOption(options);
         const sameHex = choice?.territory === group.territory;
         if (!choice?.territory || (sameHex && !choice.isCarrier)) {

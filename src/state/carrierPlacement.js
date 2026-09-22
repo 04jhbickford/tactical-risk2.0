@@ -102,6 +102,39 @@ export function loadOneAirOntoCarrier(gameState, seaZoneName, unitType, playerId
   return { success: false, error: 'No carrier with capacity to hold this aircraft' };
 }
 
+export function countCarrierAir(gameState, seaZoneName, unitType, playerId) {
+  let count = 0;
+  for (const carrier of friendlyCarriersAt(gameState, seaZoneName, playerId)) {
+    for (const craft of carrier.aircraft || []) {
+      if (!craft || craft.moved) continue;
+      if (craft.type !== unitType || craft.owner !== playerId) continue;
+      count += Number(craft.quantity) || 1;
+    }
+  }
+  return count;
+}
+
+export function takeAirFromCarriers(gameState, seaZoneName, unitType, playerId, quantity) {
+  let left = Number(quantity) || 0;
+  let taken = 0;
+  if (left <= 0) return 0;
+  for (const carrier of friendlyCarriersAt(gameState, seaZoneName, playerId)) {
+    const aircraft = carrier.aircraft || [];
+    for (let i = aircraft.length - 1; i >= 0 && left > 0; i--) {
+      const craft = aircraft[i];
+      if (!craft || craft.moved) continue;
+      if (craft.type !== unitType || craft.owner !== playerId) continue;
+      const have = Number(craft.quantity) || 1;
+      const take = Math.min(have, left);
+      if (take >= have) aircraft.splice(i, 1);
+      else craft.quantity = have - take;
+      left -= take;
+      taken += take;
+    }
+  }
+  return taken;
+}
+
 export function unloadOneAirFromCarrier(gameState, seaZoneName, unitType, playerId) {
   for (const carrier of friendlyCarriersAt(gameState, seaZoneName, playerId)) {
     const aircraft = carrier.aircraft || [];

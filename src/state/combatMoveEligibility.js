@@ -1,6 +1,20 @@
+import { hasLegalAirLandingFrom } from './airLanding.js';
+
 // Shared combat-move eligibility. A&A: you may empty a territory during
 // combat move. All unmoved eligible units can leave. Friendly transit is
 // legal; the attack dest is an enemy hex.
+
+export function airSelectionType(key) {
+  if (typeof key !== 'string' || !key.startsWith('aircraft:')) return key;
+  return key.split(':').slice(2).join(':') || 'fighter';
+}
+
+export function moveUnitKey(unit) {
+  if (!unit) return null;
+  if (unit.isCargo || unit.isCarrierAircraft) return unit.cargoKey || null;
+  if (unit.isIndividual && unit.id) return `ship:${unit.id}`;
+  return unit.type || null;
+}
 
 export function maxMoveSelection(movableUnits = []) {
   const selected = {};
@@ -79,7 +93,10 @@ export function combatMoveReachableDests(gameState, fromName, picked = {}, unitD
   const profile = moveSelectionProfile(picked, unitDefs);
   const selected = Object.entries(picked || {})
     .filter(([, n]) => Number(n) > 0)
-    .map(([type, quantity]) => ({ type, quantity: Number(quantity), def: unitDefs[type] }));
+    .map(([key, quantity]) => {
+      const type = airSelectionType(key);
+      return { type, quantity: Number(quantity), def: unitDefs[type], key };
+    });
 
   const landUnits = selected.filter((u) => u.def?.isLand);
   const airUnits = selected.filter((u) => u.def?.isAir);
@@ -95,7 +112,12 @@ export function combatMoveReachableDests(gameState, fromName, picked = {}, unitD
   }
 
   if (airUnits.length && typeof gameState.getReachableTerritoriesForAir === 'function') {
-    const minMovement = Math.min(...airUnits.map((u) => u.def.movement || 4));
+    const hasLongRange = !!gameState.hasTech?.(playerId, 'longRangeAircraft');
+    const minMovement = Math.min(...airUnits.map((u) => {
+      const base = u.def.movement || 4;
+      return hasLongRange ? base + 2 : base;
+    }));
+    const airType = airUnits[0].type;
     const reachable = gameState.getReachableTerritoriesForAir(fromName, minMovement, playerId, true);
     for (const [name, info] of reachable) {
       if (dests.has(name)) continue;
@@ -103,6 +125,10 @@ export function combatMoveReachableDests(gameState, fromName, picked = {}, unitD
       // Combat-move air may attack a sea zone only when something enemy is there.
       // Empty ocean is not an attack dest (landing is a carrier or a later phase).
       if (zone?.isWater && !seaZoneHasEnemyForAirAttack(gameState, name, playerId)) continue;
+      // Must still be able to land: start-of-turn friendly land, or a carrier,
+      // within movement left after reaching this hex (9.21.26.11).
+      const remaining = minMovement - (info.distance || 0);
+      if (!hasLegalAirLandingFrom(gameState, name, remaining, airType, unitDefs, playerId)) continue;
       dests.set(name, { name, distance: info.distance, via: 'air', attack: true });
     }
   }

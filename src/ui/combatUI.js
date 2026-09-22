@@ -4,7 +4,7 @@ import { getUnitIconPath } from '../utils/unitIcons.js';
 import { formatUnitName } from '../utils/unitNames.js';
 import { isMobileShell, setShellFlag } from './mobileShell.js';
 import { syncBottomSurfaces } from './bottomSurface.js';
-import { remainingAirLandingsToAssign } from '../state/airLanding.js';
+import { mergeLiveCarrierLoads, remainingAirLandingsToAssign } from '../state/airLanding.js';
 import {
   getEnemyCombatUnits,
   getFriendlyCombatUnits,
@@ -1242,6 +1242,13 @@ export class CombatUI {
         || mergedLandings[`${airUnit.type}_${index}`]
         || mergedLandings[airUnit.type]
         || airUnit.destination;
+      const option = (airUnit.landingOptions || []).find((opt) => opt.territory === destination);
+      const loadedHere = (applied.applied || []).some((item) => (
+        !item.stayed
+        && item.destination === this.currentTerritory
+        && item.type === airUnit.type
+      ));
+      const carrierInBattle = destination === this.currentTerritory && (option?.isCarrier || loadedHere);
 
       if (airUnit.landingOptions.length === 0) {
         crashes[airUnit.type] = (crashes[airUnit.type] || 0) + airUnit.quantity;
@@ -1249,6 +1256,8 @@ export class CombatUI {
       } else if (destination && destination !== this.currentTerritory) {
         // Board apply already moved these. Still drop them from attackers
         // so _finalizeCombat cannot write them back onto the battle hex.
+      } else if (carrierInBattle) {
+        // Same sea zone is a carrier landing, not a crash (9.21.26.08).
       } else if (destination === this.currentTerritory && canStayInCurrent) {
         // Explicitly selected current territory and it's valid - unit stays
       } else if (!destination && canStayInCurrent) {
@@ -1555,7 +1564,13 @@ export class CombatUI {
 
   _finalizeCombat() {
     if (this.combatState?._finalized) return;
-    // Apply final state to game
+    // Apply final state to game. Snapshot carrier loads first: applyAirLandings
+    // already wrote aircraft onto the live board, and the overlay rebuild below
+    // does not (9.21.26.08).
+    const liveCarrierBoard = (this.gameState.units[this.currentTerritory] || []).map((unit) => ({
+      ...unit,
+      aircraft: Array.isArray(unit.aircraft) ? unit.aircraft.map((craft) => ({ ...craft })) : unit.aircraft,
+    }));
     const player = this.gameState.currentPlayer;
     const units = [];
     const previousOwner = this.gameState.getOwner(this.currentTerritory);
@@ -1620,7 +1635,7 @@ export class CombatUI {
       }
     }
 
-    this.gameState.units[this.currentTerritory] = units;
+    this.gameState.units[this.currentTerritory] = mergeLiveCarrierLoads(liveCarrierBoard, units);
 
     // Log combat result
     this.gameState.logCombat({

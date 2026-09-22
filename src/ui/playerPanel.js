@@ -66,7 +66,19 @@ import {
   mergeLandingSelections,
   resolveLandingDestination,
 } from '../state/airLanding.js';
-import { maxMoveSelection, moveSelectionProfile, seaZoneHasEnemyForAirAttack } from '../state/combatMoveEligibility.js';
+import {
+  airSelectionType,
+  maxMoveSelection,
+  moveSelectionProfile,
+  moveUnitKey,
+  seaZoneHasEnemyForAirAttack,
+} from '../state/combatMoveEligibility.js';
+import { hasLegalAirLandingFrom, wasFriendlyAtTurnStart } from '../state/airLanding.js';
+import {
+  factoriesAdjacentToSeaZone,
+  factoryProductionLimit,
+  factoryProductionUsed,
+} from '../state/mobilizeSource.js';
 import {
   canPlaceAirOnCarrierInSeaZone,
   pendingAirCanLoadInSeaZone,
@@ -1056,7 +1068,7 @@ export class PlayerPanel {
       && (turnPhase === TURN_PHASES.COMBAT_MOVE || turnPhase === TURN_PHASES.NON_COMBAT_MOVE)) {
       const unit = this._phoneMoveUnitMatch(unitType, this._phoneDeployDest(), player);
       const unitKey = unit
-        ? (unit.isCargo ? unit.cargoKey : (unit.isIndividual ? `ship:${unit.id}` : unit.type))
+        ? (moveUnitKey(unit))
         : unitType;
       const staged = Number(this.moveSelectedUnits?.[unitKey]) || 0;
       return remainingUnstagedOfType({ available: unit?.quantity || 0, staged });
@@ -1146,7 +1158,11 @@ export class PlayerPanel {
     this.selectedTerritory = dest;
     this._phoneDeployLandName = dest.name;
     for (let i = 0; i < count; i++) {
-      this.onAction('mobilize-unit', { unitType, territory: dest.name });
+      this.onAction('mobilize-unit', {
+        unitType,
+        territory: dest.name,
+        sourceFactory: this._mobilizeSourceFactory(dest, player),
+      });
     }
     const left = remainingEligibleOfType({
       available: quantityAvailableForType(this.gameState.getPendingPurchases?.() || [], unitType),
@@ -1163,7 +1179,7 @@ export class PlayerPanel {
     if (!hasQty && this.selectedUnitType) {
       const unit = this._phoneMoveUnitMatch(this.selectedUnitType, from, player);
       if (unit) {
-        const key = unit.isCargo ? unit.cargoKey : (unit.isIndividual ? `ship:${unit.id}` : unit.type);
+        const key = moveUnitKey(unit);
         this.moveSelectedUnits = { [key]: 1 };
       }
     }
@@ -1175,7 +1191,7 @@ export class PlayerPanel {
   _phoneMoveUnitMatch(unitType, from, player) {
     const movable = from ? this._getMovableUnits(from, player) : [];
     return movable.find((u) => {
-      const key = u.isCargo ? u.cargoKey : (u.isIndividual ? `ship:${u.id}` : u.type);
+      const key = moveUnitKey(u);
       return key === unitType || u.type === unitType;
     }) || null;
   }
@@ -1186,7 +1202,7 @@ export class PlayerPanel {
     const player = this.gameState?.currentPlayer;
     const unit = this._phoneMoveUnitMatch(this.selectedUnitType, from, player);
     if (!from || !player || !unit) return;
-    const unitKey = unit.isCargo ? unit.cargoKey : (unit.isIndividual ? `ship:${unit.id}` : unit.type);
+    const unitKey = moveUnitKey(unit);
     const available = remainingEligibleOfType({ available: unit.quantity || 0 });
     const current = Number(this.moveSelectedUnits?.[unitKey]) || 0;
     const leftover = remainingUnstagedOfType({ available, staged: current });
@@ -1231,6 +1247,8 @@ export class PlayerPanel {
           quantity: count,
         });
       }
+    } else if (String(unitKey).startsWith('aircraft:')) {
+      units.push({ type: airSelectionType(unitKey), quantity: count });
     } else {
       units.push({ type: unit.type || unitKey, quantity: count });
     }
@@ -1280,14 +1298,41 @@ export class PlayerPanel {
     return isFactory && !!(def.isLand || def.isAir);
   }
 
+  _seaMobilizeFactories(dest, player) {
+    if (!dest?.isWater || !player) return [];
+    return factoriesAdjacentToSeaZone(this.gameState, dest.name, player.id);
+  }
+
+  _mobilizeSourceFactory(dest, player) {
+    if (!dest?.isWater) return null;
+    const factories = this._seaMobilizeFactories(dest, player);
+    if (factories.length === 1) return factories[0];
+    if (this.mobilizeSourceFactory && factories.includes(this.mobilizeSourceFactory)) {
+      return this.mobilizeSourceFactory;
+    }
+    return null;
+  }
+
+  _mobilizeNeedsFactoryPick(dest, player) {
+    return !!dest?.isWater
+      && this._seaMobilizeFactories(dest, player).length > 1
+      && !this._mobilizeSourceFactory(dest, player);
+  }
+
   _mobilizeSlotsRemaining(dest, player) {
-    if (!dest || dest.isWater) return 99;
+    if (!dest || !player) return 0;
     const capital = this.gameState?.playerState?.[player.id]?.capitalTerritory;
-    const isCapitalFactory = dest.name === capital;
-    const productionLimit = isCapitalFactory ? 20 : 5;
-    const placedHere = (this.gameState?.mobilizationHistory || [])
-      .filter((h) => h.territory === dest.name && h.owner === player.id)
-      .length;
+    let factoryName = dest.name;
+    if (dest.isWater) {
+      factoryName = this._mobilizeSourceFactory(dest, player);
+      if (!factoryName) return 0;
+    }
+    const productionLimit = factoryProductionLimit(factoryName, capital);
+    const placedHere = factoryProductionUsed(
+      this.gameState?.mobilizationHistory,
+      factoryName,
+      player.id,
+    );
     return Math.max(0, productionLimit - placedHere);
   }
 
@@ -1350,8 +1395,13 @@ export class PlayerPanel {
     const unitTypes = seaFirstUnitTypes(expandPlaceQueue(queue), this.unitDefs);
     if (unitTypes.length === 0) return false;
     this._ignoreUndoUntil = Date.now() + 400;
+    const player = this.gameState?.currentPlayer;
     for (const unitType of unitTypes) {
-      this.onAction('mobilize-unit', { unitType, territory: dest.name });
+      this.onAction('mobilize-unit', {
+        unitType,
+        territory: dest.name,
+        sourceFactory: this._mobilizeSourceFactory(dest, player),
+      });
     }
     this.placementQueue = {};
     this.selectedTerritory = dest;
@@ -1839,7 +1889,13 @@ export class PlayerPanel {
         turnPhase,
       })) {
       const destOwner = this.gameState.getOwner(this.movePendingDest);
-      const isAttack = destOwner && destOwner !== player.id && !this.gameState.areAllies(player.id, destOwner);
+      const destWater = !!this.territories?.[this.movePendingDest]?.isWater;
+      const seaAttack = destWater && seaZoneHasEnemyForAirAttack(
+        this.gameState, this.movePendingDest, player.id,
+      );
+      const isAttack = seaAttack || (
+        destOwner && destOwner !== player.id && !this.gameState.areAllies(player.id, destOwner)
+      );
       const selectedSummary = formatPhoneMoveSelectionSummary(this.moveSelectedUnits);
       const named = resolvePhoneMoveCta({
         destName: this.movePendingDest,
@@ -3355,7 +3411,7 @@ export class PlayerPanel {
       const movable = from ? this._getMovableUnits(from, player) : [];
       const seen = new Set();
       for (const unit of movable) {
-        const unitKey = unit.isCargo ? unit.cargoKey : (unit.isIndividual ? `ship:${unit.id}` : unit.type);
+        const unitKey = moveUnitKey(unit);
         if (seen.has(unitKey)) continue;
         seen.add(unitKey);
         const imageSrc = getUnitIconPath(unit.type, player.id);
@@ -3881,6 +3937,10 @@ export class PlayerPanel {
             quantity: qty
           });
         }
+      } else if (key.startsWith('aircraft:')) {
+        const type = airSelectionType(key);
+        const def = this.unitDefs?.[type];
+        if (def) selectedUnits.push({ type, quantity: qty, def });
       } else {
         const def = this.unitDefs?.[key];
         if (def) {
@@ -3907,7 +3967,7 @@ export class PlayerPanel {
       const movable = this._getMovableUnits(fromTerritory, player);
       const previewPick = {};
       for (const unit of movable) {
-        const key = unit.isCargo ? unit.cargoKey : (unit.isCarrierAircraft ? unit.cargoKey : (unit.isIndividual ? `ship:${unit.id}` : unit.type));
+        const key = moveUnitKey(unit);
         if (!key) continue;
         previewPick[key] = (previewPick[key] || 0) + (Number(unit.quantity) || 0);
       }
@@ -4021,6 +4081,14 @@ export class PlayerPanel {
         } else {
           const owner = this.gameState.getOwner(terrName);
           isEnemy = owner && owner !== player.id && !this.gameState.areAllies(player.id, owner);
+        }
+        if (isCombatMove) {
+          const remaining = minMovement - (info.distance || 0);
+          if (!hasLegalAirLandingFrom(
+            this.gameState, terrName, remaining, airUnits[0].type, this.unitDefs, player.id,
+          )) continue;
+        } else if (!conn.isWater && !wasFriendlyAtTurnStart(this.gameState, terrName, player.id)) {
+          continue;
         }
         // Only allow enemy territories during combat move
         if (!destinations.has(terrName) && (isCombatMove || !isEnemy)) {
@@ -4200,7 +4268,7 @@ export class PlayerPanel {
 
     // Show units for selected category
     for (const unit of currentUnits) {
-      const unitKey = unit.isCargo ? unit.cargoKey : (unit.isIndividual ? `ship:${unit.id}` : unit.type);
+      const unitKey = moveUnitKey(unit);
       const selected = this.moveSelectedUnits[unitKey] || 0;
       const imageSrc = getUnitIconPath(unit.type, player.id);
       const displayName = unit.displayName || unit.type;
@@ -4492,11 +4560,12 @@ export class PlayerPanel {
       if (isFactoryTerritory) {
         const capital = this.gameState.playerState?.[player.id]?.capitalTerritory;
         const isCapitalFactory = this.selectedTerritory.name === capital;
-        const productionLimit = isCapitalFactory ? 20 : 5;
-        const mobilizationHistory = this.gameState.mobilizationHistory || [];
-        const unitsPlacedHere = mobilizationHistory
-          .filter(h => h.territory === this.selectedTerritory.name && h.owner === player.id)
-          .length;
+        const productionLimit = factoryProductionLimit(this.selectedTerritory.name, capital);
+        const unitsPlacedHere = factoryProductionUsed(
+          this.gameState.mobilizationHistory,
+          this.selectedTerritory.name,
+          player.id,
+        );
         const remaining = productionLimit - unitsPlacedHere;
 
         html += `
@@ -4507,6 +4576,19 @@ export class PlayerPanel {
       }
     } else {
       html += `<div class="pp-hint">Click a factory or a factory-adjacent sea zone to deploy units</div>`;
+    }
+
+    const seaFactories = (isWater && isValidPlacement)
+      ? this._seaMobilizeFactories(this.selectedTerritory, player)
+      : [];
+    const needsFactoryPick = this._mobilizeNeedsFactoryPick(this.selectedTerritory, player);
+    if (seaFactories.length > 1) {
+      html += `<div class="pp-factory-pick"><span class="pp-mob-sel-label">Which factory produces into ${this.selectedTerritory.name}?</span>`;
+      for (const factoryName of seaFactories) {
+        const on = this.mobilizeSourceFactory === factoryName ? ' active' : '';
+        html += `<button type="button" class="pp-qty-btn${on}" data-action="pick-mobilize-factory" data-factory="${factoryName}">${factoryName}</button>`;
+      }
+      html += `</div>`;
     }
 
     // Get units that can be placed at the current location
@@ -4548,7 +4630,7 @@ export class PlayerPanel {
             this.unitDefs,
             { requireFactoryAdjacent: true },
           );
-        const canPlace = onFactory || onCarrier;
+        const canPlace = (onFactory || onCarrier) && !needsFactoryPick;
         html += `
           <div class="pp-buy-row ${canPlace ? 'can-place' : ''}">
             <div class="pp-buy-info">
@@ -4569,7 +4651,7 @@ export class PlayerPanel {
       html += `<div class="pp-unit-category-label">Naval</div>`;
       for (const unit of navalUnits) {
         const imageSrc = getUnitIconPath(unit.type, player.id);
-        const canPlace = isWater && isValidPlacement;
+        const canPlace = isWater && isValidPlacement && !needsFactoryPick;
         html += `
           <div class="pp-buy-row ${canPlace ? 'can-place' : ''}">
             <div class="pp-buy-info">
@@ -5012,15 +5094,7 @@ export class PlayerPanel {
           const current = this.moveSelectedUnits[unitKey] || 0;
           const movable = this._getMovableUnits(this.selectedTerritory, this.gameState.currentPlayer);
           // Find max qty - match by key (type for regular, "ship:id" for individual, "cargoKey" for cargo)
-          const unitEntry = movable.find(u => {
-            if (u.isCargo) {
-              return u.cargoKey === unitKey;
-            } else if (u.isIndividual) {
-              return `ship:${u.id}` === unitKey;
-            } else {
-              return u.type === unitKey;
-            }
-          });
+          const unitEntry = movable.find(u => moveUnitKey(u) === unitKey);
           const maxQty = unitEntry?.quantity || 0;
           const newQty = Math.max(0, Math.min(maxQty, current + delta));
           this.moveSelectedUnits[unitKey] = newQty;
@@ -5100,6 +5174,8 @@ export class PlayerPanel {
                     quantity: qty
                   });
                 }
+              } else if (key.startsWith('aircraft:')) {
+                units.push({ type: airSelectionType(key), quantity: qty });
               } else {
                 // Regular unit type
                 units.push({ type: key, quantity: qty });
@@ -5198,10 +5274,25 @@ export class PlayerPanel {
         }
 
         // Handle mobilize unit
+        if (action === 'pick-mobilize-factory') {
+          const factoryName = btn.dataset.factory;
+          if (factoryName) {
+            this.mobilizeSourceFactory = factoryName;
+            this._scheduleRender();
+          }
+          return;
+        }
+
         if (action === 'mobilize-unit') {
           const unitType = btn.dataset.unit;
+          const player = this.gameState?.currentPlayer;
           if (this.onAction && unitType && this.selectedTerritory) {
-            this.onAction('mobilize-unit', { unitType, territory: this.selectedTerritory.name });
+            if (this._mobilizeNeedsFactoryPick(this.selectedTerritory, player)) return;
+            this.onAction('mobilize-unit', {
+              unitType,
+              territory: this.selectedTerritory.name,
+              sourceFactory: this._mobilizeSourceFactory(this.selectedTerritory, player),
+            });
           }
           return;
         }
@@ -5209,8 +5300,14 @@ export class PlayerPanel {
         // Handle mobilize all of a unit type
         if (action === 'mobilize-all') {
           const unitType = btn.dataset.unit;
+          const player = this.gameState?.currentPlayer;
           if (this.onAction && unitType && this.selectedTerritory) {
-            this.onAction('mobilize-all', { unitType, territory: this.selectedTerritory.name });
+            if (this._mobilizeNeedsFactoryPick(this.selectedTerritory, player)) return;
+            this.onAction('mobilize-all', {
+              unitType,
+              territory: this.selectedTerritory.name,
+              sourceFactory: this._mobilizeSourceFactory(this.selectedTerritory, player),
+            });
           }
           return;
         }

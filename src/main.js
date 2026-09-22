@@ -865,7 +865,9 @@ async function init() {
       case 'mobilize-unit':
         // Mobilize a purchased unit to a territory
         if (data.unitType && data.territory) {
-          const result = gameState.mobilizeUnit(data.unitType, data.territory, unitDefs);
+          const result = gameState.mobilizeUnit(data.unitType, data.territory, unitDefs, {
+            sourceFactory: data.sourceFactory || null,
+          });
           if (result.success) {
             actionLog.logMobilize(gameState.currentPlayer, [{ type: data.unitType, quantity: 1 }], data.territory);
             camera.dirty = true;
@@ -882,7 +884,9 @@ async function init() {
             let placed = 0;
             const toPlace = unit.quantity;
             for (let i = 0; i < toPlace; i++) {
-              const result = gameState.mobilizeUnit(data.unitType, data.territory, unitDefs);
+              const result = gameState.mobilizeUnit(data.unitType, data.territory, unitDefs, {
+                sourceFactory: data.sourceFactory || null,
+              });
               if (!result.success) break;
               placed++;
             }

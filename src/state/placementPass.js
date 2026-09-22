@@ -221,6 +221,22 @@ export function shouldApplyRemoteGameState({
   return false;
 }
 
+// A snapshot swallowed while isPushing still has to land after the push.
+// Older than the write we just committed is ignored. A newer doc, or the
+// same version with a different seat, is the turn the open client missed.
+export function deferredSnapshotShouldApply({
+  remoteVersion = 0,
+  localVersion = 0,
+  remotePlayerId = null,
+  localPlayerId = null,
+} = {}) {
+  const remote = Number(remoteVersion) || 0;
+  const local = Number(localVersion) || 0;
+  if (remote < local) return false;
+  if (remote > local) return true;
+  return !!(remotePlayerId && localPlayerId && remotePlayerId !== localPlayerId);
+}
+
 // Sync debug / push labels must advertise game phase, never leftover turnPhase.
 export function syncPushPhaseLabel(phase, _turnPhase) {
   void _turnPhase;

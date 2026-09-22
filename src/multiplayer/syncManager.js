@@ -13,7 +13,7 @@ import { getFirebaseDb } from './firebase.js';
 import { getAuthManager } from './auth.js';
 import { GAME_VERSION, compareGameVersions } from '../version.js';
 import { createPushQueue } from './pushCoalesce.js';
-import { shouldApplyRemoteGameState } from '../state/placementPass.js';
+import { deferredSnapshotShouldApply, shouldApplyRemoteGameState } from '../state/placementPass.js';
 import {
   shouldReplaceSnapshotListener,
   shouldResumeSnapshots,
@@ -32,6 +32,7 @@ export class SyncManager {
     this.isHost = false; // Whether this client is the game host (follows lobbyData)
     this.hostOderId = null;
     this.isPushing = false;
+    this._deferredRemote = null;
     this.isLoadingRemoteState = false; // Flag to prevent push during remote state load
     this.unsubscribe = null;
     this._listeners = [];
@@ -45,6 +46,7 @@ export class SyncManager {
         return await this._runPushWithRetry();
       } finally {
         this.isPushing = false;
+        this._flushDeferredRemote();
       }
     });
     this._versionOutdatedNotified = false; // fire the refresh banner at most once
@@ -266,6 +268,10 @@ export class SyncManager {
       this.applyHostFromDoc(newData);
 
       if (this.isPushing) {
+        // Keep the newest doc. Applying it here would fight the in-flight
+        // write; flushing after isPushing clears is what unsticks an open
+        // host whose turn-end snapshot was swallowed (9.21.26.06).
+        this._noteDeferredSnapshot(newData);
         if (newData.currentPlayerId !== this._lastCurrentPlayerId) {
           this._updateActivePlayer(newData.currentPlayerId);
         }
@@ -610,7 +616,37 @@ export class SyncManager {
       return false;
     } finally {
       this.isPushing = false;
+      this._flushDeferredRemote();
     }
+  }
+
+  _noteDeferredSnapshot(newData) {
+    if (!newData) return;
+    const prev = this._deferredRemote;
+    if (!prev || (Number(newData.stateVersion) || 0) >= (Number(prev.stateVersion) || 0)) {
+      this._deferredRemote = newData;
+    }
+  }
+
+  _flushDeferredRemote() {
+    const deferred = this._deferredRemote;
+    this._deferredRemote = null;
+    if (!deferred?.state || !this.gameState) return;
+    const remoteSeat = deferred.currentPlayerId || null;
+    const localSeat = this.gameState.currentPlayer?.oderId || null;
+    if (!deferredSnapshotShouldApply({
+      remoteVersion: deferred.stateVersion || 0,
+      localVersion: this.localVersion,
+      remotePlayerId: remoteSeat,
+      localPlayerId: localSeat,
+    })) return;
+    console.log(`[Sync] Applying snapshot deferred while pushing: v${this.localVersion} -> v${deferred.stateVersion}, seat ${localSeat} -> ${remoteSeat}`);
+    this.localVersion = Math.max(this.localVersion, deferred.stateVersion || 0);
+    this.isLoadingRemoteState = true;
+    this.gameState.loadFromJSON(deferred.state);
+    this.isLoadingRemoteState = false;
+    this._updateActivePlayer(remoteSeat);
+    this._notifyListeners('state_updated', this._turnSnapshotPayload(remoteSeat));
   }
 
   // Single source of truth for "is it my turn" — DERIVED FROM LIVE STATE, not
