@@ -330,6 +330,12 @@ export function createThreeMpSession({ setup, territories, continents }) {
     return isRealAuthIdentity(user) ? user : null;
   }
 
+  async function listMyGames() {
+    const gate = await ensure();
+    if (!gate.ok) return [];
+    return getLobbyManager().listMyGamesBoard();
+  }
+
   async function signOut() {
     const auth = getAuthManager();
     return auth.signOut({ confirmed: true });
@@ -349,6 +355,7 @@ export function createThreeMpSession({ setup, territories, continents }) {
     signOut,
     createGame,
     joinGame,
+    listMyGames,
     pickFaction,
     setDiscord,
     addAi,

@@ -40,7 +40,7 @@ const EMPTY_OWNED = [
 ];
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-dual-path.15', GAME_VERSION === 'V2.81.57-dual-path.15');
+check('GAME_VERSION is V2.81.57-dual-path.16', GAME_VERSION === 'V2.81.57-dual-path.16');
 
 console.log('=== empty owned land still marked ===');
 {

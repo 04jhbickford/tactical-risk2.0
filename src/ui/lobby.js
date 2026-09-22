@@ -8,7 +8,6 @@
 // importers but leave GAME_VERSION undefined inside this module.
 import { GAME_VERSION } from '../version.js';
 import { isMobileShell } from './mobileShell.js';
-import { UX_CLASSIC, UX_THREE, UX_LABEL_EXPERIMENTAL, navigateUxMode } from '../map/presentationMode.js';
 export { GAME_VERSION };
 
 // Native <select> option taps land on the card under the popup.
@@ -132,21 +131,8 @@ export class Lobby {
   }
 
   _renderUxPicker() {
-    return `
-      <div class="lobby-ux-picker" role="group" aria-label="Interface">
-        <p class="lobby-ux-kicker">Interface</p>
-        <div class="lobby-ux-row">
-          <button type="button" class="lobby-ux-btn is-on" data-action="ux-classic" aria-pressed="true">
-            <span class="lobby-ux-title">Classic</span>
-            <span class="lobby-ux-desc">Default · Canvas</span>
-          </button>
-          <button type="button" class="lobby-ux-btn lobby-ux-btn-new" data-action="ux-three" aria-pressed="false">
-            <span class="lobby-ux-title">${UX_LABEL_EXPERIMENTAL}</span>
-            <span class="lobby-ux-desc">Optional</span>
-          </button>
-        </div>
-      </div>
-    `;
+    // Classic is a deep link (`?ux=classic`) only. The lobby does not offer it.
+    return '';
   }
 
   _renderMobileMainMenu() {
@@ -582,15 +568,6 @@ export class Lobby {
   }
 
   _bindEvents() {
-    // Main menu actions
-    this.el.querySelector('[data-action="ux-classic"]')?.addEventListener('click', () => {
-      navigateUxMode(UX_CLASSIC);
-    });
-
-    this.el.querySelector('[data-action="ux-three"]')?.addEventListener('click', () => {
-      navigateUxMode(UX_THREE);
-    });
-
     this.el.querySelector('[data-action="local-play"]')?.addEventListener('click', () => {
       this.mode = 'local-setup';
       this._render();

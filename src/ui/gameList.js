@@ -28,6 +28,7 @@ import {
   shouldWipeMyGamesOnError,
   shouldForgetLastMatchAfterLookup,
   shouldJoinListedGame,
+  resolveMyGamesEntryAction,
 } from '../multiplayer/lastMatch.js';
 import { seatNamesForOpenGameCard } from '../multiplayer/lobbySeats.js';
 
@@ -235,6 +236,7 @@ export class GameList {
                   <span class="mp-game-details">${lobby.players.length}/${lobby.settings?.maxPlayers || '?'} players · Code ${lobby.code}</span>
                 </div>
                 <div class="mp-game-status"><span class="mp-waiting">In lobby</span></div>
+                <span class="mp-game-join">Resume lobby</span>
               </button>
               <div class="mp-game-row-actions">
                 <button type="button" class="mp-leave-game" data-leave-lobby="${lobby.id}" data-role="leave-game" title="Leave this lobby">Leave</button>
@@ -356,7 +358,12 @@ export class GameList {
           <div class="mp-game-status">
             ${statusHtml}
           </div>
-          <span class="mp-game-join">Resume</span>
+          <span class="mp-game-join">${resolveMyGamesEntryAction({
+            kind: 'game',
+            status: game.status,
+            stateVersion: game.stateVersion,
+            hasState: !!game.state,
+          }).label}</span>
         </button>
         <div class="mp-game-row-actions">
           <button type="button" class="mp-leave-game" data-leave-game="${game.id}" data-role="leave-game" title="Surrender and leave this game">Leave</button>
@@ -395,7 +402,7 @@ export class GameList {
       this._render();
     });
 
-    // Waiting-lobby items — rejoin the lobby and return to the lobby screen
+    // Waiting-lobby items open the room. They must not start a map.
     this.el.querySelectorAll('.mp-game-item[data-lobby-code]').forEach(item => {
       item.addEventListener('click', async () => {
         const code = item.dataset.lobbyCode;
@@ -404,10 +411,21 @@ export class GameList {
           alert(result.error);
           return;
         }
+        const decision = resolveMyGamesEntryAction({
+          kind: result.isGame ? 'game' : 'lobby',
+          status: result.isGame ? (result.game?.status || 'active') : 'waiting',
+          stateVersion: result.game?.stateVersion || 0,
+          hasState: !!result.game?.state,
+        });
+        // The row was a waiting lobby. A live waiting room always wins.
+        if (!result.isGame || decision.action === 'open-lobby' || result.game?.status === 'waiting') {
+          this.hide();
+          if (this.onOpenLobby) this.onOpenLobby(result);
+          else if (this.onBack) this.onBack();
+          return;
+        }
         this.hide();
-        // onBack shows the multiplayer lobby; its subscription switches to
-        // lobby mode automatically now that currentLobby is set
-        if (this.onBack) this.onBack();
+        if (this.onSelectGame) await this.onSelectGame(result.gameId, result.game);
       });
     });
 
@@ -420,11 +438,33 @@ export class GameList {
         const gameId = item.dataset.gameId;
         const game = this.games.find(g => g.id === gameId);
         console.log('[GameList] Game clicked:', { gameId, game });
-        if (!shouldJoinListedGame({ game })) {
+        const decision = game ? resolveMyGamesEntryAction({
+          kind: 'game',
+          status: game.status,
+          stateVersion: game.stateVersion,
+          hasState: !!game.state,
+        }) : { action: 'rejoin-map' };
+        if (!game || (!shouldJoinListedGame({ game }) && decision.action !== 'open-lobby')) {
           if (gameId) forgetLastMatch();
           alert('That game is no longer active.');
           await this._loadGames();
           this._render();
+          return;
+        }
+        if (decision.action === 'open-lobby') {
+          const code = game?.lobbyCode || game?.lobbyData?.code || game?.code;
+          if (!code) {
+            alert('That lobby has no code to rejoin.');
+            return;
+          }
+          const joined = await this.lobbyManager.joinLobby(code, null);
+          if (!joined.success) {
+            alert(joined.error);
+            return;
+          }
+          this.hide();
+          if (this.onOpenLobby) this.onOpenLobby(joined);
+          else if (this.onBack) this.onBack();
           return;
         }
         if (game && this.onSelectGame) {

@@ -110,6 +110,71 @@ export function shouldJoinListedGame({ game = null, exists = true } = {}) {
   return shouldListGameInMyGames(game);
 }
 
+// Waiting lobbies are not a started map. My Games must open the room.
+// A started doc (active / starting, or a saved state) rejoins the board.
+export function isWaitingLobbyEntry({
+  kind = null,
+  status = null,
+  stateVersion = 0,
+  hasState = false,
+} = {}) {
+  if (kind === 'lobby' || status === 'waiting') return true;
+  if (status === 'active' || status === 'starting') return false;
+  if (Number(stateVersion) > 0 || hasState) return false;
+  return true;
+}
+
+export function resolveMyGamesEntryAction(entry = {}) {
+  if (isWaitingLobbyEntry(entry)) {
+    return { action: 'open-lobby', label: 'Resume lobby' };
+  }
+  return { action: 'rejoin-map', label: 'Resume' };
+}
+
+export function lastMatchFromLobbySnapshot(lobby = null) {
+  if (!lobby) return null;
+  const code = resolveLobbyCodeFromGameDoc(lobby);
+  const waiting = !lobby.status || lobby.status === 'waiting';
+  const gameId = waiting ? null : (lobby.gameId || null);
+  if (!gameId && !code) return null;
+  return {
+    gameId,
+    lobbyCode: code,
+    hostName: (lobby.players || []).find((p) => p.isHost)?.displayName || null,
+  };
+}
+
+export function buildMyGamesBoard({ games = [], waitingLobbies = [] } = {}) {
+  const lobbyRows = (waitingLobbies || []).filter((l) => l && (l.code || l.id)).map((l) => {
+    const entry = {
+      kind: 'lobby',
+      id: l.id || null,
+      code: l.code || null,
+      status: 'waiting',
+      name: l.name || l.code || 'Lobby',
+      detail: `${(l.players || []).length}/${l.settings?.maxPlayers || '?'} players`,
+    };
+    return { ...entry, ...resolveMyGamesEntryAction(entry) };
+  });
+  const gameRows = (games || []).filter((g) => g?.id).map((g) => {
+    const players = g.lobbyData?.players || g.state?.players || [];
+    const names = players.map((p) => p.displayName || p.name).filter(Boolean);
+    const entry = {
+      kind: 'game',
+      id: g.id,
+      code: resolveLobbyCodeFromGameDoc(g),
+      status: g.status || 'active',
+      stateVersion: Number(g.stateVersion) || 0,
+      hasState: !!g.state || Number(g.stateVersion) > 0,
+      name: names.join(', ') || resolveLobbyCodeFromGameDoc(g) || 'Game in progress',
+      detail: g.status === 'starting' ? 'Starting' : `Round ${g.state?.round || 1}`,
+      game: g,
+    };
+    return { ...entry, ...resolveMyGamesEntryAction(entry) };
+  });
+  return [...lobbyRows, ...gameRows];
+}
+
 export function shouldForgetLastMatchAfterLookup({
   lastMatchMissing = false,
   lastMatchGame = null,

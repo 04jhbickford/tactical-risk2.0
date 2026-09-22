@@ -1,4 +1,5 @@
-// Prove P0-1 stamp .4 and P0-2 queryless Classic after visiting New UX.
+// Stamp check. Queryless `/` is Experimental as of dual-path.16.
+// Classic stays on `?ux=classic` only — the lobby does not offer a Classic picker.
 // Run: node tools/qc-stamp-classic.mjs
 
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -75,38 +76,44 @@ try {
   await page.screenshot({ path: join(OUT, 'stamp-new-ux-390.png'), fullPage: false });
 
   await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('.lobby-ux-picker, .lobby-version-badge', { timeout: 25000 });
+  await page.waitForSelector('#three-lobby, .three-lobby-ver, .three-l0-ver', { timeout: 25000 });
   await page.waitForTimeout(500);
   const cold = await page.evaluate(() => ({
     html: window.__TR_GAME_VERSION,
     attr: document.documentElement.getAttribute('data-game-version'),
-    badge: document.querySelector('.lobby-version-badge')?.textContent || '',
+    badge: document.querySelector('.three-lobby-ver')?.textContent
+      || document.querySelector('.three-l0-ver')?.textContent
+      || '',
     storage: sessionStorage.getItem('tacticalRisk_uxMode'),
-    classicPicker: !!document.querySelector('[data-action="ux-classic"]'),
-    threeLobby: !!document.querySelector('#three-lobby.is-open, .three-lobby-home'),
-    classicOn: document.querySelector('[data-action="ux-classic"]')?.classList.contains('is-on') || false,
+    classicPicker: !!document.querySelector('[data-action="ux-classic"], [data-lobby="ux"][data-value="classic"]'),
+    threeLobby: !!document.querySelector('#three-lobby.is-open, .three-lobby-home, #three-lobby'),
   }));
-  push('queryless after New UX', cold);
-  if (cold.threeLobby) throw new Error('queryless opened New UX');
-  if (!cold.classicPicker || cold.storage) throw new Error('queryless did not reset to Classic');
-  if (cold.html !== GAME_VERSION || cold.badge !== GAME_VERSION) {
-    throw new Error(`Classic stamp ${JSON.stringify(cold)} != ${GAME_VERSION}`);
+  push('queryless after Experimental', cold);
+  if (!cold.threeLobby) throw new Error('queryless did not open Experimental');
+  if (cold.classicPicker || cold.storage) throw new Error('queryless still offers Classic or kept a sticky mode');
+  if (cold.html !== GAME_VERSION || (cold.badge && cold.badge !== GAME_VERSION)) {
+    throw new Error(`Experimental stamp ${JSON.stringify(cold)} != ${GAME_VERSION}`);
   }
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('.lobby-version-badge', { timeout: 20000 });
+  await page.waitForSelector('#three-lobby, .three-lobby-ver, .three-l0-ver', { timeout: 20000 });
   await page.waitForTimeout(400);
   const reload = await page.evaluate(() => ({
     html: window.__TR_GAME_VERSION,
-    badge: document.querySelector('.lobby-version-badge')?.textContent || '',
+    badge: document.querySelector('.three-lobby-ver')?.textContent
+      || document.querySelector('.three-l0-ver')?.textContent
+      || '',
     storage: sessionStorage.getItem('tacticalRisk_uxMode'),
-    threeLobby: !!document.querySelector('#three-lobby.is-open, .three-lobby-home'),
+    classicPicker: !!document.querySelector('[data-action="ux-classic"], [data-lobby="ux"][data-value="classic"]'),
+    threeLobby: !!document.querySelector('#three-lobby.is-open, .three-lobby-home, #three-lobby'),
   }));
   push('hard reload queryless', reload);
-  if (reload.threeLobby || reload.storage) throw new Error('reload stuck on New UX');
-  if (reload.html !== GAME_VERSION || reload.badge !== GAME_VERSION) {
+  if (!reload.threeLobby || reload.classicPicker || reload.storage) {
+    throw new Error('reload left Experimental or offered Classic');
+  }
+  if (reload.html !== GAME_VERSION || (reload.badge && reload.badge !== GAME_VERSION)) {
     throw new Error(`reload stamp ${JSON.stringify(reload)} != ${GAME_VERSION}`);
   }
-  await page.screenshot({ path: join(OUT, 'stamp-classic-queryless-390.png'), fullPage: false });
+  await page.screenshot({ path: join(OUT, 'stamp-experimental-queryless-390.png'), fullPage: false });
 
   writeFileSync(join(OUT, 'stamp-classic-proof.json'), JSON.stringify(proof, null, 2));
   console.log('qc-stamp-classic: PASS', GAME_VERSION);

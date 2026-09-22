@@ -203,6 +203,22 @@ function compactLocalSeatHtml(faction, model) {
   `;
 }
 
+function combatMoveListHtml(moves = []) {
+  const rows = Array.isArray(moves) ? moves.filter((m) => m && m.label) : [];
+  if (!rows.length) return '';
+  const undoable = rows.some((m) => m.canUndo);
+  return `<div class="three-move-list">
+    <div class="three-move-head">
+      <span>Combat moves</span>
+      ${undoable ? '<button type="button" class="three-move-undo" data-undo-all="1">Undo all</button>' : ''}
+    </div>
+    ${rows.map((row) => `<div class="three-move-row">
+      <span>${String(row.label).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))}</span>
+      ${row.canUndo ? `<button type="button" class="three-move-undo" data-undo-id="${row.id}">Undo</button>` : ''}
+    </div>`).join('')}
+  </div>`;
+}
+
 function lobbyCardHtml({ action, value, kicker, title, desc, mark, off = false }) {
   const data = off
     ? 'disabled'
@@ -493,6 +509,16 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       box-shadow:0 8px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.10);
     }
     #three-peek.is-on { display:block; pointer-events:auto; }
+    .three-move-list { margin-top:8px; display:flex; flex-direction:column; gap:4px; }
+    .three-move-head, .three-move-row {
+      display:flex; align-items:center; justify-content:space-between; gap:8px;
+      font:500 12px/1.3 -apple-system,sans-serif; color:#E8E2D4;
+    }
+    .three-move-undo {
+      min-height:32px; padding:0 10px; border-radius:8px; cursor:pointer;
+      border:1px solid rgba(201,164,74,.45); background:transparent; color:#f4ead4;
+      font:600 12px/1 -apple-system,sans-serif;
+    }
     #three-peek .three-peek-head {
       display:flex; align-items:baseline; gap:8px; min-height:0;
     }
@@ -1749,7 +1775,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
           : `<div class="three-lobby-identity" data-auth-surface="signin"><p>Sign in when you create or join. Session stays until Sign Out.</p></div>`);
       const code = room?.code || '------';
 
-      if (screen === 'online' || screen === 'create' || screen === 'join' || screen === 'room') {
+      if (screen === 'online' || screen === 'create' || screen === 'join' || screen === 'room' || screen === 'games') {
         if (screen === 'online') {
           lobby.innerHTML = `
             <div class="three-lobby-home">
@@ -1771,6 +1797,11 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
                   action: 'screen', value: 'join', mark: LOBBY_MARK_ONLINE,
                   kicker: 'Join', title: 'Join by Code',
                   desc: 'Enter a 6-character code',
+                })}
+                ${lobbyCardHtml({
+                  action: 'screen', value: 'games', mark: LOBBY_MARK_HOWTO,
+                  kicker: 'Yours', title: 'My Games',
+                  desc: 'Resume a lobby or a started match',
                 })}
               </div>
               ${mpError ? `<p class="three-lobby-error">${mpError}</p>` : ''}
@@ -1822,6 +1853,36 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
                 ${mpError ? `<p class="three-lobby-error">${mpError}</p>` : ''}
                 <button type="submit" class="three-lobby-start">Join lobby</button>
               </form>
+            </div>
+          `;
+        } else if (screen === 'games') {
+          const entries = Array.isArray(mp.entries) ? mp.entries : null;
+          const rows = entries === null
+            ? '<p class="three-lobby-sub">Loading your games…</p>'
+            : (entries.length
+              ? entries.map((row) => {
+                const token = row.action === 'open-lobby' ? (row.code || '') : (row.id || '');
+                const value = `${row.action}|${token}`;
+                return `<button type="button" class="three-lobby-card" data-lobby="mp-row" data-value="${value}">
+                  <span class="three-lobby-card-copy">
+                    <span class="three-lobby-kicker">${row.action === 'open-lobby' ? 'Waiting lobby' : 'In progress'}</span>
+                    <span class="three-lobby-card-title">${String(row.name || 'Game').replace(/[&<>"]/g, '')}</span>
+                    <span class="three-lobby-card-desc">${String(row.detail || '')} · ${row.label || 'Resume'}</span>
+                  </span>
+                </button>`;
+              }).join('')
+              : '<p class="three-lobby-sub">No waiting lobbies or started games.</p>');
+          lobby.innerHTML = `
+            <div class="three-lobby-howto">
+              <div class="three-lobby-setup-head">
+                <button type="button" class="three-lobby-back" data-lobby="screen" data-value="online" aria-label="Back">${LOBBY_BACK_ICON}</button>
+                <div>
+                  <p class="three-lobby-title">My Games</p>
+                  <p class="three-lobby-sub">Waiting rooms open the lobby · started matches rejoin the map</p>
+                </div>
+              </div>
+              <div class="three-lobby-actions">${rows}</div>
+              ${mpError ? `<p class="three-lobby-error">${mpError}</p>` : ''}
             </div>
           `;
         } else {
@@ -1913,20 +1974,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
               <p class="three-lobby-tag">World War II Grand Strategy</p>
               <span class="three-lobby-ver"></span>
             </div>
-            <div class="lobby-ux-picker three-lobby-ux">
-              <p class="lobby-ux-kicker">Interface</p>
-              <div class="lobby-ux-row">
-                <button type="button" class="lobby-ux-btn" data-lobby="ux" data-value="classic">
-                  <span class="lobby-ux-title">Classic</span>
-                  <span class="lobby-ux-desc">Canvas · default</span>
-                </button>
-                <button type="button" class="lobby-ux-btn lobby-ux-btn-new is-on" data-lobby="ux" data-value="three" aria-pressed="true">
-                  <span class="lobby-ux-title">${UX_LABEL_EXPERIMENTAL}</span>
-                  <span class="lobby-ux-desc">Optional</span>
-                </button>
-              </div>
-            </div>
-            <p class="three-lobby-path">Start here</p>
+            <p class="three-lobby-path">Start here · ${UX_LABEL_EXPERIMENTAL}</p>
             <div class="three-lobby-actions">
               ${lobbyCardHtml({
                 action: 'screen', value: 'setup', mark: LOBBY_MARK_LOCAL,
@@ -2226,6 +2274,26 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
         tile.onpointerdown = activate;
         tile.onclick = activate;
       });
+      api.peek.querySelectorAll('[data-undo-id]').forEach((btn) => {
+        stamp(btn);
+        const activate = (e) => {
+          sealActivate(e);
+          if (e.type === 'touchstart' || e.type === 'touchmove') return;
+          if (typeof api.onUndoMove === 'function') api.onUndoMove(btn.dataset.undoId);
+        };
+        btn.onpointerdown = activate;
+        btn.onclick = activate;
+      });
+      api.peek.querySelectorAll('[data-undo-all]').forEach((btn) => {
+        stamp(btn);
+        const activate = (e) => {
+          sealActivate(e);
+          if (e.type === 'touchstart' || e.type === 'touchmove') return;
+          if (typeof api.onUndoAll === 'function') api.onUndoAll();
+        };
+        btn.onpointerdown = activate;
+        btn.onclick = activate;
+      });
       api.peek.querySelectorAll('[data-ship]').forEach((btn) => {
         stamp(btn);
         const activate = (e) => {
@@ -2261,7 +2329,9 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       targetShipId = null,
       researchHint = false,
       stage = '',
+      moves = [],
     } = {}) {
+      const moveHtml = combatMoveListHtml(moves);
       api.setGuide('', false);
       if (api.confirm) {
         api.confirm.dataset.stage = stage || '';
@@ -2278,14 +2348,20 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
         const rosterTotal = (steppers || stacks).reduce((n, s) => n + (Number(s.have ?? s.quantity) || 0), 0);
         api.peek.innerHTML = `<div class="three-peek-head"><strong>${title}</strong>
           <div class="three-peek-meta">${route || 'Selected aircraft'}</div></div>
-          ${steppers?.length ? stepperRowHtml(steppers, { showAll: false }) : iconRowHtml(stacks)}`;
+          ${steppers?.length ? stepperRowHtml(steppers, { showAll: false }) : iconRowHtml(stacks)}
+          ${moveHtml}`;
         api.peek.dataset.rosterTotal = String(rosterTotal);
         api.peek.dataset.airLand = '1';
         if (!api.isSheetOpen()) api.peek.classList.add('is-on');
       } else if (!land) {
-        api.peek.classList.remove('is-on');
-        api.peek.textContent = '';
         delete api.peek.dataset.airLand;
+        if (moveHtml) {
+          api.peek.innerHTML = moveHtml;
+          if (!api.isSheetOpen()) api.peek.classList.add('is-on');
+        } else {
+          api.peek.classList.remove('is-on');
+          api.peek.textContent = '';
+        }
       } else {
         const owner = peekControlLabel(land, stacks);
         const ipcLine = !land.isWater ? `${printIpc(land)} IPC` : '';
@@ -2301,7 +2377,8 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
           <div class="three-peek-meta">${[owner, ipcLine, route].filter(Boolean).join(' · ')}</div></div>
           ${researchInfo}
           ${body}
-          ${cargoRowHtml(cargo || [], targetShipId)}`;
+          ${cargoRowHtml(cargo || [], targetShipId)}
+          ${moveHtml}`;
         api.peek.dataset.rosterTotal = String(rosterTotal);
         delete api.peek.dataset.airLand;
         const pickedTypes = [

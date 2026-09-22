@@ -2,6 +2,20 @@
 
 ---
 
+## 9.21.26.12 + 9.21.26.05 — dual-path.16
+
+Stamp `V2.81.57-dual-path.16`. Turn-change Discord pings stay paused.
+
+- [x] **9.21.26.12** Per-row combat-move Undo. History entries are addressable (`mvN`). Undoing a row reverts that move and any later continuation of the same units, newest first. Independent rows stay. **Undo all** clears the unlocked suffix. Classic recent-move list and Experimental combat-move list both call the shared engine. Locked prefix (after leaving combat move) and combat-resolve stay refused. Retreat still reads the full history.
+- [x] **9.21.26.05 Rob** A waiting lobby in My Games opens the room (`Resume lobby` / `open-lobby`). A started match (`active` / `starting`, or saved state) still rejoins the map. Classic Game List and Experimental My Games (`screen=games`) share `resolveMyGamesEntryAction`. Remembered last-match no longer keeps a stale started `gameId` while the lobby is still waiting.
+- [x] Lobby chrome no longer offers Classic as a path. Queryless `/` is Experimental (`three`). `?ux=classic` remains the deep link. Classic 1942 is still a local game-mode option.
+
+Residual: `moveHistory` is not in `toJSON()` (`SCHEMA_VERSION` stays 11). A reload or snapshot clears the undo list. That was already true for the stack.
+
+Receipt: `node tools/test-dual-path-16-playtest.mjs`.
+
+---
+
 ## 9.21.26.06–.11 — dual-path.15 playtest cluster
 
 Stamp `V2.81.57-dual-path.15`. Classic `/` and Experimental `?ux=three` share the engine. Turn-change Discord pings stay paused.
@@ -13,9 +27,9 @@ Stamp `V2.81.57-dual-path.15`. Classic `/` and Experimental `?ux=three` share th
 - [x] **9.21.26.06** Snapshots swallowed while `isPushing` are flushed after the push when the remote doc is newer or the seat changed.
 - [x] **9.21.26.07** Air cannot NCM onto land captured this turn. Leaving combat or NCM relocates or crashes that air. `capturedThisTurn` clears on `nextTurn`.
 - [x] Captured factory cap verified: not the player's `capitalTerritory`, so the limit is 5.
-- [ ] **9.21.26.12** Out-of-order / per-row undo of combat moves. History is still a stack (`undoLastMove`). Deferred.
+- [x] **9.21.26.12** Out-of-order / per-row undo of combat moves. Shipped in dual-path.16 (`undoMoveById` / Undo all).
 - [ ] Naval battle report defender dice. Experimental `battleCard` already shows atk/def lanes. Classic defender dice stay in the expanded casualty view. Deferred.
-- [ ] **9.21.26.05 Rob** My Games must not act as Rejoin on a waiting lobby. Distinct from the dual-path.14 ownership chrome that shared the .05 label. Deferred.
+- [x] **9.21.26.05 Rob** My Games must not act as Rejoin on a waiting lobby. Shipped in dual-path.16 (`open-lobby`). Distinct from the dual-path.14 ownership chrome that shared the .05 label.
 
 Receipt: `node tools/test-dual-path-15-playtest.mjs`.
 

@@ -35,6 +35,8 @@ import {
   shouldKeepLastKnownLobby,
   hasHydratePayload,
   resolveRejoinHydratePlan,
+  lastMatchFromLobbySnapshot,
+  buildMyGamesBoard,
 } from './lastMatch.js';
 import { resolveStartGameTarget } from './lobbyStart.js';
 import {
@@ -350,6 +352,27 @@ export class LobbyManager {
     }
   }
 
+  // My Games rows for Classic and Experimental. Waiting lobbies stay rooms.
+  async listMyGamesBoard() {
+    if (!this.db) return [];
+    const user = this.authManager.getUser();
+    if (!user) return [];
+    const games = await this.getMyActiveGames();
+    let waiting = [];
+    try {
+      const snap = await getDocs(query(
+        collection(this.db, 'lobbies'),
+        where('status', '==', 'waiting'),
+      ));
+      waiting = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((l) => l.players?.some((p) => p.oderId === user.id));
+    } catch (error) {
+      console.warn('Error listing waiting lobbies', error);
+    }
+    return buildMyGamesBoard({ games, waitingLobbies: waiting });
+  }
+
   // Join a lobby by code (or rejoin a started game by code)
   async joinLobby(code, password = null) {
     if (!this.db) return { success: false, error: 'Not connected' };
@@ -417,12 +440,12 @@ export class LobbyManager {
 
     // Check if already in lobby
     if (lobby.players.some(p => p.oderId === user.id)) {
-      rememberLastMatch({
-        lobbyCode: lobby.code || code,
-        hostName: lobby.players?.find((p) => p.isHost)?.displayName || null,
-      });
+      this.currentLobby = lobby;
+      const remembered = lastMatchFromLobbySnapshot(lobby);
+      if (remembered) rememberLastMatch(remembered);
       this._subscribeToLobby(lobby.id);
-      return { success: true, lobbyId: lobby.id };
+      this._notifyListeners();
+      return { success: true, lobbyId: lobby.id, lobby };
     }
 
     // Check if full
@@ -487,11 +510,9 @@ export class LobbyManager {
       if (!outcome?.success) {
         return { success: false, error: outcome?.error || 'Could not join lobby' };
       }
-      this._patchCurrentLobby(lobby.id, { players: outcome.players });
-      rememberLastMatch({
-        lobbyCode: outcome.code || lobby.code || code,
-        hostName: outcome.hostName || lobby.players?.find((p) => p.isHost)?.displayName || null,
-      });
+      this.currentLobby = { ...lobby, players: outcome.players, code: outcome.code || lobby.code };
+      const remembered = lastMatchFromLobbySnapshot(this.currentLobby);
+      if (remembered) rememberLastMatch(remembered);
       this._subscribeToLobby(lobby.id);
       console.log('[LobbyManager] Player successfully joined lobby');
       return { success: true, lobbyId: lobby.id };
@@ -986,11 +1007,11 @@ export class LobbyManager {
         if (snapshot.exists()) {
           this.currentLobby = { id: snapshot.id, ...snapshot.data() };
           this._listenerErrored = false;
-          rememberLastMatch({
-            gameId: this.currentLobby.gameId || readLastMatch()?.gameId || null,
-            lobbyCode: this.currentLobby.code,
-            hostName: this.currentLobby.players?.find((p) => p.isHost)?.displayName || null,
-          });
+          const remembered = lastMatchFromLobbySnapshot(this.currentLobby);
+          if (remembered) rememberLastMatch(remembered);
+          else if (!this.currentLobby.status || this.currentLobby.status === 'waiting') {
+            forgetLastMatch();
+          }
         } else if (shouldKeepLastKnownLobby({
           snapshotExists: false,
           explicitLeave: false,
