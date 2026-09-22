@@ -1,4 +1,4 @@
-// V2.81.57-unified.3 — playtest P0s: single-row undo, transport load,
+// V2.81.57-unified.4 — playtest P0s: single-row undo, transport load,
 // amphibious assault, empty-land air, desktop right-click / unit drag.
 // Run: node tools/test-unified-3-playtest.mjs
 
@@ -13,7 +13,7 @@ if (typeof globalThis.localStorage === 'undefined') {
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const { GAME_VERSION, SCHEMA_VERSION } = await import(pathToFileURL(join(root, 'src/version.js')));
-const { GameState, GAME_PHASES, TURN_PHASES } = await import(pathToFileURL(join(root, 'src/state/gameState.js')));
+const { GameState, GAME_PHASES, TURN_PHASES, LAND_BRIDGES } = await import(pathToFileURL(join(root, 'src/state/gameState.js')));
 const { combatMoveReachableDests } = await import(pathToFileURL(join(root, 'src/state/combatMoveEligibility.js')));
 const { shouldApplyRemoteGameState } = await import(pathToFileURL(join(root, 'src/state/placementPass.js')));
 const { pointerStartsUnitDrag, rightClickConfirmsMove } = await import(pathToFileURL(join(root, 'src/ui/mapPointer.js')));
@@ -95,9 +95,9 @@ const html = readFileSync(join(root, 'index.html'), 'utf8');
 const mainSrc = readFileSync(join(root, 'src/main.js'), 'utf8');
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-unified.3', GAME_VERSION === 'V2.81.57-unified.3');
+check('GAME_VERSION is V2.81.57-unified.4', GAME_VERSION === 'V2.81.57-unified.4');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
-check('index.html stamp is unified.3', html.includes('content="V2.81.57-unified.3"'));
+check('index.html stamp is unified.4', html.includes('content="V2.81.57-unified.4"'));
 
 console.log('=== 9.22.26.04 one undo row ===');
 {
@@ -266,9 +266,35 @@ console.log('=== shared dests still omit a hostile sea for land ===');
 
 console.log('=== 9.22.26.10 island-capital navy ===');
 {
+  const realList = JSON.parse(readFileSync(join(root, 'data/territories.json'), 'utf8'));
+  const realByName = Object.fromEntries(realList.map((t) => [t.name, t]));
+  const realIslands = realList
+    .filter((t) => !t.isWater && isIslandCapital(realByName, t.name, LAND_BRIDGES))
+    .map((t) => t.name)
+    .sort();
+  check('movement graph excludes Japan', isIslandCapital(realByName, 'Japan') === false);
+  check('movement graph excludes the United Kingdom', isIslandCapital(realByName, 'United Kingdom') === false);
+  check('movement graph excludes Eire', isIslandCapital(realByName, 'Eire') === false);
+  check('Australia has a land bridge, so it is not an island capital', isIslandCapital(realByName, 'Australia') === false);
+  check('starting capitals are not island capitals',
+    ['Japan', 'United Kingdom', 'East US', 'Germany', 'Russia'].every((name) => isIslandCapital(realByName, name) === false));
+  check('Philippines has no land step', isIslandCapital(realByName, 'Philippines') === true);
+  check('true islands are only sea-locked territories',
+    realIslands.join('|') === [
+      'Borneo Celebes',
+      'Caroline Islands',
+      'Hawaiian Islands',
+      'Midway',
+      'New Guinea',
+      'Okinawa',
+      'Philippines',
+      'Solomon Islands',
+      'Wake Island',
+    ].join('|'));
+
   const islandMap = {
-    Japan: { name: 'Japan', isWater: false, connections: ['Sea'] },
-    Sea: { name: 'Sea', isWater: true, connections: ['Japan', 'Korea', 'Open'] },
+    Philippines: { name: 'Philippines', isWater: false, connections: ['Sea'] },
+    Sea: { name: 'Sea', isWater: true, connections: ['Philippines', 'Korea', 'Open'] },
     Open: { name: 'Open', isWater: true, connections: ['Sea'] },
     Korea: { name: 'Korea', isWater: false, connections: ['Sea', 'China'] },
     China: { name: 'China', isWater: false, connections: ['Korea', 'India', 'Foothold'] },
@@ -281,8 +307,12 @@ console.log('=== 9.22.26.10 island-capital navy ===');
     D: { name: 'D', isWater: false, connections: ['B'] },
     E: { name: 'E', isWater: false, connections: ['C'] },
   };
-  check('Japan-sized capital is an island start', isIslandCapital(islandMap, 'Japan') === true);
-  check('a 6-territory landmass is continental', isIslandCapital(islandMap, 'Germany') === false);
+  check('a sea-locked capital is an island start', isIslandCapital(islandMap, 'Philippines') === true);
+  check('Japan is not an island even with only a sea polygon', isIslandCapital({
+    Japan: { name: 'Japan', isWater: false, connections: ['Sea'] },
+    Sea: { name: 'Sea', isWater: true, connections: ['Japan'] },
+  }, 'Japan') === false);
+  check('a land-connected capital is not an island start', isIslandCapital(islandMap, 'Germany') === false);
   const navyDefs = {
     infantry: { cost: 3, attack: 1, defense: 2, movement: 1, isLand: true },
     armour: { cost: 5, attack: 3, defense: 3, movement: 2, isLand: true },
@@ -307,10 +337,10 @@ console.log('=== 9.22.26.10 island-capital navy ===');
   check('secondary factory prefers the other landmass',
     pickSecondaryFactorySite({
       territoryByName: islandMap,
-      capitalName: 'Japan',
-      ownedLands: ['Japan', 'Foothold'],
+      capitalName: 'Philippines',
+      ownedLands: ['Philippines', 'Foothold'],
       factoryAt: () => false,
-      friendlyAtStart: new Set(['Japan', 'Foothold']),
+      friendlyAtStart: new Set(['Philippines', 'Foothold']),
     }) === 'Foothold');
   const assault = pickIslandAssault({
     territoryByName: islandMap,
@@ -339,7 +369,7 @@ console.log('=== 9.22.26.10 island-capital navy ===');
   gs.phase = GAME_PHASES.PLAYING;
   gs.turnPhase = TURN_PHASES.PURCHASE;
   gs.territoryState = {
-    Japan: { owner: 'jp' },
+    Philippines: { owner: 'jp' },
     Korea: { owner: 'cn' },
     China: { owner: 'cn' },
     India: { owner: 'cn' },
@@ -348,12 +378,12 @@ console.log('=== 9.22.26.10 island-capital navy ===');
     Open: { owner: null },
   };
   gs.playerState = {
-    jp: { ipcs: 40, hasPlacedCapital: true, capitalTerritory: 'Japan' },
+    jp: { ipcs: 40, hasPlacedCapital: true, capitalTerritory: 'Philippines' },
     cn: { ipcs: 20, hasPlacedCapital: true, capitalTerritory: 'China' },
   };
-  gs.friendlyTerritoriesAtTurnStart = new Set(['Japan', 'Foothold']);
+  gs.friendlyTerritoriesAtTurnStart = new Set(['Philippines', 'Foothold']);
   gs.units = {
-    Japan: [{ type: 'infantry', quantity: 2, owner: 'jp' }, { type: 'factory', quantity: 1, owner: 'jp' }],
+    Philippines: [{ type: 'infantry', quantity: 2, owner: 'jp' }, { type: 'factory', quantity: 1, owner: 'jp' }],
     Foothold: [{ type: 'infantry', quantity: 1, owner: 'jp' }],
     Korea: [],
     China: [],
@@ -391,10 +421,31 @@ console.log('=== 9.22.26.10 island-capital navy ===');
   check('island AI unloads onto the empty enemy coast',
     gs.getOwner('Korea') === 'jp'
     && (gs.units.Korea || []).some((u) => u.type === 'infantry' && u.owner === 'jp'));
+
+  const japanTerritories = [
+    { name: 'Japan', isWater: false, connections: ['Sea'] },
+    { name: 'Sea', isWater: true, connections: ['Japan'] },
+    { name: 'Manchuria', isWater: false, connections: [] },
+  ];
+  const japan = new GameState({ risk: { factions: [] } }, japanTerritories, []);
+  japan.players = [{ id: 'jp', name: 'Japanese', alliance: 'axis' }];
+  japan.currentPlayerIndex = 0;
+  japan.phase = GAME_PHASES.PLAYING;
+  japan.turnPhase = TURN_PHASES.PURCHASE;
+  japan.territoryState = { Japan: { owner: 'jp' }, Sea: { owner: null }, Manchuria: { owner: 'cn' } };
+  japan.playerState = { jp: { ipcs: 40, hasPlacedCapital: true, capitalTerritory: 'Japan' } };
+  japan.units = { Japan: [{ type: 'infantry', quantity: 2, owner: 'jp' }, { type: 'factory', quantity: 1, owner: 'jp' }], Sea: [], Manchuria: [] };
+  const japanAi = new AIController();
+  japanAi.gameState = japan;
+  japanAi.unitDefs = navyDefs;
+  japanAi._delay = async () => {};
+  await japanAi._handlePurchase({ difficulty: 'medium' }, japan.players[0]);
+  const japanShips = Object.values(japan.units).flat().filter((u) => u && (u.type === 'transport' || u.type === 'submarine') && u.owner === 'jp');
+  check('Japan uses the normal purchase list, not the island navy profile', japanShips.length === 0);
 }
 
 if (failures) {
   console.error(`\n${failures} failed`);
   process.exit(1);
 }
-console.log('\nall unified.3 checks passed');
+console.log('\nall unified.4 checks passed');
