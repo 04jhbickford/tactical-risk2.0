@@ -26,19 +26,22 @@ globalThis.sessionStorage = memoryStore();
 globalThis.localStorage = memoryStore();
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-assert.match(html, /window\.__TR_GAME_VERSION = 'V2\.81\.57-dual-path\.16'/);
-assert.match(html, /name="tr-game-version" content="V2\.81\.57-dual-path\.16"/);
+assert.match(html, /window\.__TR_GAME_VERSION = 'V2\.81\.57-dual-path\.17'/);
+assert.match(html, /name="tr-game-version" content="V2\.81\.57-dual-path\.17"/);
 assert.match(html, /lockStamp/, 'HTML stamp cannot drop below .12');
-assert.match(html, /src="src\/main\.js\?v=V2\.81\.57-dual-path\.16"/);
+assert.match(html, /src="src\/main\.js\?v=V2\.81\.57-dual-path\.17"/);
 assert.doesNotMatch(html, /dual-path\.(?:[23456789]|10)['"]/);
 
-assert.equal(GAME_VERSION, 'V2.81.57-dual-path.16', 'stamp is dual-path.16');
+assert.equal(GAME_VERSION, 'V2.81.57-dual-path.17', 'stamp is dual-path.17');
 assert.equal(UX_LABEL_EXPERIMENTAL, 'Experimental UX');
 
 const lobbySrc = readFileSync(new URL('../src/ui/lobby.js', import.meta.url), 'utf8');
 const chromeSrc = readFileSync(new URL('../src/map/threeMapChrome.js', import.meta.url), 'utf8');
-assert.doesNotMatch(lobbySrc, /data-action="ux-classic"|data-action="ux-three"/);
-assert.doesNotMatch(chromeSrc, /data-lobby="ux"/);
+assert.match(lobbySrc, /data-action="ux-classic"/);
+assert.match(lobbySrc, /data-action="ux-three"/);
+assert.match(lobbySrc, /lobbyInterfaceChoices/);
+assert.match(chromeSrc, /data-lobby="ux"/);
+assert.match(chromeSrc, /data-value="\$\{item\.id\}"/);
 assert.match(chromeSrc, /UX_LABEL_EXPERIMENTAL/);
 assert.match(chromeSrc, /assets\/flags\/\$\{flag\}/);
 assert.match(chromeSrc, /three-lobby-swatch\$\{on \? ' is-on'/);
@@ -77,7 +80,8 @@ assert.equal(globalThis.localStorage.getItem(UX_STORAGE_KEY), null, 'queryless w
 const threeHref = applyUxQuery(UX_THREE, 'https://tactical-risk20.vercel.app/');
 assert.match(threeHref, /ux=three/);
 const classicHref = applyUxQuery(UX_CLASSIC, threeHref);
-assert.doesNotMatch(classicHref, /[?&]ux=/);
+assert.match(classicHref, /[?&]ux=classic/);
+assert.doesNotMatch(classicHref, /[?&]ux=three/);
 assert.doesNotMatch(classicHref, /[?&]three=/);
 
 assert.equal(isPocketPreviewRequested('?ux=three'), false);

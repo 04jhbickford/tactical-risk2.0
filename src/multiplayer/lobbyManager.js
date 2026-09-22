@@ -38,7 +38,7 @@ import {
   lastMatchFromLobbySnapshot,
   buildMyGamesBoard,
 } from './lastMatch.js';
-import { resolveStartGameTarget } from './lobbyStart.js';
+import { lobbyAppearsInOpenGames, resolveStartGameTarget } from './lobbyStart.js';
 import {
   addLobbyAISeat,
   joinLobbySeat,
@@ -285,10 +285,13 @@ export class LobbyManager {
       snapshot.forEach(doc => {
         const data = doc.data();
         const isOwnLobby = data.players?.some(p => p.oderId === userId);
-        const isPublicAndNotFull = !data.password && data.isPublished && data.players.length < data.settings.maxPlayers;
-
-        // Show if: (public, published, not full) OR (user's own lobby that is published)
-        if (isPublicAndNotFull || (isOwnLobby && data.isPublished)) {
+        if (lobbyAppearsInOpenGames({
+          isPublished: data.isPublished,
+          password: data.password,
+          playerCount: data.players.length,
+          maxPlayers: data.settings.maxPlayers,
+          isOwnLobby,
+        })) {
           lobbies.push({ id: doc.id, ...data });
         }
       });
@@ -877,6 +880,31 @@ export class LobbyManager {
       return { success: true };
     } catch (error) {
       console.error('Error publishing lobby:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Drop the waiting lobby from Open Games. Stays in the room.
+  // Does not remove seats and does not delete the lobby doc.
+  async unlistLobby() {
+    if (!this.currentLobby) return { success: false, error: 'Not in lobby' };
+
+    const user = this.authManager.getUser();
+    if (!user || this.currentLobby.hostId !== user.id) {
+      return { success: false, error: 'Only host can unlist' };
+    }
+
+    try {
+      const lobbyId = this.currentLobby.id;
+      await updateDoc(doc(this.db, 'lobbies', lobbyId), {
+        isPublished: false,
+        updatedAt: serverTimestamp(),
+      });
+      this._patchCurrentLobby(lobbyId, { isPublished: false });
+      this._notifyListeners();
+      return { success: true, isPublished: false };
+    } catch (error) {
+      console.error('Error unlisting lobby:', error);
       return { success: false, error: error.message };
     }
   }

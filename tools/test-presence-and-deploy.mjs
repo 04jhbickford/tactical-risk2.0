@@ -182,7 +182,7 @@ const unitDefs = {
 };
 
 console.log('=== Version stamps ===');
-check('GAME_VERSION is V2.81.57-dual-path.16', GAME_VERSION === 'V2.81.57-dual-path.16');
+check('GAME_VERSION is V2.81.57-dual-path.17', GAME_VERSION === 'V2.81.57-dual-path.17');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== Presence: background must not delete or go offline ===');
@@ -1479,7 +1479,7 @@ console.log('=== B38–B40 first host turn: panel, deploy pool, Start Game, relo
     && shouldShowListInOpenGames({ isHost: false, isPublished: false }) === false
     && /async publishLobby\([\s\S]*_patchCurrentLobby\([\s\S]*isPublished:\s*true/.test(lobbyMgrSrc)
     && lobbySrc.includes("btn.textContent = 'Listing…'")
-    && lobbySrc.includes('isHost && !lobby.isPublished')
+    && lobbySrc.includes('shouldShowListInOpenGames')
     && readFileSync(join(root, 'src/map/threeMapChrome.js'), 'utf8').includes('data-lobby="mp-publish"')
     && readFileSync(join(root, 'src/map/threeMpSession.js'), 'utf8').includes('publishRoom')
     && readFileSync(join(root, 'src/map/threeSoloBoot.js'), 'utf8').includes('mp-publish'));

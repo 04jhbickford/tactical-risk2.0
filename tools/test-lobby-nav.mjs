@@ -36,8 +36,8 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-console.log('=== V2.81.57-dual-path.16 lobby nav ===');
-check('GAME_VERSION is V2.81.57-dual-path.16', GAME_VERSION === 'V2.81.57-dual-path.16');
+console.log('=== V2.81.57-dual-path.17 lobby nav ===');
+check('GAME_VERSION is V2.81.57-dual-path.17', GAME_VERSION === 'V2.81.57-dual-path.17');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== 9.20.26.08 explicit Back ===');
@@ -163,7 +163,7 @@ console.log('=== dual-fork wiring ===');
   const chrome = readFileSync(join(root, 'src/map/threeMapChrome.js'), 'utf8');
   check('first List click patches locally on both forks',
     lobbyMgr.includes('_patchCurrentLobby(lobbyId, { isPublished: true })')
-    && classic.includes('isHost && !lobby.isPublished')
+    && classic.includes('shouldShowListInOpenGames')
     && chrome.includes('data-lobby="mp-publish"')
     && threeMp.includes('publishRoom')
     && threeBoot.includes("kind === 'mp-publish'"));

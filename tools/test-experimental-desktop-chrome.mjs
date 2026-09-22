@@ -9,7 +9,7 @@ import { GAME_VERSION } from '../src/version.js';
 import { UX_LABEL_EXPERIMENTAL, resolveUxMode, UX_CLASSIC, UX_THREE } from '../src/map/presentationMode.js';
 import { injectThreeChrome, syncThreeShellWidth, resizeThreeMapCanvas } from '../src/map/threeMapChrome.js';
 
-assert.equal(GAME_VERSION, 'V2.81.57-dual-path.16', 'stamp is dual-path.16');
+assert.equal(GAME_VERSION, 'V2.81.57-dual-path.17', 'stamp is dual-path.17');
 assert.equal(UX_LABEL_EXPERIMENTAL, 'Experimental UX');
 assert.equal(resolveUxMode(''), UX_THREE, 'queryless is Experimental');
 assert.equal(resolveUxMode('?ux=classic'), UX_CLASSIC, 'classic remains a deep link');
@@ -25,9 +25,9 @@ const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const brief = readFileSync(new URL('../briefs/2026-09-20-main-art-three-ux/DESKTOP-EXPERIMENTAL-CHROME-BRIEF.md', import.meta.url), 'utf8');
 const checklist = readFileSync(new URL('../briefs/2026-09-20-main-art-three-ux/ADAPTIVE-LOBBY-CHECKLIST.md', import.meta.url), 'utf8');
 
-assert.match(html, /tr-game-version" content="V2\.81\.57-dual-path\.16"/);
-assert.match(html, /style\.css\?v=V2\.81\.57-dual-path\.16/);
-assert.match(html, /src\/main\.js\?v=V2\.81\.57-dual-path\.16/);
+assert.match(html, /tr-game-version" content="V2\.81\.57-dual-path\.17"/);
+assert.match(html, /style\.css\?v=V2\.81\.57-dual-path\.17/);
+assert.match(html, /src\/main\.js\?v=V2\.81\.57-dual-path\.17/);
 
 assert.match(brief, /map center \+ left context rail \+ right actions rail/);
 assert.match(brief, /fixed map scale grow frame/);
@@ -58,8 +58,9 @@ assert.match(chromeSrc, /#three-confirm, #three-confirm\.is-idle, #three-confirm
 assert.match(chromeSrc, /#three-sheet-stack \{[\s\S]*pointer-events:none/);
 assert.match(chromeSrc, /compactLocalSeatHtml/);
 
-assert.doesNotMatch(classicLobby, /data-action="ux-classic"|data-action="ux-three"/);
-assert.doesNotMatch(chromeSrc, /data-lobby="ux"/);
+assert.match(classicLobby, /data-action="ux-classic"/);
+assert.match(classicLobby, /data-action="ux-three"/);
+assert.match(chromeSrc, /data-lobby="ux"/);
 assert.doesNotMatch(classicLobby, /--three-left/);
 assert.doesNotMatch(classicCanvas, /--three-left/);
 assert.doesNotMatch(classicStyle, /--three-left/);

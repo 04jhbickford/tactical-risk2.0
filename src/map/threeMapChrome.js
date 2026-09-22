@@ -5,8 +5,9 @@ import { GAME_VERSION, SCHEMA_VERSION } from '../version.js';
 import { peekControlLabel } from './politicalControl.js';
 import { formatUnitName } from '../utils/unitNames.js';
 import { getUnitIconPath } from '../utils/unitIcons.js';
-import { UX_LABEL_EXPERIMENTAL } from './presentationMode.js';
+import { UX_LABEL_EXPERIMENTAL, UX_THREE, lobbyInterfaceChoices } from './presentationMode.js';
 import { formatWelcomeEmail, formatWelcomeName, isRealAuthIdentity } from '../multiplayer/authSession.js';
+import { resolveLobbyRoomChrome } from '../multiplayer/lobbyStart.js';
 import { stripPreviewParams, soloHref } from './uxPreviewFlag.js';
 import {
   AI_DIFFICULTIES,
@@ -1083,6 +1084,13 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
       font:700 14px/1 -apple-system,"SF Pro Text",sans-serif;
       letter-spacing:0.04em; text-transform:uppercase; cursor:pointer;
     }
+    #three-lobby .three-lobby-menu {
+      display:block; width:100%; min-height:48px; margin-top:4px;
+      border:1px solid rgba(255,255,255,0.18); border-radius:12px;
+      background:transparent; color:#E8E2D4;
+      font:700 14px/1 -apple-system,"SF Pro Text",sans-serif;
+      letter-spacing:0.04em; text-transform:uppercase; cursor:pointer;
+    }
     #three-lobby .three-lobby-form {
       display:flex; flex-direction:column; gap:12px; padding:8px 4px 16px;
     }
@@ -1774,6 +1782,10 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
           ? `<div class="three-lobby-identity" data-auth-surface="restoring"><p>Restoring your session…</p></div>`
           : `<div class="three-lobby-identity" data-auth-surface="signin"><p>Sign in when you create or join. Session stays until Sign Out.</p></div>`);
       const code = room?.code || '------';
+      const roomChrome = resolveLobbyRoomChrome({
+        isHost: host,
+        isPublished: !!room?.isPublished,
+      });
 
       if (screen === 'online' || screen === 'create' || screen === 'join' || screen === 'room' || screen === 'games') {
         if (screen === 'online') {
@@ -1929,9 +1941,19 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
                 ${mpError ? `<p class="three-lobby-error">${mpError}</p>` : ''}
               </div>
               <div class="three-lobby-footer">
-                ${host && !room.isPublished ? `
+                ${roomChrome.unlist.visible ? `
+                  <button type="button" class="three-lobby-list" data-lobby="mp-unlist">
+                    ${roomChrome.unlist.label}
+                  </button>
+                ` : ''}
+                ${roomChrome.mainMenu.visible ? `
+                  <button type="button" class="three-lobby-menu" data-lobby="mp-main-menu">
+                    ${roomChrome.mainMenu.label}
+                  </button>
+                ` : ''}
+                ${roomChrome.list.visible ? `
                   <button type="button" class="three-lobby-list" data-lobby="mp-publish">
-                    List in Open Games
+                    ${roomChrome.list.label}
                   </button>
                 ` : ''}
                 <button type="button" class="three-lobby-start" data-lobby="mp-start" ${host && roomPlayers.length >= 2 && roomPlayers.every((p) => p.factionId) ? '' : 'disabled'}>
@@ -1974,6 +1996,22 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
               <p class="three-lobby-tag">World War II Grand Strategy</p>
               <span class="three-lobby-ver"></span>
             </div>
+            ${(() => {
+              const choice = lobbyInterfaceChoices(UX_THREE);
+              const button = (item, extra = '') => `
+                <button type="button" class="lobby-ux-btn${extra}${item.pressed ? ' is-on' : ''}" data-lobby="ux" data-value="${item.id}" aria-pressed="${item.pressed ? 'true' : 'false'}">
+                  <span class="lobby-ux-title">${item.label}</span>
+                  <span class="lobby-ux-desc">${item.desc}</span>
+                </button>`;
+              return `
+                <div class="lobby-ux-picker three-lobby-ux">
+                  <p class="lobby-ux-kicker">Interface</p>
+                  <div class="lobby-ux-row">
+                    ${button(choice.classic)}
+                    ${button(choice.experimental, ' lobby-ux-btn-new')}
+                  </div>
+                </div>`;
+            })()}
             <p class="three-lobby-path">Start here · ${UX_LABEL_EXPERIMENTAL}</p>
             <div class="three-lobby-actions">
               ${lobbyCardHtml({

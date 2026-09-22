@@ -2,6 +2,18 @@
 
 ---
 
+## 9.21.26.13 — dual-path.17 lobby chrome
+
+Stamp `V2.81.57-dual-path.17`. Turn-change Discord pings stay paused.
+
+- [x] **9.21.26.13 Rob** Game lobby chrome, both forks. **Unlist Game** (host) writes `isPublished: false` and stays in the room, so the lobby drops out of Open Games. **Main Menu** (host and player) returns to Main Menu and does not write the listed flag. Classic `?ux=classic` and Experimental `/` share `lobbyChromeStatusAfter`.
+- [x] Classic | Experimental is an explicit lobby choice again on both home screens (`lobbyInterfaceChoices`). Queryless `/` stays Experimental. Choosing Classic sets `?ux=classic`.
+- [x] dual-path.16 still holds: per-row combat Undo, My Games waiting → Resume lobby.
+
+Receipt: `node tools/test-dual-path-17-playtest.mjs`.
+
+---
+
 ## 9.21.26.12 + 9.21.26.05 — dual-path.16
 
 Stamp `V2.81.57-dual-path.16`. Turn-change Discord pings stay paused.

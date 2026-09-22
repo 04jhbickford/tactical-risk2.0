@@ -1,5 +1,5 @@
-// Stamp check. Queryless `/` is Experimental as of dual-path.16.
-// Classic stays on `?ux=classic` only — the lobby does not offer a Classic picker.
+// Stamp check. Queryless `/` is Experimental.
+// Both lobbies offer Classic | Experimental. Classic choice is `?ux=classic`.
 // Run: node tools/qc-stamp-classic.mjs
 
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -90,7 +90,8 @@ try {
   }));
   push('queryless after Experimental', cold);
   if (!cold.threeLobby) throw new Error('queryless did not open Experimental');
-  if (cold.classicPicker || cold.storage) throw new Error('queryless still offers Classic or kept a sticky mode');
+  if (!cold.classicPicker) throw new Error('queryless Experimental lobby must offer Classic');
+  if (cold.storage) throw new Error('queryless kept a sticky mode');
   if (cold.html !== GAME_VERSION || (cold.badge && cold.badge !== GAME_VERSION)) {
     throw new Error(`Experimental stamp ${JSON.stringify(cold)} != ${GAME_VERSION}`);
   }
@@ -107,8 +108,8 @@ try {
     threeLobby: !!document.querySelector('#three-lobby.is-open, .three-lobby-home, #three-lobby'),
   }));
   push('hard reload queryless', reload);
-  if (!reload.threeLobby || reload.classicPicker || reload.storage) {
-    throw new Error('reload left Experimental or offered Classic');
+  if (!reload.threeLobby || !reload.classicPicker || reload.storage) {
+    throw new Error('reload left Experimental, dropped the Classic choice, or kept a sticky mode');
   }
   if (reload.html !== GAME_VERSION || (reload.badge && reload.badge !== GAME_VERSION)) {
     throw new Error(`reload stamp ${JSON.stringify(reload)} != ${GAME_VERSION}`);
