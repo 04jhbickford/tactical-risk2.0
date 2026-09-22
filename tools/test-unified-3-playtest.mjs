@@ -18,6 +18,14 @@ const { combatMoveReachableDests } = await import(pathToFileURL(join(root, 'src/
 const { shouldApplyRemoteGameState } = await import(pathToFileURL(join(root, 'src/state/placementPass.js')));
 const { pointerStartsUnitDrag, rightClickConfirmsMove } = await import(pathToFileURL(join(root, 'src/ui/mapPointer.js')));
 const { legalDests, createSoloPlay } = await import(pathToFileURL(join(root, 'src/map/threeSoloPlay.js')));
+const {
+  isIslandCapital,
+  pickIslandAssault,
+  pickSecondaryFactorySite,
+  pickTransportSail,
+  planIslandNavyPurchases,
+} = await import(pathToFileURL(join(root, 'src/ai/islandNavy.js')));
+const { AIController } = await import(pathToFileURL(join(root, 'src/ai/aiController.js')));
 
 let failures = 0;
 const check = (label, cond) => {
@@ -254,6 +262,135 @@ console.log('=== shared dests still omit a hostile sea for land ===');
   play.selected = 'Britain';
   play.selectedUnits = { infantry: 1 };
   check('solo legalDests also omit that hostile sea', !legalDests(play).includes('North Sea'));
+}
+
+console.log('=== 9.22.26.10 island-capital navy ===');
+{
+  const islandMap = {
+    Japan: { name: 'Japan', isWater: false, connections: ['Sea'] },
+    Sea: { name: 'Sea', isWater: true, connections: ['Japan', 'Korea', 'Open'] },
+    Open: { name: 'Open', isWater: true, connections: ['Sea'] },
+    Korea: { name: 'Korea', isWater: false, connections: ['Sea', 'China'] },
+    China: { name: 'China', isWater: false, connections: ['Korea', 'India', 'Foothold'] },
+    India: { name: 'India', isWater: false, connections: ['China'] },
+    Foothold: { name: 'Foothold', isWater: false, connections: ['China'] },
+    Germany: { name: 'Germany', isWater: false, connections: ['A', 'B'] },
+    A: { name: 'A', isWater: false, connections: ['Germany', 'C'] },
+    B: { name: 'B', isWater: false, connections: ['Germany', 'D'] },
+    C: { name: 'C', isWater: false, connections: ['A', 'E'] },
+    D: { name: 'D', isWater: false, connections: ['B'] },
+    E: { name: 'E', isWater: false, connections: ['C'] },
+  };
+  check('Japan-sized capital is an island start', isIslandCapital(islandMap, 'Japan') === true);
+  check('a 6-territory landmass is continental', isIslandCapital(islandMap, 'Germany') === false);
+  const navyDefs = {
+    infantry: { cost: 3, attack: 1, defense: 2, movement: 1, isLand: true },
+    armour: { cost: 5, attack: 3, defense: 3, movement: 2, isLand: true },
+    artillery: { cost: 4, attack: 2, defense: 2, movement: 1, isLand: true },
+    fighter: { cost: 10, attack: 3, defense: 4, movement: 4, isAir: true },
+    transport: { cost: 7, attack: 0, defense: 0, movement: 2, isSea: true, canCarry: ['infantry'] },
+    submarine: { cost: 6, attack: 2, defense: 1, movement: 2, isSea: true },
+    factory: { cost: 15, attack: 0, defense: 0, movement: 0, isBuilding: true },
+  };
+  const held = planIslandNavyPurchases({
+    ipcs: 40,
+    unitDefs: navyDefs,
+    transportCount: 0,
+    escortCount: 0,
+    reserve: 15,
+  });
+  check('island plan buys transports and an escort before the factory reserve',
+    held.buys.filter((b) => b.unitType === 'transport').reduce((s, b) => s + b.count, 0) === 2
+    && held.buys.some((b) => b.unitType === 'submarine' && b.placement === 'sea'));
+  check('threatened island capital does not buy ships',
+    planIslandNavyPurchases({ ipcs: 40, unitDefs: navyDefs, threatened: true }).buys.length === 0);
+  check('secondary factory prefers the other landmass',
+    pickSecondaryFactorySite({
+      territoryByName: islandMap,
+      capitalName: 'Japan',
+      ownedLands: ['Japan', 'Foothold'],
+      factoryAt: () => false,
+      friendlyAtStart: new Set(['Japan', 'Foothold']),
+    }) === 'Foothold');
+  const assault = pickIslandAssault({
+    territoryByName: islandMap,
+    units: { Sea: [{ type: 'transport', owner: 'jp', cargo: [{ type: 'infantry', owner: 'jp' }] }] },
+    playerId: 'jp',
+    enemyLand: (name) => name === 'Korea',
+    emptyLand: () => true,
+  });
+  check('loaded transport assaults the adjacent island', assault?.coast === 'Korea' && assault.sea === 'Sea');
+  const sail = pickTransportSail({
+    territoryByName: islandMap,
+    units: { Open: [{ type: 'transport', owner: 'jp', cargo: [{ type: 'infantry', owner: 'jp' }] }] },
+    playerId: 'jp',
+    enemyLand: (name) => name === 'Korea',
+  });
+  check('loaded transport sails toward a sea that touches enemy land', sail?.from === 'Open' && sail?.to === 'Sea');
+
+  const territories = Object.values(islandMap).filter((t) => !['Germany', 'A', 'B', 'C', 'D', 'E'].includes(t.name));
+  const gs = new GameState({ risk: { factions: [] } }, territories, []);
+  gs.players = [
+    { id: 'jp', name: 'Japanese', alliance: 'axis' },
+    { id: 'cn', name: 'Chinese', alliance: 'allies' },
+  ];
+  gs.currentPlayerIndex = 0;
+  gs.alliancesEnabled = true;
+  gs.phase = GAME_PHASES.PLAYING;
+  gs.turnPhase = TURN_PHASES.PURCHASE;
+  gs.territoryState = {
+    Japan: { owner: 'jp' },
+    Korea: { owner: 'cn' },
+    China: { owner: 'cn' },
+    India: { owner: 'cn' },
+    Foothold: { owner: 'jp' },
+    Sea: { owner: null },
+    Open: { owner: null },
+  };
+  gs.playerState = {
+    jp: { ipcs: 40, hasPlacedCapital: true, capitalTerritory: 'Japan' },
+    cn: { ipcs: 20, hasPlacedCapital: true, capitalTerritory: 'China' },
+  };
+  gs.friendlyTerritoriesAtTurnStart = new Set(['Japan', 'Foothold']);
+  gs.units = {
+    Japan: [{ type: 'infantry', quantity: 2, owner: 'jp' }, { type: 'factory', quantity: 1, owner: 'jp' }],
+    Foothold: [{ type: 'infantry', quantity: 1, owner: 'jp' }],
+    Korea: [],
+    China: [],
+    India: [],
+    Sea: [],
+    Open: [],
+  };
+  const ai = new AIController();
+  ai.gameState = gs;
+  ai.unitDefs = navyDefs;
+  ai._delay = async () => {};
+  await ai._handlePurchase({ difficulty: 'medium' }, gs.players[0]);
+  const ships = (type) => (gs.units.Sea || []).filter((u) => u.type === type && u.owner === 'jp')
+    .reduce((sum, u) => sum + (u.quantity || 0), 0);
+  check('island AI placed transports in the capital sea', ships('transport') === 2);
+  check('island AI placed an escort', ships('submarine') === 1);
+  check('factory is queued for the other landmass',
+    (gs.pendingPurchases || []).some((row) => row.type === 'factory' && row.territory === 'Foothold' && row.owner === 'jp'));
+  gs.turnPhase = TURN_PHASES.MOBILIZE;
+  await ai._handleMobilize({ difficulty: 'medium' }, gs.players[0]);
+  check('factory mobilizes on the foothold',
+    (gs.units.Foothold || []).some((u) => u.type === 'factory' && u.owner === 'jp'));
+
+  gs.currentPlayerIndex = 0;
+  gs.turnPhase = TURN_PHASES.COMBAT_MOVE;
+  gs.units.Sea = [{
+    type: 'transport',
+    quantity: 1,
+    owner: 'jp',
+    id: 't-assault',
+    cargo: [{ type: 'infantry', quantity: 1, owner: 'jp' }],
+    moved: false,
+  }];
+  await ai._projectIslandNavy(gs.players[0], 'combat');
+  check('island AI unloads onto the empty enemy coast',
+    gs.getOwner('Korea') === 'jp'
+    && (gs.units.Korea || []).some((u) => u.type === 'infantry' && u.owner === 'jp'));
 }
 
 if (failures) {

@@ -3,6 +3,16 @@
 
 import { AIPlayer } from './aiPlayer.js';
 import { GAME_PHASES, TURN_PHASES } from '../state/gameState.js';
+import {
+  adjacentSeas,
+  countOwned,
+  isIslandCapital,
+  pickIslandAssault,
+  pickSecondaryFactorySite,
+  pickTransportLoad,
+  pickTransportSail,
+  planIslandNavyPurchases,
+} from './islandNavy.js';
 
 export class AIController {
   constructor() {
@@ -420,15 +430,62 @@ export class AIController {
     // Get strategic analysis
     const strategy = this._analyzeStrategicSituation(player.id, aiPlayer.difficulty);
 
-    // Determine purchase priorities based on strategic situation
-    const priorities = this._getStrategicPurchasePriorities(
-      aiPlayer.difficulty,
-      strategy,
-      player.id
-    );
-
+    const capitalZone = this.gameState.territoryByName?.[capital];
+    const islandStart = isIslandCapital(this.gameState.territoryByName, capital);
     let remaining = ipcs;
     const purchased = [];
+
+    // Island capitals buy a transport and an escort before a land army.
+    // Continental capitals keep the existing priority list.
+    if (islandStart && !strategy.threatenedCapital && capitalZone) {
+      const sea = adjacentSeas(this.gameState.territoryByName, capital)[0];
+      const owned = this.gameState.getPlayerTerritories?.(player.id) || [];
+      const factoryCost = this.unitDefs.factory?.cost || 0;
+      const site = factoryCost > 0
+        ? pickSecondaryFactorySite({
+          territoryByName: this.gameState.territoryByName,
+          capitalName: capital,
+          ownedLands: owned,
+          factoryAt: (name) => (this.gameState.units[name] || []).some((unit) => unit.type === 'factory'),
+          friendlyAtStart: this.gameState.friendlyTerritoriesAtTurnStart,
+        })
+        : null;
+      const plan = planIslandNavyPurchases({
+        ipcs: remaining,
+        unitDefs: this.unitDefs,
+        transportCount: countOwned(this.gameState.units, player.id, ['transport']),
+        escortCount: countOwned(this.gameState.units, player.id, ['submarine', 'destroyer', 'cruiser', 'battleship', 'carrier']),
+        threatened: false,
+        reserve: site ? factoryCost : 0,
+      });
+      for (const buy of plan.buys) {
+        const where = buy.placement === 'sea' ? sea : capital;
+        if (!where) continue;
+        for (let i = 0; i < buy.count; i++) {
+          if (!this.gameState.purchaseUnit(buy.unitType, where, this.unitDefs)) break;
+          remaining -= this.unitDefs[buy.unitType]?.cost || 0;
+          purchased.push(buy.unitType);
+        }
+      }
+      if (site && remaining >= factoryCost) {
+        const queued = this.gameState.addToPendingPurchases('factory', this.unitDefs, site);
+        if (queued?.success !== false && this.gameState.pendingPurchases?.some((row) => row.type === 'factory' && row.owner === player.id)) {
+          remaining -= factoryCost;
+          purchased.push('factory');
+        }
+      }
+    }
+
+    // Determine purchase priorities based on strategic situation.
+    // An island start already spent on navy; skip the continental list
+    // unless the capital is threatened and the navy plan was skipped.
+    const priorities = (islandStart && !strategy.threatenedCapital)
+      ? []
+      : this._getStrategicPurchasePriorities(
+        aiPlayer.difficulty,
+        strategy,
+        player.id
+      );
 
     for (const { unitType, maxCount } of priorities) {
       const def = this.unitDefs[unitType];
@@ -505,6 +562,8 @@ export class AIController {
 
     // Get strategic analysis
     const strategy = this._analyzeStrategicSituation(player.id, aiPlayer.difficulty);
+
+    await this._projectIslandNavy(player, 'combat');
 
     // Get all potential attack targets with priority scores
     const attackTargets = this._evaluateAttackTargets(player.id, aiPlayer.difficulty, strategy);
@@ -856,6 +915,9 @@ export class AIController {
     // Priority 3: Reinforce frontline territories
     await this._reinforceFrontlines(player.id, aiPlayer.difficulty);
 
+    // Island navy that still has cargo sails one sea toward an enemy coast.
+    await this._projectIslandNavy(player, 'noncombat');
+
     this._notifyAction('nonCombatMove', {});
     this.gameState.nextPhase();
     this._notifyAction('nextPhase', {});
@@ -1034,12 +1096,116 @@ export class AIController {
     return maxDepth + 1; // Not found within max depth
   }
 
+  // Load, sail, or unload one transport when the capital is an island.
+  // Combat unloads onto an enemy coast. Non-combat only sails.
+  async _projectIslandNavy(player, mode) {
+    const capital = this.gameState.playerState[player.id]?.capitalTerritory;
+    if (!isIslandCapital(this.gameState.territoryByName, capital)) return;
+
+    const enemyLand = (name) => {
+      const owner = this.gameState.getOwner(name);
+      return !!(owner && owner !== player.id && !this.gameState.areAllies?.(player.id, owner));
+    };
+    const emptyLand = (name) => {
+      const stacks = this.gameState.units[name] || [];
+      return !stacks.some((unit) => (
+        unit
+        && unit.owner !== player.id
+        && !this.gameState.areAllies?.(player.id, unit.owner)
+        && unit.type !== 'factory'
+        && (Number(unit.quantity) || 0) > 0
+      ));
+    };
+    const seaHostile = (name) => (this.gameState.units[name] || []).some((unit) => (
+      unit
+      && unit.owner !== player.id
+      && !this.gameState.areAllies?.(player.id, unit.owner)
+      && (Number(unit.quantity) || 0) > 0
+    ));
+
+    if (mode === 'combat') {
+      const assault = pickIslandAssault({
+        territoryByName: this.gameState.territoryByName,
+        units: this.gameState.units,
+        playerId: player.id,
+        enemyLand,
+        emptyLand,
+      });
+      if (assault) {
+        const dropped = this.gameState.unloadTransport(assault.sea, assault.transportIndex, assault.coast);
+        if (dropped?.success !== false) {
+          this._logAction('attack', {
+            message: `${player.name} lands at ${assault.coast}`,
+            from: assault.sea,
+            to: assault.coast,
+          }, player);
+          return;
+        }
+      }
+      const infantry = (this.gameState.units[capital] || [])
+        .filter((unit) => unit.type === 'infantry' && unit.owner === player.id)
+        .reduce((sum, unit) => sum + (Number(unit.quantity) || 0), 0);
+      const load = pickTransportLoad({
+        territoryByName: this.gameState.territoryByName,
+        capitalName: capital,
+        infantryAtCapital: infantry,
+        units: this.gameState.units,
+        playerId: player.id,
+      });
+      if (load) {
+        this.gameState.moveUnits(
+          load.from,
+          load.sea,
+          [{ type: load.unitType, quantity: load.quantity }],
+          this.unitDefs,
+        );
+      }
+    }
+
+    const sail = pickTransportSail({
+      territoryByName: this.gameState.territoryByName,
+      units: this.gameState.units,
+      playerId: player.id,
+      enemyLand,
+      seaHostile,
+    });
+    if (sail && (mode === 'combat' || mode === 'noncombat')) {
+      this.gameState.moveUnits(sail.from, sail.to, [{ type: 'transport', quantity: 1 }], this.unitDefs);
+    }
+  }
+
+  _refundPending(playerId, unitType) {
+    const rows = (this.gameState.pendingPurchases || []).filter((row) => row.owner === playerId && row.type === unitType);
+    for (const row of rows) {
+      const refund = (Number(row.cost) || 0) * (Number(row.quantity) || 0);
+      if (this.gameState.playerState?.[playerId]) {
+        this.gameState.playerState[playerId].ipcs += refund;
+      }
+    }
+    this.gameState.pendingPurchases = (this.gameState.pendingPurchases || [])
+      .filter((row) => !(row.owner === playerId && row.type === unitType));
+  }
+
   // ============================================
   // MOBILIZE (place purchased units)
   // ============================================
   async _handleMobilize(aiPlayer, player) {
     this._updateStatus(`${player.name} mobilizing units...`);
     await this._delay(this._getActionDelay() / 2);
+
+    // Island-start factories are queued in purchase and placed here.
+    const pending = (this.gameState.pendingPurchases || [])
+      .filter((row) => row.owner === player.id && row.type === 'factory' && row.territory);
+    for (const row of pending) {
+      const qty = row.quantity || 0;
+      for (let i = 0; i < qty; i++) {
+        const placed = this.gameState.mobilizeUnit('factory', row.territory, this.unitDefs);
+        if (!placed?.success) {
+          this._refundPending(player.id, 'factory');
+          break;
+        }
+      }
+    }
 
     // Units are placed during purchase at capital, just advance
     this._notifyAction('mobilize', {});
