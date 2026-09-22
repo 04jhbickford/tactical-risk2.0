@@ -2548,33 +2548,33 @@ export class CombatUI {
   _renderPhoneCombatCta(phase) {
     const isAmphibiousAssault = this.gameState.hasAmphibiousAssault(this.currentTerritory);
     if (phase === 'bombardment') {
-      return `<button class="combat-btn roll" data-action="fire-bombardment">Fire Shore Bombardment</button>`;
+      return `<button class="combat-btn roll" data-action="fire-bombardment">Confirm: Fire Shore Bombardment</button>`;
     }
     if (phase === 'selectBombardmentCasualties') {
       const { pendingBombardmentCasualties, selectedBombardmentCasualties, defenders } = this.combatState;
       const selectedTotal = this._getTotalSelectedCasualties(selectedBombardmentCasualties);
       const maxAvailable = this._getTotalUnits(defenders);
       const canConfirm = selectedTotal === pendingBombardmentCasualties || selectedTotal === maxAvailable;
-      return `<button class="combat-btn confirm" data-action="confirm-bombardment-casualties" ${!canConfirm ? 'disabled' : ''}>Confirm Bombardment Casualties</button>`;
+      return `<button class="combat-btn confirm" data-action="confirm-bombardment-casualties" ${!canConfirm ? 'disabled' : ''}>Confirm: Take bombardment hits</button>`;
     }
     if (phase === 'aaFire') {
-      return `<button class="combat-btn roll" data-action="aa-fire">Fire AA Guns</button>`;
+      return `<button class="combat-btn roll" data-action="aa-fire">Confirm: Fire AA</button>`;
     }
     if (phase === AA_RESULT_PHASE) {
-      return `<button class="combat-btn confirm" data-action="confirm-aa-results">Continue</button>`;
+      return `<button class="combat-btn confirm" data-action="confirm-aa-results">Confirm: Continue</button>`;
     }
     if (phase === 'selectAACasualties') {
       const { pendingAACasualties, selectedAACasualties } = this.combatState;
       const selectedTotal = this._getTotalSelectedCasualties(selectedAACasualties);
       const canConfirm = selectedTotal === pendingAACasualties;
-      return `<button class="combat-btn confirm" data-action="confirm-aa-casualties" ${!canConfirm ? 'disabled' : ''}>Confirm AA Casualties</button>`;
+      return `<button class="combat-btn confirm" data-action="confirm-aa-casualties" ${!canConfirm ? 'disabled' : ''}>Confirm: Take AA hits</button>`;
     }
     if (phase === 'submarineFirstStrike') {
-      return `<button class="combat-btn roll" data-action="submarine-first-strike">Fire First Strike</button>`;
+      return `<button class="combat-btn roll" data-action="submarine-first-strike">Confirm: Fire First Strike</button>`;
     }
     if (phase === 'ready') {
       return `
-        <button class="combat-btn roll" data-action="roll">Roll Dice</button>
+        <button class="combat-btn roll" data-action="roll">Confirm: Roll combat</button>
         <div class="phone-combat-cta-secondary">
           <button class="combat-btn auto" data-action="auto-battle">Auto Battle</button>
           ${isAmphibiousAssault
@@ -2592,15 +2592,15 @@ export class CombatUI {
       const effectiveAttacker = Math.min(pendingAttackerCasualties, attackerMax);
       const effectiveDefender = Math.min(pendingDefenderCasualties, defenderMax);
       const canConfirm = attackerTotal >= effectiveAttacker && defenderTotal >= effectiveDefender;
-      return `<button class="combat-btn confirm" data-action="confirm-casualties" ${!canConfirm ? 'disabled' : ''}>Confirm Casualties</button>`;
+      return `<button class="combat-btn confirm" data-action="confirm-casualties" ${!canConfirm ? 'disabled' : ''}>Confirm: Take hits</button>`;
     }
     if (phase === 'airLanding') {
       const { airUnitsToLand, selectedLandings } = this.combatState;
       const remaining = remainingAirLandingsToAssign(airUnitsToLand, selectedLandings);
-      return `<button class="combat-btn confirm" data-action="confirm-landing" ${remaining > 0 ? 'disabled' : ''}>Confirm Landings</button>`;
+      return `<button class="combat-btn confirm" data-action="confirm-landing" ${remaining > 0 ? 'disabled' : ''}>Confirm: All Landings</button>`;
     }
     if (phase === 'resolved') {
-      return `<button class="combat-btn next" data-action="next">${this.gameState.combatQueue.length > 1 ? 'Next Battle' : 'End Combat Phase'}</button>`;
+      return `<button class="combat-btn next" data-action="next">${this.gameState.combatQueue.length > 1 ? 'Confirm: Next Battle' : 'End Phase · Combat'}</button>`;
     }
     if (phase === 'selectRetreat') {
       return `<p class="phone-combat-cta-hint">Tap a land above</p>`;

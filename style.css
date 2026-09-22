@@ -17072,8 +17072,21 @@ iframe[title="Vercel Live Feedback"] {
     justify-content: space-between;
     height: var(--mobile-top-bar);
     z-index: 70;
-    background: #0b1020;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    /* Experimental L0 frost — map shows through the top bar */
+    background: linear-gradient(180deg, rgba(30, 36, 32, 0.18) 0%, rgba(30, 36, 32, 0.02) 100%);
+    -webkit-backdrop-filter: saturate(1.35) blur(22px);
+    backdrop-filter: saturate(1.35) blur(22px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    color: #e8e2d4;
+    pointer-events: none;
+  }
+
+  html.mobile-shell #hud .hud-mobile-identity,
+  html.mobile-shell #hud .hud-mobile-overflow,
+  html.mobile-shell #hud .hud-menu-btn,
+  html.mobile-shell #hud .hud-mobile-chip {
+    pointer-events: auto;
   }
 
   html.mobile-shell #sidebarClose,
@@ -17134,34 +17147,74 @@ iframe[title="Vercel Live Feedback"] {
     flex-wrap: nowrap;
     align-items: center;
     justify-content: flex-start;
-    gap: var(--phone-row-gap, 8px);
+    gap: 6px;
     min-width: 0;
     flex: 1;
     overflow: hidden;
   }
 
+  .hud-mobile-chip {
+    min-height: 36px;
+    padding: 0 10px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(30, 36, 32, 0.42);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #e8e2d4;
+    -webkit-backdrop-filter: saturate(1.35) blur(16px);
+    backdrop-filter: saturate(1.35) blur(16px);
+    font: 600 12px/1 -apple-system, "SF Pro Text", sans-serif;
+    letter-spacing: 0.02em;
+    flex-shrink: 1;
+    min-width: 0;
+    max-width: 42%;
+    overflow: hidden;
+  }
+
+  .hud-mobile-chip.hud-mobile-phase {
+    text-transform: none;
+    font-weight: 700;
+    color: #f4e8c4;
+    flex-shrink: 0;
+    max-width: none;
+  }
+
+  .hud-mobile-chip.hud-mobile-seat {
+    margin-left: auto;
+    flex-shrink: 1;
+  }
+
+  .hud-mobile-chip.hud-mobile-ipc {
+    flex-shrink: 0;
+    max-width: none;
+    font-variant-numeric: tabular-nums lining-nums;
+    font-weight: 600;
+  }
+
   .hud-mobile-flag {
-    flex: 0 0 var(--phone-mark, 44px);
-    width: var(--phone-mark, 44px);
-    height: 32px;
+    flex: 0 0 22px;
+    width: 22px;
+    height: 16px;
     margin: 0;
-    border-radius: 4px;
+    border-radius: 3px;
     border: 1px solid rgba(255, 255, 255, 0.35);
     object-fit: cover;
   }
 
   .hud-mobile-swatch {
-    flex: 0 0 16px;
-    width: 16px;
-    height: 16px;
+    flex: 0 0 10px;
+    width: 10px;
+    height: 10px;
     margin: 0;
     border-radius: 50%;
     border: 1px solid rgba(255, 255, 255, 0.35);
   }
 
   .hud-mobile-faction {
-    font-size: var(--phone-type-body, 15px);
-    font-weight: 700;
+    font-size: 12px;
+    font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -17174,37 +17227,30 @@ iframe[title="Vercel Live Feedback"] {
   }
 
   .hud-mobile-phase {
-    font-size: var(--phone-type-meta, 13px); /* ≥11pt — not the tablet 9px */
+    font-size: var(--phone-type-meta, 13px);
     font-weight: 700;
-    letter-spacing: 0.4px;
-    text-transform: uppercase;
-    color: #e0e0e0;
+    letter-spacing: 0.02em;
+    color: #e8e2d4;
     white-space: nowrap;
-    flex-shrink: 1;
-    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   .hud-mobile-overflow {
-    margin-left: auto;
+    margin-left: 4px;
     flex-shrink: 0;
     display: flex;
     align-items: center;
     gap: 6px;
   }
 
-  .hud-map-tools-btn {
-    width: auto;
-    min-width: 44px;
-    padding: 0 10px;
-    font-size: 12px;
+  .hud-help-btn .hud-menu-icon {
+    font-size: 16px;
     font-weight: 700;
-    letter-spacing: 0.3px;
   }
 
-  .hud-map-tools-btn.open {
-    background: rgba(59, 130, 246, 0.32);
+  .hud-map-tools-btn {
+    display: none !important;
   }
 
   .hud-mobile-overflow .hud-menu-dropdown {
@@ -18076,8 +18122,29 @@ iframe[title="Vercel Live Feedback"] {
   }
 
   .pp-confirm-btn {
-    min-height: 48px;
+    min-height: 56px;
     width: 100%;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    background: rgba(30, 36, 32, 0.88);
+    color: rgba(232, 226, 212, 0.55);
+    -webkit-backdrop-filter: blur(24px) saturate(1.15);
+    backdrop-filter: blur(24px) saturate(1.15);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    font: 600 17px/1.2 -apple-system, "SF Pro Text", sans-serif;
+    letter-spacing: -0.01em;
+    touch-action: manipulation;
+  }
+
+  html.mobile-shell .pp-peek-primary-slot .pp-confirm-btn:not(:disabled):not(.disabled):not(.pp-select-units),
+  html.mobile-shell .pp-peek-cta-row .pp-confirm-btn:not(:disabled):not(.disabled):not(.pp-select-units),
+  html.mobile-shell .pp-confirm-btn.attack:not(:disabled):not(.disabled) {
+    background: #c4a35a;
+    color: #1e2420;
+    border-color: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: inset 0 1px 0 rgba(255, 248, 230, 0.28), 0 0 0 3px rgba(196, 163, 90, 0.28);
   }
 
   .pp-confirm-btn.disabled,
@@ -18128,23 +18195,26 @@ iframe[title="Vercel Live Feedback"] {
     padding: 0 10px;
   }
 
-  /* Zoom / Fit / minimap stay off the art until HUD Map is open. */
-  #zoom-controls,
+  /* Zoom / Fit always on BR above CTA (Experimental #three-zoom). Minimap stays off. */
+  #zoom-controls {
+    display: flex;
+    right: max(10px, env(safe-area-inset-right, 0px));
+    left: auto;
+    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+    top: auto;
+    gap: 8px;
+    z-index: 28;
+    pointer-events: auto;
+  }
+
   #minimap {
     display: none;
   }
 
-  html.mobile-shell.map-tools-open #zoom-controls {
-    display: flex;
-    right: 8px;
-    left: auto;
-    bottom: auto;
-    top: calc(var(--mobile-top-bar, 48px) + 8px);
-    gap: 8px;
-    padding: 6px;
-    border-radius: 12px;
-    background: rgba(12, 16, 28, 0.94);
-    border: 1px solid rgba(255, 255, 255, 0.14);
+  html.mobile-shell.phone-menu-open #zoom-controls,
+  html.mobile-shell.bottom-surface-sheet #zoom-controls,
+  html.mobile-shell.combat-active #zoom-controls {
+    display: none !important;
   }
 
   .zoom-btn {
@@ -18152,20 +18222,24 @@ iframe[title="Vercel Live Feedback"] {
     height: 44px;
     min-width: 44px;
     min-height: 44px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(30, 36, 32, 0.62);
+    -webkit-backdrop-filter: saturate(1.35) blur(18px);
+    backdrop-filter: saturate(1.35) blur(18px);
+    color: #e8e2d4;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    touch-action: manipulation;
   }
 
-  html.mobile-shell.map-tools-open #minimap {
-    display: block;
-    width: 120px;
-    height: 68px;
-    left: auto;
-    right: 8px;
-    top: auto;
-    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  .zoom-btn-fit {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    letter-spacing: 0.02em;
   }
 
-  /* Place Capital / Deploy: +/−/Fit may open; minimap stays off the art. */
-  html.mobile-shell.phone-setup.map-tools-open #minimap,
   html.mobile-shell.phone-setup #minimap {
     display: none;
   }
@@ -18183,6 +18257,31 @@ iframe[title="Vercel Live Feedback"] {
   }
 
   /* --- V2.64 phone lobby (full-screen steps, not 50% desktop column) --- */
+  /* .19: frosted lobby over live map (Experimental #three-lobby feel) */
+  html.mobile-shell .lobby-overlay.modern,
+  html.mobile-shell.has-lobby .lobby-overlay.modern {
+    background: rgba(10, 14, 18, 0.55);
+    -webkit-backdrop-filter: saturate(1.2) blur(18px);
+    backdrop-filter: saturate(1.2) blur(18px);
+  }
+
+  html.mobile-shell .lobby-overlay.modern::before,
+  html.mobile-shell .lobby-overlay.modern::after {
+    display: none !important;
+  }
+
+  html.mobile-shell.has-lobby #hud,
+  html.mobile-shell.has-lobby #zoom-controls,
+  html.mobile-shell.has-lobby #minimap,
+  html.mobile-shell.has-lobby #sidebar {
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  html.mobile-shell.has-lobby #mapCanvas {
+    pointer-events: none !important;
+  }
+
   html.mobile-shell .lobby-container.modern.lobby-phone {
     width: 100%;
     min-width: 0;
@@ -18190,6 +18289,7 @@ iframe[title="Vercel Live Feedback"] {
     height: 100dvh;
     align-items: stretch;
     justify-content: stretch;
+    background: transparent;
   }
 
   html.mobile-shell .lobby-phone-wrap {
@@ -18686,7 +18786,24 @@ iframe[title="Vercel Live Feedback"] {
     flex-shrink: 0;
     position: sticky;
     bottom: 0;
-    padding: 8px 0 calc(8px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 0 calc(10px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(180deg, transparent 0%, rgba(10, 14, 18, 0.92) 28%);
+  }
+
+  .lobby-phone-footer-opts {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .lobby-phone-footer-opts .lobby-phone-teams-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #cbd5e1;
   }
 
   /* Short ⋯ sheet under the HUD — not a second lobby, not a 4-tab bar. */
@@ -19299,8 +19416,40 @@ iframe[title="Vercel Live Feedback"] {
   html.mobile-shell .phone-combat-cta .combat-btn.confirm,
   html.mobile-shell .phone-combat-cta .combat-btn.roll,
   html.mobile-shell .phone-combat-cta .combat-btn.next {
-    min-height: 48px;
+    min-height: 56px;
     width: 100%;
+    border-radius: 16px;
+    border: 1px solid transparent;
+    background: #c4a35a;
+    color: #1e2420;
+    font: 600 17px/1.2 -apple-system, "SF Pro Text", sans-serif;
+    box-shadow: inset 0 1px 0 rgba(255, 248, 230, 0.28), 0 0 0 3px rgba(196, 163, 90, 0.28);
+    touch-action: manipulation;
+  }
+
+  html.mobile-shell .phone-combat-cta .combat-btn:disabled,
+  html.mobile-shell .combat-popup--phone .combat-btn.confirm:disabled {
+    background: rgba(30, 36, 32, 0.88);
+    color: rgba(232, 226, 212, 0.55);
+    border-color: rgba(255, 255, 255, 0.10);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  /* Combat sheet as bottom dock (Experimental #three-battle) — not a full opaque modal */
+  html.mobile-shell .combat-popup.combat-popup--phone:not(.hidden) {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: auto;
+    max-height: min(58dvh, calc(100dvh - var(--mobile-top-bar, 48px) - 8px));
+    border-radius: 16px 16px 0 0;
+    background: rgba(30, 36, 32, 0.92);
+    -webkit-backdrop-filter: saturate(1.2) blur(20px);
+    backdrop-filter: saturate(1.2) blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-bottom: none;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.45);
   }
 
   html.mobile-shell .phone-combat-compact .phone-combat-hero,

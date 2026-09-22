@@ -78,7 +78,7 @@ function board() {
 }
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-dual-path.18', GAME_VERSION === 'V2.81.57-dual-path.18');
+check('GAME_VERSION is V2.81.57-dual-path.19', GAME_VERSION === 'V2.81.57-dual-path.19');
 
 console.log('=== 9.21.26.01 land-only sea zone is not a combat attack ===');
 {

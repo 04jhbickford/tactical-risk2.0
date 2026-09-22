@@ -200,7 +200,7 @@ const check = (label, cond) => {
 };
 
 console.log('=== Version stamps ===');
-check('GAME_VERSION is V2.81.57-dual-path.18', GAME_VERSION === 'V2.81.57-dual-path.18');
+check('GAME_VERSION is V2.81.57-dual-path.19', GAME_VERSION === 'V2.81.57-dual-path.19');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== resolveMapRightEdge ===');
@@ -1128,9 +1128,10 @@ check('phone placement hints say Tap, desktop stay Click',
   check('empty peek tray does not eat named-land taps',
     /player-panel--peek \.pp-bottom-actions[\s\S]*?pointer-events:\s*none/.test(phoneBlock)
     && /player-panel--peek \.pp-bottom-actions \[data-action\][\s\S]*?pointer-events:\s*auto/.test(phoneBlock));
-  check('phone zoom/minimap stay off the art until Map is open',
-    /#zoom-controls,\s*#minimap \{\s*display:\s*none/.test(phoneBlock)
-    && /html\.mobile-shell\.map-tools-open #zoom-controls/.test(phoneBlock));
+  check('phone zoom always-on bottom-right above CTA (Experimental parity)',
+    /bottom:\s*calc\(88px \+ env\(safe-area-inset-bottom/.test(phoneBlock)
+    && /\.hud-map-tools-btn\s*\{[\s\S]*?display:\s*none\s*!important/.test(phoneBlock)
+    && /#minimap \{\s*display:\s*none/.test(phoneBlock));
   check('deploy peek keeps +/−/Max beside chips, not a covering sheet',
     /\.phone-peek-qty-btn \{[\s\S]*?min-width:\s*44px[\s\S]*?min-height:\s*44px/.test(phoneBlock)
     && /html\.mobile-shell #sidebarClose[\s\S]*?display:\s*none/.test(phoneBlock));
@@ -1233,7 +1234,7 @@ check('inspect≠commit still holds — tap never auto-places capital',
   });
   check('owned-land peek resolves Place Capital Confirm',
     cta?.action === 'place-capital'
-    && cta?.label === 'Place Capital: Novosibirsk'
+    && cta?.label === 'Confirm: Capital in Novosibirsk'
     && cta?.territory === 'Novosibirsk'
     && cta?.disabled === false);
   check('peeked land name mounts Confirm even if selectedTerritory dropped',
@@ -1241,7 +1242,7 @@ check('inspect≠commit still holds — tap never auto-places capital',
       phase: GAME_PHASES.CAPITAL_PLACEMENT,
       landName: 'Novosibirsk',
       isOwnedLand: true,
-    })?.label === 'Place Capital: Novosibirsk');
+    })?.label === 'Confirm: Capital in Novosibirsk');
   check('water or missing land does not mount Confirm',
     resolvePhoneCapitalCta({
       phase: GAME_PHASES.CAPITAL_PLACEMENT,
@@ -1346,7 +1347,7 @@ check('staged land name survives without a queue',
 check('Confirm names the pair',
   resolvePhoneDeployCtaLabel({
     count: 1, unitType: 'infantry', landName: 'Ukraine S.S.R.',
-  }) === 'Deploy 1 infantry to Ukraine S.S.R.');
+  }) === 'Confirm: Deploy in Ukraine S.S.R.');
 {
   const { formatUnitName } = await import(pathToFileURL(join(root, 'src/utils/unitNames.js')));
   check('unit ids are human words, never camelCase',
@@ -1945,7 +1946,7 @@ console.log('=== V2.81.33 Skeptic HOLD — inspect, commit, opening, Fit ===');
       isOwnedLand: true,
       landName: null,
       currentPlayerId: 'Russians',
-    })?.label === 'Place Capital: Novosibirsk'
+    })?.label === 'Confirm: Capital in Novosibirsk'
     && resolvePhoneCapitalCta({
       phase: GAME_PHASES.CAPITAL_PLACEMENT,
       landName: null,
@@ -2013,7 +2014,7 @@ console.log('=== V2.81.33 Skeptic HOLD — inspect, commit, opening, Fit ===');
     && shouldHidePhoneSetupMinimap({
       mobile: true, phase: GAME_PHASES.PLAYING,
     }) === false
-    && /phone-setup\.map-tools-open #minimap/.test(phoneBlock)
+    && /phone-setup #minimap/.test(phoneBlock)
     && /setShellFlag\('phone-setup'/.test(readFileSync(join(root, 'src/ui/hud.js'), 'utf8')));
   check('CTA only from owned peek name, never selected inspect land',
     /const peekName = this\._phoneCapitalLandName/.test(panelSrc)
@@ -2058,7 +2059,7 @@ console.log('=== V2.81.34 Fit fills-only + China inspect ===');
       landName: 'Russia',
       isOwnedLand: true,
       currentPlayerId: 'Russians',
-    })?.label === 'Place Capital: Russia');
+    })?.label === 'Confirm: Capital in Russia');
   check('phone setup skips water-mask stroke and sea dashes; keeps land-bridge lanes',
     shouldSkipPhoneWaterMask({ mobile: true, setup: true }) === true
     && shouldSkipPhoneWaterMask({ mobile: true, setup: false }) === false
@@ -2158,7 +2159,7 @@ console.log('=== V2.81.36 sea hairline + tech Confirm + mixed-stack select ===')
       mobile: true, phase: GAME_PHASES.PLAYING, turnPhase: TURN_PHASES.DEVELOP_TECH,
     }) === true
     && resolvePhoneTechCta({ diceCount: 0 }) === null
-    && resolvePhoneTechCta({ diceCount: 3 })?.label === 'Confirm 3 research dice'
+    && resolvePhoneTechCta({ diceCount: 3 })?.label === 'Confirm: Roll 3 tech dice'
     && resolvePhonePeekHint(GAME_PHASES.PLAYING, TURN_PHASES.DEVELOP_TECH, null, {
       techDiceCount: 3,
     }) === 'Research 3 dice'
@@ -2173,7 +2174,7 @@ console.log('=== V2.81.36 sea hairline + tech Confirm + mixed-stack select ===')
       destName: 'West Russia',
       isAttack: true,
       selectedSummary: '4 infantry · 2 tank · 1 fighter',
-    })?.label === 'Attack West Russia'
+    })?.label === 'Confirm Attack'
     && resolvePhonePeekHint(GAME_PHASES.PLAYING, TURN_PHASES.COMBAT_MOVE, 'infantry', {
       territoryName: 'Ukraine S.S.R.',
       destName: 'West Russia',
@@ -2348,14 +2349,14 @@ console.log('=== V2.81.51 combat / fortify purchase-class Confirm ===');
     && remainingUnstagedOfType({ available: 2, staged: 2 }) === 0
     && nextStagedCount({ current: 0, available: 3 }) === 1
     && nextStagedCount({ current: 2, available: 3 }) === 3);
-  check('named Confirm is Move to / Attack dest; ghost until units stage',
-    resolvePhoneMoveCta({ destName: 'West Russia' })?.label === 'Move to West Russia'
+  check('named Confirm is Confirm: Move to / Confirm Attack; ghost until units stage',
+    resolvePhoneMoveCta({ destName: 'West Russia' })?.label === 'Confirm: Move to West Russia'
     && resolvePhoneMoveCta({ destName: 'West Russia' })?.selectUnits === true
     && resolvePhoneMoveCta({ destName: 'West Russia' })?.disabled === true
     && resolvePhoneMoveCta({
       destName: 'West Russia',
       selectedSummary: '2 infantry',
-    })?.label === 'Move to West Russia'
+    })?.label === 'Confirm: Move to West Russia'
     && resolvePhoneMoveCta({
       destName: 'West Russia',
       selectedSummary: '2 infantry',
@@ -2364,13 +2365,13 @@ console.log('=== V2.81.51 combat / fortify purchase-class Confirm ===');
       destName: 'West Russia',
       isAttack: true,
       selectedSummary: '2 infantry · 1 tank',
-    })?.label === 'Attack West Russia'
+    })?.label === 'Confirm Attack'
     && resolvePhoneMoveCta({}) === null);
   check('phone move icon path stages instead of execute-move',
     /shouldStagePhoneMoveIcon/.test(panelSrc)
     && /remainingUnstagedOfType/.test(panelSrc)
-    && /Move to \$\{destName\}/.test(panelSrc)
-    && /Attack \$\{destName\}/.test(panelSrc));
+    && /Confirm: Move to \$\{destName\}/.test(panelSrc)
+    && /Confirm Attack/.test(panelSrc));
 }
 
 if (failures) {

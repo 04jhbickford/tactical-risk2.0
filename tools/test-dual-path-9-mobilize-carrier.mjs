@@ -84,7 +84,7 @@ function makeTheater() {
 }
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-dual-path.18', GAME_VERSION === 'V2.81.57-dual-path.18');
+check('GAME_VERSION is V2.81.57-dual-path.19', GAME_VERSION === 'V2.81.57-dual-path.19');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== 9.20.26.07 shared canPlace / capacity ===');

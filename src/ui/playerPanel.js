@@ -381,7 +381,8 @@ export function resolvePhoneTechCta({ diceCount } = {}) {
   if (n <= 0) return null;
   return {
     action: 'roll-tech',
-    label: n === 1 ? 'Confirm 1 research die' : `Confirm ${n} research dice`,
+    // Match Experimental Confirm: Roll N tech dice vocabulary (.19).
+    label: n === 1 ? 'Confirm: Roll 1 tech die' : `Confirm: Roll ${n} tech dice`,
     disabled: false,
     primary: true,
   };
@@ -392,7 +393,8 @@ export function resolvePhoneMoveCta({ destName, isAttack = false, selectedSummar
   const ready = !!selectedSummary;
   return {
     action: 'confirm-move',
-    label: isAttack ? `Attack ${destName}` : `Move to ${destName}`,
+    // Experimental: ready attack is "Confirm Attack"; move is "Confirm: Move to X".
+    label: isAttack ? 'Confirm Attack' : `Confirm: Move to ${destName}`,
     disabled: !ready,
     selectUnits: !ready,
     primary: true,
@@ -475,9 +477,10 @@ export function shouldKeepPhonePairLand({ incomingTerritory, stagedLandName } = 
 export function resolvePhoneDeployCtaLabel({ count, unitType, landName } = {}) {
   const n = Number(count) || 0;
   if (n <= 0) return '';
-  const unit = formatUnitName(unitType).toLowerCase();
-  if (landName && unit) return `Deploy ${n} ${unit} to ${landName}`;
-  return `Deploy ${n}`;
+  // Experimental Confirm: Deploy in X — land name is the thumb verb; count
+  // stays on the peek tiles.
+  if (landName) return `Confirm: Deploy in ${landName}`;
+  return `Confirm: Deploy ${n}`;
 }
 
 export function resolvePhoneCapitalCta({
@@ -497,7 +500,7 @@ export function resolvePhoneCapitalCta({
   if (isPhoneCapitalInspectOnlyLand(name, currentPlayerId)) return null;
   return {
     action: 'place-capital',
-    label: `Place Capital: ${name}`,
+    label: `Confirm: Capital in ${name}`,
     disabled: false,
     primary: true,
     territory: name,
@@ -1857,7 +1860,7 @@ export class PlayerPanel {
     if (this.isAirLandingActive() && !airLandingReady) {
       buttons.push({
         action: 'confirm-air-landing',
-        label: 'Confirm All Landings',
+        label: 'Confirm: All Landings',
         disabled: true,
         primary: true
       });
@@ -2018,7 +2021,7 @@ export class PlayerPanel {
         action: 'next-phase',
         label: airLandingReady
           ? 'Done →'
-          : `End ${TURN_PHASE_NAMES[turnPhase] || 'Phase'} →`,
+          : `End Phase · ${TURN_PHASE_NAMES[turnPhase] || 'Phase'}`,
         disabled: hasUnresolvedCombats || hasUnplacedUnits,
         primary: true
       });
