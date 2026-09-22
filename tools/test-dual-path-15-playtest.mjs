@@ -80,7 +80,7 @@ check('Experimental query mode is three', UX_THREE === 'three');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
   const mode = readFileSync(join(root, 'src/map/presentationMode.js'), 'utf8');
-  check('index.html stamp is dual-path.15', html.includes('content="V2.81.57-dual-path.16"'));
+  check('index.html stamp is dual-path.16', html.includes('content="V2.81.57-dual-path.16"'));
   check('Experimental boot query is ux=three', /ux=three/.test(mode) || /UX_THREE\s*=\s*'three'/.test(mode));
 }
 
@@ -305,4 +305,4 @@ if (failures) {
   console.error(`\n${failures} failed`);
   process.exit(1);
 }
-console.log('\nall dual-path.15 playtest checks passed');
+console.log('\nall dual-path.16 playtest checks passed');

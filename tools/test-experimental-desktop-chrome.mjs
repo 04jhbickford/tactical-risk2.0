@@ -9,7 +9,7 @@ import { GAME_VERSION } from '../src/version.js';
 import { UX_LABEL_EXPERIMENTAL, resolveUxMode, UX_CLASSIC, UX_THREE } from '../src/map/presentationMode.js';
 import { injectThreeChrome, syncThreeShellWidth, resizeThreeMapCanvas } from '../src/map/threeMapChrome.js';
 
-assert.equal(GAME_VERSION, 'V2.81.57-dual-path.16', 'stamp is dual-path.15');
+assert.equal(GAME_VERSION, 'V2.81.57-dual-path.16', 'stamp is dual-path.16');
 assert.equal(UX_LABEL_EXPERIMENTAL, 'Experimental UX');
 assert.equal(resolveUxMode(''), UX_THREE, 'queryless is Experimental');
 assert.equal(resolveUxMode('?ux=classic'), UX_CLASSIC, 'classic remains a deep link');
