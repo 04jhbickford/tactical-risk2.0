@@ -26,13 +26,13 @@ globalThis.sessionStorage = memoryStore();
 globalThis.localStorage = memoryStore();
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-assert.match(html, /window\.__TR_GAME_VERSION = 'V2\.81\.57-dual-path\.18'/);
-assert.match(html, /name="tr-game-version" content="V2\.81\.57-dual-path\.18"/);
+assert.match(html, /window\.__TR_GAME_VERSION = 'V2\.81\.57-dual-path\.19'/);
+assert.match(html, /name="tr-game-version" content="V2\.81\.57-dual-path\.19"/);
 assert.match(html, /lockStamp/, 'HTML stamp cannot drop below .12');
-assert.match(html, /src="src\/main\.js\?v=V2\.81\.57-dual-path\.18"/);
+assert.match(html, /src="src\/main\.js\?v=V2\.81\.57-dual-path\.19"/);
 assert.doesNotMatch(html, /dual-path\.(?:[23456789]|10)['"]/);
 
-assert.equal(GAME_VERSION, 'V2.81.57-dual-path.18', 'stamp is dual-path.18');
+assert.equal(GAME_VERSION, 'V2.81.57-dual-path.19', 'stamp is dual-path.19');
 assert.equal(UX_LABEL_EXPERIMENTAL, 'Experimental UX');
 
 const lobbySrc = readFileSync(new URL('../src/ui/lobby.js', import.meta.url), 'utf8');

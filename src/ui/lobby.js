@@ -103,6 +103,7 @@ export class Lobby {
     this._render();
     console.log('[Lobby] _render() complete, appending to body');
     document.body.appendChild(this.el);
+    document.documentElement.classList.add('has-lobby');
     console.log('[Lobby] Element appended. Display:', getComputedStyle(this.el).display, 'Visibility:', getComputedStyle(this.el).visibility);
   }
 
@@ -251,15 +252,15 @@ export class Lobby {
               ${startingIpcOptionsHtml(this.startingIPCs)}
             </select>
           </label>
-          <label class="lobby-phone-option lobby-phone-teams">
+        </div>
+
+        <div class="setup-footer lobby-phone-start">
+          <div class="lobby-phone-footer-opts">
             <span class="lobby-phone-teams-name">Teams</span>
             <button type="button" id="teams-enabled" class="lobby-phone-teams-toggle" aria-pressed="${this.teamsEnabled ? 'true' : 'false'}" aria-label="Teams">
               ${this.teamsEnabled ? 'On' : 'Off'}
             </button>
-          </label>
-        </div>
-
-        <div class="setup-footer lobby-phone-start">
+          </div>
           <button class="start-game-btn ${canStart ? '' : 'disabled'}" data-action="start" ${canStart ? '' : 'disabled'}>
             ${canStart ? `Start Game (${selectedCount})` : 'Select at least 2 factions'}
           </button>
@@ -874,11 +875,13 @@ export class Lobby {
     this._render();
     this.el.classList.remove('hidden');
     this.el.style.display = 'flex'; // Ensure visible
+    document.documentElement.classList.add('has-lobby');
   }
 
   hide() {
     this.el.classList.add('hidden');
     this.el.style.display = 'none'; // Force hide
+    document.documentElement.classList.remove('has-lobby');
   }
 
   destroy() {

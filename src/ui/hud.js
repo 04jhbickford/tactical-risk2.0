@@ -226,9 +226,8 @@ export class HUD {
     this._renderClarity();
   }
 
-  // Phone top bar: {color} {faction} · {3/7 PHASE}. Phase identity stays
-  // ≥11pt — do not copy the tablet 9px / hidden-dots path. Wordmark, full
-  // player list (IPC + visible OUT), and settings sit behind ⋯.
+  // Phone top bar: frosted L0 chips matching Experimental — phase pill,
+  // seat, always-visible IPC, help ?, menu. Zoom is always-on BR (no Map btn).
   _renderMobile() {
     const player = this.gameState?.currentPlayer;
     const inGame = this.gameState && this.gameState.phase !== GAME_PHASES.LOBBY && player;
@@ -236,16 +235,22 @@ export class HUD {
       ? formatMobilePhaseWord(this.gameState.phase, this.gameState.turnPhase)
       : '';
     const flagSrc = inGame && player.flag ? `assets/flags/${player.flag}` : null;
+    const ipcVal = inGame && this.gameState.getIPCs
+      ? this.gameState.getIPCs(player.id)
+      : null;
 
     let identity = `<span class="hud-title">Tactical Risk</span>`;
     if (inGame) {
       identity = `
         <div class="hud-mobile-identity">
-          ${flagSrc
-            ? `<img src="${flagSrc}" class="hud-mobile-flag" alt="">`
-            : `<span class="hud-mobile-swatch" style="background:${player.color}"></span>`}
-          <span class="hud-mobile-faction" style="color:${readableFactionTextColor(player.color)}">${player.name}</span>
-          <span class="hud-mobile-phase">${phaseName}</span>
+          <span class="hud-mobile-chip hud-mobile-phase" title="Phase">${phaseName}</span>
+          <span class="hud-mobile-chip hud-mobile-seat">
+            ${flagSrc
+              ? `<img src="${flagSrc}" class="hud-mobile-flag" alt="">`
+              : `<span class="hud-mobile-swatch" style="background:${player.color}"></span>`}
+            <span class="hud-mobile-faction" style="color:${readableFactionTextColor(player.color)}">${player.name}</span>
+          </span>
+          ${ipcVal != null ? `<span class="hud-mobile-chip hud-mobile-ipc" title="IPCs">IPC ${ipcVal}</span>` : ''}
         </div>`;
     }
 
@@ -278,11 +283,11 @@ export class HUD {
     this.el.innerHTML = `
       ${identity}
       <div class="hud-menu-container hud-mobile-overflow">
-        <button class="hud-menu-btn hud-map-tools-btn${this.mapToolsOpen ? ' open' : ''}" data-action="toggle-map-tools" title="Map tools" aria-label="Map tools">
-          <span class="hud-menu-icon">Map</span>
+        <button class="hud-menu-btn hud-help-btn" data-action="phase-tips" title="How to start" aria-label="How to start">
+          <span class="hud-menu-icon">?</span>
         </button>
         <button class="hud-menu-btn" data-action="toggle-menu" title="Menu" aria-label="Menu">
-          <span class="hud-menu-icon">⋯</span>
+          <span class="hud-menu-icon">☰</span>
         </button>
       </div>
       <div class="phone-menu-sheet ${this.menuOpen ? 'open' : ''}" id="phone-menu-sheet">
@@ -319,6 +324,8 @@ export class HUD {
         `}
       </div>
     `;
+    // Zoom is always-on under mobile-shell (.19); keep Map tools closed.
+    this.mapToolsOpen = false;
     this._bindEvents();
     this._syncMapToolsFlag();
     this._syncMenuFlag();

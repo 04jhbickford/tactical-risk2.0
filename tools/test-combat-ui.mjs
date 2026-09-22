@@ -133,7 +133,7 @@ function makeUI(game) {
 }
 
 console.log('=== Version stamps ===');
-check('GAME_VERSION is V2.81.57-dual-path.18', GAME_VERSION === 'V2.81.57-dual-path.18');
+check('GAME_VERSION is V2.81.57-dual-path.19', GAME_VERSION === 'V2.81.57-dual-path.19');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 check('AA result auto-pause is readable (not a 150ms blip)', AA_RESULT_AUTO_PAUSE_MS >= 400);
 
@@ -403,7 +403,7 @@ console.log('=== V2.81.45 phone combat sheet (odds / select / resolve) ===');
     && /phone-combat-chip is-current/.test(readyHtml)
     && bodyAt >= 0 && ctaAt > bodyAt
     && rollAt > ctaAt
-    && /Roll Dice/.test(readyHtml)
+    && /Confirm: Roll combat/.test(readyHtml)
     && /Auto Battle/.test(readyHtml)
     && /Retreat/.test(readyHtml)
     && ui.el.classList.contains('phone-combat-compact'));
@@ -420,7 +420,7 @@ console.log('=== V2.81.45 phone combat sheet (odds / select / resolve) ===');
     /Assign hits, then Confirm/.test(selectHtml)
     && /casualty-selection-split/.test(selectHtml)
     && confirmAt > selectCta
-    && /Confirm Casualties/.test(selectHtml));
+    && /Confirm: Take hits/.test(selectHtml));
   ui.combatState.phase = 'resolved';
   ui.combatState.winner = 'attacker';
   ui.combatState.totalAttackerLosses = {};
@@ -432,7 +432,7 @@ console.log('=== V2.81.45 phone combat sheet (odds / select / resolve) ===');
   check('resolve step keeps End Combat Phase in the sticky CTA',
     /data-combat-step="resolve"/.test(resolveHtml)
     && resolveHtml.indexOf('data-action="next"') > resolveHtml.indexOf('phone-combat-cta')
-    && /End Combat Phase/.test(resolveHtml));
+    && /End Phase · Combat/.test(resolveHtml));
   if (prevHeight === undefined) delete globalThis.window.innerHeight;
   else globalThis.window.innerHeight = prevHeight;
   document.documentElement.classList.remove('mobile-shell');
