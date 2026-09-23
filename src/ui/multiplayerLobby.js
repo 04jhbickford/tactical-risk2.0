@@ -20,6 +20,9 @@ import {
   resolveLobbyBackTarget,
   shouldForceLobbyRoomOnSnapshot,
   shouldHonorLobbyBack,
+  resolveOpenGamesEntry,
+  resolveOpenGamesRowEntry,
+  shouldStayOnOpenGamesList,
   shouldBlockCompetingEntryForms,
   resolveRejoinRecoveryUi,
   resolveReconnectCopy,
@@ -79,6 +82,10 @@ export class MultiplayerLobby {
     this.mode = 'menu'; // 'menu', 'create', 'join', 'lobby'
     this.unsubscribe = null;
     this._browsingAway = false;
+    // 9.23.26.01 — Open Games list stays up until a bar click.
+    this._openGamesList = false;
+    // Hub after explicit Main Menu: snapshots must not resume a map or room.
+    this._holdHub = false;
     this._create();
   }
 
@@ -109,17 +116,48 @@ export class MultiplayerLobby {
     }
     if (action === 'create') {
       if (this._blocksCompetingEntry()) return;
+      this._holdHub = false;
+      this._openGamesList = false;
       this._browsingAway = false;
       this.mode = 'create';
       this._render();
       return;
     }
     if (action === 'browse') {
-      if (this._blocksCompetingEntry()) return;
-      this.mode = 'browse';
-      this._render();
-      this._loadBrowseGames();
+      this._showOpenGamesList();
     }
+  }
+
+  // Open Games is the list. Never hide into the canvas or auto-join
+  // the room that was just listed (9.23.26.01).
+  _showOpenGamesList() {
+    if (this._blocksCompetingEntry()) return;
+    const plan = resolveOpenGamesEntry({
+      inGameSession: false,
+      lastMatch: readLastMatch(),
+      liveLobbyWaiting: !!(this.lobbyManager.getLobby()
+        && (!this.lobbyManager.getLobby().status || this.lobbyManager.getLobby().status === 'waiting')),
+    });
+    if (plan.screen !== 'browse' || plan.autoEnterMap || plan.autoEnterLobby) return;
+    this._holdHub = false;
+    this._openGamesList = true;
+    this._browsingAway = true;
+    if (plan.disconnectLobbyView) {
+      this.lobbyManager.disconnectFromLobby({ notify: false });
+    }
+    this.mode = 'browse';
+    if (this.el.classList.contains('hidden')) this.show();
+    else this._render();
+    this._syncOpenGamesChrome();
+  }
+
+  _syncOpenGamesChrome() {
+    if (typeof document === 'undefined') return;
+    const visible = !!(this.el
+      && !this.el.classList.contains('hidden')
+      && this.mode === 'browse'
+      && this._openGamesList);
+    document.documentElement.classList.toggle('tr-open-games', visible);
   }
 
   _blocksCompetingEntry() {
@@ -131,6 +169,8 @@ export class MultiplayerLobby {
 
   _openJoinByCode() {
     if (this._blocksCompetingEntry()) return;
+    this._holdHub = false;
+    this._openGamesList = false;
     this._browsingAway = false;
     if (this.mode === 'reconnect') this._fromReconnect = true;
     this.mode = 'join';
@@ -138,6 +178,8 @@ export class MultiplayerLobby {
   }
 
   _openMyGames() {
+    this._holdHub = false;
+    this._openGamesList = false;
     if (this.onBack) this.onBack('rejoin');
   }
 
@@ -151,9 +193,11 @@ export class MultiplayerLobby {
   show() {
     console.log('[MultiplayerLobby] show() called, mode:', this.mode);
     console.trace('[MultiplayerLobby] show() stack trace');
-    if (typeof this.onCoverHome === 'function') this.onCoverHome();
+    // Paint this overlay before uncovering the canvas (9.23.26.01).
     this.el.classList.remove('hidden');
     this.el.style.display = 'flex'; // Ensure visible
+    if (typeof this.onCoverHome === 'function') this.onCoverHome();
+    this._syncOpenGamesChrome();
     this._subscribeToLobby();
     this._subscribeToAuth();
     void this._paintOrBounceToAuth();
@@ -188,6 +232,7 @@ export class MultiplayerLobby {
     console.log('[MultiplayerLobby] hide() called');
     this.el.classList.add('hidden');
     this.el.style.display = 'none'; // Force hide with display none
+    this._syncOpenGamesChrome();
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;
@@ -209,6 +254,12 @@ export class MultiplayerLobby {
       this.unsubscribe = null;
     }
     this.unsubscribe = this.lobbyManager.subscribe((lobby) => {
+      // Open Games list and the post-Main-Menu hub never follow a snapshot
+      // into the map or a waiting room (9.23.26.01).
+      if (shouldStayOnOpenGamesList({ openGamesList: !!this._openGamesList }) || this._holdHub) {
+        return;
+      }
+
       // Check if game is starting
       if (lobby?.status === 'starting' && lobby.gameId) {
         this._browsingAway = false;
@@ -306,6 +357,7 @@ export class MultiplayerLobby {
     `;
 
     restoreLobbyScroll(this.el, savedScroll);
+    this._syncOpenGamesChrome();
     this._bindEvents();
     if (typeof requestAnimationFrame === 'function') {
       requestAnimationFrame(() => restoreLobbyScroll(this.el, savedScroll));
@@ -637,18 +689,24 @@ export class MultiplayerLobby {
         // Bind click events for lobby items (resume buttons are bound separately)
         container.querySelectorAll('.mp-game-item[data-code]').forEach(item => {
           item.addEventListener('click', async () => {
+            // Listed waiting bar → lobby chrome only. Never the map (9.23.26.01).
+            const row = resolveOpenGamesRowEntry({ kind: 'lobby', status: 'waiting' });
+            if (row.screen !== 'lobby') return;
+            this._openGamesList = false;
+            this._holdHub = false;
             this._browsingAway = false;
             const code = item.dataset.code;
             const result = await this.lobbyManager.joinLobby(code, null);
             if (!result.success) {
+              this._openGamesList = true;
+              this._browsingAway = true;
               alert(result.error);
-            } else if (result.isGame) {
-              // Code matched a started game - rejoin it directly
-              this.hide();
-              if (this.onStart) {
-                this.onStart(result.gameId, result.game);
-              }
+              this._render();
+              return;
             }
+            this.mode = 'lobby';
+            this._syncOpenGamesChrome();
+            this._render();
           });
         });
 
@@ -687,13 +745,13 @@ export class MultiplayerLobby {
         const gameId = item.dataset.resumeGameId;
         const game = myGames.find(g => g.id === gameId);
         if (!game) return;
-        const decision = resolveMyGamesEntryAction({
+        const decision = resolveOpenGamesRowEntry({
           kind: 'game',
           status: game.status,
           stateVersion: game.stateVersion,
           hasState: !!game.state,
         });
-        if (decision.action === 'open-lobby') {
+        if (decision.action === 'open-lobby' || decision.screen === 'lobby') {
           const code = game.lobbyCode || game.lobbyData?.code || item.dataset.lobbyCode;
           if (!code) return;
           const joined = await this.lobbyManager.joinLobby(code, null);
@@ -701,11 +759,15 @@ export class MultiplayerLobby {
             alert(joined.error);
             return;
           }
+          this._openGamesList = false;
+          this._holdHub = false;
           this._browsingAway = false;
           this.mode = 'lobby';
           this._render();
           return;
         }
+        this._openGamesList = false;
+        this._holdHub = false;
         this.hide();
         if (this.onStart) {
           this.onStart(gameId, game);
@@ -729,6 +791,8 @@ export class MultiplayerLobby {
     if (this._rejoining) return false;
     this._rejoining = true;
     this._rejoinError = '';
+    this._holdHub = false;
+    this._openGamesList = false;
     this._browsingAway = false;
     try {
       if (!this.authManager.isAuthReady()) {
@@ -771,6 +835,7 @@ export class MultiplayerLobby {
   }
 
   async _restoreLiveLobby() {
+    if (this._openGamesList || this._holdHub) return false;
     if (this._browsingAway) return false;
     if (this._restoringLobby) return false;
     this._restoringLobby = true;
@@ -1049,6 +1114,11 @@ export class MultiplayerLobby {
     });
 
     this.el.querySelector('[data-action="cancel"]')?.addEventListener('click', () => {
+      if (this.mode === 'browse') {
+        this._openGamesList = false;
+        this._browsingAway = true;
+        this._holdHub = true;
+      }
       this.mode = this._fromReconnect ? 'reconnect' : 'menu';
       this._render();
     });
@@ -1126,15 +1196,19 @@ export class MultiplayerLobby {
         isHost: this.lobbyManager.isHost(),
       });
       if (outcome.navigate !== 'main' || outcome.changed || outcome.isPublished !== before) return;
+      this._openGamesList = false;
+      this._holdHub = false;
       this._browsingAway = true;
       this.lobbyManager.disconnectFromLobby({ notify: false });
       this.hide();
-      if (this.onBack) this.onBack();
+      if (this.onBack) this.onBack('main-menu');
     });
 
     // Back to Open Games (host stays seated in Firestore; view leaves the room)
     this.el.querySelector('[data-action="back-to-browse"]')?.addEventListener('click', () => {
       if (!shouldHonorLobbyBack({ explicitBack: true })) return;
+      this._holdHub = false;
+      this._openGamesList = true;
       this._browsingAway = true;
       const target = resolveLobbyBackTarget({
         published: !!this.lobbyManager.getLobby()?.isPublished,
@@ -1142,6 +1216,10 @@ export class MultiplayerLobby {
       });
       this.lobbyManager.disconnectFromLobby({ notify: false });
       this.mode = target === 'browse' ? 'browse' : 'menu';
+      if (this.mode !== 'browse') {
+        this._openGamesList = false;
+        this._holdHub = true;
+      }
       this._render();
       if (this.mode === 'browse') this._loadBrowseGames();
     });

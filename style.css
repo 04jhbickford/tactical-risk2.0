@@ -16502,6 +16502,25 @@ iframe[title="Vercel Live Feedback"] {
   margin-top: 20px;
 }
 
+/* 9.23.26.01 — Open Games is an opaque list. The in-progress map must not
+   show through the frosted phone lobby or during the menu handoff. */
+html.tr-open-games #mapCanvas,
+html.tr-open-games #hud,
+html.tr-open-games #minimap,
+html.tr-open-games #zoom-controls,
+html.tr-open-games #sidebar {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+html.tr-open-games .lobby-overlay.modern,
+html.mobile-shell.tr-open-games .lobby-overlay.modern,
+html.mobile-shell.has-lobby.tr-open-games .lobby-overlay.modern {
+  background: #0a0f1a !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
 /* Subheaders in the Open Games browse view (Your games in progress / Open lobbies) */
 .mp-section-subheader {
   font-size: 12px;

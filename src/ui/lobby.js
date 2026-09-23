@@ -585,7 +585,8 @@ export class Lobby {
 
     this.el.querySelector('[data-action="online-play"]')?.addEventListener('click', () => {
       if (this.onPlayOnline) {
-        this.hide();
+        // Do not hide first — that flashed the in-progress map before
+        // the next overlay painted (9.23.26.01). The online screen covers home.
         this.onPlayOnline();
       }
     });
