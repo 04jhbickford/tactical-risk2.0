@@ -2,6 +2,17 @@
 
 ---
 
+## 9.23.26 — unified.8 turn-ping Rob format
+
+Stamp `V2.81.57-unified.8`. Schema stays 11.
+
+- [x] `#turn-ping` is one notice per finished turn. First line @-mentions the next human. Header is the player who just finished: `{name} - {power} {phase}`. Then every unit-loss line (`-{Nx Unit} lost {place} - {who inflicted}`) and every territory line (`-{territory} Lost - {who took}`). Quiet turns say `-No units lost` and `-No territories lost`. Resume link stays `?code=` on the last line.
+- [x] Counts, places, and takers come from `turnEvents`. A bare casualty count is not given a unit type. Probe, test, health-check, and "Probe. daily review" still return `skip-probe` and do not call the webhook.
+
+Receipt: `node tools/test-discord-turn-ping.mjs`.
+
+---
+
 ## 9.23.26 — unified.7 turn-ping move summary
 
 Stamp `V2.81.57-unified.7`. Schema stays 11.
