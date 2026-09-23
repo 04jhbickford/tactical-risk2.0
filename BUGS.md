@@ -2,6 +2,16 @@
 
 ---
 
+## 9.23.26 — unified.6 Open Games list
+
+Stamp `V2.81.57-unified.6`. Schema stays 11.
+
+- [x] **9.23.26.01 Rob** Discord `1552171640664752141`, game `TXVKJB`, stamp `.5.01`. Rob reused id 9.22.26.03; that id was sea Confirm Attack. This is the lobby bug. After create + list, Main Menu → Play Online stays on the hub (no in-progress map, no auto-room). Open Games is a list of bars, including the game just listed. A bar click is the only way in. A listed waiting bar opens lobby chrome. The list disconnects the room view, ignores snapshots (including a starting game), and hides the canvas so the map cannot flash through.
+
+Receipt: `node tools/test-unified-6-open-games.mjs`.
+
+---
+
 ## 9.22.26 — unified.5 Discord turn ping
 
 Stamp `V2.81.57-unified.5`. Schema stays 11.

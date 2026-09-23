@@ -172,6 +172,7 @@ import {
   shouldShowReconnectAfterResumeAttempt,
   shouldForgetLastMatchOnHydrateFailure,
   shouldReuseInFlightMultiplayerStart,
+  resolvePlayOnlineDestination,
 } from './multiplayer/lastMatch.js';
 import { AuthScreen } from './ui/authScreen.js';
 import { MultiplayerLobby } from './ui/multiplayerLobby.js';
@@ -944,6 +945,8 @@ async function init() {
   let authScreen = null;
   let multiplayerLobby = null;
   let gameListUI = null;
+  // Room Main Menu → next Play Online opens the hub, not the map or room.
+  let explicitMainMenu = false;
   let currentGameCode = null;
   let lastTurnNoticeSeatId = null;
   let mpStartGameId = null;
@@ -1999,6 +2002,8 @@ async function init() {
             );
             gameListUI.onOpenLobby = () => {
               ensureMultiplayerLobby();
+              multiplayerLobby._openGamesList = false;
+              multiplayerLobby._holdHub = false;
               multiplayerLobby._browsingAway = false;
               const live = lobbyManager.getLobby();
               multiplayerLobby.mode = live && (!live.status || live.status === 'waiting')
@@ -2011,6 +2016,9 @@ async function init() {
           gameListUI.show();
         } else if (action === 'rejoin-auth') {
           showRejoinAuth();
+        } else if (action === 'main-menu') {
+          explicitMainMenu = true;
+          lobby.show();
         } else if (action === 'signout' || shouldNavigateToHome({
           explicitExit: true,
           confirmedSignOut: action === 'signout',
@@ -2102,7 +2110,8 @@ async function init() {
   const restoreLiveLobbyOrGame = async () => {
     const last = readLastMatch();
     ensureMultiplayerLobby();
-    lobby.hide();
+    // Keep the current overlay up until the destination screen is ready.
+    // Hiding first flashed the in-progress map (9.23.26.01).
     const restored = await resumeLastMatch({ interactive: false });
     if (restored) return true;
     if (last?.gameId || last?.lobbyCode) {
@@ -2125,6 +2134,23 @@ async function init() {
     if (authManager.isLoggedIn()) {
       if (authScreen) authScreen.hide();
       const last = readLastMatch();
+      const dest = resolvePlayOnlineDestination({
+        explicitMainMenu,
+        signedIn: true,
+        lastMatch: last,
+      });
+      // Main Menu → Play Online stays on the hub. Open Games is the list.
+      if (explicitMainMenu && dest.screen === 'menu' && !dest.autoEnterMap && !dest.autoEnterLobby) {
+        explicitMainMenu = false;
+        ensureMultiplayerLobby();
+        multiplayerLobby._holdHub = true;
+        multiplayerLobby._browsingAway = true;
+        multiplayerLobby._openGamesList = false;
+        multiplayerLobby.lobbyManager.disconnectFromLobby({ notify: false });
+        multiplayerLobby.mode = 'menu';
+        multiplayerLobby.show();
+        return;
+      }
       if (shouldAutoResumeLastMatch({ signedIn: true, lastMatch: last })) {
         const restored = await resumeLastMatch({ interactive: true });
         if (restored) return;

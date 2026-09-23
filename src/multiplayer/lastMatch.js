@@ -323,6 +323,67 @@ export function shouldForceLobbyRoomOnSnapshot({
   return !!lobbyPresent;
 }
 
+// 9.23.26.01 — Open Games is a list of bars. A live in-progress match,
+// a just-listed waiting room, or a starting snapshot must not auto-enter
+// the map or the lobby. The user clicks a bar to enter.
+export function resolveOpenGamesEntry({
+  inGameSession = false,
+  lastMatch = null,
+  liveLobbyWaiting = false,
+} = {}) {
+  void inGameSession;
+  void lastMatch;
+  void liveLobbyWaiting;
+  return {
+    screen: 'browse',
+    clearInGameView: true,
+    disconnectLobbyView: true,
+    autoEnterMap: false,
+    autoEnterLobby: false,
+  };
+}
+
+// Stay on the list until a bar click. Stronger than browsingAway:
+// a starting game must not hide the list and reveal the map.
+export function shouldStayOnOpenGamesList({ openGamesList = false } = {}) {
+  return openGamesList === true;
+}
+
+// Waiting / listed rows open lobby chrome. An in-progress row opens
+// the map only when that bar is clicked.
+export function resolveOpenGamesRowEntry(entry = {}) {
+  const decision = resolveMyGamesEntryAction(entry);
+  if (decision.action === 'open-lobby') {
+    return { action: 'open-lobby', screen: 'lobby' };
+  }
+  return { action: 'rejoin-map', screen: 'map' };
+}
+
+// After the room's Main Menu, Play Online opens the hub so the next
+// click can be Open Games. It must not resume the map or the listed room.
+// Cold Play Online (no explicit Main Menu this session) keeps the older
+// resume rules.
+export function resolvePlayOnlineDestination({
+  explicitMainMenu = false,
+  signedIn = false,
+  lastMatch = null,
+} = {}) {
+  if (explicitMainMenu) {
+    return { screen: 'menu', autoEnterMap: false, autoEnterLobby: false };
+  }
+  if (shouldAutoResumeLastMatch({ signedIn, lastMatch })) {
+    return { screen: 'resume-map', autoEnterMap: true, autoEnterLobby: false };
+  }
+  const view = resolveResumeFailureView({ resumed: false, lastMatch });
+  if (view === 'reconnect') {
+    return { screen: 'reconnect', autoEnterMap: false, autoEnterLobby: false };
+  }
+  if (view === 'lobby') {
+    return { screen: 'lobby', autoEnterMap: false, autoEnterLobby: true };
+  }
+  return { screen: 'menu', autoEnterMap: false, autoEnterLobby: false };
+}
+
 export function shouldRestoreLobbyAfterDisconnect({
   explicitBrowse = false,
   explicitBack = false,

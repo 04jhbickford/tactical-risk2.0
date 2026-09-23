@@ -1,4 +1,4 @@
-// V2.81.57-unified.5 — 9.21.26.06–.11 P0 playtest cluster.
+// V2.81.57-unified.6 — 9.21.26.06–.11 P0 playtest cluster.
 // Shared engine + both forks (Classic playerPanel/combatUI, Experimental ?ux=three).
 // Run: node tools/test-dual-path-15-playtest.mjs
 
@@ -74,13 +74,13 @@ const theater = [
 ];
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-unified.5', GAME_VERSION === 'V2.81.57-unified.5');
+check('GAME_VERSION is V2.81.57-unified.6', GAME_VERSION === 'V2.81.57-unified.6');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 check('Experimental query mode is three', UX_THREE === 'three');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
   const mode = readFileSync(join(root, 'src/map/presentationMode.js'), 'utf8');
-  check('index.html stamp is unified.2', html.includes('content="V2.81.57-unified.5"'));
+  check('index.html stamp is unified.2', html.includes('content="V2.81.57-unified.6"'));
   check('Experimental boot query is ux=three', /ux=three/.test(mode) || /UX_THREE\s*=\s*'three'/.test(mode));
 }
 
