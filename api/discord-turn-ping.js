@@ -83,6 +83,26 @@ function pingDedupeKey({ gameId = '', turnIndex = 0, seatId = '' } = {}) {
   return `${gameId || ''}|${turnIndex ?? ''}|${seatId || ''}`;
 }
 
+const PROBE_GAME_ID = /^(probe|test|testing|health|healthcheck|health-check|daily-review|dailyreview|ping)([\s._-].*)?$/i;
+const PROBE_TEXT = /\bprobe\b|daily\s*review|health[-\s]?check/i;
+
+function isDiscordTurnProbe(body) {
+  const id = cleanBit(body?.gameId);
+  if (id && (PROBE_GAME_ID.test(id) || PROBE_TEXT.test(id))) return true;
+  const blob = [
+    body?.faction,
+    body?.phase,
+    body?.summary,
+    body?.content,
+    body?.seatId,
+    body?.displayName,
+    body?.message,
+    body?.discordName,
+    body?.username,
+  ].map((value) => cleanBit(value)).filter(Boolean).join('\n');
+  return PROBE_TEXT.test(blob);
+}
+
 function buildDiscordTurnContent({
   discordUserId = '',
   faction = '',
@@ -170,6 +190,11 @@ module.exports = async function handler(req, res) {
     return;
   }
 
+  if (isDiscordTurnProbe(body)) {
+    json(res, 200, { ok: false, reason: 'skip-probe' });
+    return;
+  }
+
   const key = pingDedupeKey({ gameId, turnIndex, seatId });
   if (seen.has(key)) {
     json(res, 200, { ok: false, reason: 'deduped' });
@@ -193,6 +218,11 @@ module.exports = async function handler(req, res) {
     discordName: body.discordName || '',
     seatLabel: body.seatLabel || '',
   });
+
+  if (isDiscordTurnProbe({ ...body, content })) {
+    json(res, 200, { ok: false, reason: 'skip-probe' });
+    return;
+  }
 
   try {
     const posted = await fetch(webhook, {

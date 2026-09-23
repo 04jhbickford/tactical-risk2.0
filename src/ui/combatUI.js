@@ -1642,6 +1642,8 @@ export class CombatUI {
       territory: this.currentTerritory,
       attacker: player.name,
       defender: defenderPlayer?.name || 'Unknown',
+      attackerId: player.id,
+      defenderId: previousOwner || null,
       winner: this.combatState.winner,
       attackerSurvivors: this._getTotalUnits(this.combatState.attackers),
       defenderSurvivors: this._getTotalUnits(this.combatState.defenders),
