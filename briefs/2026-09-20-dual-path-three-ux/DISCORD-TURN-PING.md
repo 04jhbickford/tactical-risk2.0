@@ -22,10 +22,12 @@ Bare ES modules: browser code cannot read Vercel env. The secret stays on the Ve
 
 ## Sample ping
 
-Very simple (V2.81.57-unified.2). One line: optional mention, faction, phase, deep link. No "your turn" prose. Deep link is `?code=` only (unified shell strips `?ux=`).
+Very simple. One line: optional mention, faction, phase, the move that just finished, deep link. No "your turn" prose. Deep link is `?code=` only (unified shell strips `?ux=`).
+
+When the finished move took territory or lost units, those clauses are included. Empty clauses are omitted. Losses use the power name. Probe and test payloads never reach the webhook.
 
 ```
-<@123456789012345678> Russians · Combat Move · https://tactical-risk20.vercel.app/?code=ABC123
+<@123456789012345678> Germans · Combat Move · Germans took Ukraine from Russians · Lost: Germans 2 inf, Russians 3 inf · https://tactical-risk20.vercel.app/?code=ABC123
 ```
 
 Unlinked seat (no snowflake): one untagged line, then deduped.

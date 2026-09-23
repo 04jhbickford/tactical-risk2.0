@@ -1130,6 +1130,8 @@ function applyHits(play) {
       territory: dest,
       attacker: player.name,
       defender: battle.defOwner,
+      attackerId: player.id,
+      defenderId: battle.defOwner || null,
       winner: 'attacker',
       attackerLosses: attLosses,
       defenderLosses: defLosses,

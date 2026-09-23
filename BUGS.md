@@ -2,6 +2,17 @@
 
 ---
 
+## 9.23.26 — unified.7 turn-ping move summary
+
+Stamp `V2.81.57-unified.7`. Schema stays 11.
+
+- [x] `#turn-ping` still @-mentions the next human and keeps the `?code=` resume link. The line now adds who took which territory from whom, and units lost by power. Empty captures or empty losses are left off the line.
+- [x] Probe and test posts (`probe`, `test`, `health-check`, or copy such as "Probe. daily review") return `skip-probe` and do not call the Discord webhook.
+
+Receipt: `node tools/test-discord-turn-ping.mjs`.
+
+---
+
 ## 9.23.26 — unified.6 Open Games list
 
 Stamp `V2.81.57-unified.6`. Schema stays 11.

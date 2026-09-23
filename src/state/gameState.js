@@ -4637,13 +4637,16 @@ export class GameState {
     // Also add to turnEvents for turn summary modal (multiplayer).
     // Do not write undefined — Firestore rejects the whole game-doc push
     // (hiccup → exhaust → capture rolls back).
+    const attackerId = result.attackerId || this.currentPlayer?.id || null;
     this.turnEvents.push({
       type: 'combat',
-      playerId: this.currentPlayer?.id ?? null,
+      playerId: attackerId,
       timestamp: Date.now(),
       territory: result.territory ?? null,
       attacker: result.attacker ?? null,
       defender: result.defender ?? null,
+      attackerId,
+      defenderId: result.defenderId ?? null,
       outcome: result.winner === 'attacker' ? 'attacker' : 'defender',
       attackerLosses,
       defenderLosses,

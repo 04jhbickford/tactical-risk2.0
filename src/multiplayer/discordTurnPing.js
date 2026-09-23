@@ -3,7 +3,9 @@
 // The webhook lives in Vercel env DISCORD_TURN_WEBHOOK_URL — never on the client.
 // Dedupe key: (gameId, turnIndex, seatId). Skip AI. Mention the next human
 // by snowflake (explicit id, else the alias map). Summarize the prior seat
-// from turnEvents. Untagged fallback when no snowflake matches.
+// from turnEvents: who took which territory from whom, and units lost by
+// power. Untagged fallback when no snowflake matches. Probe and test
+// payloads never post.
 
 export const DISCORD_TURN_CHANNEL_ID = '1551283474303025292';
 export const DISCORD_SEEN_KEY = 'tacticalRisk_discordTurnPingSeen';
@@ -163,20 +165,7 @@ function addLosses(bucket, raw) {
   if (parsed.bare > 0) bucket.bare += parsed.bare;
 }
 
-function formatLossPhrase(bucket, prefix) {
-  if (!bucket) return '';
-  const parts = [];
-  if (bucket.types) {
-    const rows = Object.entries(bucket.types)
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-    for (const [type, n] of rows) {
-      parts.push(`${n} ${UNIT_LOSS_LABELS[type] || type}`);
-    }
-  }
-  if (bucket.bare > 0) parts.push(String(bucket.bare));
-  if (!parts.length) return '';
-  return `${prefix} ${parts.join(', ')}`;
-}
+const UNNAMED_POWER = new Set(['unknown', 'defender', 'attacker']);
 
 function uniqueNames(list) {
   const out = [];
@@ -190,55 +179,148 @@ function uniqueNames(list) {
   return out;
 }
 
-function joinTerritories(names, verb) {
-  const unique = uniqueNames(names);
-  if (!unique.length) return '';
-  const shown = unique.slice(0, 6);
-  const extra = unique.length - shown.length;
-  const list = shown.join(', ');
-  return extra > 0 ? `${verb} ${list} +${extra}` : `${verb} ${list}`;
+function powerLabel(raw) {
+  const text = cleanBit(raw);
+  if (!text || UNNAMED_POWER.has(text.toLowerCase())) return '';
+  return text;
+}
+
+function emptyLossBucket() {
+  return { bare: 0, types: null };
+}
+
+function formatUnitCounts(bucket) {
+  if (!bucket) return '';
+  const parts = [];
+  if (bucket.types) {
+    const rows = Object.entries(bucket.types)
+      .filter(([, n]) => n > 0)
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    for (const [type, n] of rows) {
+      parts.push(`${n} ${UNIT_LOSS_LABELS[type] || type}`);
+    }
+  }
+  if (bucket.bare > 0) parts.push(String(bucket.bare));
+  return parts.join(', ');
+}
+
+function eventInvolves(ev, actor) {
+  if (!actor) return true;
+  return [
+    ev.playerId,
+    ev.toPlayer,
+    ev.fromPlayer,
+    ev.attackerId,
+    ev.defenderId,
+    ev.attacker,
+    ev.defender,
+  ].some((value) => cleanBit(value) === actor);
+}
+
+function formatCapturePhrase(group) {
+  const names = uniqueNames(group.territories);
+  if (!names.length) return '';
+  const shown = names.slice(0, 6);
+  const extra = names.length - shown.length;
+  const list = extra > 0 ? `${shown.join(', ')} +${extra}` : shown.join(', ');
+  const taker = group.to ? `${group.to} took` : 'Took';
+  const from = group.from ? ` from ${group.from}` : '';
+  return `${taker} ${list}${from}`;
+}
+
+function formatCaptures(captures) {
+  const groups = [];
+  const index = new Map();
+  for (const row of captures) {
+    const key = `${row.to}\n${row.from}`;
+    let group = index.get(key);
+    if (!group) {
+      group = { to: row.to, from: row.from, territories: [] };
+      index.set(key, group);
+      groups.push(group);
+    }
+    group.territories.push(row.territory);
+  }
+  return groups.map(formatCapturePhrase).filter(Boolean).join(', ');
+}
+
+function formatLossLine(losses) {
+  const parts = [];
+  for (const [power, bucket] of losses) {
+    const counts = formatUnitCounts(bucket);
+    if (!counts) continue;
+    parts.push(`${power} ${counts}`);
+  }
+  if (!parts.length) return '';
+  return `Lost: ${parts.join(', ')}`;
 }
 
 export function formatTurnPingSummary(events, { actorId = '' } = {}) {
   if (!Array.isArray(events) || events.length === 0) return '';
-  const actor = String(actorId || '').trim();
-  const gained = [];
-  const gaveUp = [];
-  const own = { bare: 0, types: null };
-  const opp = { bare: 0, types: null };
-  for (const ev of events) {
-    if (!ev || typeof ev !== 'object') continue;
-    const involved = !actor
-      || ev.playerId === actor
-      || ev.toPlayer === actor
-      || ev.fromPlayer === actor
-      || ev.attackerId === actor
-      || ev.defenderId === actor;
-    if (!involved) continue;
-    if (ev.type === 'territory_captured' && ev.territory) {
-      const took = !actor || ev.toPlayer === actor || ev.playerId === actor;
-      const lost = !!actor && ev.fromPlayer === actor && ev.toPlayer && ev.toPlayer !== actor;
-      if (lost) gaveUp.push(ev.territory);
-      else if (took) gained.push(ev.territory);
-    } else if (ev.type === 'combat') {
-      const actorDefended = !!actor
-        && ev.playerId !== actor
-        && (ev.defenderId === actor || ev.fromPlayer === actor);
-      if (actorDefended) {
-        addLosses(own, ev.defenderLosses);
-        addLosses(opp, ev.attackerLosses);
-      } else if (!actor || ev.playerId === actor || ev.attackerId === actor) {
-        addLosses(own, ev.attackerLosses);
-        addLosses(opp, ev.defenderLosses);
-      }
-    }
+  const actor = cleanBit(actorId);
+  const rows = events.filter((ev) => ev && typeof ev === 'object' && eventInvolves(ev, actor));
+  const captureByTerritory = new Map();
+  for (const ev of rows) {
+    if (ev.type !== 'territory_captured') continue;
+    const territory = cleanBit(ev.territory);
+    if (!territory) continue;
+    captureByTerritory.set(territory, {
+      territory,
+      to: powerLabel(ev.toPlayer) || powerLabel(ev.playerId),
+      from: powerLabel(ev.fromPlayer),
+    });
   }
+
+  const losses = new Map();
+  const bucketFor = (name) => {
+    const power = powerLabel(name);
+    if (!power) return null;
+    if (!losses.has(power)) losses.set(power, emptyLossBucket());
+    return losses.get(power);
+  };
+
+  for (const ev of rows) {
+    if (ev.type !== 'combat') continue;
+    const capture = captureByTerritory.get(cleanBit(ev.territory));
+    const attacker = powerLabel(ev.attackerId)
+      || powerLabel(ev.playerId)
+      || capture?.to
+      || powerLabel(ev.attacker);
+    const defender = powerLabel(ev.defenderId)
+      || capture?.from
+      || powerLabel(ev.defender);
+    const attackerBucket = bucketFor(attacker);
+    const defenderBucket = bucketFor(defender);
+    if (attackerBucket) addLosses(attackerBucket, ev.attackerLosses);
+    if (defenderBucket) addLosses(defenderBucket, ev.defenderLosses);
+  }
+
   return [
-    joinTerritories(gained, 'Took'),
-    joinTerritories(gaveUp, 'gave up'),
-    formatLossPhrase(own, 'lost'),
-    formatLossPhrase(opp, 'opponent lost'),
-  ].filter(Boolean).join(', ');
+    formatCaptures([...captureByTerritory.values()]),
+    formatLossLine(losses),
+  ].filter(Boolean).join(' · ');
+}
+
+const PROBE_GAME_ID = /^(probe|test|testing|health|healthcheck|health-check|daily-review|dailyreview|ping)([\s._-].*)?$/i;
+const PROBE_TEXT = /\bprobe\b|daily\s*review|health[-\s]?check/i;
+
+export function isDiscordTurnProbe({
+  gameId = '',
+  faction = '',
+  phase = '',
+  summary = '',
+  content = '',
+  seatId = '',
+  displayName = '',
+  message = '',
+} = {}) {
+  const id = cleanBit(gameId);
+  if (id && (PROBE_GAME_ID.test(id) || PROBE_TEXT.test(id))) return true;
+  const blob = [faction, phase, summary, content, seatId, displayName, message]
+    .map((value) => cleanBit(value))
+    .filter(Boolean)
+    .join('\n');
+  return PROBE_TEXT.test(blob);
 }
 
 export function turnEventCount(gameState) {
@@ -493,6 +575,7 @@ export function discordPingPayload({
 }
 
 export async function postDiscordTurnPingViaProxy(apiUrl, payload, fetchImpl) {
+  if (isDiscordTurnProbe(payload || {})) return { ok: false, reason: 'skip-probe' };
   const fetchFn = fetchImpl || (typeof fetch === 'function' ? fetch : null);
   if (!fetchFn) return { ok: false, reason: 'no-fetch' };
   const path = String(apiUrl || DISCORD_TURN_PING_API);
@@ -537,6 +620,16 @@ export function maybePostDiscordTurnPing({
       player, gameId, turnIndex, seatId, seen: seenKeys,
     });
     if (!gate.ok) return { ok: false, reason: gate.reason };
+    if (isDiscordTurnProbe({
+      gameId,
+      seatId: seatId || player?.id || player?.oderId || '',
+      faction: factionLabelOf(player),
+      phase,
+      summary,
+      displayName: player?.displayName || player?.name || '',
+    })) {
+      return { ok: false, reason: 'skip-probe' };
+    }
     const discordUserId = resolveDiscordSnowflake(player);
     const content = buildDiscordTurnContent({
       discordUserId,
