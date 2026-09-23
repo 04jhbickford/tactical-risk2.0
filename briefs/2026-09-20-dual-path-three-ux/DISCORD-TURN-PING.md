@@ -15,25 +15,33 @@ Shared sync path. Soft-fail only. Never blocks play. Hold merge.
 |---|---|
 | Channel | `#tactical-risk` `1551283474303025292` |
 | Production | `POST /api/discord-turn-ping` — serverless reads `DISCORD_TURN_WEBHOOK_URL` |
-| Client | Payload only (`gameId`, `seatId`, `turnIndex`, `faction`, `phase`, `deepLink`, `discordUserId`). No webhook on the client. |
+| Client | Payload only (`gameId`, `seatId`, `turnIndex`, `faction`, `phase`, `summary`, `deepLink`, `discordUserId`, `actorName`, `actorFaction`). No webhook on the client. |
 | Post | Server posts `{ content }` to Discord. Missing API/env → `{ ok: false, reason }` HTTP 200, no throw. |
 
 Bare ES modules: browser code cannot read Vercel env. The secret stays on the Vercel project (Production + Preview). Do not put the URL in git, PRs, briefs, comments, or client JS. Never echo or log it.
 
 ## Sample ping
 
-Very simple. One line: optional mention, faction, phase, the move that just finished, deep link. No "your turn" prose. Deep link is `?code=` only (unified shell strips `?ux=`).
+One notice per finished turn. First line is the next human's mention. Header is the player who just finished. Then every unit loss and every territory taken. A quiet turn still includes both empty lines. Deep link is `?code=` only, on the last line (unified shell strips `?ux=`). No "your turn" prose.
 
-When the finished move took territory or lost units, those clauses are included. Empty clauses are omitted. Losses use the power name. Probe and test payloads never reach the webhook.
-
-```
-<@123456789012345678> Germans · Combat Move · Germans took Ukraine from Russians · Lost: Germans 2 inf, Russians 3 inf · https://tactical-risk20.vercel.app/?code=ABC123
-```
-
-Unlinked seat (no snowflake): one untagged line, then deduped.
+Unit lines use the combat log: `{count}x {unit}` when the log stored types, a bare count when it stored only a number. Opponent is who inflicted the loss. Territory lines name who took the land. Probe and test payloads never reach the webhook.
 
 ```
-British · Purchase · https://tactical-risk20.vercel.app/?code=ZZZZZZ
+<@261711980526567428>
+Robfox007 - Germany Develop Tech Phase
+-1x Destroyer lost Baltic Sea - Russian Easy AI
+-1x Carrier, 2x Fighters, 1x Battleship lost North Atlantic - Bastion UK
+-No territories lost
+https://tactical-risk20.vercel.app/?code=ABC123
+```
+
+Unlinked seat (no snowflake): the mention line is left off.
+
+```
+UK Purchase Phase
+-No units lost
+-No territories lost
+https://tactical-risk20.vercel.app/?code=ZZZZZZ
 ```
 
 Turn pings stay off until a human sets `DISCORD_TURN_WEBHOOK_URL` on Production and Preview and redeploys. Missing env returns `{ ok: false, reason: 'unconfigured' }` HTTP 200. Do not commit a webhook URL.

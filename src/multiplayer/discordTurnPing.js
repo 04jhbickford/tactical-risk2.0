@@ -2,10 +2,13 @@
 // Production path: POST /api/discord-turn-ping with the seat payload.
 // The webhook lives in Vercel env DISCORD_TURN_WEBHOOK_URL — never on the client.
 // Dedupe key: (gameId, turnIndex, seatId). Skip AI. Mention the next human
-// by snowflake (explicit id, else the alias map). Summarize the prior seat
-// from turnEvents: who took which territory from whom, and units lost by
-// power. Untagged fallback when no snowflake matches. Probe and test
-// payloads never post.
+// by snowflake (explicit id, else the alias map). The body is the finished
+// turn in Rob's multiline shape: who just played, units lost (place + who
+// inflicted), territories taken (who took them). Counts and places come
+// from turnEvents only. Untagged fallback when no snowflake matches.
+// Probe and test payloads never post.
+
+import { formatUnitName } from '../utils/unitNames.js';
 
 export const DISCORD_TURN_CHANNEL_ID = '1551283474303025292';
 export const DISCORD_SEEN_KEY = 'tacticalRisk_discordTurnPingSeen';
@@ -41,24 +44,46 @@ export const DISCORD_ALIAS_MAP = Object.freeze([
   },
 ]);
 
-const UNIT_LOSS_LABELS = {
-  infantry: 'inf',
-  armour: 'tank',
-  tank: 'tank',
-  artillery: 'art',
-  fighter: 'ftr',
-  bomber: 'bmr',
-  tacticalBomber: 'tac',
-  transport: 'trn',
-  transportPlane: 'tpt',
-  submarine: 'sub',
-  destroyer: 'dd',
-  cruiser: 'ca',
-  battleship: 'bb',
-  carrier: 'cv',
-  aaGun: 'aa',
-  factory: 'fac',
+// Rob's sea line is "1x Carrier, 2x fighters, 1x battleship" and the land
+// line is "8x Infantry, 5x tanks". Catalog order keeps that sequence.
+const UNIT_LINE_ORDER = [
+  'infantry',
+  'artillery',
+  'armour',
+  'tank',
+  'carrier',
+  'fighter',
+  'tacticalBomber',
+  'bomber',
+  'battleship',
+  'cruiser',
+  'destroyer',
+  'submarine',
+  'transport',
+  'transportPlane',
+  'aaGun',
+  'factory',
+];
+
+const POWER_WORDS = {
+  germans: { name: 'Germany', adj: 'German' },
+  germany: { name: 'Germany', adj: 'German' },
+  german: { name: 'Germany', adj: 'German' },
+  british: { name: 'UK', adj: 'British' },
+  uk: { name: 'UK', adj: 'British' },
+  russians: { name: 'Russia', adj: 'Russian' },
+  russia: { name: 'Russia', adj: 'Russian' },
+  russian: { name: 'Russia', adj: 'Russian' },
+  japanese: { name: 'Japan', adj: 'Japanese' },
+  japan: { name: 'Japan', adj: 'Japanese' },
+  americans: { name: 'US', adj: 'American' },
+  american: { name: 'US', adj: 'American' },
+  us: { name: 'US', adj: 'American' },
+  usa: { name: 'US', adj: 'American' },
 };
+
+const NO_UNITS_LINE = '-No units lost';
+const NO_TERRITORIES_LINE = '-No territories lost';
 
 function normAlias(raw) {
   return String(raw ?? '')
@@ -167,26 +192,21 @@ function addLosses(bucket, raw) {
 
 const UNNAMED_POWER = new Set(['unknown', 'defender', 'attacker']);
 
-function uniqueNames(list) {
-  const out = [];
-  const seen = new Set();
-  for (const name of list) {
-    const text = String(name || '').trim();
-    if (!text || seen.has(text)) continue;
-    seen.add(text);
-    out.push(text);
-  }
-  return out;
-}
-
-function powerLabel(raw) {
-  const text = cleanBit(raw);
-  if (!text || UNNAMED_POWER.has(text.toLowerCase())) return '';
-  return text;
-}
-
 function emptyLossBucket() {
   return { bare: 0, types: null };
+}
+
+function unitOrder(type) {
+  const idx = UNIT_LINE_ORDER.indexOf(type);
+  return idx === -1 ? UNIT_LINE_ORDER.length : idx;
+}
+
+function pluralUnit(name, n) {
+  if (!name) return '';
+  if (n === 1) return name;
+  if (name === 'Infantry' || name === 'Artillery') return name;
+  if (/s$/i.test(name)) return name;
+  return `${name}s`;
 }
 
 function formatUnitCounts(bucket) {
@@ -195,9 +215,10 @@ function formatUnitCounts(bucket) {
   if (bucket.types) {
     const rows = Object.entries(bucket.types)
       .filter(([, n]) => n > 0)
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+      .sort((a, b) => unitOrder(a[0]) - unitOrder(b[0]) || a[0].localeCompare(b[0]));
     for (const [type, n] of rows) {
-      parts.push(`${n} ${UNIT_LOSS_LABELS[type] || type}`);
+      const word = pluralUnit(formatUnitName(type), n);
+      if (word) parts.push(`${n}x ${word}`);
     }
   }
   if (bucket.bare > 0) parts.push(String(bucket.bare));
@@ -217,88 +238,231 @@ function eventInvolves(ev, actor) {
   ].some((value) => cleanBit(value) === actor);
 }
 
-function formatCapturePhrase(group) {
-  const names = uniqueNames(group.territories);
-  if (!names.length) return '';
-  const shown = names.slice(0, 6);
-  const extra = names.length - shown.length;
-  const list = extra > 0 ? `${shown.join(', ')} +${extra}` : shown.join(', ');
-  const taker = group.to ? `${group.to} took` : 'Took';
-  const from = group.from ? ` from ${group.from}` : '';
-  return `${taker} ${list}${from}`;
+export function powerWord(raw) {
+  const text = cleanBit(raw);
+  if (!text) return '';
+  const hit = POWER_WORDS[text.toLowerCase()];
+  return hit ? hit.name : text;
 }
 
-function formatCaptures(captures) {
-  const groups = [];
-  const index = new Map();
-  for (const row of captures) {
-    const key = `${row.to}\n${row.from}`;
-    let group = index.get(key);
-    if (!group) {
-      group = { to: row.to, from: row.from, territories: [] };
-      index.set(key, group);
-      groups.push(group);
+function powerAdj(factionId) {
+  const text = cleanBit(factionId);
+  if (!text) return '';
+  return POWER_WORDS[text.toLowerCase()]?.adj || '';
+}
+
+function difficultyWord(raw) {
+  const key = cleanBit(raw).toLowerCase();
+  if (key === 'easy') return 'Easy';
+  if (key === 'medium') return 'Medium';
+  if (key === 'hard') return 'Hard';
+  return '';
+}
+
+function isStockAiName(raw) {
+  return /^(easy|medium|hard|ai)\s+bot$/i.test(cleanBit(raw));
+}
+
+function isBlankSideName(name, factionId) {
+  const text = cleanBit(name);
+  if (!text || UNNAMED_POWER.has(text.toLowerCase())) return true;
+  if (factionId && text === cleanBit(factionId)) return true;
+  const named = POWER_WORDS[text.toLowerCase()];
+  const faction = POWER_WORDS[cleanBit(factionId).toLowerCase()];
+  if (named && faction && named.name === faction.name) return true;
+  return false;
+}
+
+function findPlayer(players, id) {
+  const key = cleanBit(id);
+  if (!key || !Array.isArray(players)) return null;
+  return players.find((p) => p && (
+    cleanBit(p.id) === key
+    || cleanBit(p.oderId) === key
+    || cleanBit(p.factionId) === key
+  )) || null;
+}
+
+function composeAiLabel(factionId, difficulty) {
+  const adj = powerAdj(factionId);
+  const diff = difficultyWord(difficulty);
+  if (adj && diff) return `${adj} ${diff} AI`;
+  if (adj) return `${adj} AI`;
+  if (diff) return `${diff} AI`;
+  return '';
+}
+
+function joinNamePower(name, factionId) {
+  const power = powerWord(factionId);
+  const text = cleanBit(name);
+  if (!text) return power || '';
+  if (!power) return text;
+  const parts = text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  if (parts.includes(power.toLowerCase())) return text;
+  return `${text} ${power}`;
+}
+
+export function sideLabel(id, fallbackName, players) {
+  const rec = findPlayer(players, id);
+  const factionId = rec?.id || rec?.factionId || id;
+  if (rec?.isAI) {
+    const custom = cleanBit(rec.displayName || rec.name);
+    if (custom && !isStockAiName(custom) && !isBlankSideName(custom, factionId)) {
+      return joinNamePower(custom, factionId);
     }
-    group.territories.push(row.territory);
+    const composed = composeAiLabel(factionId, rec.aiDifficulty);
+    if (composed) return composed;
   }
-  return groups.map(formatCapturePhrase).filter(Boolean).join(', ');
+  const fromRecord = cleanBit(rec?.displayName || rec?.name);
+  const fallback = cleanBit(fallbackName);
+  const name = !isBlankSideName(fromRecord, factionId)
+    ? fromRecord
+    : (isBlankSideName(fallback, factionId) ? '' : fallback);
+  return joinNamePower(name, factionId);
 }
 
-function formatLossLine(losses) {
-  const parts = [];
-  for (const [power, bucket] of losses) {
-    const counts = formatUnitCounts(bucket);
-    if (!counts) continue;
-    parts.push(`${power} ${counts}`);
+export function turnPingHeaderIdentity(player, actorId = '') {
+  const id = player?.id || player?.factionId || actorId || '';
+  const power = powerWord(id);
+  if (player?.isAI) {
+    const custom = cleanBit(player.displayName || player.name);
+    const displayName = (custom && !isStockAiName(custom) && !isBlankSideName(custom, id))
+      ? custom
+      : (composeAiLabel(id, player.aiDifficulty) || power);
+    return { displayName, power };
   }
-  if (!parts.length) return '';
-  return `Lost: ${parts.join(', ')}`;
+  const name = cleanBit(player?.displayName || player?.name);
+  return {
+    displayName: isBlankSideName(name, id) ? '' : name,
+    power,
+  };
 }
 
-export function formatTurnPingSummary(events, { actorId = '' } = {}) {
-  if (!Array.isArray(events) || events.length === 0) return '';
+function phaseWithSuffix(phase) {
+  const ph = cleanBit(phase);
+  if (!ph) return '';
+  if (/phase$/i.test(ph)) return ph;
+  return `${ph} Phase`;
+}
+
+export function formatPingHeader({ displayName = '', power = '', phase = '' } = {}) {
+  const pow = powerWord(power);
+  let name = cleanBit(displayName);
+  if (!name || (pow && name.toLowerCase() === pow.toLowerCase())) name = '';
+  else if (POWER_WORDS[name.toLowerCase()] && powerWord(name) === pow) name = '';
+  const tail = [pow, phaseWithSuffix(phase)].filter(Boolean).join(' ');
+  if (name && tail) return `${name} - ${tail}`;
+  return name || tail || 'seat';
+}
+
+function formatUnitLossLine(bucket, place, opponent) {
+  const counts = formatUnitCounts(bucket);
+  if (!counts) return '';
+  const where = cleanBit(place);
+  const who = cleanBit(opponent);
+  let line = `-${counts} lost`;
+  if (where) line += ` ${where}`;
+  if (who) line += ` - ${who}`;
+  return line;
+}
+
+function formatTerritoryLine(territory, taker) {
+  const name = cleanBit(territory);
+  if (!name) return '';
+  const who = cleanBit(taker);
+  return who ? `-${name} Lost - ${who}` : `-${name} Lost`;
+}
+
+export function formatTurnPingSummary(events, { actorId = '', players = [] } = {}) {
   const actor = cleanBit(actorId);
-  const rows = events.filter((ev) => ev && typeof ev === 'object' && eventInvolves(ev, actor));
+  const rows = Array.isArray(events)
+    ? events.filter((ev) => ev && typeof ev === 'object' && eventInvolves(ev, actor))
+    : [];
+
   const captureByTerritory = new Map();
   for (const ev of rows) {
     if (ev.type !== 'territory_captured') continue;
     const territory = cleanBit(ev.territory);
     if (!territory) continue;
+    const takerId = cleanBit(ev.toPlayer) || cleanBit(ev.playerId);
     captureByTerritory.set(territory, {
       territory,
-      to: powerLabel(ev.toPlayer) || powerLabel(ev.playerId),
-      from: powerLabel(ev.fromPlayer),
+      takerId,
+      fromId: cleanBit(ev.fromPlayer),
     });
   }
 
-  const losses = new Map();
-  const bucketFor = (name) => {
-    const power = powerLabel(name);
-    if (!power) return null;
-    if (!losses.has(power)) losses.set(power, emptyLossBucket());
-    return losses.get(power);
+  const lossGroups = [];
+  const lossIndex = new Map();
+  const pushLoss = (raw, place, opponentId, opponentName) => {
+    const probe = emptyLossBucket();
+    addLosses(probe, raw);
+    if (!formatUnitCounts(probe)) return;
+    const where = cleanBit(place);
+    const who = sideLabel(opponentId, opponentName, players);
+    const key = `${where}\n${who}`;
+    let group = lossIndex.get(key);
+    if (!group) {
+      group = { place: where, opponent: who, bucket: emptyLossBucket() };
+      lossIndex.set(key, group);
+      lossGroups.push(group);
+    }
+    addLosses(group.bucket, raw);
   };
 
   for (const ev of rows) {
     if (ev.type !== 'combat') continue;
-    const capture = captureByTerritory.get(cleanBit(ev.territory));
-    const attacker = powerLabel(ev.attackerId)
-      || powerLabel(ev.playerId)
-      || capture?.to
-      || powerLabel(ev.attacker);
-    const defender = powerLabel(ev.defenderId)
-      || capture?.from
-      || powerLabel(ev.defender);
-    const attackerBucket = bucketFor(attacker);
-    const defenderBucket = bucketFor(defender);
-    if (attackerBucket) addLosses(attackerBucket, ev.attackerLosses);
-    if (defenderBucket) addLosses(defenderBucket, ev.defenderLosses);
+    const place = cleanBit(ev.territory);
+    const capture = captureByTerritory.get(place);
+    const attackerId = cleanBit(ev.attackerId) || cleanBit(ev.playerId) || capture?.takerId || '';
+    const defenderId = cleanBit(ev.defenderId) || capture?.fromId || '';
+    const actorIsDefender = !!actor && defenderId === actor;
+    const own = actorIsDefender
+      ? { raw: ev.defenderLosses, opponentId: attackerId, opponentName: ev.attacker }
+      : { raw: ev.attackerLosses, opponentId: defenderId, opponentName: ev.defender };
+    const other = actorIsDefender
+      ? { raw: ev.attackerLosses, opponentId: defenderId, opponentName: ev.defender }
+      : { raw: ev.defenderLosses, opponentId: attackerId, opponentName: ev.attacker };
+    pushLoss(own.raw, place, own.opponentId, own.opponentName);
+    pushLoss(other.raw, place, other.opponentId, other.opponentName);
   }
 
+  const unitLines = lossGroups
+    .map((group) => formatUnitLossLine(group.bucket, group.place, group.opponent))
+    .filter(Boolean);
+  const territoryLines = [...captureByTerritory.values()]
+    .map((row) => formatTerritoryLine(row.territory, sideLabel(row.takerId, '', players)))
+    .filter(Boolean);
+
   return [
-    formatCaptures([...captureByTerritory.values()]),
-    formatLossLine(losses),
-  ].filter(Boolean).join(' · ');
+    ...(unitLines.length ? unitLines : [NO_UNITS_LINE]),
+    ...(territoryLines.length ? territoryLines : [NO_TERRITORIES_LINE]),
+  ].join('\n');
+}
+
+function clampDiscordContent(lines, max) {
+  const kept = lines.filter((line) => line != null && String(line).length);
+  const join = (rows) => rows.join('\n');
+  if (join(kept).length <= max) return join(kept);
+  const hasLink = /^https?:\/\//i.test(kept[kept.length - 1] || '');
+  const link = hasLink ? kept[kept.length - 1] : '';
+  const body = hasLink ? kept.slice(0, -1) : kept.slice();
+  const originalBodyLen = body.length;
+  while (body.length > 1 && join([...body, link].filter(Boolean)).length > max) {
+    body.pop();
+  }
+  if (body.length < originalBodyLen) {
+    const marked = [...body, '…', link].filter(Boolean);
+    if (join(marked).length <= max) return join(marked);
+  }
+  const rows = [...body, link].filter(Boolean);
+  if (join(rows).length <= max) return join(rows);
+  const tail = link ? `\n${link}` : '';
+  const budget = max - tail.length;
+  const cut = `${body.join('\n').slice(0, Math.max(0, budget - 1)).trimEnd()}…`;
+  const text = `${cut}${tail}`;
+  if (text.length <= max) return text;
+  return `${text.slice(0, Math.max(0, max - 1))}…`;
 }
 
 const PROBE_GAME_ID = /^(probe|test|testing|health|healthcheck|health-check|daily-review|dailyreview|ping)([\s._-].*)?$/i;
@@ -313,13 +477,14 @@ export function isDiscordTurnProbe({
   seatId = '',
   displayName = '',
   message = '',
+  actorName = '',
+  actorFaction = '',
 } = {}) {
   const id = cleanBit(gameId);
   if (id && (PROBE_GAME_ID.test(id) || PROBE_TEXT.test(id))) return true;
-  const blob = [faction, phase, summary, content, seatId, displayName, message]
-    .map((value) => cleanBit(value))
-    .filter(Boolean)
-    .join('\n');
+  const blob = [
+    faction, phase, summary, content, seatId, displayName, message, actorName, actorFaction,
+  ].map((value) => cleanBit(value)).filter(Boolean).join('\n');
   return PROBE_TEXT.test(blob);
 }
 
@@ -405,6 +570,8 @@ export function buildDiscordTurnContent({
   username = '',
   discordName = '',
   seatLabel = '',
+  actorName = '',
+  actorFaction = '',
 } = {}) {
   const snowflake = resolveDiscordSnowflake({
     discordUserId,
@@ -414,28 +581,20 @@ export function buildDiscordTurnContent({
     discordName,
     seatLabel,
   });
-  const bits = [cleanBit(faction) || 'seat'];
-  const phaseBit = cleanBit(phase);
-  if (phaseBit) bits.push(phaseBit);
-  const headText = bits.join(' · ');
+  const header = formatPingHeader({
+    displayName: actorName || displayName,
+    power: actorFaction || faction,
+    phase,
+  });
+  const sum = String(summary ?? '').replace(/\r\n/g, '\n').trim()
+    || `${NO_UNITS_LINE}\n${NO_TERRITORIES_LINE}`;
   const link = cleanBit(deepLink);
-  let sum = cleanBit(summary);
-  const prefix = snowflake ? `<@${snowflake}> ` : '';
-  const linkPart = link ? ` · ${link}` : '';
-  let line = sum ? `${prefix}${headText} · ${sum}${linkPart}` : `${prefix}${headText}${linkPart}`;
-  if (line.length > DISCORD_TURN_CONTENT_MAX && sum) {
-    const budget = DISCORD_TURN_CONTENT_MAX - prefix.length - headText.length - linkPart.length - 3;
-    if (budget > 8) {
-      sum = `${sum.slice(0, budget - 1).trimEnd()}…`;
-      line = `${prefix}${headText} · ${sum}${linkPart}`;
-    } else {
-      line = `${prefix}${headText}${linkPart}`;
-    }
-  }
-  if (line.length > DISCORD_TURN_CONTENT_MAX) {
-    line = `${line.slice(0, DISCORD_TURN_CONTENT_MAX - 1)}…`;
-  }
-  return line;
+  return clampDiscordContent([
+    snowflake ? `<@${snowflake}>` : '',
+    header,
+    ...sum.split('\n'),
+    link,
+  ], DISCORD_TURN_CONTENT_MAX);
 }
 
 export function shouldPingHumanSeat({
@@ -555,6 +714,8 @@ export function discordPingPayload({
   deepLink = '',
   uxMode = '',
   summary = '',
+  actorName = '',
+  actorFaction = '',
 } = {}) {
   return {
     gameId: String(gameId || ''),
@@ -568,6 +729,8 @@ export function discordPingPayload({
     faction: factionLabelOf(player),
     phase: String(phase || ''),
     summary: String(summary || ''),
+    actorName: String(actorName || ''),
+    actorFaction: String(actorFaction || ''),
     deepLink: String(deepLink || ''),
     uxMode: String(uxMode || ''),
     isAI: !!player?.isAI,
@@ -606,6 +769,8 @@ export function maybePostDiscordTurnPing({
   deepLink = '',
   uxMode = '',
   summary = '',
+  actorName = '',
+  actorFaction = '',
   seen = null,
   storage = null,
   post = null,
@@ -627,6 +792,8 @@ export function maybePostDiscordTurnPing({
       phase,
       summary,
       displayName: player?.displayName || player?.name || '',
+      actorName,
+      actorFaction,
     })) {
       return { ok: false, reason: 'skip-probe' };
     }
@@ -641,9 +808,12 @@ export function maybePostDiscordTurnPing({
       username: player?.username || '',
       discordName: player?.discordName || player?.discordHandle || '',
       seatLabel: player?.seatLabel || player?.label || player?.id || '',
+      actorName,
+      actorFaction,
     });
     const payload = discordPingPayload({
       player, gameId, turnIndex, seatId, phase, deepLink, uxMode, summary,
+      actorName, actorFaction,
     });
 
     const finish = (posted) => {
@@ -715,7 +885,10 @@ export function bindDiscordTurnPing(gameState, {
       if (isApplyingRemote()) return;
       const player = gameState.currentPlayer;
       const uxMode = getUxMode();
-      const summary = formatTurnPingSummary(priorEvents, { actorId: prevSeat });
+      const players = Array.isArray(gameState.players) ? gameState.players : [];
+      const prevPlayer = players.find((p) => p && (p.id === prevSeat || p.oderId === prevSeat)) || null;
+      const actor = turnPingHeaderIdentity(prevPlayer, prevSeat);
+      const summary = formatTurnPingSummary(priorEvents, { actorId: prevSeat, players });
       const result = maybePostDiscordTurnPing({
         player,
         gameId: getGameId() || '',
@@ -726,6 +899,8 @@ export function bindDiscordTurnPing(gameState, {
         seatId: nextSeat,
         phase: phaseLabelOf(gameState),
         summary,
+        actorName: actor.displayName,
+        actorFaction: actor.power,
         deepLink: buildDeepLink({
           origin: getOrigin(),
           uxMode,

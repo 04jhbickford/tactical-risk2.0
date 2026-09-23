@@ -9,7 +9,7 @@ import { GAME_VERSION } from '../src/version.js';
 import { UX_LABEL_EXPERIMENTAL, resolveUxMode, UX_CLASSIC, UX_THREE } from '../src/map/presentationMode.js';
 import { injectThreeChrome, syncThreeShellWidth, resizeThreeMapCanvas } from '../src/map/threeMapChrome.js';
 
-assert.equal(GAME_VERSION, 'V2.81.57-unified.7', 'stamp is unified.2');
+assert.equal(GAME_VERSION, 'V2.81.57-unified.8', 'stamp is unified.2');
 assert.equal(UX_LABEL_EXPERIMENTAL, 'Experimental UX');
 assert.equal(resolveUxMode(''), UX_CLASSIC, 'queryless is unified Classic');
 assert.equal(resolveUxMode('?ux=classic'), UX_CLASSIC, 'classic remains a deep link');

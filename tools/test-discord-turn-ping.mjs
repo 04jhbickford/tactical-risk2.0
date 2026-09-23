@@ -21,6 +21,7 @@ import {
   discordPingPayload,
   resolveDiscordSnowflake,
   formatTurnPingSummary,
+  sideLabel,
   isDiscordTurnProbe,
   DISCORD_TURN_CONTENT_MAX,
 } from '../src/multiplayer/discordTurnPing.js';
@@ -36,7 +37,7 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-check('stamp is unified.2', GAME_VERSION === 'V2.81.57-unified.7');
+check('stamp is unified.2', GAME_VERSION === 'V2.81.57-unified.8');
 check('channel id documented', DISCORD_TURN_CHANNEL_ID === '1551283474303025292');
 check('Classic lobby field', classicLobby.includes('mp-discord-input') && classicLobby.includes('data-action="discord-id"'));
 check('New UX lobby field', threeChrome.includes('data-lobby-discord') && threeChrome.includes('three-lobby-discord'));
@@ -69,7 +70,13 @@ const sample = buildDiscordTurnContent({
   }),
 });
 check('sample mention + deep link',
-  sample === '<@123456789012345678> Russians · Combat Move · https://tactical-risk20.vercel.app/?code=ABC123');
+  sample === [
+    '<@123456789012345678>',
+    'Russia Combat Move Phase',
+    '-No units lost',
+    '-No territories lost',
+    'https://tactical-risk20.vercel.app/?code=ABC123',
+  ].join('\n'));
 check('unified deep link has no ux query', !sample.includes('ux='));
 console.log('SAMPLE_PING:\n' + sample);
 
@@ -79,10 +86,19 @@ const fallback = buildDiscordTurnContent({
   phase: 'Purchase',
   deepLink: 'https://tactical-risk20.vercel.app/?code=ZZZZZZ',
 });
-check('untagged fallback', fallback === 'British · Purchase · https://tactical-risk20.vercel.app/?code=ZZZZZZ');
+check('untagged fallback', fallback === [
+  'UK Purchase Phase',
+  '-No units lost',
+  '-No territories lost',
+  'https://tactical-risk20.vercel.app/?code=ZZZZZZ',
+].join('\n'));
 
-check('blank phase does not leave a dangling dot',
-  buildDiscordTurnContent({ faction: 'Russians', phase: '' }) === 'Russians');
+check('blank phase does not leave a dangling dash',
+  buildDiscordTurnContent({ faction: 'Russians', phase: '' }) === [
+    'Russia',
+    '-No units lost',
+    '-No territories lost',
+  ].join('\n'));
 
 check('alias Bastion', resolveDiscordSnowflake({ name: 'Bastion' }) === '261711980526567428');
 check('alias crusader_bastion', resolveDiscordSnowflake({ discordName: '@crusader_bastion' }) === '261711980526567428');
@@ -101,44 +117,73 @@ check('unknown name stays untagged', resolveDiscordSnowflake({ name: 'James' }) 
 check('token prefix is not an alias', resolveDiscordSnowflake({ name: 'Roberts' }) === '');
 check('crusader alone is not Bastion', resolveDiscordSnowflake({ name: 'crusader' }) === '');
 
-const summary = formatTurnPingSummary([
+const robPlayers = [
+  { id: 'Germans', name: 'Robfox007', isAI: false },
+  { id: 'Russians', name: 'Easy Bot', isAI: true, aiDifficulty: 'easy' },
+  { id: 'British', name: 'Bastion', isAI: false },
+  { id: 'Americans', name: 'Sean', isAI: false },
+];
+const quiet = formatTurnPingSummary([], { actorId: 'Germans', players: robPlayers });
+check('quiet turn uses both empty lines',
+  quiet === '-No units lost\n-No territories lost');
+const seaLosses = formatTurnPingSummary([
   {
-    type: 'territory_captured',
+    type: 'combat',
     playerId: 'Germans',
-    territory: 'Ukraine',
-    fromPlayer: 'Russians',
-    toPlayer: 'Germans',
+    attackerId: 'Germans',
+    defenderId: 'Russians',
+    territory: 'Baltic Sea',
+    attackerLosses: { destroyer: 1 },
+    defenderLosses: {},
   },
   {
     type: 'combat',
     playerId: 'Germans',
-    attacker: 'Bastion',
-    defender: 'rwts',
     attackerId: 'Germans',
-    defenderId: 'Russians',
-    territory: 'Ukraine',
-    attackerLosses: { infantry: 2 },
-    defenderLosses: { infantry: 3 },
+    defenderId: 'British',
+    territory: 'North Atlantic',
+    attackerLosses: { carrier: 1, fighter: 2, battleship: 1 },
+    defenderLosses: {},
   },
-], { actorId: 'Germans' });
-check('summary names taker, previous owner, and losses by power',
-  summary === 'Germans took Ukraine from Russians · Lost: Germans 2 inf, Russians 3 inf');
-check('summary omits empty losses',
-  formatTurnPingSummary([
-    {
-      type: 'territory_captured',
-      playerId: 'Germans',
-      territory: 'Ukraine',
-      toPlayer: 'Germans',
-      fromPlayer: 'Russians',
-    },
-    { type: 'combat', playerId: 'Germans', attackerLosses: { infantry: 0 }, defenderLosses: {} },
-  ], { actorId: 'Germans' }) === 'Germans took Ukraine from Russians');
-check('summary numeric losses do not invent a unit type',
+], { actorId: 'Germans', players: robPlayers });
+check('sea losses list every battle and the empty territory line',
+  seaLosses === [
+    '-1x Destroyer lost Baltic Sea - Russian Easy AI',
+    '-1x Carrier, 2x Fighters, 1x Battleship lost North Atlantic - Bastion UK',
+    '-No territories lost',
+  ].join('\n'));
+const southAfrica = formatTurnPingSummary([
+  {
+    type: 'combat',
+    playerId: 'British',
+    attackerId: 'British',
+    defenderId: 'Germans',
+    territory: 'South Africa',
+    attacker: 'Bastion',
+    defender: 'Robfox007',
+    attackerLosses: {},
+    defenderLosses: { infantry: 8, armour: 5 },
+  },
+  {
+    type: 'territory_captured',
+    playerId: 'British',
+    territory: 'South Africa',
+    fromPlayer: 'Germans',
+    toPlayer: 'British',
+  },
+], { actorId: 'British', players: robPlayers });
+check('capture lists defender losses and who took the territory',
+  southAfrica === [
+    '-8x Infantry, 5x Tanks lost South Africa - Bastion UK',
+    '-South Africa Lost - Bastion UK',
+  ].join('\n'));
+check('a name that contains "us" still gets the power',
+  sideLabel('Americans', 'Susan', [{ id: 'Americans', name: 'Susan', isAI: false }]) === 'Susan US');
+check('numeric losses do not invent a unit type',
   formatTurnPingSummary([
     { type: 'combat', playerId: 'Germans', attackerLosses: 4, defenderLosses: null },
-  ], { actorId: 'Germans' }) === 'Lost: Germans 4');
-check('summary names who took a territory the actor lost',
+  ], { actorId: 'Germans', players: robPlayers }) === '-4 lost\n-No territories lost');
+check('territory the actor lost names who took it',
   formatTurnPingSummary([
     {
       type: 'territory_captured',
@@ -147,8 +192,8 @@ check('summary names who took a territory the actor lost',
       fromPlayer: 'Germans',
       toPlayer: 'Americans',
     },
-  ], { actorId: 'Germans' }) === 'Americans took France from Germans');
-check('summary ignores another seat',
+  ], { actorId: 'Germans', players: robPlayers }) === '-No units lost\n-France Lost - Sean US');
+check('another seat is not this turn',
   formatTurnPingSummary([
     {
       type: 'territory_captured',
@@ -157,39 +202,18 @@ check('summary ignores another seat',
       fromPlayer: 'British',
       toPlayer: 'Americans',
     },
-  ], { actorId: 'Germans' }) === '');
-check('empty turn omits summary', formatTurnPingSummary([], { actorId: 'Germans' }) === '');
-check('losses only omits the capture line',
+  ], { actorId: 'Germans' }) === '-No units lost\n-No territories lost');
+check('both sides and every territory stay on their own lines',
   formatTurnPingSummary([
     {
       type: 'combat',
       playerId: 'Germans',
+      attackerId: 'Germans',
       defenderId: 'Russians',
-      attackerLosses: { infantry: 1, armour: 1 },
-      defenderLosses: { artillery: 2 },
-    },
-  ], { actorId: 'Germans' }) === 'Lost: Germans 1 tank, 1 inf, Russians 2 art');
-check('defender power comes from the capture when the combat log omitted it',
-  formatTurnPingSummary([
-    {
-      type: 'territory_captured',
       territory: 'Ukraine',
-      fromPlayer: 'Russians',
-      toPlayer: 'Germans',
-      playerId: 'Germans',
-    },
-    {
-      type: 'combat',
-      territory: 'Ukraine',
-      playerId: 'Germans',
-      attacker: 'Bastion',
-      defender: 'Unknown',
       attackerLosses: { infantry: 2 },
       defenderLosses: { infantry: 3 },
     },
-  ], { actorId: 'Germans' }) === 'Germans took Ukraine from Russians · Lost: Germans 2 inf, Russians 3 inf');
-check('two territories from the same power stay on one line',
-  formatTurnPingSummary([
     {
       type: 'territory_captured',
       territory: 'Ukraine',
@@ -204,24 +228,62 @@ check('two territories from the same power stay on one line',
       toPlayer: 'Germans',
       playerId: 'Germans',
     },
-  ], { actorId: 'Germans' }) === 'Germans took Ukraine, Caucasus from Russians');
+  ], { actorId: 'Germans', players: robPlayers }) === [
+    '-2x Infantry lost Ukraine - Russian Easy AI',
+    '-3x Infantry lost Ukraine - Robfox007 Germany',
+    '-Ukraine Lost - Robfox007 Germany',
+    '-Caucasus Lost - Robfox007 Germany',
+  ].join('\n'));
+check('omitted defender id uses the capture previous owner',
+  formatTurnPingSummary([
+    {
+      type: 'territory_captured',
+      territory: 'Ukraine',
+      fromPlayer: 'Russians',
+      toPlayer: 'Germans',
+      playerId: 'Germans',
+    },
+    {
+      type: 'combat',
+      territory: 'Ukraine',
+      playerId: 'Germans',
+      attacker: 'Robfox007',
+      defender: 'Unknown',
+      attackerLosses: { infantry: 2 },
+      defenderLosses: { infantry: 3 },
+    },
+  ], { actorId: 'Germans', players: robPlayers }) === [
+    '-2x Infantry lost Ukraine - Russian Easy AI',
+    '-3x Infantry lost Ukraine - Robfox007 Germany',
+    '-Ukraine Lost - Robfox007 Germany',
+  ].join('\n'));
 check('probe detector rejects probe and test ids and probe copy',
   isDiscordTurnProbe({ gameId: 'probe' })
   && isDiscordTurnProbe({ gameId: 'TEST' })
   && isDiscordTurnProbe({ gameId: 'health-check' })
   && isDiscordTurnProbe({ faction: 'Probe. daily review' })
   && isDiscordTurnProbe({ summary: 'daily review' })
-  && !isDiscordTurnProbe({ gameId: 'HENV42', faction: 'Germans', summary: 'Germans took Ukraine from Russians' }));
+  && !isDiscordTurnProbe({ gameId: 'HENV42', faction: 'Germans', summary: '-1x Destroyer lost Baltic Sea - Russian Easy AI' }));
 
 const enriched = buildDiscordTurnContent({
   displayName: 'Bastion',
-  faction: 'Germans',
-  phase: 'Combat Move',
-  summary: 'Germans took Ukraine from Russians · Lost: Germans 2 inf, Russians 3 inf',
+  discordUserId: '',
+  faction: 'British',
+  actorName: 'Robfox007',
+  actorFaction: 'Germany',
+  phase: 'Develop Tech',
+  summary: seaLosses,
   deepLink: 'https://tactical-risk20.vercel.app/?code=HENV42',
 });
-check('mention + phase + summary + resume link',
-  enriched === '<@261711980526567428> Germans · Combat Move · Germans took Ukraine from Russians · Lost: Germans 2 inf, Russians 3 inf · https://tactical-risk20.vercel.app/?code=HENV42');
+check('mention + finisher header + loss lines + resume link',
+  enriched === [
+    '<@261711980526567428>',
+    'Robfox007 - Germany Develop Tech Phase',
+    '-1x Destroyer lost Baltic Sea - Russian Easy AI',
+    '-1x Carrier, 2x Fighters, 1x Battleship lost North Atlantic - Bastion UK',
+    '-No territories lost',
+    'https://tactical-risk20.vercel.app/?code=HENV42',
+  ].join('\n'));
 const huge = buildDiscordTurnContent({
   discordUserId: '261711980526567428',
   faction: 'Germans',
@@ -284,7 +346,7 @@ const fb = await maybePostDiscordTurnPing({
   storage: store,
   post: async (url, content) => { posts.push({ url, content }); return { ok: true }; },
 });
-check('unlinked fallback once', fb.ok === true && posts[1].content.startsWith('British · Purchase'));
+check('unlinked fallback once', fb.ok === true && posts[1].content.startsWith('UK Purchase Phase'));
 
 const probePosts = [];
 const probePing = await maybePostDiscordTurnPing({
@@ -369,6 +431,10 @@ const summaryPosts = [];
 const summaryListeners = [];
 const summaryGs = {
   currentPlayer: { id: 'Russians', name: 'rwts', isAI: false },
+  players: [
+    { id: 'Russians', name: 'rwts', isAI: false },
+    { id: 'Germans', name: 'Bastion', isAI: false },
+  ],
   currentPlayerIndex: 0,
   round: 2,
   phase: 'playing',
@@ -406,7 +472,13 @@ summaryGs.currentPlayerIndex = 1;
 summaryListeners[0]();
 check('bind mentions next player from alias and summarizes prior turn',
   summaryPosts.length === 1
-  && summaryPosts[0] === '<@261711980526567428> Germans · Combat Move · Russians took Ukraine from Germans · Lost: Russians 3 inf · https://tactical-risk20.vercel.app/?code=HENV42');
+  && summaryPosts[0] === [
+    '<@261711980526567428>',
+    'rwts - Russia Combat Move Phase',
+    '-3x Infantry lost',
+    '-Ukraine Lost - rwts Russia',
+    'https://tactical-risk20.vercel.app/?code=HENV42',
+  ].join('\n'));
 
 const apiPath = new URL('../api/discord-turn-ping.js', import.meta.url);
 check('serverless api file exists', existsSync(apiPath));
@@ -461,7 +533,9 @@ const aliasPing = await maybePostDiscordTurnPing({
   turnIndex: 11,
   seatId: 'Germans',
   phase: 'Combat Move',
-  summary: 'Germans took Ukraine from Russians · Lost: Germans 2 inf, Russians 3 inf',
+  summary: seaLosses,
+  actorName: 'Robfox007',
+  actorFaction: 'Germany',
   deepLink: 'https://tactical-risk20.vercel.app/?code=HENV42',
   storage: { _d: {}, getItem() { return null; }, setItem() {} },
   proxyPost: async (_url, payload) => {
@@ -472,7 +546,9 @@ const aliasPing = await maybePostDiscordTurnPing({
 check('proxy payload resolves alias, summary, and resume link',
   aliasPing.ok === true
   && aliasProxy[0].discordUserId === '261711980526567428'
-  && aliasProxy[0].summary === 'Germans took Ukraine from Russians · Lost: Germans 2 inf, Russians 3 inf'
+  && aliasProxy[0].summary === seaLosses
+  && aliasProxy[0].actorName === 'Robfox007'
+  && aliasProxy[0].actorFaction === 'Germany'
   && aliasProxy[0].deepLink.includes('code=HENV42')
   && aliasProxy[0].displayName === 'Bastion'
   && aliasProxy[0].isAI === false);
@@ -532,8 +608,14 @@ await handler({
 const sentBody = JSON.parse(sent.body);
 check('configured posts {content} and reports sent',
   sent.statusCode === 200 && sentBody.ok === true && sentBody.reason === 'sent' && postedContent);
-check('configured body is mention · faction · phase · link',
-  postedBody.includes('<@123456789012345678> Russians · Combat Move · https://tactical-risk20.vercel.app/?code=G9')
+check('configured body is mention, header, empty lines, link',
+  postedBody.includes([
+    '<@123456789012345678>',
+    'Russia Combat Move Phase',
+    '-No units lost',
+    '-No territories lost',
+    'https://tactical-risk20.vercel.app/?code=G9',
+  ].join('\\n'))
   && !postedBody.includes('your turn'));
 const aliased = mockRes();
 await handler({
@@ -542,10 +624,15 @@ await handler({
     gameId: 'HENV42',
     seatId: 'Germans',
     turnIndex: 8,
-    faction: 'Germans',
-    phase: 'Combat Move',
-    displayName: 'Sean',
-    summary: 'Germans took Ukraine from Russians · Lost: Germans 2 inf, Russians 3 inf',
+    faction: 'British',
+    phase: 'Develop Tech',
+    displayName: 'Bastion',
+    actorName: 'Robfox007',
+    actorFaction: 'Germany',
+    summary: [
+      '-8x Infantry, 5x Tanks lost South Africa - Bastion UK',
+      '-South Africa Lost - Bastion UK',
+    ].join('\n'),
     deepLink: 'https://tactical-risk20.vercel.app/?code=HENV42',
   },
 }, aliased);
@@ -553,7 +640,13 @@ const aliasedBody = JSON.parse(aliased.body);
 check('api aliases the next player and includes summary + link',
   aliased.statusCode === 200
   && aliasedBody.ok === true
-  && postedBody.includes('<@261711980526567428> Germans · Combat Move · Germans took Ukraine from Russians · Lost: Germans 2 inf, Russians 3 inf · https://tactical-risk20.vercel.app/?code=HENV42'));
+  && postedBody.includes([
+    '<@261711980526567428>',
+    'Robfox007 - Germany Develop Tech Phase',
+    '-8x Infantry, 5x Tanks lost South Africa - Bastion UK',
+    '-South Africa Lost - Bastion UK',
+    'https://tactical-risk20.vercel.app/?code=HENV42',
+  ].join('\\n')));
 check('api alias response has no webhook',
   !JSON.stringify(aliasedBody).includes('http')
   && !JSON.stringify(aliasedBody).toLowerCase().includes('webhook'));

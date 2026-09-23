@@ -2,8 +2,9 @@
 // Reads DISCORD_TURN_WEBHOOK_URL from server env (Preview + Production).
 // Never ships the URL to the client. Never logs or echoes it.
 // Soft-fail only (always 200 for POST). Body: gameId, turnIndex, seatId,
-// discordUserId, faction, phase, summary, deepLink. Name fields are a
-// fallback when discordUserId is empty.
+// discordUserId, faction, phase, summary, deepLink, actorName, actorFaction.
+// Name fields are a fallback when discordUserId is empty. actorName is the
+// player who just finished and is not used for the mention.
 
 const seen = new Set();
 const CONTENT_MAX = 1800;
@@ -86,6 +87,74 @@ function pingDedupeKey({ gameId = '', turnIndex = 0, seatId = '' } = {}) {
 const PROBE_GAME_ID = /^(probe|test|testing|health|healthcheck|health-check|daily-review|dailyreview|ping)([\s._-].*)?$/i;
 const PROBE_TEXT = /\bprobe\b|daily\s*review|health[-\s]?check/i;
 
+const POWER_WORDS = {
+  germans: 'Germany',
+  germany: 'Germany',
+  german: 'Germany',
+  british: 'UK',
+  uk: 'UK',
+  russians: 'Russia',
+  russia: 'Russia',
+  russian: 'Russia',
+  japanese: 'Japan',
+  japan: 'Japan',
+  americans: 'US',
+  american: 'US',
+  us: 'US',
+  usa: 'US',
+};
+
+const NO_UNITS_LINE = '-No units lost';
+const NO_TERRITORIES_LINE = '-No territories lost';
+
+function powerWord(raw) {
+  const text = cleanBit(raw);
+  if (!text) return '';
+  return POWER_WORDS[text.toLowerCase()] || text;
+}
+
+function phaseWithSuffix(phase) {
+  const ph = cleanBit(phase);
+  if (!ph) return '';
+  if (/phase$/i.test(ph)) return ph;
+  return `${ph} Phase`;
+}
+
+function formatPingHeader({ displayName = '', power = '', phase = '' } = {}) {
+  const pow = powerWord(power);
+  let name = cleanBit(displayName);
+  if (!name || (pow && name.toLowerCase() === pow.toLowerCase())) name = '';
+  else if (POWER_WORDS[name.toLowerCase()] && powerWord(name) === pow) name = '';
+  const tail = [pow, phaseWithSuffix(phase)].filter(Boolean).join(' ');
+  if (name && tail) return `${name} - ${tail}`;
+  return name || tail || 'seat';
+}
+
+function clampDiscordContent(lines, max) {
+  const kept = lines.filter((line) => line != null && String(line).length);
+  const join = (rows) => rows.join('\n');
+  if (join(kept).length <= max) return join(kept);
+  const hasLink = /^https?:\/\//i.test(kept[kept.length - 1] || '');
+  const link = hasLink ? kept[kept.length - 1] : '';
+  const body = hasLink ? kept.slice(0, -1) : kept.slice();
+  const originalBodyLen = body.length;
+  while (body.length > 1 && join([...body, link].filter(Boolean)).length > max) {
+    body.pop();
+  }
+  if (body.length < originalBodyLen) {
+    const marked = [...body, '…', link].filter(Boolean);
+    if (join(marked).length <= max) return join(marked);
+  }
+  const rows = [...body, link].filter(Boolean);
+  if (join(rows).length <= max) return join(rows);
+  const tail = link ? `\n${link}` : '';
+  const budget = max - tail.length;
+  const cut = `${body.join('\n').slice(0, Math.max(0, budget - 1)).trimEnd()}…`;
+  const text = `${cut}${tail}`;
+  if (text.length <= max) return text;
+  return `${text.slice(0, Math.max(0, max - 1))}…`;
+}
+
 function isDiscordTurnProbe(body) {
   const id = cleanBit(body?.gameId);
   if (id && (PROBE_GAME_ID.test(id) || PROBE_TEXT.test(id))) return true;
@@ -99,6 +168,8 @@ function isDiscordTurnProbe(body) {
     body?.message,
     body?.discordName,
     body?.username,
+    body?.actorName,
+    body?.actorFaction,
   ].map((value) => cleanBit(value)).filter(Boolean).join('\n');
   return PROBE_TEXT.test(blob);
 }
@@ -113,6 +184,8 @@ function buildDiscordTurnContent({
   username = '',
   discordName = '',
   seatLabel = '',
+  actorName = '',
+  actorFaction = '',
 } = {}) {
   const snowflake = resolveDiscordSnowflake({
     discordUserId,
@@ -122,28 +195,20 @@ function buildDiscordTurnContent({
     seatLabel,
     name: displayName,
   });
-  const bits = [cleanBit(faction) || 'seat'];
-  const phaseBit = cleanBit(phase);
-  if (phaseBit) bits.push(phaseBit);
-  const headText = bits.join(' · ');
+  const header = formatPingHeader({
+    displayName: actorName || displayName,
+    power: actorFaction || faction,
+    phase,
+  });
+  const sum = String(summary ?? '').replace(/\r\n/g, '\n').trim()
+    || `${NO_UNITS_LINE}\n${NO_TERRITORIES_LINE}`;
   const link = cleanBit(deepLink);
-  let sum = cleanBit(summary);
-  const prefix = snowflake ? `<@${snowflake}> ` : '';
-  const linkPart = link ? ` · ${link}` : '';
-  let line = sum ? `${prefix}${headText} · ${sum}${linkPart}` : `${prefix}${headText}${linkPart}`;
-  if (line.length > CONTENT_MAX && sum) {
-    const budget = CONTENT_MAX - prefix.length - headText.length - linkPart.length - 3;
-    if (budget > 8) {
-      sum = `${sum.slice(0, budget - 1).trimEnd()}…`;
-      line = `${prefix}${headText} · ${sum}${linkPart}`;
-    } else {
-      line = `${prefix}${headText}${linkPart}`;
-    }
-  }
-  if (line.length > CONTENT_MAX) {
-    line = `${line.slice(0, CONTENT_MAX - 1)}…`;
-  }
-  return line;
+  return clampDiscordContent([
+    snowflake ? `<@${snowflake}>` : '',
+    header,
+    ...sum.split('\n'),
+    link,
+  ], CONTENT_MAX);
 }
 
 function readWebhookUrl() {
@@ -217,6 +282,8 @@ module.exports = async function handler(req, res) {
     username: body.username || '',
     discordName: body.discordName || '',
     seatLabel: body.seatLabel || '',
+    actorName: body.actorName || '',
+    actorFaction: body.actorFaction || '',
   });
 
   if (isDiscordTurnProbe({ ...body, content })) {
