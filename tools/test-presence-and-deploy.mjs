@@ -126,6 +126,12 @@ const {
   resolveReconnectCopy,
   resolveRejoinHydratePlan,
   shouldReuseInFlightMultiplayerStart,
+  gameDocMatchesLobbyCode,
+  pickActiveGameForRejoin,
+  resolveSameMatchResume,
+  differentGameBlockMessage,
+  readResumeCodeFromSearch,
+  planResumeCodeFromUrl,
 } = await import(pathToFileURL(join(root, 'src/multiplayer/lastMatch.js')));
 const { resolveHostLobbyPrimaryCta, resolveStartGameTarget, shouldCreateNewGameOnResume, shouldShowListInOpenGames } =
   await import(pathToFileURL(join(root, 'src/multiplayer/lobbyStart.js')));
@@ -182,7 +188,7 @@ const unitDefs = {
 };
 
 console.log('=== Version stamps ===');
-check('GAME_VERSION is V2.81.57-unified.8', GAME_VERSION === 'V2.81.57-unified.8');
+check('GAME_VERSION is V2.81.57-unified.9', GAME_VERSION === 'V2.81.57-unified.9');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== Presence: background must not delete or go offline ===');
@@ -341,6 +347,17 @@ console.log('=== B25: session-lost host can still find ZUJMNP ===');
   check('E1/B25 P0: remembered gameId alone is still a join, never not-found',
     resolveJoinByCode({ userId: 'host', rememberedGameId: 'g-zuj' }).kind === 'game'
     && resolveJoinByCode({ userId: 'host', rememberedGameId: 'g-zuj' }).game.id === 'g-zuj');
+  check('seated started game wins over a waiting lobby with the same code',
+    resolveJoinByCode({
+      waitingLobby: { id: 'w', status: 'waiting', code: 'A29LPE' },
+      startedGame: { id: 'g-a29', status: 'active', playerUserIds: ['bastion'], lobbyCode: 'A29LPE' },
+      userId: 'bastion',
+    }).kind === 'game'
+    && resolveJoinByCode({
+      waitingLobby: { id: 'w', status: 'waiting', code: 'A29LPE' },
+      startedGame: { id: 'g-a29', status: 'active', playerUserIds: ['bastion'], lobbyCode: 'A29LPE' },
+      userId: 'stranger',
+    }).kind === 'lobby');
   check('token hiccup with a signed-in user still loads My Games',
     shouldAbortMyGamesOnTokenHiccup({ authUserPresent: true, tokenValid: false }) === false
     && shouldAbortMyGamesOnTokenHiccup({ authUserPresent: false, tokenValid: false }) === true);
@@ -1711,6 +1728,102 @@ console.log('=== V2.81.42 My Games hygiene + presence comments ===');
     shouldAccumulateHostOfflineMs({ hostPresence: 'idle' }) === false
     && shouldStartHostFailover({ hostPresence: 'idle', offlineForMs: 120000 }) === false
     && shouldStartHostFailover({ hostPresence: 'offline', offlineForMs: 90000 }) === true);
+}
+
+console.log('=== V2.81.57-unified.9 Bastion same-match rejoin ===');
+{
+  const seated = [{
+    id: 'game_a29',
+    status: 'active',
+    playerUserIds: ['bastion', 'other'],
+    lobbyData: { code: 'A29LPE', players: [{ oderId: 'bastion' }, { oderId: 'other' }] },
+    state: { round: 3, players: [{}, {}] },
+  }];
+  const otherLive = {
+    id: 'game_other',
+    status: 'active',
+    playerUserIds: ['bastion'],
+    lobbyCode: 'NEWGAM',
+    state: { players: [{}] },
+  };
+  check('nested lobbyData.code counts as the join code',
+    gameDocMatchesLobbyCode(seated[0], 'a29lpe') === true
+    && gameDocMatchesLobbyCode(seated[0], 'ZZZZZZ') === false);
+  const resumed = resolveSameMatchResume({
+    requestedCode: 'A29LPE',
+    lastMatch: { lobbyCode: 'A29LPE' },
+    seatedGames: seated,
+    intent: 'rejoin',
+  });
+  check('same-match rejoin resumes the seated doc, no gameId required',
+    resumed.action === 'resume'
+    && resumed.sameMatch === true
+    && resumed.game.id === 'game_a29');
+  check('code query miss still picks that seat over a lastMatch stub',
+    pickActiveGameForRejoin({
+      games: [
+        { id: 'stub', status: 'active', lobbyCode: 'A29LPE' },
+        seated[0],
+      ],
+      code: 'A29LPE',
+    })?.id === 'game_a29');
+  const blocked = resolveSameMatchResume({
+    requestedCode: 'ZZZZZZ',
+    lastMatch: { lobbyCode: 'A29LPE', gameId: 'game_a29' },
+    seatedGames: seated,
+    intent: 'join-code',
+  });
+  check('a different code stays blocked while still in the match',
+    blocked.action === 'block-other'
+    && blocked.sameMatch === false
+    && /A29LPE/.test(differentGameBlockMessage(blocked.code))
+    && /do not start a new one/i.test(differentGameBlockMessage(blocked.code)));
+  check('joining the other live game he is seated in is still a resume',
+    resolveSameMatchResume({
+      requestedCode: 'NEWGAM',
+      lastMatch: { lobbyCode: 'A29LPE', gameId: 'game_a29' },
+      seatedGames: [seated[0], otherLive],
+      intent: 'join-code',
+    }).action === 'resume');
+  check('Leave clears the block so another code is not foreign',
+    resolveSameMatchResume({
+      requestedCode: 'ZZZZZZ',
+      lastMatch: null,
+      seatedGames: seated,
+      intent: 'join-code',
+    }).action === 'miss');
+  const mem = {
+    data: {},
+    getItem(k) { return this.data[k] ?? null; },
+    setItem(k, v) { this.data[k] = String(v); },
+    removeItem(k) { delete this.data[k]; },
+  };
+  rememberLastMatch({ gameId: 'game_a29', lobbyCode: 'A29LPE', hostName: 'Bastion' }, mem);
+  rememberLastMatch({ lobbyCode: 'A29LPE' }, mem);
+  check('waiting snapshot does not wipe gameId for the same code',
+    readLastMatch(mem).gameId === 'game_a29' && readLastMatch(mem).lobbyCode === 'A29LPE');
+  rememberLastMatch({ lobbyCode: 'NEWGAM' }, mem);
+  check('a different code does not keep the old gameId',
+    readLastMatch(mem).lobbyCode === 'NEWGAM' && readLastMatch(mem).gameId === null);
+  check('resume link reads ?code= and same code resumes',
+    readResumeCodeFromSearch('?code=a29lpe') === 'A29LPE'
+    && readResumeCodeFromSearch('?code=nope') === null
+    && planResumeCodeFromUrl({
+      lastMatch: { gameId: 'game_a29', lobbyCode: 'A29LPE' },
+      urlCode: 'A29LPE',
+    }).action === 'resume');
+  check('resume link for a different code does not replace lastMatch',
+    planResumeCodeFromUrl({
+      lastMatch: { gameId: 'game_a29', lobbyCode: 'A29LPE' },
+      urlCode: 'ZZZZZZ',
+    }).action === 'block-other');
+  const lobbySrc9 = readFileSync(join(root, 'src/ui/multiplayerLobby.js'), 'utf8');
+  const mainSrc9 = readFileSync(join(root, 'src/main.js'), 'utf8');
+  check('reconnect offers My Games without Leave, and My Games keeps reconnect mode',
+    /data-action="open-my-games"/.test(lobbySrc9)
+    && /data-action="dismiss-rejoin"/.test(lobbySrc9)
+    && mainSrc9.includes('hide({ resetMode: false })')
+    && mainSrc9.includes('planResumeCodeFromUrl'));
 }
 
 console.log('=== V2.81.48 rejoin hydrate — no stub start, Leave clears lastMatch ===');

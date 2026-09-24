@@ -473,6 +473,9 @@ export class MultiplayerLobby {
       ${competing}
       ${ui.showDismissEscape ? `
       <div class="mp-footer-actions mp-rejoin-escape">
+        <button type="button" class="mp-secondary-btn" data-action="open-my-games">
+          My Games
+        </button>
         <button type="button" class="mp-secondary-btn" data-action="dismiss-rejoin">
           Leave this match / find another game
         </button>
@@ -1070,6 +1073,10 @@ export class MultiplayerLobby {
   }
 
   _bindEvents() {
+    this.el.querySelector('[data-action="open-my-games"]')?.addEventListener('click', () => {
+      this._openMyGames();
+    });
+
     this.el.querySelector('[data-action="dismiss-rejoin"]')?.addEventListener('click', () => {
       this._rejoinDismissed = true;
       this._fromReconnect = false;

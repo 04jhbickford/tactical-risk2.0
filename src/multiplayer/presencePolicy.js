@@ -213,8 +213,22 @@ export function isSeatedInStartedGame({ game, lobby, userId } = {}) {
   return !!game;
 }
 
-// Join-by-code: a started match is still the same code. Waiting lobby
-// first; otherwise any lobby/game with that code.
+// Explicit seat only. The `!!game` fallback in isSeatedInStartedGame must
+// not let an empty playerUserIds doc shadow a real waiting room.
+function isExplicitSeat({ game, lobby, userId, rememberedGameId } = {}) {
+  if (rememberedGameId && game?.id && rememberedGameId === game.id) return true;
+  if (!userId || !game) return false;
+  const ids = game.playerUserIds;
+  if (Array.isArray(ids) && ids.includes(userId)) return true;
+  const lobbyPlayers = lobby?.players || game.lobbyData?.players || [];
+  if (lobbyPlayers.some((p) => p && p.oderId === userId)) return true;
+  if (game.startedBy === userId) return true;
+  if (lobby?.hostId === userId) return true;
+  return false;
+}
+
+// Join-by-code: a started match the player is already in wins over a
+// waiting lobby with the same code. A new player still enters the room.
 export function resolveJoinByCode({
   waitingLobby,
   anyLobby,
@@ -222,6 +236,14 @@ export function resolveJoinByCode({
   userId,
   rememberedGameId = null,
 } = {}) {
+  if (startedGame && isExplicitSeat({
+    game: startedGame,
+    lobby: anyLobby,
+    userId,
+    rememberedGameId,
+  })) {
+    return { kind: 'game', game: startedGame };
+  }
   if (waitingLobby) return { kind: 'lobby', lobby: waitingLobby };
   if (startedGame && (
     isSeatedInStartedGame({

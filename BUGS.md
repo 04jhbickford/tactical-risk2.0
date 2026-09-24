@@ -2,6 +2,20 @@
 
 ---
 
+## 9.24.26 — unified.9 Bastion same-match rejoin
+
+Stamp `V2.81.57-unified.9`. Schema stays 11.
+
+Bastion (Sean Benson), Discord `#tactical-risk` `1552524045868597288`, live `V2.81.57-unified.8`, code A29LPE. Rejoin painted the red line “Still in A29LPE — the match is live. Open My Games or tap Rejoin.” The match was live. The only way back in was Leave, then rejoin.
+
+Cause: that red line is `resolveJoinNotFoundError`, the join-by-code miss. Rejoin of the match he was already in took that path when `lastMatch` had the code and no `gameId` (a waiting-lobby snapshot rewrote the same code and cleared the id) and the `lobbyCode` query missed. My Games was hidden on that screen, and the Rejoin button repeated the miss. Leave only clears the local hint, so the seat query could then open the same doc.
+
+Fix: same-match Rejoin / `?code=` / My Games resumes the seated game (`playerUserIds`, including a code that lives only on `lobbyData.code`). A waiting snapshot no longer drops `gameId` for the same code. A started game he is seated in wins over a waiting lobby with that code. A different code stays blocked until Leave. Leave still clears the hint.
+
+Receipt: `node tools/test-presence-and-deploy.mjs`.
+
+---
+
 ## 9.23.26 — unified.8 turn-ping Rob format
 
 Stamp `V2.81.57-unified.8`. Schema stays 11.

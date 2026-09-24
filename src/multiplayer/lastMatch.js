@@ -38,10 +38,15 @@ export function rememberLastMatch({
   if (!storage?.setItem) return null;
   const code = resolveLobbyCodeFromGameDoc({ lobbyCode, code: lobbyCode });
   if (!gameId && !code) return null;
+  // A waiting-lobby snapshot has no gameId. Rewriting the same code must
+  // not wipe the started id — that wipe is what sent Rejoin through the
+  // "still in the match" not-found wall.
+  const prev = readLastMatch(storage);
+  const sameCode = !!(prev?.lobbyCode && code && prev.lobbyCode === code);
   const next = {
-    gameId: gameId || null,
+    gameId: gameId || (sameCode ? prev.gameId : null) || null,
     lobbyCode: code,
-    hostName: hostName || null,
+    hostName: hostName || (sameCode ? prev?.hostName : null) || null,
     at: Date.now(),
   };
   storage.setItem(LAST_MATCH_KEY, JSON.stringify(next));
@@ -193,6 +198,9 @@ export function shouldForgetLastMatchOnBackground() {
 }
 
 // Never the string "Lobby not found" — that is how ZUJMNP died after Sign In.
+// This is a lookup miss, not a successful rejoin. Same-match resume must run
+// first (resolveSameMatchResume). Showing this on the Rejoin screen is a
+// dead end: the button that produced it is the one the copy tells you to tap.
 export function resolveJoinNotFoundError({ lastMatch = null, code = null } = {}) {
   const remembered = lastMatchForJoinCode({ lastMatch, code });
   const upper = code ? String(code).toUpperCase() : null;
@@ -200,6 +208,119 @@ export function resolveJoinNotFoundError({ lastMatch = null, code = null } = {})
     return `Still in ${upper} — the match is live. Open My Games or tap Rejoin.`;
   }
   return 'No waiting lobby with that code. If the match already started, open My Games — it stays listed there.';
+}
+
+export function gameDocMatchesLobbyCode(game, code) {
+  if (!game || !code) return false;
+  const found = resolveLobbyCodeFromGameDoc(game);
+  return !!found && found === String(code).toUpperCase();
+}
+
+// A lastMatch stub has an id and a code but no seat payload. A real seated
+// doc must win over that stub when both are in the list.
+function isSeatStub(game) {
+  if (!game?.id) return true;
+  if (Array.isArray(game.playerUserIds) && game.playerUserIds.length) return false;
+  if (game.state) return false;
+  if (game.lobbyData?.players?.length) return false;
+  if (game.startedBy) return false;
+  return true;
+}
+
+export function pickActiveGameForRejoin({
+  games = [],
+  code = null,
+  gameId = null,
+  allowSole = false,
+} = {}) {
+  const list = (games || []).filter((g) => shouldListGameInMyGames(g));
+  const real = list.filter((g) => !isSeatStub(g));
+  const want = code ? String(code).toUpperCase() : null;
+
+  const byCode = (pool) => {
+    if (!want) return null;
+    const matches = pool.filter((g) => gameDocMatchesLobbyCode(g, want));
+    if (!matches.length) return null;
+    return matches.find((g) => g.status === 'active') || matches[0];
+  };
+  const byId = (pool) => (gameId ? pool.find((g) => g.id === gameId) || null : null);
+
+  const coded = byCode(real) || byCode(list);
+  if (coded) return coded;
+  const identified = byId(real) || byId(list);
+  if (identified) return identified;
+
+  if (allowSole && real.length === 1) {
+    const only = real[0];
+    const onlyCode = resolveLobbyCodeFromGameDoc(only);
+    if (!want || !onlyCode || onlyCode === want || only.id === gameId) return only;
+  }
+  return null;
+}
+
+// Rejoin / My Games / ?code= of the match you are already in resumes that
+// doc. A different code, while lastMatch is still held, stays blocked.
+// Leave clears lastMatch; after that, finding another game is allowed.
+export function resolveSameMatchResume({
+  requestedCode = null,
+  lastMatch = null,
+  seatedGames = [],
+  intent = 'rejoin',
+} = {}) {
+  const code = requestedCode
+    ? String(requestedCode).toUpperCase()
+    : (lastMatch?.lobbyCode || null);
+  const foreignCode = !!(code && lastMatch?.lobbyCode && lastMatch.lobbyCode !== code);
+  const game = pickActiveGameForRejoin({
+    games: seatedGames,
+    code,
+    gameId: foreignCode ? null : (lastMatch?.gameId || null),
+    allowSole: intent === 'rejoin' && !foreignCode,
+  });
+  if (game && (!foreignCode || gameDocMatchesLobbyCode(game, code))) {
+    return { action: 'resume', game, sameMatch: true, code: lastMatch?.lobbyCode || code };
+  }
+  if (foreignCode && (lastMatch?.gameId || lastMatch?.lobbyCode)) {
+    return { action: 'block-other', game: null, sameMatch: false, code: lastMatch.lobbyCode };
+  }
+  return { action: 'miss', game: null, sameMatch: !foreignCode, code: code || lastMatch?.lobbyCode || null };
+}
+
+export function differentGameBlockMessage(code) {
+  const stuck = code || 'the match';
+  return `You are still in ${stuck}. Rejoin that match — do not start a new one.`;
+}
+
+export function readResumeCodeFromSearch(search = '') {
+  const raw = String(search || '');
+  const q = raw.includes('?') ? raw.slice(raw.indexOf('?')) : raw;
+  let params;
+  try {
+    params = new URLSearchParams(q.startsWith('?') || q === '' ? q : `?${q}`);
+  } catch {
+    return null;
+  }
+  const code = String(params.get('code') || '').toUpperCase();
+  return /^[A-Z2-9]{6}$/.test(code) ? code : null;
+}
+
+// Discord resume links are ?code= only. Same code resumes. A different
+// code does not replace the match you are still in.
+export function planResumeCodeFromUrl({ lastMatch = null, urlCode = null } = {}) {
+  if (!urlCode) return { action: 'default', lastMatch: lastMatch || null, urlCode: null };
+  const code = String(urlCode).toUpperCase();
+  if (lastMatch?.lobbyCode && lastMatch.lobbyCode !== code) {
+    return { action: 'block-other', lastMatch, urlCode: code };
+  }
+  return {
+    action: 'resume',
+    urlCode: code,
+    lastMatch: {
+      gameId: lastMatch?.gameId || null,
+      lobbyCode: code,
+      hostName: lastMatch?.hostName || null,
+    },
+  };
 }
 
 // Guest-facing copy. Idle / missing host is "reconnecting", not "game over".

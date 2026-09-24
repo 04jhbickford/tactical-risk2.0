@@ -200,7 +200,7 @@ const check = (label, cond) => {
 };
 
 console.log('=== Version stamps ===');
-check('GAME_VERSION is V2.81.57-unified.8', GAME_VERSION === 'V2.81.57-unified.8');
+check('GAME_VERSION is V2.81.57-unified.9', GAME_VERSION === 'V2.81.57-unified.9');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== resolveMapRightEdge ===');

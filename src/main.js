@@ -173,6 +173,8 @@ import {
   shouldForgetLastMatchOnHydrateFailure,
   shouldReuseInFlightMultiplayerStart,
   resolvePlayOnlineDestination,
+  readResumeCodeFromSearch,
+  planResumeCodeFromUrl,
 } from './multiplayer/lastMatch.js';
 import { AuthScreen } from './ui/authScreen.js';
 import { MultiplayerLobby } from './ui/multiplayerLobby.js';
@@ -2012,7 +2014,7 @@ async function init() {
               multiplayerLobby.show();
             };
           }
-          multiplayerLobby.hide();
+          multiplayerLobby.hide({ resetMode: false });
           gameListUI.show();
         } else if (action === 'rejoin-auth') {
           showRejoinAuth();
@@ -2236,10 +2238,22 @@ async function init() {
   // lobby (lobbyCode only) is not a started map — stay on Main Menu
   // (9.20.26.09). Do not pin the branded loader across tile fetches.
   const lastAtBoot = readLastMatch();
-  const bootResume = shouldAutoResumeLastMatch({
-    signedIn: true,
-    lastMatch: lastAtBoot,
-  });
+  const urlCode = typeof location !== 'undefined'
+    ? readResumeCodeFromSearch(location.search)
+    : null;
+  const urlPlan = planResumeCodeFromUrl({ lastMatch: lastAtBoot, urlCode });
+  // Same-code resume link joins that match. A different code must not
+  // replace the match this browser is still in.
+  if (urlPlan.action === 'resume' && urlCode) {
+    rememberLastMatch(urlPlan.lastMatch);
+  }
+  const bootLast = urlPlan.action === 'block-other' ? lastAtBoot : readLastMatch();
+  const bootResume = urlPlan.action === 'block-other'
+    ? !!(lastAtBoot?.gameId || lastAtBoot?.lobbyCode)
+    : (
+      shouldAutoResumeLastMatch({ signedIn: true, lastMatch: bootLast })
+      || urlPlan.action === 'resume'
+    );
   if (bootResume) {
     lobby.hide();
     reportStartupStatus('Rejoining match…', 70);
