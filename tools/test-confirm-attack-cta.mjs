@@ -44,7 +44,7 @@ function assert(cond, msg) {
   }
 }
 
-assert(GAME_VERSION === 'V2.81.57-unified.8', 'stamp is unified.2');
+assert(GAME_VERSION === 'V2.81.57-unified.9', 'stamp is unified.2');
 
 const hiddenZoom = {
   hidden: true,

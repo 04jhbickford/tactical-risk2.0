@@ -31,6 +31,9 @@ import {
   forgetLastMatch,
   recoverMyGamesOnLoad,
   resolveJoinNotFoundError,
+  resolveSameMatchResume,
+  differentGameBlockMessage,
+  gameDocMatchesLobbyCode,
   shouldClearLobbyOnSnapshotError,
   shouldKeepLastKnownLobby,
   hasHydratePayload,
@@ -202,6 +205,25 @@ export class LobbyManager {
     }
   }
 
+  // Seat list (playerUserIds), not the lobbyCode query. Same-match Rejoin
+  // uses this when the code lookup misses. A different code stays blocked
+  // until Leave clears lastMatch.
+  async _lookupSameMatch(code, intent) {
+    let seatedGames = [];
+    try {
+      seatedGames = await this.getMyActiveGames();
+    } catch (error) {
+      console.warn('[LobbyManager] seated-game lookup failed', error);
+      seatedGames = [];
+    }
+    return resolveSameMatchResume({
+      requestedCode: code || null,
+      lastMatch: readLastMatch(),
+      seatedGames,
+      intent: intent || 'rejoin',
+    });
+  }
+
   // Boot / Rejoin / Play Online: fetch a live doc, never start from a stub.
   async hydrateLastMatch(lastMatch = readLastMatch()) {
     const user = this.authManager.getUser();
@@ -225,6 +247,10 @@ export class LobbyManager {
           fetchedGame = await this.findGameByCode(lastMatch.lobbyCode);
         }
         if (!fetchedGame) {
+          const seatedOnError = await this._lookupSameMatch(lastMatch.lobbyCode, 'rejoin');
+          if (seatedOnError?.action === 'resume' && seatedOnError.game?.id) {
+            return { kind: 'game', gameId: seatedOnError.game.id, game: seatedOnError.game };
+          }
           return { kind: 'error', error: loaded.error || 'Could not load the live match.' };
         }
       }
@@ -234,14 +260,30 @@ export class LobbyManager {
       if (fetchedGame) fetchedMissing = false;
     }
 
-    if (fetchedGame) {
-      if (fetchedGame.status && !shouldReconnectToGame({
-        exists: true,
-        status: fetchedGame.status,
-      })) {
-        return { kind: 'finished', game: fetchedGame, error: 'That game is no longer active.' };
-      }
+    const joinable = fetchedGame && (
+      !fetchedGame.status
+      || shouldReconnectToGame({ exists: true, status: fetchedGame.status })
+    );
+    const wantCode = lastMatch?.lobbyCode || null;
+    const codeMismatch = !!(
+      joinable
+      && wantCode
+      && !gameDocMatchesLobbyCode(fetchedGame, wantCode)
+      && (fetchedGame.lobbyCode || fetchedGame.code || fetchedGame.lobbyData?.code)
+    );
+    if (joinable && !codeMismatch) {
       return { kind: 'game', gameId: fetchedGame.id, game: fetchedGame };
+    }
+
+    // Code query missed, the remembered id is a different match, or that
+    // doc is finished. The player may still be seated in the requested code.
+    const seated = await this._lookupSameMatch(wantCode, 'rejoin');
+    if (seated?.action === 'resume' && seated.game?.id) {
+      return { kind: 'game', gameId: seated.game.id, game: seated.game };
+    }
+
+    if (fetchedGame && !codeMismatch) {
+      return { kind: 'finished', game: fetchedGame, error: 'That game is no longer active.' };
     }
 
     if (lastMatch?.lobbyCode) {
@@ -417,8 +459,25 @@ export class LobbyManager {
       return { success: false, error: 'Game already started' };
     }
     if (resolved.kind === 'not-found') {
+      const seated = await this._lookupSameMatch(code, 'join-code');
+      if (seated?.action === 'resume' && seated.game?.id) {
+        return { success: true, isGame: true, gameId: seated.game.id, game: seated.game };
+      }
+      if (seated?.action === 'block-other') {
+        return { success: false, error: differentGameBlockMessage(seated.code) };
+      }
       if (remembered?.gameId) {
         const fetched = await this.getGameById(remembered.gameId);
+        if (fetched && (!fetched.status || shouldReconnectToGame({
+          exists: true,
+          status: fetched.status,
+        }))) {
+          return { success: true, isGame: true, gameId: fetched.id, game: fetched };
+        }
+        const again = await this._lookupSameMatch(code, 'rejoin');
+        if (again?.action === 'resume' && again.game?.id) {
+          return { success: true, isGame: true, gameId: again.game.id, game: again.game };
+        }
         if (fetched) {
           return { success: true, isGame: true, gameId: fetched.id, game: fetched };
         }
