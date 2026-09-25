@@ -27,6 +27,17 @@ import { airCombatMoveMayOccupy, landOnlySeaAttackIllegal, moveSelectionProfile,
 import { cascadeUndoIndexes } from './moveUndo.js';
 import { emitGameEvent, summarizeUnits } from '../multiplayer/gameEventLog.js';
 import { omitUndefinedDeep } from './persistState.js';
+
+function cloneMoveHistory(rows) {
+  if (!Array.isArray(rows)) return [];
+  return rows.map((row) => {
+    if (!row || typeof row !== 'object') return row;
+    const copy = { ...row };
+    if (Array.isArray(row.units)) copy.units = row.units.map((unit) => ({ ...unit }));
+    if (Array.isArray(row.shipIds)) copy.shipIds = row.shipIds.slice();
+    return copy;
+  });
+}
 import { captureIfAttackerHolds, finalizeAttackerHoldsOnBoard } from './combatFinalize.js';
 import {
   canPlaceAirOnCarrierInSeaZone,
@@ -5906,6 +5917,11 @@ export class GameState {
       // Default false = AI pauses when no human is present. Old clients ignore
       // the extra field; a missing field loads as false. See aiPolicy.js.
       aiRunsWhenUnattended: this.aiRunsWhenUnattended ?? false,
+      // Additive (no schema bump): per-row Undo for the current turn.
+      // Old saves omit the fields and load as [] / 0. nextTurn still clears
+      // both. Undo refuses a row whose player is not the current seat.
+      moveHistory: cloneMoveHistory(this.moveHistory),
+      undoLockMoveCount: Number(this.undoLockMoveCount) || 0,
       // Monotonic board revision. A cloud snapshot with a lower seq must not
       // clobber in-progress moves (9.21.26.04).
       actionSeq: Number(this.actionSeq) || 0,
@@ -6042,7 +6058,11 @@ export class GameState {
     }
     this.amphibiousTerritories = new Set();
     this.amphibiousAssaultDetails = {};
-    this.moveHistory = [];
+    // Optional fields. A save from before this build has neither.
+    this.moveHistory = cloneMoveHistory(data.moveHistory);
+    this.undoLockMoveCount = Number.isFinite(Number(data.undoLockMoveCount))
+      ? Number(data.undoLockMoveCount)
+      : 0;
     this.conqueredThisTurn = {};
     this.capturedThisTurn = new Set(data.capturedThisTurn || []);
 

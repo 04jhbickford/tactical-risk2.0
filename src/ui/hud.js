@@ -5,6 +5,7 @@ import { possessivePhrase } from '../utils/possessive.js';
 import { isMobileShell, formatMobilePhaseWord, formatMobilePlayerMeta, readableFactionTextColor, setShellFlag, shouldShowPhoneMenuPlayerRoster, isPhoneSetupPhase, phoneMenuHomeActions } from './mobileShell.js';
 import { syncBottomSurfaces } from './bottomSurface.js';
 import { resolveHudClarity, shouldShowHudTicker } from './hudClarity.js';
+import { confirmChoice } from './confirmChoice.js';
 
 export class HUD {
   constructor() {
@@ -463,11 +464,14 @@ export class HUD {
       });
     });
 
-    const phaseTipsItem = this.el.querySelector('[data-action="phase-tips"]');
-    phaseTipsItem?.addEventListener('click', () => {
-      this.menuOpen = false;
-      this._updateMenuState();
-      if (this.onPhaseTips) this.onPhaseTips();
+    // The phone sheet row is the second [data-action="phase-tips"].
+    // querySelector bound only the ? button, so the row did nothing.
+    this.el.querySelectorAll('[data-action="phase-tips"]').forEach((phaseTipsItem) => {
+      phaseTipsItem.addEventListener('click', () => {
+        this.menuOpen = false;
+        this._updateMenuState();
+        if (this.onPhaseTips) this.onPhaseTips();
+      });
     });
 
     // Rules menu item (desktop dropdown or phone sheet row)
@@ -480,7 +484,8 @@ export class HUD {
       }
     });
 
-    // Exit to lobby menu item
+    // Exit to lobby menu item. In-app confirm: window.confirm is a no-op
+    // in Discord and some iOS web views.
     const exitItem = this.el.querySelector('[data-action="exit-lobby"]');
     exitItem?.addEventListener('click', () => {
       this.menuOpen = false;
@@ -491,9 +496,13 @@ export class HUD {
         const message = isMultiplayer
           ? 'Exit to lobby? Your game is saved and you can resume later.'
           : 'Exit to lobby? Your game progress will be lost.';
-        if (confirm(message)) {
-          this.onExitToLobby();
-        }
+        void confirmChoice({
+          message,
+          confirmLabel: 'Save & Exit',
+          cancelLabel: 'Cancel',
+        }).then((ok) => {
+          if (ok) this.onExitToLobby();
+        });
       }
     });
 
@@ -505,9 +514,13 @@ export class HUD {
         const message = this.gameState?.isMultiplayer
           ? 'Resign from this game? Your territories become neutral and your units are removed. If no seated humans remain, the game is deleted. This cannot be undone.'
           : 'Resign from this game? Your territories become neutral and your units are removed. If no humans remain, the game ends. This cannot be undone.';
-        if (confirm(message)) {
-          this.onResign();
-        }
+        void confirmChoice({
+          message,
+          confirmLabel: 'Resign',
+          cancelLabel: 'Cancel',
+        }).then((ok) => {
+          if (ok) this.onResign();
+        });
       }
     });
   }
