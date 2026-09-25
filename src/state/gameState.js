@@ -3104,6 +3104,7 @@ export class GameState {
     // Per A&A rules: Only LAND units can capture territory - air units cannot hold ground
     let captured = false;
     let cardAwarded = null;
+    let captureEventIdx = null;
 
     // Check if we moved any land units (only land units can capture)
     const movedLandUnits = unitsToMove.some(u => {
@@ -3132,11 +3133,14 @@ export class GameState {
         for (const blitzedTerrName of blitzedTerritories) {
           const blitzedOwner = this.getOwner(blitzedTerrName);
           if (blitzedOwner && blitzedOwner !== player.id) {
-            // Track for undo
-            blitzedCaptures.push({ territory: blitzedTerrName, previousOwner: blitzedOwner });
-
-            // Capture the territory
+            // Capture the territory, then record it so a turn ping can list it.
             this.territoryState[blitzedTerrName].owner = player.id;
+            const blitzed = {
+              territory: blitzedTerrName,
+              previousOwner: blitzedOwner,
+              captureEventIdx: this._recordTerritoryCapture(blitzedTerrName, blitzedOwner, player.id),
+            };
+            blitzedCaptures.push(blitzed);
 
             // Award Risk card for conquering (one per turn per Risk rules)
             if (!this.conqueredThisTurn[player.id]) {
@@ -3157,6 +3161,7 @@ export class GameState {
         // Capture the territory immediately
         this.territoryState[toTerritory].owner = player.id;
         captured = true;
+        captureEventIdx = this._recordTerritoryCapture(toTerritory, toOwner, player.id);
 
         // Award Risk card for conquering (one per turn per Risk rules)
         if (!this.conqueredThisTurn[player.id]) {
@@ -3179,6 +3184,7 @@ export class GameState {
       loadedOntoCarrier: landingOnCarrier, // Track for undo - remove from aircraft
       launchedFromCarrier: Object.keys(launchedFromCarrier).length > 0 ? launchedFromCarrier : undefined,
       blitzedCaptures: blitzedCaptures.length > 0 ? blitzedCaptures : undefined, // Track blitzed territories for undo
+      ...(Number.isInteger(captureEventIdx) ? { captureEventIdx } : {}),
     });
 
     // Track air unit origins for post-combat landing (combat move only)
@@ -3413,6 +3419,7 @@ export class GameState {
       }
       if (lastMove.captured && lastMove.previousOwner && this.territoryState[lastMove.to]) {
         this.territoryState[lastMove.to].owner = lastMove.previousOwner;
+        this._markCaptureEventUndone(lastMove.captureEventIdx, lastMove.to, lastMove.player);
       }
       return { success: true };
     }
@@ -3548,12 +3555,14 @@ export class GameState {
     // If territory was captured by this move, restore previous owner
     if (lastMove.captured && lastMove.previousOwner) {
       this.territoryState[lastMove.to].owner = lastMove.previousOwner;
+      this._markCaptureEventUndone(lastMove.captureEventIdx, lastMove.to, lastMove.player);
     }
 
     // Restore blitzed territories to their previous owners
     if (lastMove.blitzedCaptures && lastMove.blitzedCaptures.length > 0) {
       for (const blitzed of lastMove.blitzedCaptures) {
         this.territoryState[blitzed.territory].owner = blitzed.previousOwner;
+        this._markCaptureEventUndone(blitzed.captureEventIdx, blitzed.territory, lastMove.player);
       }
     }
 
@@ -3899,6 +3908,19 @@ export class GameState {
     const t = this.territoryByName[territory];
     const isNavalBattle = t?.isWater;
 
+    // Count diff for the turn ping. attackerCasualties are the defender's
+    // hits, so the arrays are the wrong source; a damaged battleship is not
+    // a loss until its quantity drops. Ledger is in-memory only (not saved).
+    const beforeCounts = this._combatUnitCounts(units);
+    const landOwner = this.getOwner(territory);
+    this._openCombatLossLedger(
+      territory,
+      player.id,
+      isNavalBattle
+        ? this._mainEnemyOwner(allDefenders, player.id)
+        : (landOwner || this._mainEnemyOwner(allDefenders, player.id)),
+    );
+
     // Shore bombardment: ships in adjacent sea zones can bombard land battles (first round only)
     let bombardmentHits = 0;
     let bombardmentRolls = [];
@@ -3926,6 +3948,7 @@ export class GameState {
     // Clean up destroyed units (quantity <= 0)
     // IMPORTANT: Preserve factories - they are captured, never destroyed
     this.units[territory] = units.filter(u => u.quantity > 0 || u.type === 'factory');
+    this._noteCombatRoundLosses(territory, beforeCounts);
 
     // Check if combat is over
     // Note: Factories are captured (not destroyed) and AA guns have 0 combat value
@@ -3955,7 +3978,8 @@ export class GameState {
     };
 
     if (remainingDefenders.length === 0) {
-      // Attacker wins
+      // Attacker wins. Combat event first, then the capture, matching combatUI.
+      this._flushCombatLossLedger(territory, 'attacker');
       if (isNavalBattle) {
         // Naval battle won - mark sea zone as cleared for shore bombardment
         this.markSeaZoneCleared(territory);
@@ -3998,6 +4022,7 @@ export class GameState {
       result.winner = 'attacker';
       result.conquered = !isNavalBattle; // Only land territories are "conquered"
     } else if (remainingAttackers.length === 0) {
+      this._flushCombatLossLedger(territory, 'defender');
       // Repair surviving damaged ships
       this._repairDamagedShips(this.units[territory], unitDefs);
       this.combatQueue = this.combatQueue.filter(t => t !== territory);
@@ -4693,6 +4718,134 @@ export class GameState {
     return !hasUnits && ownedTerritories.length === 0;
   }
 
+  // Per-owner unit counts, factories excluded. Numbers only, so later
+  // casualty mutation cannot change the snapshot.
+  _combatUnitCounts(units) {
+    const byOwner = {};
+    for (const unit of units || []) {
+      if (!unit || unit.type === 'factory' || !unit.owner || !unit.type) continue;
+      const qty = Number(unit.quantity) || 0;
+      if (qty <= 0) continue;
+      const bucket = byOwner[unit.owner] || (byOwner[unit.owner] = {});
+      bucket[unit.type] = (bucket[unit.type] || 0) + qty;
+    }
+    return byOwner;
+  }
+
+  // Sea zones have no owner. The main defender is whoever has the most
+  // enemy units; the first owner wins a tie.
+  _mainEnemyOwner(units, attackerId) {
+    const totals = new Map();
+    let best = null;
+    let bestQty = -1;
+    for (const unit of units || []) {
+      if (!unit || unit.type === 'factory' || !unit.owner) continue;
+      if (unit.owner === attackerId || this.areAllies(attackerId, unit.owner)) continue;
+      const qty = Number(unit.quantity) || 0;
+      if (qty <= 0) continue;
+      const next = (totals.get(unit.owner) || 0) + qty;
+      totals.set(unit.owner, next);
+      if (next > bestQty) {
+        bestQty = next;
+        best = unit.owner;
+      }
+    }
+    return best;
+  }
+
+  _openCombatLossLedger(territory, attackerId, defenderId) {
+    if (!this._combatLossLedger) this._combatLossLedger = {};
+    if (!this._combatLossLedger[territory]) {
+      this._combatLossLedger[territory] = {
+        attackerId,
+        defenderId: defenderId || null,
+        byOwner: {},
+      };
+    }
+  }
+
+  _noteCombatRoundLosses(territory, beforeCounts) {
+    const ledger = this._combatLossLedger?.[territory];
+    if (!ledger) return;
+    const after = this._combatUnitCounts(this.units[territory]);
+    for (const [owner, types] of Object.entries(beforeCounts || {})) {
+      for (const [type, n] of Object.entries(types)) {
+        const lost = n - (after[owner]?.[type] || 0);
+        if (lost <= 0) continue;
+        const bucket = ledger.byOwner[owner] || (ledger.byOwner[owner] = {});
+        bucket[type] = (bucket[type] || 0) + lost;
+      }
+    }
+  }
+
+  _copyLossMap(map) {
+    const out = {};
+    if (!map) return out;
+    for (const [type, n] of Object.entries(map)) {
+      const qty = Number(n) || 0;
+      if (type && qty > 0) out[type] = qty;
+    }
+    return out;
+  }
+
+  _playerLabel(playerId) {
+    if (!playerId) return null;
+    return this.getPlayer(playerId)?.name || playerId;
+  }
+
+  // One combat event for the battle, plus one per other owner who lost units.
+  // Drop the ledger. It is not part of the save.
+  _flushCombatLossLedger(territory, winner) {
+    const ledger = this._combatLossLedger?.[territory];
+    if (this._combatLossLedger) delete this._combatLossLedger[territory];
+    if (!ledger) return;
+    const player = this.currentPlayer;
+    if (!player) return;
+    const attackerName = player.name || player.id || null;
+    const defenderId = ledger.defenderId || null;
+    this.logCombat({
+      territory,
+      attacker: attackerName,
+      defender: this._playerLabel(defenderId),
+      attackerId: player.id,
+      defenderId,
+      winner,
+      attackerLosses: this._copyLossMap(ledger.byOwner[player.id]),
+      defenderLosses: this._copyLossMap(defenderId ? ledger.byOwner[defenderId] : null),
+    });
+    for (const owner of Object.keys(ledger.byOwner)) {
+      if (owner === player.id) continue;
+      if (defenderId && owner === defenderId) continue;
+      const defenderLosses = this._copyLossMap(ledger.byOwner[owner]);
+      if (!Object.keys(defenderLosses).length) continue;
+      this.logCombat({
+        territory,
+        attacker: attackerName,
+        defender: this._playerLabel(owner),
+        attackerId: player.id,
+        defenderId: owner,
+        winner,
+        attackerLosses: {},
+        defenderLosses,
+      });
+    }
+  }
+
+  _recordTerritoryCapture(territory, fromPlayer, toPlayer) {
+    this.logTerritoryCapture(territory, fromPlayer ?? null, toPlayer ?? null);
+    return this.turnEvents.length - 1;
+  }
+
+  // Ping cursors are event indexes, so an undo marks the row instead of
+  // splicing it. A stale index that no longer matches is left alone.
+  _markCaptureEventUndone(eventIdx, territory, toPlayer) {
+    if (!Number.isInteger(eventIdx) || eventIdx < 0) return;
+    const ev = this.turnEvents?.[eventIdx];
+    if (!ev || ev.type !== 'territory_captured') return;
+    if (ev.territory !== territory || ev.toPlayer !== toPlayer) return;
+    ev.undone = true;
+  }
+
   // Add a combat result to the log
   logCombat(result) {
     const attackerLosses = result.attackerLosses ?? 0;
@@ -5040,7 +5193,8 @@ export class GameState {
       this.conqueredThisTurn[player.id] = true;
       cardAwarded = this.awardRiskCard(player.id);
     }
-    return { captured: true, previousOwner: owner || null, cardAwarded };
+    const eventIdx = this._recordTerritoryCapture(territoryName, owner || null, player.id);
+    return { captured: true, previousOwner: owner || null, cardAwarded, eventIdx };
   }
 
   // Load a unit onto a transport in the same sea zone
@@ -5317,6 +5471,7 @@ export class GameState {
         transportId: transport.id,
         captured: !!capture?.captured,
         previousOwner: capture?.previousOwner || null,
+        ...(Number.isInteger(capture?.eventIdx) ? { captureEventIdx: capture.eventIdx } : {}),
       });
     }
 
@@ -5416,6 +5571,7 @@ export class GameState {
       transportId: transport.id,
       captured: !!capture?.captured,
       previousOwner: capture?.previousOwner || null,
+      ...(Number.isInteger(capture?.eventIdx) ? { captureEventIdx: capture.eventIdx } : {}),
     });
 
     this._notify();

@@ -1,4 +1,4 @@
-// V2.81.57-unified.14 — a million offline _rollDie faces stay inside
+// V2.81.57-unified.14.1 — a million offline _rollDie faces stay inside
 // the fair chi-square band. Seeded RNG is deterministic; one real
 // Math.random pass is only a smoke run.
 // Run: node tools/test-dice-uniform.mjs

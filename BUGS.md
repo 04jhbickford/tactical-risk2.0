@@ -2,6 +2,20 @@
 
 ---
 
+## 9.25.26 — unified.14.1 turn ping lists AI battle losses
+
+Stamp `V2.81.57-unified.14.1`. Schema stays 11.
+
+Rob, Discord `#tactical-risk` `1553165985161281637` (Fri 25 Sep 3:07pm PT), about `#turn-ping` `1553156337092005948` (game TXVKJB): the ping should list which units were lost in which territories. That ping said Germany lost Turkey and Kenya-Rhodesia and lost no units.
+
+Cause: `resolveCombat` (the AI battle path) removed casualties and logged the capture, and never called `logCombat`. Empty walk-ins, blitzes, and amphibious landings flipped the owner without `logTerritoryCapture`. Human battles through the combat screen were already logged.
+
+Fix: each dice round in `resolveCombat` diffs unit counts (a damaged battleship is not a loss) and, when the battle ends, writes one combat event before the capture. Walk-in, blitz, and empty amphibious captures log a territory event and store its index on the move. Undo marks that event `undone` instead of splicing it, and the ping skips `undone` rows. Dice, casualties, and captures are unchanged.
+
+Receipt: `node tools/test-turn-ping-ai-losses.mjs`.
+
+---
+
 ## 9.25.26 — unified.14 game options panel
 
 Stamp `V2.81.57-unified.14`. Schema stays 11.
