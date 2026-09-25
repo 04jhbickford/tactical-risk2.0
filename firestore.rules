@@ -15,6 +15,71 @@ service cloud.firestore {
              && request.auth.token.email == 'bickford.james@gmail.com';
     }
 
+    // Dice stats (observe-only). Limits, documented for reviewers:
+    // - diceBatches are create-only. writerUid must be the signed-in user.
+    //   Same id (game_round_seq_uid) makes a retry fail closed, so it cannot
+    //   double-count. Rules check the envelope plus the first and last die;
+    //   rules have no list loop for every face in the middle.
+    // - diceStats accepts non-negative numeric increases of at most 240 on
+    //   n / faces / high-low runs, and n's increase must equal the face
+    //   increases. longestStreak may only rise, by at most 240.
+    // - Unit, seat, and transition fields are not each matched. A signed-in
+    //   client can add other numeric fields. That is the tradeoff for
+    //   increment() without a composite of every unit type.
+    // - displayName is an in-game name: short string, no '@'. No email field.
+    // - player_{uid} can be written only by that uid. global and game_* by
+    //   any signed-in user. Nobody can delete.
+    function diceOld(key) {
+      return resource == null ? 0 : resource.data.get(key, 0);
+    }
+    function diceNew(key) {
+      return request.resource.data.get(key, diceOld(key));
+    }
+    function diceDelta(key) {
+      return diceNew(key) - diceOld(key);
+    }
+    function diceNameOk(name) {
+      return name is string
+        && name.size() > 0
+        && name.size() <= 40
+        && !name.matches('.*@.*');
+    }
+    function diceFacesOk() {
+      return diceDelta('face_1') >= 0 && diceDelta('face_1') <= 240
+        && diceDelta('face_2') >= 0 && diceDelta('face_2') <= 240
+        && diceDelta('face_3') >= 0 && diceDelta('face_3') <= 240
+        && diceDelta('face_4') >= 0 && diceDelta('face_4') <= 240
+        && diceDelta('face_5') >= 0 && diceDelta('face_5') <= 240
+        && diceDelta('face_6') >= 0 && diceDelta('face_6') <= 240
+        && diceDelta('n') == diceDelta('face_1') + diceDelta('face_2')
+            + diceDelta('face_3') + diceDelta('face_4')
+            + diceDelta('face_5') + diceDelta('face_6')
+        && diceDelta('n') <= 240
+        && diceDelta('hl_low') >= 0 && diceDelta('hl_low') <= 240
+        && diceDelta('hl_high') >= 0 && diceDelta('hl_high') <= 240
+        && diceDelta('hl_runs') >= 0 && diceDelta('hl_runs') <= 240;
+    }
+    function diceStreakOk() {
+      return !('longestStreak' in request.resource.data)
+        || (request.resource.data.longestStreak is int
+            && request.resource.data.longestStreak >= diceOld('longestStreak')
+            && request.resource.data.longestStreak - diceOld('longestStreak') <= 240);
+    }
+    function diceStatsIdOk(statId) {
+      return statId == 'global'
+        || statId.matches('^game_[A-Za-z0-9_\\-]{1,80}$')
+        || statId == ('player_' + request.auth.uid);
+    }
+    function diceDieOk(d) {
+      return d.keys().hasAll(['unit', 'face'])
+        && d.unit is string
+        && d.unit.size() <= 40
+        && d.face is int
+        && d.face >= 1
+        && d.face <= 6
+        && (!('need' in d) || d.need == null || (d.need is number && d.need >= 0 && d.need <= 6));
+    }
+
     // Lobbies: any authenticated user can create, read, or update lobbies.
     // Only the host (creator) or an admin can delete a lobby.
     match /lobbies/{lobbyId} {
@@ -77,6 +142,54 @@ service cloud.firestore {
     match /presence/{userId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Observe-only dice log. Create once; no update or delete.
+    match /diceBatches/{batchId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.writerUid == request.auth.uid
+        && request.resource.data.keys().hasAll([
+          'gameId', 'round', 'turnPhase', 'context', 'side', 'playerSeat',
+          'isAI', 'writerUid', 'clientVersion', 'ts', 'dice'
+        ])
+        && request.resource.data.gameId is string
+        && request.resource.data.gameId.size() > 0
+        && request.resource.data.gameId.size() <= 80
+        && request.resource.data.round is int
+        && request.resource.data.turnPhase is string
+        && request.resource.data.turnPhase.size() <= 40
+        && request.resource.data.context in ['combat', 'aa', 'bombard', 'sub', 'rocket', 'tech']
+        && request.resource.data.side in ['attacker', 'defender']
+        && request.resource.data.playerSeat is string
+        && request.resource.data.playerSeat.size() <= 80
+        && request.resource.data.isAI is bool
+        && request.resource.data.writerUid is string
+        && request.resource.data.clientVersion is string
+        && request.resource.data.clientVersion.size() <= 80
+        && request.resource.data.ts is number
+        && request.resource.data.dice is list
+        && request.resource.data.dice.size() > 0
+        && request.resource.data.dice.size() <= 240
+        && diceDieOk(request.resource.data.dice[0])
+        && diceDieOk(request.resource.data.dice[request.resource.data.dice.size() - 1])
+        && !('email' in request.resource.data);
+      allow update, delete: if false;
+    }
+
+    // Running totals. Readable by any signed-in user. Writes are increments
+    // (and a monotonic longestStreak) from a signed-in client.
+    match /diceStats/{statId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && diceStatsIdOk(statId)
+        && request.resource.data.size() < 800
+        && diceFacesOk()
+        && diceStreakOk()
+        && !('email' in request.resource.data)
+        && (!('displayName' in request.resource.data)
+            || diceNameOk(request.resource.data.displayName));
+      allow delete: if false;
     }
   }
 }

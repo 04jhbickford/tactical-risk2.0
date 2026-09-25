@@ -20180,3 +20180,168 @@ html.mobile-shell.tech-active .tech-popup {
   width: 100%;
   min-height: 44px;
 }
+
+/* Dice stats — in-game menu only. Desktop is a compact popover.
+   Under 1024px (tablet 820 and phone) tab targets are 44px.
+   The popover scrolls with the default touch action so a one-finger
+   drag still pans; do not set touch-action: none here. */
+.dice-stats-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 188px;
+  width: 360px;
+  max-width: calc(100vw - 24px);
+  max-height: min(70vh, 520px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  z-index: 40;
+  box-sizing: border-box;
+}
+.dice-stats {
+  background: rgba(22, 24, 40, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  color: #e8e8ee;
+  font-size: 13px;
+  line-height: 1.35;
+  padding: 10px 12px 12px;
+  box-sizing: border-box;
+}
+.dice-stats-head {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-bottom: 8px;
+}
+.dice-stats-tabs {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.dice-stats-tab {
+  flex: 1 1 0;
+  min-height: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.04);
+  color: #d5d5de;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.dice-stats-tab:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.dice-stats-tab.is-on {
+  background: rgba(96, 140, 220, 0.35);
+  border-color: rgba(160, 190, 255, 0.5);
+  color: #fff;
+}
+.dice-stats-verdict {
+  margin: 0 0 8px;
+  font-weight: 700;
+}
+.dice-stats-p {
+  font-weight: 500;
+  color: #b9c0d4;
+}
+.dice-face-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 3px 0;
+}
+.dice-face-num {
+  width: 14px;
+  flex: 0 0 14px;
+  text-align: right;
+  color: #b9c0d4;
+}
+.dice-bar-track {
+  position: relative;
+  flex: 1 1 auto;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.dice-bar-fill {
+  display: block;
+  height: 100%;
+  background: #7ea2e8;
+}
+.dice-bar-fair {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #f2d38a;
+}
+.dice-face-pct {
+  width: 42px;
+  flex: 0 0 42px;
+  text-align: right;
+  color: #b9c0d4;
+  font-variant-numeric: tabular-nums;
+}
+.dice-progress {
+  margin-top: 8px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.dice-progress-fill {
+  display: block;
+  height: 100%;
+  background: #8fbc8f;
+}
+.dice-progress-label,
+.dice-stats-meta,
+.dice-stats-caveat,
+.dice-stats-empty {
+  margin: 6px 0 0;
+  color: #b9c0d4;
+  font-size: 12px;
+}
+.dice-player-row {
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.dice-player-name {
+  font-weight: 700;
+}
+.dice-stats-ai {
+  font-size: 11px;
+  font-weight: 600;
+  color: #f2d38a;
+}
+.dice-player-rate {
+  color: #d5d5de;
+}
+.dice-stats-sheet {
+  width: 100%;
+  max-width: 100%;
+}
+@media (max-width: 1023px) {
+  .dice-stats-popover {
+    left: 0;
+    width: min(420px, calc(100vw - 16px));
+  }
+  .dice-stats-tab,
+  .dice-stats-sheet .dice-stats-tab {
+    min-height: 44px;
+    height: 44px;
+    font-size: 15px;
+  }
+}
+@media (min-width: 1024px) {
+  .dice-stats-tab {
+    min-height: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+}

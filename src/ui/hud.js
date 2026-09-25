@@ -6,6 +6,7 @@ import { isMobileShell, formatMobilePhaseWord, formatMobilePlayerMeta, readableF
 import { syncBottomSurfaces } from './bottomSurface.js';
 import { resolveHudClarity, shouldShowHudTicker } from './hudClarity.js';
 import { confirmChoice } from './confirmChoice.js';
+import { ensureDiceStatsLoaded, renderDiceStatsMarkup, setDiceStatsTab } from './diceStatsPanel.js';
 
 export class HUD {
   constructor() {
@@ -18,6 +19,7 @@ export class HUD {
     this.menuOpen = false;
     this.mapToolsOpen = false;
     this.menuTab = null;
+    this.diceStatsOpen = false;
     this.menuTabProvider = null;
     this.onMenuOpen = null;
     this.el = document.getElementById('hud');
@@ -48,7 +50,19 @@ export class HUD {
       if (Date.now() < (this._ignoreMenuCloseUntil || 0)) return;
       this.menuOpen = false;
       this.menuTab = null;
+      this.diceStatsOpen = false;
+      this.el.querySelector('.dice-stats-popover')?.remove();
       this._updateMenuState();
+    });
+
+    // Escape closes Dice stats even after a later HUD render moves focus.
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (!this.diceStatsOpen && this.menuTab !== 'dice') return;
+      e.preventDefault();
+      this.diceStatsOpen = false;
+      if (this.menuTab === 'dice') this.menuTab = null;
+      this._render();
     });
   }
 
@@ -126,6 +140,10 @@ export class HUD {
             <span class="hud-menu-item-icon">ⓘ</span>
             <span>Phase tips</span>
           </button>
+          <button class="hud-menu-item" data-action="dice-stats">
+            <span class="hud-menu-item-icon">⚀</span>
+            <span>Dice stats</span>
+          </button>
           <button class="hud-menu-item" data-action="rules">
             <span class="hud-menu-item-icon">📖</span>
             <span>Game Rules</span>
@@ -139,6 +157,7 @@ export class HUD {
             <span>Resign</span>
           </button>
         </div>
+        ${this.diceStatsOpen ? renderDiceStatsMarkup({ placement: 'popover' }) : ''}
       </div>
     `;
 
@@ -279,6 +298,7 @@ export class HUD {
     const tabLabel = this.menuTab === 'stats' ? 'Players'
       : this.menuTab === 'territory' ? 'Territory'
       : this.menuTab === 'log' ? 'Log'
+      : this.menuTab === 'dice' ? 'Dice stats'
       : '';
 
     this.el.innerHTML = `
@@ -413,7 +433,10 @@ export class HUD {
   _toggleMenu() {
     this._ignoreMenuCloseUntil = Date.now() + 400;
     this.menuOpen = !this.menuOpen;
-    if (!this.menuOpen) this.menuTab = null;
+    if (!this.menuOpen) {
+      this.menuTab = null;
+      this.diceStatsOpen = false;
+    }
     if (this.menuOpen) this.mapToolsOpen = false;
     if (this.menuOpen && typeof this.onMenuOpen === 'function') this.onMenuOpen();
     if (isMobileShell()) this._render();
@@ -460,9 +483,54 @@ export class HUD {
         e.stopPropagation();
         this.menuOpen = true;
         this.menuTab = btn.dataset.tab;
+        if (btn.dataset.tab === 'dice') this._focusDice = true;
+        this._render();
+        if (btn.dataset.tab === 'dice') {
+          ensureDiceStatsLoaded(() => {
+            if (this.menuTab !== 'dice') return;
+            this._focusDice = true;
+            this._render();
+          });
+        }
+      });
+    });
+
+    this.el.querySelector('[data-action="dice-stats"]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.menuOpen = true;
+      this.diceStatsOpen = !this.diceStatsOpen;
+      if (this.diceStatsOpen) this._focusDice = true;
+      this._updateMenuState();
+      this._render();
+      if (this.diceStatsOpen) {
+        ensureDiceStatsLoaded(() => {
+          if (!this.diceStatsOpen) return;
+          this._focusDice = true;
+          this._render();
+        });
+      }
+    });
+
+    this.el.querySelectorAll('[data-dice-tab]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setDiceStatsTab(btn.dataset.diceTab);
         this._render();
       });
     });
+
+    const dicePanel = this.el.querySelector('.dice-stats');
+    dicePanel?.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      this.diceStatsOpen = false;
+      if (this.menuTab === 'dice') this.menuTab = null;
+      this._render();
+    });
+    if (this._focusDice && dicePanel) {
+      this._focusDice = false;
+      dicePanel.focus();
+    }
 
     // The phone sheet row is the second [data-action="phase-tips"].
     // querySelector bound only the ? button, so the row did nothing.

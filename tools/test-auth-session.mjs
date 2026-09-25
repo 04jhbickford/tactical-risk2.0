@@ -26,7 +26,7 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-check('stamp is unified.2', GAME_VERSION === 'V2.81.57-unified.12');
+check('stamp is unified.2', GAME_VERSION === 'V2.81.57-unified.13');
 check('email local-part', emailLocalPart('rob@example.com') === 'rob');
 check('generic Player', isGenericDisplayName('Player') && isGenericDisplayName('non-player'));
 check('real name is not generic', isGenericDisplayName('Robert007') === false);
