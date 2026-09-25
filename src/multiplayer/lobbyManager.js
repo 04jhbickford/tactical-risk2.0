@@ -52,6 +52,7 @@ import {
   transferLobbyHost,
 } from './lobbySeats.js';
 import { readRememberedDiscordSeat } from './discordTurnPing.js';
+import { buildHumanLobbySeat, shouldApplyDiscordWrite } from './discordSeat.js';
 
 // Generate a random 6-character lobby code
 function generateLobbyCode() {
@@ -116,16 +117,11 @@ export class LobbyManager {
         startingIPCs: settings.startingIPCs || 80,
         teamsEnabled: settings.teamsEnabled || false
       },
-      players: [{
-        oderId: user.id,
-        displayName: user.displayName,
-        factionId: null,
-        color: null,
-        isReady: false,
+      players: [buildHumanLobbySeat({
+        user,
         isHost: true,
-        joinedAt: Date.now(),
-        ...readRememberedDiscordSeat(),
-      }],
+        remembered: readRememberedDiscordSeat(),
+      })],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
@@ -515,17 +511,13 @@ export class LobbyManager {
       return { success: false, error: 'Lobby is full' };
     }
 
-    // Add player
-    const newPlayer = {
-      oderId: user.id,
-      displayName: user.displayName,
-      factionId: null,
-      color: null,
-      isReady: false,
+    // Add player. An existing seat is left as-is here; the waiting-lobby
+    // view writes the remembered Discord name once if that seat is empty.
+    const newPlayer = buildHumanLobbySeat({
+      user,
       isHost: false,
-      joinedAt: Date.now(),
-      ...readRememberedDiscordSeat(),
-    };
+      remembered: readRememberedDiscordSeat(),
+    });
 
     console.log('[LobbyManager] Player joining lobby:', {
       oderId: user.id,
@@ -688,6 +680,64 @@ export class LobbyManager {
       return { success: true };
     } catch (error) {
       console.error('Error leaving lobby:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Discord name only. onlyIfEmpty is the automatic re-entry prefill.
+  // isStale() is checked again inside the transaction so a clear typed
+  // while the prefill is in flight is not overwritten on retry.
+  async updateDiscordSeat(fields, { onlyIfEmpty = false, isStale = null } = {}) {
+    const stale = () => (typeof isStale === 'function' ? !!isStale() : false);
+    if (stale()) return { success: true, skipped: true };
+    if (!this.currentLobby) return { success: false, error: 'Not in lobby' };
+
+    const user = this.authManager.getUser();
+    if (!user) return { success: false, error: 'Not logged in' };
+
+    const lobbyId = this.currentLobby.id;
+    const lobbyRef = doc(this.db, 'lobbies', lobbyId);
+    const discordFields = {
+      discordUserId: fields?.discordUserId || '',
+      discordName: fields?.discordName || '',
+    };
+
+    try {
+      const outcome = await runTransaction(this.db, async (transaction) => {
+        const snap = await transaction.get(lobbyRef);
+        if (!snap.exists()) return { success: false, error: 'Lobby not found' };
+        const players = snap.data().players;
+        const mine = (players || []).find((p) => p && p.oderId === user.id) || null;
+        // startedRev 0 / currentRev 1 marks a user edit that landed after
+        // this write was queued. onlyIfEmpty refuses a seat that already
+        // has a Discord name.
+        if (!shouldApplyDiscordWrite({
+          startedRev: 0,
+          currentRev: stale() ? 1 : 0,
+          onlyIfEmpty,
+          seat: mine,
+        })) {
+          return { success: true, skipped: true, players };
+        }
+        const patched = patchLobbySeat({
+          players,
+          userId: user.id,
+          updates: discordFields,
+        });
+        if (!patched.ok) return { success: false, error: patched.error };
+        transaction.update(lobbyRef, {
+          players: patched.players,
+          updatedAt: serverTimestamp(),
+        });
+        return { success: true, players: patched.players };
+      });
+      if (!outcome?.success) return { success: false, error: outcome?.error || 'Not in lobby' };
+      if (!outcome.skipped && outcome.players) {
+        this._patchCurrentLobby(lobbyId, { players: outcome.players });
+      }
+      return { success: true, skipped: !!outcome.skipped };
+    } catch (error) {
+      console.error('Error updating discord seat:', error);
       return { success: false, error: error.message };
     }
   }

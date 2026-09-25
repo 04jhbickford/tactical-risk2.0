@@ -1,4 +1,4 @@
-// V2.81.57-unified.10 — desktop/tablet Deploy and Mobilize follow the
+// V2.81.57-unified.11 — desktop/tablet Deploy and Mobilize follow the
 // selected territory. Phone @390 pair grammar stays on the tapped land.
 // Run: node tools/test-unified-10-deploy-target.mjs
 
@@ -187,7 +187,7 @@ function attachPanel(gs) {
 }
 
 console.log('=== Version stamps ===');
-check('GAME_VERSION is V2.81.57-unified.10', GAME_VERSION === 'V2.81.57-unified.10');
+check('GAME_VERSION is V2.81.57-unified.11', GAME_VERSION === 'V2.81.57-unified.11');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== Desktop shell: setup Deploy follows the selected territory ===');
@@ -324,4 +324,4 @@ if (failures) {
   console.error(`\n${failures} check(s) failed`);
   process.exit(1);
 }
-console.log('\nunified.10 deploy-target checks passed');
+console.log('\nunified.11 deploy-target checks passed');

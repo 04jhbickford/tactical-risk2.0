@@ -2,6 +2,20 @@
 
 ---
 
+## 9.25.26 — unified.11 lobby Discord name
+
+Stamp `V2.81.57-unified.11`. Schema stays 11.
+
+Bastion, Discord `#tactical-risk` `1553044501063409776`, live `V2.81.57-unified.10`. People had to type a Discord screen name on every lobby, and hosts appeared to have no field at all. Rob (`1552876288811868181`) was tagged-missing on turn ping while Bastion was tagged.
+
+Cause: the waiting-lobby box saved only on `change`. `MultiplayerLobby._render()` runs on every Firestore snapshot, blurs the focused control, then replaces `innerHTML` from the seat. A browser pass typed `robfox007`: `input` fired per character and `change` did not. The snapshot `blur()` did fire `change`, then the new input's value was `""` and focus was gone. Hosts generate the most lobby writes (Add AI, settings, joins), so the box kept resetting under them. Create and join already copied `tacticalRisk_discordSeat` onto a **new** seat. Re-entering an existing seat (already seated, restore, same-match return) did not, so an empty seat stayed empty.
+
+Fix: save on debounced `input` plus `blur` / Enter. A snapshot keeps the focused box's value, caret, and focus. Create, join, and re-entry onto an empty seat prefill the remembered name and write it once. Clearing saves empty. Turn-ping payload is unchanged.
+
+Receipt: `node tools/test-lobby-discord-seat.mjs`.
+
+---
+
 ## 9.24.26 — unified.10 Bastion setup deploy lock
 
 Stamp `V2.81.57-unified.10`. Schema stays 11.
