@@ -381,7 +381,7 @@ function formatTerritoryLine(territory, taker) {
 export function formatRecipientLossSummary(events, { recipientId = '', players = [] } = {}) {
   const id = cleanBit(recipientId);
   const rows = Array.isArray(events)
-    ? events.filter((ev) => ev && typeof ev === 'object')
+    ? events.filter((ev) => ev && typeof ev === 'object' && ev.undone !== true)
     : [];
   const captureByTerritory = new Map();
   for (const ev of rows) {
@@ -416,7 +416,7 @@ export function formatRecipientLossSummary(events, { recipientId = '', players =
 export function formatTurnPingSummary(events, { actorId = '', players = [] } = {}) {
   const actor = cleanBit(actorId);
   const rows = Array.isArray(events)
-    ? events.filter((ev) => ev && typeof ev === 'object' && eventInvolves(ev, actor))
+    ? events.filter((ev) => ev && typeof ev === 'object' && ev.undone !== true && eventInvolves(ev, actor))
     : [];
 
   const captureByTerritory = new Map();
