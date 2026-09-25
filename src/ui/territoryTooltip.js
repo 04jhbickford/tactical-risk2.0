@@ -34,7 +34,9 @@ export function shouldToggleOffPhoneTooltip({ mobile, visibleName, tappedName } 
 }
 
 export function isPhoneSetupPlacementPhase(phase) {
-  return phase === GAME_PHASES.CAPITAL_PLACEMENT || phase === GAME_PHASES.UNIT_PLACEMENT;
+  return phase === GAME_PHASES.TERRITORY_DRAFT
+    || phase === GAME_PHASES.CAPITAL_PLACEMENT
+    || phase === GAME_PHASES.UNIT_PLACEMENT;
 }
 
 // Place Capital / Initial Deployment: a tap commits (select / place).
@@ -79,10 +81,12 @@ export function shouldCommitPhoneSetupPeekAfterGesture({ mobile, phase, movedPx 
   return Number(movedPx) < PHONE_SETUP_PAN_SLOP_PX;
 }
 
-const PHONE_CAPITAL_CTA_ACTIONS = new Set(['place-capital', 'undo-capital']);
+const PHONE_CAPITAL_CTA_ACTIONS = new Set(['place-capital', 'undo-capital', 'pick-territory']);
 const PHONE_TRAY_CHROME_ACTIONS = new Set([
   'place-capital',
+  'pick-territory',
   'undo-capital',
+  'buy-tech',
   'confirm-placement',
   'confirm-mobilize',
   'confirm-move',

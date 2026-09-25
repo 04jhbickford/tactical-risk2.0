@@ -65,8 +65,8 @@ export class RulesPanel {
           <section class="rules-section" id="rules-phases" data-rules-section="phases">
             <h3>Turn Phases</h3>
             <ol>
-              <li><strong>Develop Tech</strong> - Spend 5 IPCs per research die. Roll 6 to unlock a technology.</li>
-              <li><strong>Purchase Units</strong> - Buy units with IPCs. Units are placed during Mobilize phase.</li>
+              <li><strong>Develop Tech</strong> - Dice tokens cost 5 IPCs each and are spent on the roll. Roll 6 to unlock a technology. If the host chose Keep tokens until success, a roll with no 6 keeps those tokens for the next turn, and a breakthrough spends them. If the host chose Buy directly, there is no research roll: during Purchase, pick a technology for 20 IPCs.</li>
+              <li><strong>Purchase Units</strong> - Buy units with IPCs. Units are placed during Mobilize phase. Buy directly also sells technologies here for 20 IPCs.</li>
               <li><strong>Combat Movement</strong> - Move units into enemy territories to attack.</li>
               <li><strong>Combat</strong> - Resolve battles in contested territories.</li>
               <li><strong>Non-Combat Movement</strong> - Move remaining units. Load troops onto transports.</li>

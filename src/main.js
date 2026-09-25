@@ -460,6 +460,20 @@ async function init() {
     if (!gameState) return;
 
     switch (action) {
+      case 'pick-territory': {
+        const draftLand = data?.territory;
+        const draftingPlayer = gameState.currentPlayer;
+        if (draftLand && gameState.pickDraftTerritory(draftLand) === true) {
+          selectedTerritory = null;
+          playerPanel.selectedTerritory = null;
+          kickPaint();
+          notifyTurnSwap(draftingPlayer, gameState.currentPlayer);
+          if (syncManager) await syncManager.pushStateNow();
+          checkAI();
+        }
+        break;
+      }
+
       case 'place-capital':
         // Capture player BEFORE placeCapital (which advances the turn)
         const placingPlayer = gameState.currentPlayer;
@@ -644,12 +658,21 @@ async function init() {
         }
         break;
 
+      case 'buy-tech':
+        if (shouldShowPurchase(gameState.phase, gameState.turnPhase) && data?.techId) {
+          gameState.buyTech(gameState.currentPlayer.id, data.techId);
+          camera.dirty = true;
+        }
+        break;
+
       case 'roll-tech':
-        // Inline tech roll - PLAYING + DEVELOP_TECH only
+        // Inline tech roll - PLAYING + DEVELOP_TECH only.
+        // Keep-tokens may roll dice already carried, with no new purchase.
         if (gameState.phase === GAME_PHASES.PLAYING &&
             gameState.turnPhase === TURN_PHASES.DEVELOP_TECH &&
-            data.diceCount > 0) {
-          techUI.performInlineRoll(data.diceCount);
+            gameState.gameOptions?.techAcquisition !== 'buy' &&
+            ((data.diceCount > 0) || (gameState.playerTechs?.[gameState.currentPlayer?.id]?.techTokens > 0))) {
+          techUI.performInlineRoll(data.diceCount || 0);
           camera.dirty = true;
         }
         break;
@@ -1636,7 +1659,7 @@ async function init() {
       aiController.setGameState(gameState);
       aiController.setOnAction((action) => {
         camera.dirty = true;
-        if (action === 'finishPlacement' || action === 'placeCapital' || action === 'nextPhase') {
+        if (action === 'finishPlacement' || action === 'placeCapital' || action === 'draftPick' || action === 'nextPhase') {
           notifyTurnSwap(null, gameState.currentPlayer);
           syncManager?.pushStateNow();
         }
@@ -2960,6 +2983,22 @@ async function init() {
           }
           return;
         }
+        if (gameState.phase === GAME_PHASES.TERRITORY_DRAFT && !isMobileShell()) {
+          if (!gameState.currentPlayer?.isAI && hit && !hit.isWater && !gameState.getOwner(hit.name)) {
+            const draftingPlayer = gameState.currentPlayer;
+            if (gameState.pickDraftTerritory(hit.name) === true) {
+              selectedTerritory = null;
+              playerPanel.setSelectedTerritory(null);
+              hud.setLastClick({ landed: true, label: hit.name });
+              hud._render();
+              notifyTurnSwap(draftingPlayer, gameState.currentPlayer);
+              syncManager?.pushStateNow();
+              kickPaint();
+              checkAI();
+              return;
+            }
+          }
+        }
         if (gameState.phase === GAME_PHASES.CAPITAL_PLACEMENT) {
           const { capitalLandName } = applyCapitalPlacementPeek({
             phase: gameState.phase,
@@ -3239,6 +3278,13 @@ async function init() {
           if (territoryRenderer.phoneTilePulseActive()) camera.dirty = true;
         } else {
           territoryRenderer.setPhoneLegalTerritories([]);
+        }
+
+        if (gameState?.phase === GAME_PHASES.TERRITORY_DRAFT) {
+          const open = (gameState.landTerritories || [])
+            .filter((t) => t && !gameState.getOwner(t.name))
+            .map((t) => t.name);
+          territoryRenderer.renderValidMoveDestinations(ctx, open, {});
         }
 
         // Hover + selection

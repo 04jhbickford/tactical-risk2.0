@@ -2,6 +2,73 @@
 // to recap what other players did during their turns
 
 import { GAME_PHASES } from '../state/gameState.js';
+import { formatUnitName } from '../utils/unitNames.js';
+
+const UNIT_LINE_ORDER = [
+  'infantry',
+  'artillery',
+  'armour',
+  'tank',
+  'fighter',
+  'bomber',
+  'battleship',
+  'cruiser',
+  'destroyer',
+  'submarine',
+  'transport',
+  'carrier',
+  'aaGun',
+  'factory',
+];
+
+function pluralUnit(name, n) {
+  if (!name) return '';
+  if (n === 1) return name;
+  if (name === 'Infantry' || name === 'Artillery') return name;
+  if (/s$/i.test(name)) return name;
+  return `${name}s`;
+}
+
+/** Combat loss maps print like the turn ping: "2x Infantry, 1x Tank". */
+export function formatLossCount(raw) {
+  if (raw == null || raw === '') return '0';
+  if (typeof raw === 'number' && Number.isFinite(raw)) return String(raw);
+  if (typeof raw === 'string') {
+    const text = raw.trim();
+    if (!text || text === '[object Object]') return '0';
+    return text;
+  }
+  if (typeof raw !== 'object') return String(raw);
+  const entries = Array.isArray(raw)
+    ? raw.map((row) => [row?.type, Number(row?.quantity ?? row?.count)])
+    : Object.entries(raw).map(([type, value]) => [type, Number(value)]);
+  const parts = entries
+    .filter(([type, n]) => type && Number.isFinite(n) && n > 0)
+    .sort((a, b) => {
+      const ia = UNIT_LINE_ORDER.indexOf(a[0]);
+      const ib = UNIT_LINE_ORDER.indexOf(b[0]);
+      return (ia === -1 ? UNIT_LINE_ORDER.length : ia) - (ib === -1 ? UNIT_LINE_ORDER.length : ib);
+    })
+    .map(([type, n]) => `${n}x ${pluralUnit(formatUnitName(type), n)}`);
+  return parts.length ? parts.join(', ') : '0';
+}
+
+export function visibleTurnSummaryEvents(events) {
+  return (Array.isArray(events) ? events : []).filter((ev) => ev && ev.undone !== true);
+}
+
+export function describeTurnSummaryEvent(ev) {
+  if (!ev || ev.undone === true) return '';
+  if (ev.type === 'combat') {
+    const result = ev.outcome === 'attacker' ? 'won' : 'lost';
+    return `Combat at ${ev.territory || ''}: ${ev.attacker || ''} attacked ${ev.defender || ''} and ${result} `
+      + `(attacker lost ${formatLossCount(ev.attackerLosses)}, defender lost ${formatLossCount(ev.defenderLosses)})`;
+  }
+  if (ev.type === 'territory_captured') {
+    return `Captured ${ev.territory || ''} from ${ev.fromPlayer || ''}`;
+  }
+  return ev.type || 'Unknown event';
+}
 
 // Local Place Capital must never raise this sheet — a leftover overlay
 // (class mismatch used to leave it in the hit stack) eats map taps.
@@ -11,7 +78,9 @@ export function shouldShowTurnSummary({
   isMultiplayer = false,
 } = {}) {
   if (!isMultiplayer) return false;
-  if (phase === GAME_PHASES.CAPITAL_PLACEMENT || phase === GAME_PHASES.UNIT_PLACEMENT) {
+  if (phase === GAME_PHASES.TERRITORY_DRAFT
+    || phase === GAME_PHASES.CAPITAL_PLACEMENT
+    || phase === GAME_PHASES.UNIT_PLACEMENT) {
     return false;
   }
   return Array.isArray(events) && events.length > 0;
@@ -63,13 +132,14 @@ export class TurnSummaryModal {
   show(events, extra = {}) {
     const phase = extra.phase ?? this.gameState?.phase;
     const isMultiplayer = extra.isMultiplayer ?? !!this.gameState?.isMultiplayer;
-    if (!shouldShowTurnSummary({ events, phase, isMultiplayer })) {
+    const visible = visibleTurnSummaryEvents(events);
+    if (!shouldShowTurnSummary({ events: visible, phase, isMultiplayer })) {
       this.hide();
       return;
     }
 
     const body = this.el.querySelector('#turnSummaryBody');
-    body.innerHTML = this._renderEvents(events);
+    body.innerHTML = this._renderEvents(visible);
 
     this.el.classList.remove('hidden');
     this.el.removeAttribute('inert');
@@ -106,14 +176,14 @@ export class TurnSummaryModal {
   }
 
   _renderEvent(ev) {
+    if (ev?.undone === true) return '';
     if (ev.type === 'combat') {
       const won = ev.outcome === 'attacker';
       const result = won ? 'won' : 'lost';
-      const atLoss = ev.attackerLosses || 0;
-      const defLoss = ev.defenderLosses || 0;
       return `Combat at <strong>${this._escapeHtml(ev.territory)}</strong>: `
         + `${this._escapeHtml(ev.attacker)} attacked ${this._escapeHtml(ev.defender)} and <strong>${result}</strong> `
-        + `(attacker lost ${atLoss}, defender lost ${defLoss})`;
+        + `(attacker lost ${this._escapeHtml(formatLossCount(ev.attackerLosses))}, `
+        + `defender lost ${this._escapeHtml(formatLossCount(ev.defenderLosses))})`;
     }
     if (ev.type === 'territory_captured') {
       return `Captured <strong>${this._escapeHtml(ev.territory)}</strong> from ${this._escapeHtml(ev.fromPlayer)}`;

@@ -37,7 +37,9 @@ import {
 } from '../multiplayer/lobbyStart.js';
 import { seatNamesForOpenGameCard } from '../multiplayer/lobbySeats.js';
 import {
+  clampMaxPlayers,
   describe,
+  draftModeSource,
   mergeGameOptionsIntoSettings,
   normalizeGameOptions,
   optionsFromSettings,
@@ -619,6 +621,7 @@ export class MultiplayerLobby {
           editable: true,
           open: this._optionsOpen,
           sheet: this._optionsSheet,
+          draftMode: draftModeSource(this.setup),
         })}
         <p class="game-rules-preview go-live-mirror">${describe(this._draftOptions)}</p>
         <label class="mp-checkbox-option standalone">
@@ -992,6 +995,14 @@ export class MultiplayerLobby {
     // Get taken factions and colors
     const takenFactions = new Set(lobby.players.map(p => p.factionId).filter(Boolean));
     const takenColors = new Set(lobby.players.map(p => p.color).filter(Boolean));
+    const seatedCount = lobby.players.length;
+    const roomOptions = optionsFromSettings(lobby.settings);
+    const seatMax = clampMaxPlayers(roomOptions.maxPlayers, seatedCount);
+    if (isHost && seatMax !== roomOptions.maxPlayers && !this._maxClampFlight) {
+      this._maxClampFlight = true;
+      Promise.resolve(this._commitGameOptions({ ...roomOptions, maxPlayers: seatMax }))
+        .finally(() => { this._maxClampFlight = false; });
+    }
 
     return `
       <div class="mp-lobby-active">
@@ -1010,8 +1021,8 @@ export class MultiplayerLobby {
 
         <div class="mp-players-section modern">
           <div class="mp-section-header">
-            <h3>Players <span class="player-count">${lobby.players.length}/${lobby.settings.maxPlayers}</span></h3>
-            ${isHost && lobby.players.length < lobby.settings.maxPlayers ? `
+            <h3>Players <span class="player-count">${seatedCount}/${seatMax}</span></h3>
+            ${isHost && seatedCount < seatMax ? `
               <button class="mp-add-ai-btn" data-action="add-ai">
                 <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
                 Add AI
@@ -1087,10 +1098,12 @@ export class MultiplayerLobby {
             </div>
           </div>
 
-          ${renderGameOptionsPanel(optionsFromSettings(lobby.settings), {
+          ${renderGameOptionsPanel(roomOptions, {
             editable: isHost,
             open: this._optionsOpen,
             sheet: this._optionsSheet,
+            draftMode: draftModeSource(this.setup),
+            seatedCount,
           })}
           <p class="game-rules-preview go-live-mirror">${describe(optionsFromSettings(lobby.settings))}</p>
         </div>

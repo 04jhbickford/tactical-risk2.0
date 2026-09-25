@@ -16,6 +16,7 @@ export class MultiplayerGuard {
       'nextTurn',
       // Capital placement (initial game setup)
       'placeCapital',
+      'pickDraftTerritory',
       'setCapital',
       // Initial unit placement (Risk-style setup)
       'placeInitialUnit',
@@ -51,6 +52,9 @@ export class MultiplayerGuard {
       'removeIPCs',
       // Tech
       'developTech',
+      'buyTech',
+      'purchaseTechDice',
+      'rollTechDice',
       // Risk cards
       'tradeRiskCards',
       'tradeSpecificCards',

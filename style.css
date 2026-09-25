@@ -20437,9 +20437,10 @@ html.mobile-shell.tech-active .tech-popup {
   gap: 12px;
   min-width: 0;
 }
-.go-label { font-size: 13px; color: #cbd5e1; }
+.go-label { font-size: 13px; color: #cbd5e1; flex: 0 1 auto; min-width: 0; }
 .go-control.modern-select {
   min-width: 88px;
+  max-width: 16rem;
   padding: 4px 8px;
   min-height: 28px;
   height: 28px;

@@ -11,12 +11,20 @@ export const DEFAULT_GAME_OPTIONS = Object.freeze({
   startingArmy: 'standard',
   multipleTech: false,
   landBridges: true,
+  // Random deal is today's setup. Draft is a host option.
+  territorySetup: 'random',
+  // Dice tokens are spent on the roll, hit or miss. Today's research.
+  techAcquisition: 'dice',
 });
 
 export const STARTING_IPC_VALUES = Object.freeze([40, 60, 80, 100, 120, 150]);
 export const MAX_PLAYER_VALUES = Object.freeze([2, 3, 4, 5]);
 export const UNITS_PER_ROUND_VALUES = Object.freeze([3, 4, 5, 6, 7, 8, 9, 10]);
 export const STARTING_ARMY_VALUES = Object.freeze(['standard', 'light', 'heavy']);
+export const TERRITORY_SETUP_VALUES = Object.freeze(['random', 'draft']);
+export const TECH_ACQUISITION_VALUES = Object.freeze(['dice', 'keep', 'buy']);
+// Buy directly: one technology, no dice, paid during Purchase.
+export const DIRECT_TECH_IPC_COST = 20;
 
 function pickNumber(value, allowed, fallback) {
   const n = Number(value);
@@ -26,6 +34,37 @@ function pickNumber(value, allowed, fallback) {
 function pickArmy(value) {
   const army = String(value || '');
   return STARTING_ARMY_VALUES.includes(army) ? army : 'standard';
+}
+
+function pickEnum(value, allowed, fallback) {
+  const key = String(value || '');
+  return allowed.includes(key) ? key : fallback;
+}
+
+/** Choices at or above the number of players already seated. */
+export function maxPlayerChoices(seated = 0) {
+  const floor = Math.max(0, Number(seated) || 0);
+  const choices = MAX_PLAYER_VALUES.filter((n) => n >= floor);
+  return choices.length ? choices : [DEFAULT_GAME_OPTIONS.maxPlayers];
+}
+
+export function clampMaxPlayers(value, seated = 0) {
+  const choices = maxPlayerChoices(seated);
+  const n = Number(value);
+  if (choices.includes(n)) return n;
+  return choices[0];
+}
+
+/** The disabled `draft` row in data/setup.json is the option source.
+ *  Other game modes are not turned on by this. */
+export function draftModeSource(setup) {
+  const modes = Array.isArray(setup?.gameModes) ? setup.gameModes : [];
+  const row = modes.find((mode) => mode && mode.id === 'draft');
+  return {
+    id: 'draft',
+    name: row?.name || 'Territory Draft',
+    description: row?.description || 'Players take turns drafting territories',
+  };
 }
 
 /**
@@ -65,6 +104,16 @@ export function normalizeGameOptions(raw, legacy = {}) {
     multipleTech: multiRaw === true,
     // Default ON. Only an explicit false removes the bridges.
     landBridges: bridgesRaw === false ? false : true,
+    territorySetup: pickEnum(
+      src.territorySetup ?? old.territorySetup,
+      TERRITORY_SETUP_VALUES,
+      DEFAULT_GAME_OPTIONS.territorySetup,
+    ),
+    techAcquisition: pickEnum(
+      src.techAcquisition ?? old.techAcquisition,
+      TECH_ACQUISITION_VALUES,
+      DEFAULT_GAME_OPTIONS.techAcquisition,
+    ),
   };
 }
 
@@ -76,7 +125,9 @@ export function isStandardRules(raw, legacy) {
     && o.unitsPerRound === DEFAULT_GAME_OPTIONS.unitsPerRound
     && o.startingArmy === DEFAULT_GAME_OPTIONS.startingArmy
     && o.multipleTech === DEFAULT_GAME_OPTIONS.multipleTech
-    && o.landBridges === DEFAULT_GAME_OPTIONS.landBridges;
+    && o.landBridges === DEFAULT_GAME_OPTIONS.landBridges
+    && o.territorySetup === DEFAULT_GAME_OPTIONS.territorySetup
+    && o.techAcquisition === DEFAULT_GAME_OPTIONS.techAcquisition;
 }
 
 /** Live summary. Standard rules, or "Custom: Heavy army, 8 per round, no land bridges". */
@@ -95,6 +146,9 @@ export function describe(raw, legacy) {
   if (o.teams) parts.push('Teams');
   if (o.maxPlayers !== DEFAULT_GAME_OPTIONS.maxPlayers) parts.push(`max ${o.maxPlayers}`);
   if (o.multipleTech) parts.push('multiple breakthroughs');
+  if (o.territorySetup === 'draft') parts.push('Draft territories');
+  if (o.techAcquisition === 'keep') parts.push('keep tech tokens');
+  if (o.techAcquisition === 'buy') parts.push(`buy tech (${DIRECT_TECH_IPC_COST})`);
   if (parts.length === 0) return 'Standard rules';
   return `Custom: ${parts.join(', ')}`;
 }
@@ -174,9 +228,17 @@ export function optionRows(raw, legacy) {
     ['Max players', String(o.maxPlayers)],
     ['Units per setup round', String(o.unitsPerRound)],
     ['Starting army', army],
+    ['Territories', o.territorySetup === 'draft' ? 'Draft' : 'Random deal'],
     ['Multiple tech breakthroughs', o.multipleTech ? 'On' : 'Off'],
+    ['Tech', techAcquisitionLabel(o.techAcquisition)],
     ['Land bridges', o.landBridges ? 'On' : 'Off'],
   ];
+}
+
+export function techAcquisitionLabel(mode) {
+  if (mode === 'keep') return 'Keep tokens until success';
+  if (mode === 'buy') return `Buy directly (${DIRECT_TECH_IPC_COST} IPCs)`;
+  return 'Dice tokens';
 }
 
 /** How many distinct techs a research roll may pick. Off (today) is at most one. */

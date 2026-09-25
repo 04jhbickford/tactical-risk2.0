@@ -77,7 +77,7 @@ export class TechUI {
         <div class="tech-budget">
           <span class="tech-budget-label">Available IPCs:</span>
           <span class="tech-budget-value">${ipcs}</span>
-          <span class="tech-cost-note">(5 IPCs per research die)</span>
+          <span class="tech-cost-note">${this.gameState?.gameOptions?.techAcquisition === 'keep' ? '(5 IPCs per die, a miss keeps them)' : this.gameState?.gameOptions?.techAcquisition === 'buy' ? `(Buy for 20 IPCs during Purchase)` : '(5 IPCs per research die)'}</span>
         </div>
     `;
 
@@ -131,6 +131,12 @@ export class TechUI {
           <div class="tech-results-msg ${this.lastRolls.some(r => r === 6) ? 'success' : 'fail'}">
             ${this._breakthroughMessage(this.lastRolls)}
           </div>
+        </div>
+      `;
+    } else if (this.gameState?.gameOptions?.techAcquisition === 'buy') {
+      html += `
+        <div class="tech-dice-select">
+          <div class="tech-dice-label">Buy a technology for 20 IPCs during Purchase. No research dice.</div>
         </div>
       `;
     } else {
@@ -338,19 +344,24 @@ export class TechUI {
 
   // Inline roll - shows centered dice result instead of full modal
   async performInlineRoll(diceCount) {
-    if (diceCount <= 0) return;
     if (!shouldShowTechResearch(this.gameState?.phase, this.gameState?.turnPhase)) {
       return;
     }
+    if (this.gameState?.gameOptions?.techAcquisition === 'buy') return;
 
     const player = this.gameState.currentPlayer;
     if (!player) return;
 
-    // Purchase the dice first
-    this.gameState.purchaseTechDice(player.id, diceCount);
+    const buying = Math.max(0, Number(diceCount) || 0);
+    const carried = Number(this.gameState.playerTechs?.[player.id]?.techTokens) || 0;
+    if (buying <= 0 && carried <= 0) return;
+
+    // Purchase the new dice first. Carried tokens (keep-until-success) roll with them.
+    if (buying > 0) this.gameState.purchaseTechDice(player.id, buying);
+    const total = Number(this.gameState.playerTechs?.[player.id]?.techTokens) || buying;
 
     // Create centered dice result overlay
-    this._showCenteredDiceResult(diceCount, null, true); // Show rolling state
+    this._showCenteredDiceResult(total, null, true); // Show rolling state
 
     // Wait for rolling animation
     await new Promise(resolve => setTimeout(resolve, 1200));
@@ -361,7 +372,7 @@ export class TechUI {
     this.breakthrough = this.picksLeft > 0;
 
     // Show final result
-    this._showCenteredDiceResult(diceCount, result, false);
+    this._showCenteredDiceResult(total, result, false);
 
     // If breakthrough, show tech selection in centered overlay
     if (this.picksLeft > 0) {
@@ -428,7 +439,7 @@ export class TechUI {
           `).join('')}
         </div>
         <div class="tech-dice-result-msg ${hasBreakthrough ? 'success' : 'fail'}">
-          ${hasBreakthrough ? 'Rolled a 6! Choose your technology...' : 'No breakthrough this time'}
+          ${hasBreakthrough ? 'Rolled a 6! Choose your technology...' : (this.gameState?.gameOptions?.techAcquisition === 'keep' ? 'No breakthrough. Dice kept for the next turn.' : 'No breakthrough this time')}
         </div>
         ${!hasBreakthrough ? `<button class="tech-dice-close-btn">Continue</button>` : ''}
       </div>`;

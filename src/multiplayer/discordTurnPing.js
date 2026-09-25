@@ -42,7 +42,7 @@ export const DISCORD_ALIAS_MAP = Object.freeze([
   },
   {
     snowflake: '600101834727620620',
-    aliases: ['rwts', 'robert', 'watts', 'robfox007'],
+    aliases: ['rwts', 'robert', 'watts', 'robfox007', 'robert007', 'robfox'],
   },
 ]);
 
@@ -102,13 +102,32 @@ function aliasTokens(raw) {
   return normAlias(raw).split(' ').filter(Boolean);
 }
 
+// Whole tokens only. Trailing digits fold (robert007 → robert, bastion2 → bastion).
+// A leftover single letter is not a token, and nothing matches by substring.
+function aliasMatchTokens(raw) {
+  const tokens = new Set();
+  for (const token of aliasTokens(raw)) {
+    if (token.length < 2) continue;
+    tokens.add(token);
+    const stripped = token.replace(/\d+$/, '');
+    if (stripped.length >= 2 && stripped !== token) tokens.add(stripped);
+  }
+  return tokens;
+}
+
 export function lookupDiscordAlias(raw) {
-  const tokens = new Set(aliasTokens(raw));
+  const tokens = aliasMatchTokens(raw);
   if (!tokens.size) return '';
   for (const row of DISCORD_ALIAS_MAP) {
     for (const alias of row.aliases) {
-      const need = aliasTokens(alias);
-      if (need.length && need.every((token) => tokens.has(token))) return row.snowflake;
+      const need = aliasTokens(alias).filter((token) => token.length >= 2);
+      if (!need.length) continue;
+      const matched = need.every((token) => {
+        if (tokens.has(token)) return true;
+        const stripped = token.replace(/\d+$/, '');
+        return stripped.length >= 2 && tokens.has(stripped);
+      });
+      if (matched) return row.snowflake;
     }
   }
   return '';
@@ -565,6 +584,7 @@ const SETUP_PHASE_LABELS = {
 
 export function phaseLabelOf(gameState) {
   if (!gameState) return '';
+  if (gameState.phase === 'territory_draft') return 'Territory Draft';
   if (typeof gameState.getTurnPhaseName === 'function' && gameState.phase === 'playing') {
     const named = gameState.getTurnPhaseName();
     if (named && named !== gameState.turnPhase) return named;

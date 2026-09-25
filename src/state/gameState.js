@@ -29,10 +29,20 @@ import { emitGameEvent, summarizeUnits } from '../multiplayer/gameEventLog.js';
 import { omitUndefinedDeep } from './persistState.js';
 import { flushDiceBuffer, observeRolledDie } from '../stats/diceTracker.js';
 import {
+  DIRECT_TECH_IPC_COST,
   normalizeGameOptions,
   scaleStartingUnits,
   techPicksFromRolls,
 } from '../gameOptions.js';
+import { GAME_VERSION } from '../version.js';
+import {
+  DRAFT_MIN_CLIENT,
+  DRAFT_PHASE,
+  buildSnakeDraftOrder,
+  chooseDraftTerritory,
+  draftOpenRefusal,
+  normalizeDraftState,
+} from './territoryDraft.js';
 
 function cloneMoveHistory(rows) {
   if (!Array.isArray(rows)) return [];
@@ -60,6 +70,7 @@ import {
 
 export const GAME_PHASES = {
   LOBBY: 'lobby',
+  TERRITORY_DRAFT: DRAFT_PHASE,
   CAPITAL_PLACEMENT: 'capital_placement',
   UNIT_PLACEMENT: 'unit_placement',
   PLAYING: 'playing',
@@ -109,7 +120,8 @@ export function resolvePersistedTurnPhase(phase, turnPhase) {
 }
 
 export function isSetupPhase(phase) {
-  return phase === GAME_PHASES.CAPITAL_PLACEMENT
+  return phase === GAME_PHASES.TERRITORY_DRAFT
+    || phase === GAME_PHASES.CAPITAL_PLACEMENT
     || phase === GAME_PHASES.UNIT_PLACEMENT;
 }
 
@@ -601,15 +613,91 @@ export class GameState {
       ];
     }
 
-    // Randomly assign territories
-    this._assignTerritories();
+    this.placementRound = 1;
+    this.currentPlayerIndex = 0;
+    if (this.gameOptions?.territorySetup === 'draft') {
+      this._beginTerritoryDraft();
+    } else {
+      // Randomly assign territories
+      this._assignTerritories();
 
-    // Place 1 infantry on each territory
-    this._placeStartingInfantry();
+      // Place 1 infantry on each territory
+      this._placeStartingInfantry();
 
+      this.phase = GAME_PHASES.CAPITAL_PLACEMENT;
+    }
+  }
+
+  _beginTerritoryDraft() {
+    const ids = this.players.map((player) => player.id);
+    this.draft = {
+      order: buildSnakeDraftOrder(ids, this.landTerritories.length),
+      pickIndex: 0,
+      picks: [],
+    };
+    this.phase = GAME_PHASES.TERRITORY_DRAFT;
+    this.turnPhase = SETUP_TURN_PHASE;
+    if (!this.draft.order.length) {
+      this._completeTerritoryDraft();
+      return;
+    }
+    this._syncDraftSeat();
+  }
+
+  _syncDraftSeat() {
+    const id = this.draft?.order?.[this.draft.pickIndex];
+    if (!id) return;
+    const idx = this.players.findIndex((player) => player.id === id);
+    if (idx >= 0) this.currentPlayerIndex = idx;
+  }
+
+  draftPickerId() {
+    if (this.phase !== GAME_PHASES.TERRITORY_DRAFT || !this.draft) return null;
+    return this.draft.order[this.draft.pickIndex] || null;
+  }
+
+  // One unowned land territory. Snake order lives in draft.order.
+  pickDraftTerritory(territoryName) {
+    if (this.phase !== GAME_PHASES.TERRITORY_DRAFT || !this.draft) return false;
+    const expectedId = this.draftPickerId();
+    if (!expectedId) return false;
+    this._syncDraftSeat();
+    if (this.currentPlayer?.id !== expectedId) return false;
+    const territory = this.territoryByName[territoryName];
+    if (!territory || territory.isWater) return false;
+    if (this.getOwner(territoryName)) return false;
+
+    this.territoryState[territoryName] = {
+      owner: expectedId,
+      isCapital: false,
+    };
+    this.units[territoryName] = [{
+      type: 'infantry',
+      quantity: 1,
+      owner: expectedId,
+    }];
+    this.draft.picks.push({ playerId: expectedId, territory: territoryName });
+    this.draft.pickIndex += 1;
+
+    if (this.draft.pickIndex >= this.draft.order.length) {
+      this._completeTerritoryDraft();
+    } else {
+      this._syncDraftSeat();
+    }
+    this._notify();
+    return true;
+  }
+
+  chooseAiDraftTerritory(playerId, random = Math.random) {
+    return chooseDraftTerritory(this, playerId, random);
+  }
+
+  _completeTerritoryDraft() {
     this.phase = GAME_PHASES.CAPITAL_PLACEMENT;
+    this.turnPhase = SETUP_TURN_PHASE;
     this.currentPlayerIndex = 0;
     this.placementRound = 1;
+    this.draft = undefined;
   }
 
   _assignTerritories() {
@@ -4957,17 +5045,39 @@ export class GameState {
       rolls.push(roll);
     }
 
-    // Reset tokens after rolling (they're consumed)
-    techState.techTokens = 0;
-
     // Off (today): any 6 is one breakthrough. On: each 6 is its own pick.
     const picks = techPicksFromRolls(rolls, {
       multipleTech: this.gameOptions?.multipleTech === true,
     });
+    const keep = this.gameOptions?.techAcquisition === 'keep';
+    // Dice tokens (today): spent on the roll. Keep: a miss leaves them
+    // for the next turn; a breakthrough spends the tokens that were rolled.
+    const kept = keep && picks === 0;
+    if (!kept) techState.techTokens = 0;
 
     this._notify();
     flushDiceBuffer(this);
-    return { success: picks > 0, rolls, picks };
+    return { success: picks > 0, rolls, picks, kept };
+  }
+
+  // Buy directly: one technology for a fixed IPC cost during Purchase.
+  buyTech(playerId, techId) {
+    if (this.gameOptions?.techAcquisition !== 'buy') return false;
+    if (this.phase !== GAME_PHASES.PLAYING || this.turnPhase !== TURN_PHASES.PURCHASE) return false;
+    const pState = this.playerState[playerId];
+    if (!pState || pState.ipcs < DIRECT_TECH_IPC_COST) return false;
+    if (!TECHNOLOGIES[techId]) return false;
+    if (!this.playerTechs[playerId]) {
+      this.playerTechs[playerId] = { techTokens: 0, unlockedTechs: [] };
+    }
+    const unlocked = this.playerTechs[playerId].unlockedTechs || [];
+    if (unlocked.includes(techId)) return false;
+    pState.ipcs -= DIRECT_TECH_IPC_COST;
+    if (!this.unlockTech(playerId, techId)) {
+      pState.ipcs += DIRECT_TECH_IPC_COST;
+      return false;
+    }
+    return true;
   }
 
   // Unlock a specific tech (called after breakthrough)
@@ -6153,6 +6263,14 @@ export class GameState {
       // Additive (no schema bump): host game options. Missing on old saves
       // loads as today's rules. See gameOptions.js.
       gameOptions: normalizeGameOptions(this.gameOptions),
+      // Additive (no schema bump): present only while a draft is in progress.
+      // Old saves omit it. minClientVersion tells an older build to refuse.
+      draft: this.phase === GAME_PHASES.TERRITORY_DRAFT
+        ? normalizeDraftState(this.draft)
+        : undefined,
+      minClientVersion: this.phase === GAME_PHASES.TERRITORY_DRAFT
+        ? DRAFT_MIN_CLIENT
+        : undefined,
       // Additive (no schema bump): per-row Undo for the current turn.
       // Old saves omit the fields and load as [] / 0. nextTurn still clears
       // both. Undo refuses a row whose player is not the current seat.
@@ -6172,6 +6290,13 @@ export class GameState {
   }
 
   loadFromJSON(data) {
+    const refusal = draftOpenRefusal(data, GAME_VERSION);
+    if (refusal) {
+      const err = new Error('This game is in a territory draft. Update Tactical Risk to open it.');
+      err.code = refusal.reason;
+      err.minClientVersion = refusal.minClientVersion;
+      throw err;
+    }
     if (data.version < 3) throw new Error('Incompatible save version');
     this._suppressPersist = true;
     try {
@@ -6279,6 +6404,8 @@ export class GameState {
     if (data.gameOptions && data.gameOptions.teams !== undefined) {
       this.teamsEnabled = this.gameOptions.teams;
     }
+    this.draft = normalizeDraftState(data.draft);
+    if (this.phase === GAME_PHASES.TERRITORY_DRAFT) this._syncDraftSeat();
 
     // Reset per-turn state on load (fresh state for the turn)
     this.rocketsUsedThisTurn = {};
