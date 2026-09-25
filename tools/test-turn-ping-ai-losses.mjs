@@ -39,7 +39,7 @@ const check = (label, cond, extra) => {
   }
 };
 
-check('stamp is unified.14.1', GAME_VERSION === 'V2.81.57-unified.15');
+check('stamp is unified.15', GAME_VERSION === 'V2.81.57-unified.15');
 check('schema stays 11', SCHEMA_VERSION === 11);
 
 const landDefs = {
@@ -208,6 +208,7 @@ function playTxCombat(gs, onRound) {
 }
 
 const EXPECTED_ROB = [
+  '<@600101834727620620>',
   'Robert007 - Germany Develop Tech Phase',
   '-2x Infantry, 1x Tank lost Turkey - British Easy AI',
   '-1x Infantry lost Kenya-Rhodesia - British Easy AI',

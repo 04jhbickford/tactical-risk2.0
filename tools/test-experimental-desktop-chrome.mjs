@@ -25,9 +25,9 @@ const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const brief = readFileSync(new URL('../briefs/2026-09-20-main-art-three-ux/DESKTOP-EXPERIMENTAL-CHROME-BRIEF.md', import.meta.url), 'utf8');
 const checklist = readFileSync(new URL('../briefs/2026-09-20-main-art-three-ux/ADAPTIVE-LOBBY-CHECKLIST.md', import.meta.url), 'utf8');
 
-assert.match(html, /tr-game-version" content="V2\.81\.57-unified\.14\.1"/);
-assert.match(html, /style\.css\?v=V2\.81\.57-unified\.14\.1/);
-assert.match(html, /src\/main\.js\?v=V2\.81\.57-unified\.14\.1/);
+assert.match(html, /tr-game-version" content="V2\.81\.57-unified\.15"/);
+assert.match(html, /style\.css\?v=V2\.81\.57-unified\.15/);
+assert.match(html, /src\/main\.js\?v=V2\.81\.57-unified\.15/);
 
 assert.match(brief, /map center \+ left context rail \+ right actions rail/);
 assert.match(brief, /fixed map scale grow frame/);

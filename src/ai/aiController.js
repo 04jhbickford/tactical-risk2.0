@@ -4,7 +4,6 @@
 import { AIPlayer } from './aiPlayer.js';
 import { GAME_PHASES, TURN_PHASES } from '../state/gameState.js';
 import { DIRECT_TECH_IPC_COST } from '../gameOptions.js';
-import { DIRECT_TECH_IPC_COST } from '../gameOptions.js';
 import {
   adjacentSeas,
   countOwned,

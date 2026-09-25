@@ -30,10 +30,10 @@ globalThis.sessionStorage = memoryStore();
 globalThis.localStorage = memoryStore();
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-assert.match(html, /window\.__TR_GAME_VERSION = 'V2\.81\.57-unified\.14\.1'/);
-assert.match(html, /name="tr-game-version" content="V2\.81\.57-unified\.14\.1"/);
+assert.match(html, /window\.__TR_GAME_VERSION = 'V2\.81\.57-unified\.15'/);
+assert.match(html, /name="tr-game-version" content="V2\.81\.57-unified\.15"/);
 assert.match(html, /lockStamp/);
-assert.match(html, /src="src\/main\.js\?v=V2\.81\.57-unified\.14\.1"/);
+assert.match(html, /src="src\/main\.js\?v=V2\.81\.57-unified\.15"/);
 
 assert.equal(GAME_VERSION, 'V2.81.57-unified.15', 'stamp is unified.2');
 assert.equal(SCHEMA_VERSION, 11, 'SCHEMA stays 11');
