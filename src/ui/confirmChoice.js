@@ -1,7 +1,8 @@
 // In-app confirm. In-app browsers (Discord, some iOS web views) block or
 // auto-cancel window.confirm, so Resign / Save & Exit never ran.
 // Phone: bottom sheet, 44px targets, above the home indicator.
-// Desktop: compact centered dialog. Esc cancels, Enter confirms.
+// Desktop: compact centered dialog. Esc cancels. Enter and Space activate
+// whichever button is focused (native click); they do not force confirm.
 
 import { isMobileShell } from './mobileShell.js';
 
@@ -75,11 +76,6 @@ export function confirmChoice({
         finish(false);
         return;
       }
-      if (key === 'Enter') {
-        event.preventDefault?.();
-        finish(true);
-        return;
-      }
       if (key !== 'Tab') return;
       const items = focusables();
       const current = items.indexOf(doc.activeElement);
@@ -93,6 +89,6 @@ export function confirmChoice({
     backdrop.addEventListener('click', () => finish(false));
     cancelBtn.addEventListener('click', () => finish(false));
     okBtn.addEventListener('click', () => finish(true));
-    okBtn.focus();
+    cancelBtn.focus();
   });
 }

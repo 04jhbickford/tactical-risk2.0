@@ -236,8 +236,17 @@ globalThis.document = {
 };
 
 function keydown(key, extra = {}) {
-  const event = { key, preventDefault() {}, ...extra };
+  let defaultPrevented = false;
+  const event = {
+    key,
+    ...extra,
+    preventDefault() { defaultPrevented = true; },
+  };
   for (const fn of (documentListeners.keydown || []).slice()) fn(event);
+  const active = document.activeElement;
+  if ((key === 'Enter' || key === ' ') && !defaultPrevented && active?.tag === 'button') {
+    active.click();
+  }
 }
 
 let confirmCalls = 0;
@@ -303,9 +312,18 @@ check('Resign opens a centered dialog',
   !!dialog && dialog.classList.contains('tr-confirm--dialog') && confirmCalls === 0);
 check('Resign copy is the multiplayer warning',
   (dialog.querySelector('.tr-confirm-message')?.textContent || '').includes('Resign from this game'));
+const openedCancel = document.querySelector('[data-confirm="cancel"]');
+check('Resign dialog starts focused on Cancel', document.activeElement === openedCancel);
 keydown('Enter');
 await flush();
-check('Enter confirms Resign once', resigns === 1 && exits === 0 && !document.querySelector('.tr-confirm'));
+check('Enter with Cancel focused does not resign', resigns === 0 && exits === 0 && !document.querySelector('.tr-confirm'));
+
+resignBtn.click();
+document.querySelector('[data-confirm="ok"]').focus();
+check('Resign button can take focus', document.activeElement === document.querySelector('[data-confirm="ok"]'));
+keydown('Enter');
+await flush();
+check('Enter with Resign focused resigns once', resigns === 1 && exits === 0 && !document.querySelector('.tr-confirm'));
 
 resignBtn.click();
 keydown('Escape');
@@ -332,11 +350,11 @@ check('confirming Save & Exit runs once', exits === 1 && resigns === 1 && confir
 resignBtn.click();
 const trapCancel = document.querySelector('[data-confirm="cancel"]');
 const trapOk = document.querySelector('[data-confirm="ok"]');
-check('confirm button starts focused', document.activeElement === trapOk);
+check('focus trap starts on Cancel', document.activeElement === trapCancel);
 keydown('Tab');
-check('Tab moves to Cancel and stays in the dialog', document.activeElement === trapCancel);
+check('Tab moves to Resign and stays in the dialog', document.activeElement === trapOk);
 keydown('Tab', { shiftKey: true });
-check('Shift+Tab returns to Confirm', document.activeElement === trapOk);
+check('Shift+Tab returns to Cancel', document.activeElement === trapCancel);
 keydown('Escape');
 await flush();
 check('Escape from the focused dialog does not resign again', resigns === 1 && !document.querySelector('.tr-confirm'));
