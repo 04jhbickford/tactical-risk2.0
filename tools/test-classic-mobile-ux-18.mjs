@@ -1,4 +1,4 @@
-// V2.81.57-unified.10 — Classic mobile UX borrow from Experimental.
+// V2.81.57-unified.11 — Classic mobile UX borrow from Experimental.
 // Static checks only: stamp, SCHEMA freeze, mobile-gated CSS, peek tiles.
 
 import assert from 'node:assert/strict';
@@ -9,13 +9,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const { GAME_VERSION, SCHEMA_VERSION } = await import(pathToFileURL(join(root, 'src/version.js')));
 
-assert.equal(GAME_VERSION, 'V2.81.57-unified.10', 'stamp is unified.2');
+assert.equal(GAME_VERSION, 'V2.81.57-unified.11', 'stamp is unified.2');
 assert.equal(SCHEMA_VERSION, 11, 'SCHEMA stays 11');
 
 const html = readFileSync(join(root, 'index.html'), 'utf8');
-assert.match(html, /tr-game-version" content="V2\.81\.57-unified\.10"/);
-assert.match(html, /style\.css\?v=V2\.81\.57-unified\.10/);
-assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.10'/);
+assert.match(html, /tr-game-version" content="V2\.81\.57-unified\.11"/);
+assert.match(html, /style\.css\?v=V2\.81\.57-unified\.11/);
+assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.11'/);
 
 const css = readFileSync(join(root, 'style.css'), 'utf8');
 assert.match(css, /\.phone-peek-tile\s*\{/);

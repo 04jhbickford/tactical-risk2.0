@@ -36,7 +36,19 @@ import {
   shouldShowListInOpenGames,
 } from '../multiplayer/lobbyStart.js';
 import { seatNamesForOpenGameCard } from '../multiplayer/lobbySeats.js';
-import { parseDiscordSeatInput, rememberDiscordSeat } from '../multiplayer/discordTurnPing.js';
+import {
+  parseDiscordSeatInput,
+  readRememberedDiscordSeat,
+  rememberDiscordSeat,
+} from '../multiplayer/discordTurnPing.js';
+import {
+  captureFocusedDiscordDraft,
+  createDiscordSeatSaver,
+  lobbyPlayerDiscordHtml,
+  nextDiscordPrefill,
+  restoreFocusedDiscordDraft,
+  sameDiscordSeat,
+} from '../multiplayer/discordSeat.js';
 import { resolveHostAwayBanner } from '../ui/hudClarity.js';
 import {
   formatWelcomeEmail,
@@ -71,6 +83,8 @@ const AI_DIFFICULTIES = [
   { id: 'hard', name: 'Hard AI' },
 ];
 
+const DISCORD_SEAT_INPUT = 'input.mp-discord-input[data-action="discord-id"]';
+
 export class MultiplayerLobby {
   constructor(setup, onStart, onBack) {
     this.setup = setup;
@@ -86,6 +100,12 @@ export class MultiplayerLobby {
     this._openGamesList = false;
     // Hub after explicit Main Menu: snapshots must not resume a map or room.
     this._holdHub = false;
+    this._discordPrefillInflight = false;
+    this._optimisticDiscord = null;
+    this._discordRev = 0;
+    this._discordSaver = createDiscordSeatSaver({
+      commit: (raw) => this._commitDiscordSeat(raw),
+    });
     this._create();
   }
 
@@ -230,6 +250,7 @@ export class MultiplayerLobby {
 
   hide({ resetMode = true } = {}) {
     console.log('[MultiplayerLobby] hide() called');
+    this._flushDiscordSeat();
     this.el.classList.add('hidden');
     this.el.style.display = 'none'; // Force hide with display none
     this._syncOpenGamesChrome();
@@ -315,10 +336,26 @@ export class MultiplayerLobby {
 
   _render() {
     const savedScroll = captureLobbyScroll(this.el);
-    const focused = typeof document !== 'undefined' ? document.activeElement : null;
-    if (focused && this.el?.contains?.(focused) && typeof focused.blur === 'function') {
+    const discordInput = this.el?.querySelector?.(DISCORD_SEAT_INPUT) || null;
+    const active = typeof document !== 'undefined' ? document.activeElement : null;
+    let discordDraft = captureFocusedDiscordDraft(discordInput, active);
+    // Leaving the waiting room must keep what was typed. A snapshot that
+    // stays on the room must not blur the box — blur+innerHTML is what
+    // wiped the host's name before `change` could stick.
+    if (discordDraft && this.mode !== 'lobby') {
+      this._discordSaver?.onBlur(discordDraft.value);
+      discordDraft = null;
+    }
+    const focused = active;
+    if (
+      focused
+      && this.el?.contains?.(focused)
+      && focused !== discordInput
+      && typeof focused.blur === 'function'
+    ) {
       focused.blur();
     }
+    this._clearOptimisticDiscordIfLanded();
     const user = this.authManager.getUser();
 
     let content = '';
@@ -359,9 +396,65 @@ export class MultiplayerLobby {
     restoreLobbyScroll(this.el, savedScroll);
     this._syncOpenGamesChrome();
     this._bindEvents();
+    if (discordDraft) {
+      const nextDiscord = this.el.querySelector(DISCORD_SEAT_INPUT);
+      restoreFocusedDiscordDraft(nextDiscord, discordDraft);
+    }
+    this._queueDiscordPrefill();
     if (typeof requestAnimationFrame === 'function') {
       requestAnimationFrame(() => restoreLobbyScroll(this.el, savedScroll));
     }
+  }
+
+  _clearOptimisticDiscordIfLanded() {
+    const optimistic = this._optimisticDiscord;
+    if (!optimistic) return;
+    const me = this.lobbyManager.getCurrentPlayer?.() || null;
+    if (me && sameDiscordSeat(me, optimistic)) this._optimisticDiscord = null;
+  }
+
+  _commitDiscordSeat(raw, { onlyIfEmpty = false } = {}) {
+    const live = this.el?.querySelector?.(DISCORD_SEAT_INPUT) || null;
+    const focused = typeof document !== 'undefined' && live && document.activeElement === live;
+    const fields = parseDiscordSeatInput(focused ? live.value : raw);
+    rememberDiscordSeat(fields);
+    // A user edit (not the automatic prefill) invalidates an in-flight prefill.
+    if (!onlyIfEmpty) this._discordRev = (this._discordRev || 0) + 1;
+    const rev = this._discordRev || 0;
+    const me = this.lobbyManager.getCurrentPlayer?.() || null;
+    if (!onlyIfEmpty && me && sameDiscordSeat(me, fields)) {
+      this._optimisticDiscord = null;
+      return Promise.resolve({ success: true, unchanged: true });
+    }
+    this._optimisticDiscord = fields;
+    return this.lobbyManager.updateDiscordSeat(fields, {
+      onlyIfEmpty,
+      isStale: () => this._discordRev !== rev,
+    });
+  }
+
+  _flushDiscordSeat() {
+    const input = this.el?.querySelector?.(DISCORD_SEAT_INPUT);
+    if (!input || !this._discordSaver) return;
+    this._discordSaver.onBlur(input.value);
+  }
+
+  _queueDiscordPrefill() {
+    if (this.mode !== 'lobby') return;
+    const input = this.el?.querySelector?.(DISCORD_SEAT_INPUT) || null;
+    const editing = typeof document !== 'undefined' && input && document.activeElement === input;
+    const next = nextDiscordPrefill({
+      inFlight: !!this._discordPrefillInflight,
+      seat: this.lobbyManager.getCurrentPlayer?.() || null,
+      remembered: readRememberedDiscordSeat(),
+      editing: !!editing,
+    });
+    if (!next.patch) return;
+    this._discordPrefillInflight = true;
+    const raw = next.patch.discordUserId || next.patch.discordName || '';
+    Promise.resolve(this._commitDiscordSeat(raw, { onlyIfEmpty: true })).finally(() => {
+      this._discordPrefillInflight = false;
+    });
   }
 
   _renderMenu(user) {
@@ -944,12 +1037,12 @@ export class MultiplayerLobby {
                       ${isAI ? `<span class="badge ai">${player.aiDifficulty?.toUpperCase() || 'AI'}</span>` : ''}
                       ${!isAI && !player.isHost ? `<span class="badge ${player.isReady ? 'ready' : 'waiting'}">${player.isReady ? 'READY' : 'SELECTING'}</span>` : ''}
                     </div>
-                    ${isMe && !isAI ? `
-                      <label class="mp-discord-field">
-                        Discord
-                        <input type="text" class="mp-discord-input" data-action="discord-id" maxlength="48" placeholder="ID or username (optional)" value="${player.discordUserId || player.discordName || ''}" autocomplete="off">
-                      </label>
-                    ` : (!isAI && (player.discordName || player.discordUserId) ? `<span class="mp-discord-linked">Discord linked</span>` : '')}
+                    ${lobbyPlayerDiscordHtml({
+                      player,
+                      userId: user?.id,
+                      remembered: readRememberedDiscordSeat(),
+                      optimistic: this._optimisticDiscord,
+                    })}
                   </div>
                   ${isAI && isHost ? `
                     <button class="mp-remove-btn" data-action="remove-ai" data-index="${index}" data-oder-id="${player.oderId || ''}" title="Remove AI">×</button>
@@ -1278,11 +1371,19 @@ export class MultiplayerLobby {
       }
     });
 
-    // Faction selection
-    this.el.querySelector('[data-action="discord-id"]')?.addEventListener('change', async (e) => {
-      const fields = parseDiscordSeatInput(e.target.value);
-      rememberDiscordSeat(fields);
-      await this.lobbyManager.updatePlayer(fields);
+    // Discord name: save while typing, and again on blur / Enter.
+    // `change` alone never fired until blur, and the snapshot blur rebuilt
+    // the box from the still-empty seat.
+    this.el.querySelector(DISCORD_SEAT_INPUT)?.addEventListener('input', (e) => {
+      this._discordSaver?.onInput(e.target.value);
+    });
+    this.el.querySelector(DISCORD_SEAT_INPUT)?.addEventListener('blur', (e) => {
+      this._discordSaver?.onBlur(e.target.value);
+    });
+    this.el.querySelector(DISCORD_SEAT_INPUT)?.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      this._discordSaver?.onEnter(e.target.value);
     });
 
     this.el.querySelectorAll('.mp-faction-btn:not([disabled])').forEach(btn => {
