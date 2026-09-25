@@ -34,7 +34,7 @@ const check = (label, cond) => {
 };
 
 console.log('=== Version stamps ===');
-check('GAME_VERSION is V2.81.57-unified.9', GAME_VERSION === 'V2.81.57-unified.9');
+check('GAME_VERSION is V2.81.57-unified.10', GAME_VERSION === 'V2.81.57-unified.10');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== Undo is default except combat resolve and Done/pass ===');

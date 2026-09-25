@@ -2,6 +2,20 @@
 
 ---
 
+## 9.24.26 — unified.10 Bastion setup deploy lock
+
+Stamp `V2.81.57-unified.10`. Schema stays 11.
+
+Bastion, Discord `#tactical-risk` `1552871681196949568`, live `V2.81.57-unified.9`. During initial deployment on desktop/tablet, all six units stayed on the first territory used that turn. Undo did not release it. A sea zone still offered ships, but Deploy targeted the first land. Refresh cleared it. Phone @390 was already retargeting on every tap.
+
+Cause: `_phoneDeployDest()` prefers `_phoneDeployLandName`. Desktop Deploy and Mobilize wrote that name on commit, and `setSelectedTerritory()` only refreshed it inside the mobile shell. `clearPendingPlacementOverlay()` (Undo) left the name in place.
+
+Fix: off the mobile shell, selecting a territory sets the deploy target to that territory, and Undo clears the pin. Phone pair grammar is unchanged.
+
+Receipt: `node tools/test-unified-10-deploy-target.mjs`.
+
+---
+
 ## 9.24.26 — unified.9 Bastion same-match rejoin
 
 Stamp `V2.81.57-unified.9`. Schema stays 11.

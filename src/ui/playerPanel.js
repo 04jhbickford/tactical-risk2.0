@@ -975,6 +975,9 @@ export class PlayerPanel {
     this.placementQueue = {};
     this._lastQueueUnitType = null;
     this._queueLockType = null;
+    // Undo releases a desktop/tablet pin. Phone keeps the tapped land;
+    // the next land tap already re-targets.
+    if (!isMobileShell()) this._phoneDeployLandName = null;
   }
 
   setSelectedTerritory(territory, { immediate = true } = {}) {
@@ -993,6 +996,11 @@ export class PlayerPanel {
     if (territory) this.selectedTerritory = territory;
     if (this.gameState && keepPlaced != null) {
       this.gameState.unitsPlacedThisRound = keepPlaced;
+    }
+    // Phone pair grammar owns the name on the mobile shell. Everywhere
+    // else, Deploy / Mobilize follow the territory just selected.
+    if (!isMobileShell()) {
+      this._phoneDeployLandName = territory?.name || null;
     }
     if (this._shouldStagePhonePairLand(territory)) {
       this._phoneDeployLandName = territory.name;
@@ -1269,6 +1277,12 @@ export class PlayerPanel {
   }
 
   _phoneDeployDest() {
+    // Desktop and tablet: the selected territory wins, even if a previous
+    // Deploy left _phoneDeployLandName on the first land of the turn.
+    if (!isMobileShell()) {
+      const selectedName = this.selectedTerritory?.name;
+      return (selectedName && this.territories?.[selectedName]) || this.selectedTerritory || null;
+    }
     const landName = this._phoneDeployLandName || this.selectedTerritory?.name;
     return (landName && this.territories?.[landName]) || this.selectedTerritory || null;
   }
@@ -5291,6 +5305,7 @@ export class PlayerPanel {
             const terr = this.territories[terrName];
             if (terr) {
               this.selectedTerritory = terr;
+              if (!isMobileShell()) this._phoneDeployLandName = terr.name;
               this._scheduleRender();
             }
           }
