@@ -1776,7 +1776,8 @@ export class TerritoryRenderer {
 
     ctx.save();
 
-    for (const [t1Name, t2Name] of LAND_BRIDGES) {
+    const bridges = this.gameState?.activeLandBridges?.() || LAND_BRIDGES;
+    for (const [t1Name, t2Name] of bridges) {
       const t1 = this.territoryByName[t1Name];
       const t2 = this.territoryByName[t2Name];
 

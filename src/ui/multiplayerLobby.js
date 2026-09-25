@@ -37,6 +37,15 @@ import {
 } from '../multiplayer/lobbyStart.js';
 import { seatNamesForOpenGameCard } from '../multiplayer/lobbySeats.js';
 import {
+  describe,
+  mergeGameOptionsIntoSettings,
+  normalizeGameOptions,
+  optionsFromSettings,
+  rulesChip,
+  settingsEditError,
+} from '../gameOptions.js';
+import { bindGameOptions, readGameOptionsFrom, renderGameOptionsPanel } from './gameOptionsPanel.js';
+import {
   parseDiscordSeatInput,
   readRememberedDiscordSeat,
   rememberDiscordSeat,
@@ -106,6 +115,9 @@ export class MultiplayerLobby {
     this._discordSaver = createDiscordSeatSaver({
       commit: (raw) => this._commitDiscordSeat(raw),
     });
+    this._draftOptions = normalizeGameOptions(null);
+    this._optionsOpen = false;
+    this._optionsSheet = false;
     this._create();
   }
 
@@ -603,27 +615,12 @@ export class MultiplayerLobby {
           <label>Game Name</label>
           <input type="text" id="create-name" placeholder="${possessivePhrase(user?.displayName, 'Game')}" maxlength="30" class="modern-input">
         </div>
-        <div class="mp-field-row">
-          <div class="mp-field">
-            <label>Max Players</label>
-            <select id="create-max-players" class="modern-select">
-              <option value="2">2 Players</option>
-              <option value="3">3 Players</option>
-              <option value="4">4 Players</option>
-              <option value="5" selected>5 Players</option>
-            </select>
-          </div>
-          <div class="mp-field">
-            <label>Starting IPCs</label>
-            <select id="create-ipcs" class="modern-select">
-              <option value="40">40</option>
-              <option value="60">60</option>
-              <option value="80" selected>80</option>
-              <option value="100">100</option>
-              <option value="120">120</option>
-            </select>
-          </div>
-        </div>
+        ${renderGameOptionsPanel(this._draftOptions, {
+          editable: true,
+          open: this._optionsOpen,
+          sheet: this._optionsSheet,
+        })}
+        <p class="game-rules-preview go-live-mirror">${describe(this._draftOptions)}</p>
         <label class="mp-checkbox-option standalone">
           <input type="checkbox" id="create-private">
           <span class="checkbox-box"></span>
@@ -736,6 +733,7 @@ export class MultiplayerLobby {
                     <div class="mp-game-info">
                       <span class="mp-game-name">${playerNames || 'Game in progress'}</span>
                       <span class="mp-game-details">${isStarting ? 'Starting' : `Round ${round}`} · ${seatNames.length || players.length} players</span>
+                      <span class="mp-rules-chip">${rulesChip(game.state?.gameOptions || game.lobbyData?.settings?.gameOptions, game.lobbyData?.settings)}</span>
                     </div>
                     <span class="mp-game-join">${isMyTurn && rowAction.action === 'rejoin-map' ? 'Your Turn!' : rowAction.label}</span>
                   </button>
@@ -772,6 +770,7 @@ export class MultiplayerLobby {
                     <div class="mp-game-info">
                       <span class="mp-game-name">${lobby.name}</span>
                       <span class="mp-game-details">${lobby.players.length}/${lobby.settings.maxPlayers} players${isOwnLobby ? ' · ' + waitingText : ''}</span>
+                      <span class="mp-rules-chip">${rulesChip(lobby.settings?.gameOptions, lobby.settings)}</span>
                     </div>
                     <span class="mp-game-join">${isOwnLobby ? 'Enter' : 'Join'}</span>
                   </button>
@@ -1088,17 +1087,12 @@ export class MultiplayerLobby {
             </div>
           </div>
 
-          ${isHost ? `
-            <div class="mp-game-options">
-              <label class="mp-toggle-inline">
-                <input type="checkbox" id="lobby-teams" ${lobby.settings?.teamsEnabled ? 'checked' : ''}>
-                <span class="toggle-slider small"></span>
-                <span class="toggle-label-text">Team Mode</span>
-              </label>
-            </div>
-          ` : (lobby.settings?.teamsEnabled ? `
-            <div class="mp-team-mode-badge">Team Mode Enabled</div>
-          ` : '')}
+          ${renderGameOptionsPanel(optionsFromSettings(lobby.settings), {
+            editable: isHost,
+            open: this._optionsOpen,
+            sheet: this._optionsSheet,
+          })}
+          <p class="game-rules-preview go-live-mirror">${describe(optionsFromSettings(lobby.settings))}</p>
         </div>
 
         <div class="mp-lobby-actions">
@@ -1422,9 +1416,35 @@ export class MultiplayerLobby {
       });
     });
 
-    // Team mode toggle (host only)
-    this.el.querySelector('#lobby-teams')?.addEventListener('change', async (e) => {
-      await this.lobbyManager.updateSettings({ teamsEnabled: e.target.checked });
+    bindGameOptions(this.el, {
+      onChange: (next) => this._commitGameOptions(next),
+      onToggle: ({ open, sheet }) => {
+        this._optionsOpen = open;
+        this._optionsSheet = sheet;
+      },
+    });
+  }
+
+  async _commitGameOptions(next) {
+    if (this.mode === 'create') {
+      this._draftOptions = normalizeGameOptions(next);
+      this.el?.querySelectorAll('.go-live-mirror').forEach((el) => {
+        el.textContent = describe(this._draftOptions);
+      });
+      const collapsed = this.el?.querySelector('.go-collapsed .go-summary-text');
+      if (collapsed) collapsed.textContent = describe(this._draftOptions);
+      return;
+    }
+    const lobby = this.lobbyManager.getLobby();
+    const isHost = this.lobbyManager.isHost();
+    const denied = settingsEditError({ isHost });
+    if (denied) return;
+    const settings = mergeGameOptionsIntoSettings(lobby?.settings, next);
+    await this.lobbyManager.updateSettings({
+      maxPlayers: settings.maxPlayers,
+      startingIPCs: settings.startingIPCs,
+      teamsEnabled: settings.teamsEnabled,
+      gameOptions: settings.gameOptions,
     });
   }
 
@@ -1504,8 +1524,10 @@ export class MultiplayerLobby {
   async _handleCreate(form) {
     if (this._blocksCompetingEntry()) return;
     const name = form.querySelector('#create-name').value;
-    const maxPlayers = parseInt(form.querySelector('#create-max-players').value);
-    const startingIPCs = parseInt(form.querySelector('#create-ipcs').value);
+    const drafted = readGameOptionsFrom(form);
+    this._draftOptions = drafted;
+    const maxPlayers = drafted.maxPlayers;
+    const startingIPCs = drafted.startingIPCs;
     const isPrivate = form.querySelector('#create-private').checked;
     const password = isPrivate ? form.querySelector('#create-password').value : null;
 
@@ -1518,7 +1540,8 @@ export class MultiplayerLobby {
         maxPlayers,
         startingIPCs,
         password: password || null,
-        teamsEnabled: false // Team mode can be enabled in the lobby
+        teamsEnabled: drafted.teams,
+        gameOptions: drafted,
       });
 
       if (!result.success) {

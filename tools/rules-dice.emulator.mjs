@@ -78,7 +78,7 @@ async function flushLikeClient(db, {
       playerSeat: 'p1',
       isAI: false,
       writerUid: uid,
-      clientVersion: 'V2.81.57-unified.13',
+      clientVersion: 'V2.81.57-unified.14',
       ts: Date.now(),
       seq: seq + i,
       dice: [die(face)],

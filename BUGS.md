@@ -2,6 +2,22 @@
 
 ---
 
+## 9.25.26 — unified.14 game options panel
+
+Stamp `V2.81.57-unified.14`. Schema stays 11.
+
+Rob, Discord `#wishlist`: `1553114664886608024` change starting deployment units, `1553114851063369739` no land connections. James: a Land bridges on/off option, default ON. `1553113043867664405` (7–8 players) stays out. Bastion, `#tactical-risk` `1551754139325833286`: more than one industrial research win when you roll more than one 6.
+
+The New Local Game screen and the online Create / waiting room had Starting IPCs, Teams, and (online) max players as separate controls. Setup always placed 6 units a round from `RISK_STARTING_UNITS`, a research roll of several 6s unlocked one tech, and the 16 `LAND_BRIDGES` were always in the movement graph.
+
+Fix: one Game options card. Defaults are today's game (80 IPCs, teams off, max 5, 6 per round, standard army, one breakthrough, land bridges on). An untouched panel changes nothing. The host's `settings.gameOptions` is copied onto the game doc by the existing `startGame` settings write. `toJSON` stores the object; an old save without it loads the defaults. No Firestore rules change.
+
+Light army is one third fewer units, Heavy one third more, rounded, infantry at least 1. Multiple breakthroughs, when on, lets each 6 pick a distinct tech. Land bridges off drops those 16 adjacencies from `getConnections`, `hasLandBridge`, and AI island pathing.
+
+Receipt: `node tools/test-game-options-defaults.mjs`, `node tools/test-game-options-rules.mjs`, `node tools/test-game-options-lobby.mjs`.
+
+---
+
 ## 9.25.26 — unified.13 dice stats (observe only)
 
 Stamp `V2.81.57-unified.13`. Schema stays 11.

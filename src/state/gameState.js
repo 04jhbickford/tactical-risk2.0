@@ -28,6 +28,11 @@ import { cascadeUndoIndexes } from './moveUndo.js';
 import { emitGameEvent, summarizeUnits } from '../multiplayer/gameEventLog.js';
 import { omitUndefinedDeep } from './persistState.js';
 import { flushDiceBuffer, observeRolledDie } from '../stats/diceTracker.js';
+import {
+  normalizeGameOptions,
+  scaleStartingUnits,
+  techPicksFromRolls,
+} from '../gameOptions.js';
 
 function cloneMoveHistory(rows) {
   if (!Array.isArray(rows)) return [];
@@ -219,6 +224,8 @@ export class GameState {
     this.gameMode = null;
     this.alliancesEnabled = false;
     this.teamsEnabled = false;
+    // Optional. Missing on old saves; defaults match today's rules.
+    this.gameOptions = normalizeGameOptions(null);
 
     this.players = [];
     this.currentPlayerIndex = 0;
@@ -462,6 +469,14 @@ export class GameState {
     this.gameMode = mode;
     this.alliancesEnabled = options.alliancesEnabled || (mode === 'classic');
     this.teamsEnabled = options.teamsEnabled || false;
+    this.gameOptions = normalizeGameOptions(options.gameOptions, {
+      startingIPCs: options.startingIPCs,
+      teamsEnabled: this.teamsEnabled,
+      maxPlayers: options.maxPlayers,
+    });
+    if (options.gameOptions && typeof options.gameOptions === 'object') {
+      this.teamsEnabled = this.gameOptions.teams;
+    }
 
     if (mode === 'classic') {
       this._initClassicMode(selectedPlayers);
@@ -540,8 +555,12 @@ export class GameState {
     const riskData = this.setup.risk;
     const playerCount = selectedPlayers.length;
 
-    // Use custom starting IPCs if provided, otherwise use player count-based defaults
-    const startingIPCs = options.startingIPCs || STARTING_IPCS_BY_PLAYER_COUNT[playerCount] || 18;
+    // Lobby passes startingIPCs (default 80). A caller that omits both the
+    // option and gameOptions keeps the player-count table.
+    const explicitIPCs = (options.gameOptions && options.gameOptions.startingIPCs != null)
+      ? this.gameOptions.startingIPCs
+      : options.startingIPCs;
+    const startingIPCs = explicitIPCs || STARTING_IPCS_BY_PLAYER_COUNT[playerCount] || 18;
 
     // Randomize player order for initial placement. Local 1-human + AI
     // seats the human first so opening Place Capital is that seat.
@@ -573,10 +592,12 @@ export class GameState {
       this.riskCards[p.id] = [];
       this.cardTradeCount[p.id] = 0;
 
-      // Initialize units to place (deep copy)
+      // Initialize units to place (deep copy). Standard army matches
+      // RISK_STARTING_UNITS quantity for quantity.
+      const pool = this._startingUnitPool();
       this.unitsToPlace[p.id] = [
-        ...RISK_STARTING_UNITS.land.map(u => ({ ...u })),
-        ...RISK_STARTING_UNITS.naval.map(u => ({ ...u })),
+        ...pool.land.map(u => ({ ...u })),
+        ...pool.naval.map(u => ({ ...u })),
       ];
     }
 
@@ -694,7 +715,7 @@ export class GameState {
 
     // Add land bridge connections
     const landBridgeConnections = [];
-    for (const [t1, t2] of LAND_BRIDGES) {
+    for (const [t1, t2] of this.activeLandBridges()) {
       if (t1 === territoryName && !baseConnections.includes(t2)) {
         landBridgeConnections.push(t2);
       } else if (t2 === territoryName && !baseConnections.includes(t1)) {
@@ -1119,8 +1140,14 @@ export class GameState {
   }
 
   // Check if two territories are connected by land bridge
+  // Land bridges on (today) or off. Off drops all 16 pairs from movement.
+  activeLandBridges() {
+    if (this.gameOptions?.landBridges === false) return [];
+    return LAND_BRIDGES;
+  }
+
   hasLandBridge(t1Name, t2Name) {
-    for (const [a, b] of LAND_BRIDGES) {
+    for (const [a, b] of this.activeLandBridges()) {
       if ((a === t1Name && b === t2Name) || (a === t2Name && b === t1Name)) {
         return true;
       }
@@ -1276,15 +1303,19 @@ export class GameState {
     return true;
   }
 
+  _startingUnitPool() {
+    return scaleStartingUnits(RISK_STARTING_UNITS, this.gameOptions?.startingArmy);
+  }
+
   _buildStartingDeployPool({ factoryAlreadyPlaced = false } = {}) {
-    const land = RISK_STARTING_UNITS.land.map((u) => ({ ...u }));
+    const land = this._startingUnitPool().land.map((u) => ({ ...u }));
     if (factoryAlreadyPlaced) {
       const factory = land.find((u) => u.type === 'factory');
       if (factory) factory.quantity = 0;
     }
     return [
       ...land.filter((u) => u.quantity > 0),
-      ...RISK_STARTING_UNITS.naval.map((u) => ({ ...u })),
+      ...this._startingUnitPool().naval.map((u) => ({ ...u })),
     ];
   }
 
@@ -1411,14 +1442,18 @@ export class GameState {
     return false;
   }
 
-  // Check if this is the final placement round (all players have ≤ 7 units remaining)
+  // Final placement wave: everyone has at most one more than a full round
+  // left (7 when the round cap is today's 6).
   isFinalPlacementRound() {
     if (!this.players) return false;
-    return this.players.every(p => this.getTotalUnitsToPlace(p.id) <= 7);
+    const threshold = this.getUnitsPerRoundLimit() + 1;
+    return this.players.every(p => this.getTotalUnitsToPlace(p.id) <= threshold);
   }
 
-  // Get the units per round limit (always 6)
+  // Units placed per setup round. Default 6. Host may choose 3–10.
   getUnitsPerRoundLimit() {
+    const n = Number(this.gameOptions?.unitsPerRound);
+    if (n >= 3 && n <= 10) return n;
     return 6;
   }
 
@@ -1427,7 +1462,7 @@ export class GameState {
     const player = this.currentPlayer;
     if (!player) return { success: false, error: 'No current player' };
 
-    // Enforce unit limit per turn during initial placement (7 for final round, 6 otherwise)
+    // Setup-round cap (default 6; host option 3–10).
     const limit = this.getUnitsPerRoundLimit();
     if (this.unitsPlacedThisRound >= limit) {
       return { success: false, error: `You can only place up to ${limit} units per turn. Click "Done" to continue.` };
@@ -4757,7 +4792,6 @@ export class GameState {
     }
 
     const rolls = [];
-    let breakthrough = false;
 
     for (let i = 0; i < techState.techTokens; i++) {
       const roll = this._rollDie({
@@ -4768,15 +4802,19 @@ export class GameState {
         playerSeat: playerId,
       });
       rolls.push(roll);
-      if (roll === 6) breakthrough = true;
     }
 
     // Reset tokens after rolling (they're consumed)
     techState.techTokens = 0;
 
+    // Off (today): any 6 is one breakthrough. On: each 6 is its own pick.
+    const picks = techPicksFromRolls(rolls, {
+      multipleTech: this.gameOptions?.multipleTech === true,
+    });
+
     this._notify();
     flushDiceBuffer(this);
-    return { success: breakthrough, rolls };
+    return { success: picks > 0, rolls, picks };
   }
 
   // Unlock a specific tech (called after breakthrough)
@@ -5956,6 +5994,9 @@ export class GameState {
       // Default false = AI pauses when no human is present. Old clients ignore
       // the extra field; a missing field loads as false. See aiPolicy.js.
       aiRunsWhenUnattended: this.aiRunsWhenUnattended ?? false,
+      // Additive (no schema bump): host game options. Missing on old saves
+      // loads as today's rules. See gameOptions.js.
+      gameOptions: normalizeGameOptions(this.gameOptions),
       // Additive (no schema bump): per-row Undo for the current turn.
       // Old saves omit the fields and load as [] / 0. nextTurn still clears
       // both. Undo refuses a row whose player is not the current seat.
@@ -6074,6 +6115,14 @@ export class GameState {
     // AI-when-unattended policy (Bug 2). Default false: pause AI when no human
     // is present. Older docs without the field load as the safe default.
     this.aiRunsWhenUnattended = data.aiRunsWhenUnattended ?? false;
+    // Game options are optional. An old save has no field and plays with
+    // today's defaults (land bridges on, 6 per round, standard army).
+    this.gameOptions = normalizeGameOptions(data.gameOptions, {
+      teamsEnabled: this.teamsEnabled,
+    });
+    if (data.gameOptions && data.gameOptions.teams !== undefined) {
+      this.teamsEnabled = this.gameOptions.teams;
+    }
 
     // Reset per-turn state on load (fresh state for the turn)
     this.rocketsUsedThisTurn = {};

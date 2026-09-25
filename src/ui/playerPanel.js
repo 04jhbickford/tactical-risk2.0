@@ -3174,7 +3174,7 @@ export class PlayerPanel {
       <div class="pp-inline-tech">
         <div class="pp-tech-budget">
           <span>IPCs: ${ipcs}</span>
-          <span class="pp-tech-cost-note">(5 per die, roll 6 = breakthrough)</span>
+          <span class="pp-tech-cost-note">${this.gameState.gameOptions?.multipleTech ? '(5 per die, each 6 is a breakthrough)' : '(5 per die, roll 6 = breakthrough)'}</span>
         </div>
 
         <div class="pp-tech-dice-row">

@@ -84,7 +84,7 @@ function makeTheater() {
 }
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-unified.13', GAME_VERSION === 'V2.81.57-unified.13');
+check('GAME_VERSION is V2.81.57-unified.14', GAME_VERSION === 'V2.81.57-unified.14');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== 9.20.26.07 shared canPlace / capacity ===');

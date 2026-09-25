@@ -11,6 +11,7 @@ export class TechUI {
     this.diceCount = 0;
     this.lastRolls = null;
     this.breakthrough = false;
+    this.picksLeft = 0;
     this.isMinimized = false;
 
     this._create();
@@ -38,6 +39,7 @@ export class TechUI {
     this.diceCount = 0;
     this.lastRolls = null;
     this.breakthrough = false;
+    this.picksLeft = 0;
     this._render();
     this.el.classList.remove('hidden');
     this._syncSheetFlag();
@@ -94,10 +96,14 @@ export class TechUI {
           </div>
         `;
       } else {
+        const picksLeft = this.picksLeft || 1;
+        const pickLine = picksLeft > 1
+          ? `Choose ${picksLeft} technologies (each 6 is one):`
+          : 'Choose a technology to unlock:';
         html += `
           <div class="tech-breakthrough">
             <div class="tech-breakthrough-title">Breakthrough!</div>
-            <div class="tech-breakthrough-desc">Choose a technology to unlock:</div>
+            <div class="tech-breakthrough-desc">${pickLine}</div>
             <div class="tech-options">
               ${availableTechs.map(techId => {
                 const tech = TECHNOLOGIES[techId];
@@ -123,7 +129,7 @@ export class TechUI {
             `).join('')}
           </div>
           <div class="tech-results-msg ${this.lastRolls.some(r => r === 6) ? 'success' : 'fail'}">
-            ${this.lastRolls.some(r => r === 6) ? 'Breakthrough! Rolled a 6!' : 'No breakthrough this time.'}
+            ${this._breakthroughMessage(this.lastRolls)}
           </div>
         </div>
       `;
@@ -218,9 +224,7 @@ export class TechUI {
       btn.addEventListener('click', () => {
         const techId = btn.dataset.tech;
         this.gameState.unlockTech(this.gameState.currentPlayer.id, techId);
-        this.breakthrough = false;
-        this.lastRolls = null;
-        this._complete();
+        if (this._consumeTechPick()) return;
       });
     });
 
@@ -258,7 +262,8 @@ export class TechUI {
     // Roll
     const result = this.gameState.rollTechDice(player.id);
     this.lastRolls = result.rolls;
-    this.breakthrough = result.success;
+    this.picksLeft = result.picks ?? (result.success ? 1 : 0);
+    this.breakthrough = this.picksLeft > 0;
     this.diceCount = 0;
 
     this._render();
@@ -293,6 +298,37 @@ export class TechUI {
     setTimeout(() => clearInterval(animateInterval), 1000);
   }
 
+  _breakthroughMessage(rolls) {
+    const sixes = (rolls || []).filter((face) => face === 6).length;
+    if (sixes <= 0) return 'No breakthrough this time.';
+    const picks = this.picksLeft || (sixes > 0 ? 1 : 0);
+    if (picks > 1) return `${picks} breakthroughs. Pick ${picks} technologies.`;
+    return 'Breakthrough! Rolled a 6!';
+  }
+
+  // One distinct tech per breakthrough. Off is a single pick (today).
+  _consumeTechPick({ centered = false, playerId = null } = {}) {
+    this.picksLeft = Math.max(0, (this.picksLeft || 1) - 1);
+    const id = playerId || this.gameState?.currentPlayer?.id;
+    const more = id ? (this.gameState.getAvailableTechs(id) || []) : [];
+    if (this.picksLeft > 0 && more.length > 0) {
+      this.breakthrough = true;
+      if (centered) this._showCenteredTechSelection(this.lastRolls || [], id);
+      else this._render();
+      return true;
+    }
+    this.breakthrough = false;
+    this.picksLeft = 0;
+    this.lastRolls = null;
+    if (centered) {
+      this._hideCenteredDiceResult();
+      if (this.onComplete) this.onComplete();
+    } else {
+      this._complete();
+    }
+    return true;
+  }
+
   _complete() {
     this.hide();
     if (this.onComplete) {
@@ -321,12 +357,14 @@ export class TechUI {
 
     // Perform the actual roll
     const result = this.gameState.rollTechDice(player.id);
+    this.picksLeft = result.picks ?? (result.success ? 1 : 0);
+    this.breakthrough = this.picksLeft > 0;
 
     // Show final result
     this._showCenteredDiceResult(diceCount, result, false);
 
     // If breakthrough, show tech selection in centered overlay
-    if (result.success) {
+    if (this.picksLeft > 0) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       this._showCenteredTechSelection(result.rolls, player.id);
     } else {
@@ -438,7 +476,7 @@ export class TechUI {
           <div class="die ${roll === 6 ? 'hit' : 'miss'}">${roll}</div>
         `).join('')}
       </div>
-      <div class="tech-select-header">Choose a Technology to Unlock:</div>
+      <div class="tech-select-header">${(this.picksLeft || 1) > 1 ? `Choose ${this.picksLeft} technologies:` : 'Choose a Technology to Unlock:'}</div>
       <div class="tech-select-options">`;
 
     for (const [id, tech] of availableTechs) {
@@ -459,10 +497,7 @@ export class TechUI {
       btn.addEventListener('click', () => {
         const techId = btn.dataset.tech;
         this.gameState.unlockTech(playerId, techId);
-        this._hideCenteredDiceResult();
-        if (this.onComplete) {
-          this.onComplete();
-        }
+        if (this._consumeTechPick({ centered: true, playerId })) return;
       });
     });
   }

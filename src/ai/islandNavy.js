@@ -140,14 +140,15 @@ export function pickSecondaryFactorySite({
   ownedLands = [],
   factoryAt = () => false,
   friendlyAtStart = null,
+  landBridges = LAND_BRIDGES,
 } = {}) {
-  const home = new Set(landmassNames(territoryByName, capitalName));
+  const home = new Set(landmassNames(territoryByName, capitalName, landBridges));
   const sites = [];
   for (const name of ownedLands) {
     if (home.has(name) || territoryByName?.[name]?.isWater) continue;
     if (factoryAt(name)) continue;
     if (friendlyAtStart && friendlyAtStart.size > 0 && !friendlyAtStart.has(name)) continue;
-    sites.push({ name, size: landmassNames(territoryByName, name).length });
+    sites.push({ name, size: landmassNames(territoryByName, name, landBridges).length });
   }
   sites.sort((a, b) => b.size - a.size || a.name.localeCompare(b.name));
   return sites[0]?.name || null;

@@ -53,6 +53,7 @@ import {
 } from './lobbySeats.js';
 import { readRememberedDiscordSeat } from './discordTurnPing.js';
 import { buildHumanLobbySeat, shouldApplyDiscordWrite } from './discordSeat.js';
+import { mergeGameOptionsIntoSettings } from '../gameOptions.js';
 
 // Generate a random 6-character lobby code
 function generateLobbyCode() {
@@ -112,11 +113,11 @@ export class LobbyManager {
       password: settings.password || null,
       status: 'waiting', // 'waiting', 'starting', 'in_progress', 'finished'
       isPublished: false, // Lobby not visible in Open Games until host clicks "Create Game"
-      settings: {
-        maxPlayers: settings.maxPlayers || 5,
-        startingIPCs: settings.startingIPCs || 80,
-        teamsEnabled: settings.teamsEnabled || false
-      },
+      settings: mergeGameOptionsIntoSettings({}, settings.gameOptions || {
+        maxPlayers: settings.maxPlayers,
+        startingIPCs: settings.startingIPCs,
+        teams: settings.teamsEnabled,
+      }),
       players: [buildHumanLobbySeat({
         user,
         isHost: true,
@@ -1086,6 +1087,8 @@ export class LobbyManager {
           state: null,
           lobbyData: {
             players: roster.players,
+            // Copies settings.gameOptions onto the game doc. Rules already
+            // allow this map; no rules change.
             settings: live.settings,
           },
         });

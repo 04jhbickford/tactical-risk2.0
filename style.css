@@ -20371,3 +20371,321 @@ html.mobile-shell.tech-active .tech-popup {
     font-size: 12px;
   }
 }
+
+/* Game options (unified.14). Desktop is a collapsed card. Tablet is one
+   column of 44px controls. Phone is one row plus a bottom sheet.
+   Never touch-action:none on these scrollers — lobby pan must keep working. */
+.go-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.go-collapsed,
+.go-phone-launch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 10px;
+  background: rgba(30, 41, 59, 0.45);
+  color: #e2e8f0;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.go-phone-launch { display: none; }
+.go-dot { color: #64748b; }
+.go-summary-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #94a3b8;
+}
+.go-customize { color: #60a5fa; font-weight: 600; }
+.go-chevron { margin-left: auto; font-size: 18px; color: #94a3b8; }
+.go-host-note {
+  margin: 0;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.go-body { display: none; }
+.go-panel.is-open .go-body { display: flex; }
+.go-body {
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+.go-group { display: flex; flex-direction: column; gap: 6px; }
+.go-group-label {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+.go-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+.go-label { font-size: 13px; color: #cbd5e1; }
+.go-control.modern-select {
+  min-width: 88px;
+  padding: 4px 8px;
+  min-height: 28px;
+  height: 28px;
+  font-size: 13px;
+}
+.go-toggle {
+  min-width: 52px;
+  min-height: 28px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.go-toggle[aria-checked="true"],
+.go-toggle[aria-pressed="true"] {
+  background: #2563eb;
+  border-color: #60a5fa;
+}
+.go-stepper { display: inline-flex; align-items: center; gap: 6px; }
+.go-step {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: #0f172a;
+  color: #e2e8f0;
+  cursor: pointer;
+}
+.go-step-value { min-width: 1.5em; text-align: center; font-variant-numeric: tabular-nums; }
+.go-reset {
+  align-self: flex-start;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+}
+.go-sheet { display: none; }
+.go-sheet[hidden] { display: none !important; }
+.mp-rules-chip {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  font-size: 11px;
+  color: #cbd5e1;
+}
+.rules-options-list { margin: 8px 0 0; padding-left: 18px; }
+.rules-options-summary { margin: 0; color: #cbd5e1; }
+
+@media (hover: hover) and (pointer: fine) {
+  .go-collapsed:hover,
+  .go-toggle:hover,
+  .go-step:hover,
+  .go-reset:hover { border-color: rgba(96, 165, 250, 0.7); }
+}
+
+@media (min-width: 1024px) {
+  .lobby-content-wrapper:has(.lobby-setup) {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+  .lobby-setup {
+    flex: 1 1 auto;
+    min-height: 0;
+    gap: 12px;
+  }
+  .setup-header,
+  .setup-footer { flex: 0 0 auto; }
+  .setup-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    gap: 12px;
+  }
+  .players-section {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+  .go-panel.is-open .go-body {
+    max-height: min(42vh, 280px);
+    overflow-y: auto;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 1023px) and (min-width: 641px) {
+  .go-collapsed { display: none; }
+  .go-phone-launch { display: none; }
+  .go-body,
+  .go-panel.is-open .go-body {
+    display: flex;
+    max-height: min(46vh, 420px);
+    overflow-y: auto;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+  .go-row { min-height: 44px; }
+  .go-control.modern-select,
+  .go-toggle,
+  .go-step,
+  .go-reset {
+    min-height: 44px;
+    height: 44px;
+  }
+  .go-step { width: 44px; }
+  .lobby-content-wrapper:has(.lobby-setup) {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .lobby-setup {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .setup-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    touch-action: pan-y;
+  }
+  .setup-footer { flex: 0 0 auto; }
+}
+
+@media (max-width: 640px) {
+  .go-collapsed { display: none; }
+  .go-phone-launch {
+    display: flex;
+    min-height: 44px;
+  }
+  .go-body { display: none; }
+  .go-panel.is-sheet .go-sheet {
+    display: flex;
+  }
+  .go-panel.is-sheet .go-body {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+  .go-sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 140;
+    display: none;
+    align-items: stretch;
+    justify-content: flex-end;
+    flex-direction: column;
+    background: rgba(2, 6, 23, 0.45);
+    pointer-events: auto;
+  }
+  .go-sheet-card {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - 96px - env(safe-area-inset-bottom, 0px));
+    margin: 0 0 calc(84px + env(safe-area-inset-bottom, 0px));
+    background: #0f172a;
+    border-radius: 16px 16px 0 0;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    padding: 12px 12px 8px;
+    box-sizing: border-box;
+  }
+  .go-sheet-slot {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+  }
+  .go-done {
+    flex: 0 0 auto;
+    min-height: 44px;
+    margin-top: 8px;
+    border: none;
+    border-radius: 10px;
+    background: #2563eb;
+    color: white;
+    font-weight: 700;
+    font-size: 16px;
+  }
+  .go-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+  /* The shared Teams control keeps its 114×44 phone rule. Inside a stacked
+     options row, flex-basis would become height — pin it back to 44px. */
+  .go-row.lobby-phone-teams {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+  }
+  .go-row .lobby-phone-teams-toggle {
+    flex: 0 0 auto;
+    align-self: center;
+    width: 114px;
+    min-width: 114px;
+    max-width: 114px;
+    height: 44px;
+    min-height: 44px;
+  }
+  .go-control.modern-select,
+  .go-toggle,
+  .go-step,
+  .go-reset,
+  .go-done {
+    min-height: 44px;
+  }
+  .go-step { width: 44px; height: 44px; }
+  .go-control.modern-select { width: 100%; height: 44px; font-size: 16px; }
+  .setup-footer,
+  .lobby-phone-start {
+    position: relative;
+    z-index: 150;
+  }
+}
+
+html.mobile-shell .go-collapsed { display: none; }
+html.mobile-shell .go-phone-launch {
+  display: flex;
+  min-height: 44px;
+}
+html.mobile-shell .go-body { display: none; }
+html.mobile-shell .go-panel.is-sheet .go-body {
+  display: flex;
+  overflow-y: auto;
+  touch-action: pan-y;
+}
