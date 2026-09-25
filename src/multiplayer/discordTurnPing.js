@@ -2,10 +2,12 @@
 // Production path: POST /api/discord-turn-ping with the seat payload.
 // The webhook lives in Vercel env DISCORD_TURN_WEBHOOK_URL — never on the client.
 // Dedupe key: (gameId, turnIndex, seatId). Skip AI. Mention the next human
-// by snowflake (explicit id, else the alias map). The body is the finished
-// turn in Rob's multiline shape: who just played, units lost (place + who
-// inflicted), territories taken (who took them). Counts and places come
-// from turnEvents only. Untagged fallback when no snowflake matches.
+// by snowflake (explicit id, else the alias map). The header is that human
+// (display name - power - phase), not the seat that just finished. The body
+// is Rob's multiline shape for what that human lost since their previous
+// turn ended: units lost (place + who inflicted), territories lost (who
+// took them), or the two quiet lines. Counts and places come from
+// turnEvents only. Untagged fallback when no snowflake matches.
 // Probe and test payloads never post.
 
 import { formatUnitName } from '../utils/unitNames.js';
@@ -373,6 +375,44 @@ function formatTerritoryLine(territory, taker) {
   return who ? `-${name} Lost - ${who}` : `-${name} Lost`;
 }
 
+// Losses the ping recipient actually suffered. Opponent casualties and
+// territories the recipient took are left out. Quiet input still yields
+// the two Rob lines via formatTurnPingSummary.
+export function formatRecipientLossSummary(events, { recipientId = '', players = [] } = {}) {
+  const id = cleanBit(recipientId);
+  const rows = Array.isArray(events)
+    ? events.filter((ev) => ev && typeof ev === 'object')
+    : [];
+  const captureByTerritory = new Map();
+  for (const ev of rows) {
+    if (ev.type !== 'territory_captured') continue;
+    const territory = cleanBit(ev.territory);
+    if (!territory) continue;
+    captureByTerritory.set(territory, {
+      takerId: cleanBit(ev.toPlayer) || cleanBit(ev.playerId),
+      fromId: cleanBit(ev.fromPlayer),
+    });
+  }
+  const filtered = [];
+  for (const ev of rows) {
+    if (ev.type === 'territory_captured') {
+      if (id && cleanBit(ev.fromPlayer) === id) filtered.push(ev);
+      continue;
+    }
+    if (ev.type !== 'combat') continue;
+    const place = cleanBit(ev.territory);
+    const capture = place ? captureByTerritory.get(place) : null;
+    const attackerId = cleanBit(ev.attackerId) || cleanBit(ev.playerId) || capture?.takerId || '';
+    const defenderId = cleanBit(ev.defenderId) || capture?.fromId || '';
+    if (id && attackerId === id) {
+      filtered.push({ ...ev, attackerId, defenderId, defenderLosses: {} });
+    } else if (id && defenderId === id) {
+      filtered.push({ ...ev, attackerId, defenderId, attackerLosses: {} });
+    }
+  }
+  return formatTurnPingSummary(filtered, { actorId: id, players });
+}
+
 export function formatTurnPingSummary(events, { actorId = '', players = [] } = {}) {
   const actor = cleanBit(actorId);
   const rows = Array.isArray(events)
@@ -581,9 +621,11 @@ export function buildDiscordTurnContent({
     discordName,
     seatLabel,
   });
+  // Header is the recipient. actorName is the legacy finisher field and
+  // must not override a recipient display name / faction.
   const header = formatPingHeader({
-    displayName: actorName || displayName,
-    power: actorFaction || faction,
+    displayName: displayName || actorName,
+    power: faction || actorFaction,
     phase,
   });
   const sum = String(summary ?? '').replace(/\r\n/g, '\n').trim()
@@ -871,7 +913,17 @@ export function bindDiscordTurnPing(gameState, {
     return () => {};
   }
   let lastSeat = seatKeyOf(gameState);
-  let eventCursor = turnEventCount(gameState);
+  // Per-seat cursor: event index when that seat's previous turn ended.
+  // Seeded at bind so a mid-game join does not replay earlier history.
+  const bindCursor = turnEventCount(gameState);
+  const seatCursors = new Map();
+  const rememberSeat = (player, index) => {
+    const id = player?.id || player?.oderId || '';
+    if (id && !seatCursors.has(id)) seatCursors.set(id, index);
+  };
+  const playersAtBind = Array.isArray(gameState.players) ? gameState.players : [];
+  for (const player of playersAtBind) rememberSeat(player, bindCursor);
+  rememberSeat(gameState.currentPlayer, bindCursor);
   return gameState.subscribe(() => {
     try {
       const nextSeat = seatKeyOf(gameState);
@@ -879,16 +931,19 @@ export function bindDiscordTurnPing(gameState, {
       const prevSeat = lastSeat;
       const hadPrev = !!prevSeat;
       lastSeat = nextSeat;
-      const priorEvents = turnEventsSince(gameState, eventCursor);
-      eventCursor = turnEventCount(gameState);
+      if (prevSeat) seatCursors.set(prevSeat, turnEventCount(gameState));
+      if (!seatCursors.has(nextSeat)) seatCursors.set(nextSeat, bindCursor);
+      const priorEvents = turnEventsSince(gameState, seatCursors.get(nextSeat));
       if (!hadPrev) return;
       if (isApplyingRemote()) return;
       const player = gameState.currentPlayer;
       const uxMode = getUxMode();
       const players = Array.isArray(gameState.players) ? gameState.players : [];
-      const prevPlayer = players.find((p) => p && (p.id === prevSeat || p.oderId === prevSeat)) || null;
-      const actor = turnPingHeaderIdentity(prevPlayer, prevSeat);
-      const summary = formatTurnPingSummary(priorEvents, { actorId: prevSeat, players });
+      const recipient = turnPingHeaderIdentity(player, nextSeat);
+      const summary = formatRecipientLossSummary(priorEvents, {
+        recipientId: nextSeat,
+        players,
+      });
       const result = maybePostDiscordTurnPing({
         player,
         gameId: getGameId() || '',
@@ -899,8 +954,8 @@ export function bindDiscordTurnPing(gameState, {
         seatId: nextSeat,
         phase: phaseLabelOf(gameState),
         summary,
-        actorName: actor.displayName,
-        actorFaction: actor.power,
+        actorName: recipient.displayName,
+        actorFaction: recipient.power,
         deepLink: buildDeepLink({
           origin: getOrigin(),
           uxMode,

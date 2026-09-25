@@ -1,4 +1,4 @@
-// V2.81.57-unified.11 — 9.23.26.01 Open Games list after Main Menu.
+// V2.81.57-unified.12 — 9.23.26.01 Open Games list after Main Menu.
 // Create + list, Main Menu, Open Games must be bars only.
 // A bar click opens a waiting lobby. The map must not auto-enter.
 // Run: node tools/test-unified-6-open-games.mjs
@@ -26,15 +26,15 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-console.log('=== V2.81.57-unified.11 Open Games list (9.23.26.01) ===');
-check('GAME_VERSION is V2.81.57-unified.11', GAME_VERSION === 'V2.81.57-unified.11');
+console.log('=== V2.81.57-unified.12 Open Games list (9.23.26.01) ===');
+check('GAME_VERSION is V2.81.57-unified.12', GAME_VERSION === 'V2.81.57-unified.12');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 const html = readFileSync(join(root, 'index.html'), 'utf8');
-check('index.html meta stamp is unified.8', html.includes('content="V2.81.57-unified.11"'));
-check('index.html lockStamp is unified.8', html.includes("var LOCKED = 'V2.81.57-unified.11'"));
-check('index.html __TR_GAME_VERSION is unified.8', html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.11'"));
-check('main.js module cache-bust is unified.8', html.includes('src/main.js?v=V2.81.57-unified.11'));
+check('index.html meta stamp is unified.8', html.includes('content="V2.81.57-unified.12"'));
+check('index.html lockStamp is unified.8', html.includes("var LOCKED = 'V2.81.57-unified.12'"));
+check('index.html __TR_GAME_VERSION is unified.8', html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.12'"));
+check('main.js module cache-bust is unified.8', html.includes('src/main.js?v=V2.81.57-unified.12'));
 
 console.log('=== Open Games entry never auto-enters ===');
 const contexts = [

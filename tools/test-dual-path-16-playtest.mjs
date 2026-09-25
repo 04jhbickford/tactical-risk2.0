@@ -1,4 +1,4 @@
-// V2.81.57-unified.11 — per-row combat undo, waiting-lobby My Games.
+// V2.81.57-unified.12 — per-row combat undo, waiting-lobby My Games.
 // Classic | Experimental picker is restored in .17.
 // Run: node tools/test-dual-path-16-playtest.mjs
 
@@ -44,10 +44,10 @@ const bootSrc = readFileSync(join(root, 'src/map/threeSoloBoot.js'), 'utf8');
 const playSrc = readFileSync(join(root, 'src/map/threeSoloPlay.js'), 'utf8');
 const lobbyScreens = readFileSync(join(root, 'src/map/threeSoloLobby.js'), 'utf8');
 
-assert.equal(GAME_VERSION, 'V2.81.57-unified.11');
+assert.equal(GAME_VERSION, 'V2.81.57-unified.12');
 assert.equal(SCHEMA_VERSION, 11);
-assert.match(html, /content="V2\.81\.57-unified\.11"/);
-assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.11'/);
+assert.match(html, /content="V2\.81\.57-unified\.12"/);
+assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.12'/);
 
 function fresh() {
   const territories = [
@@ -191,7 +191,9 @@ function qty(gs, terr, type) {
   assert.equal(undone.success, true);
   assert.equal(qty(gs, 'A', 'infantry'), 3);
   assert.equal(qty(gs, 'B', 'infantry'), 0);
-  assert.equal(gs.toJSON().moveHistory, undefined, 'undo list is not persisted');
+  assert.deepEqual(gs.toJSON().moveHistory, [], 'undo list persists and is empty after the only row is undone');
+  assert.equal(gs.toJSON().undoLockMoveCount, 0);
+  assert.equal(gs.toJSON().version, 11);
 }
 
 {

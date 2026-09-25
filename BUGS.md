@@ -2,6 +2,20 @@
 
 ---
 
+## 9.25.26 — unified.12 turn ping, phone resign, undo list
+
+Stamp `V2.81.57-unified.12`. Schema stays 11.
+
+Rob, Discord `#tactical-risk` / `#turn-ping`, Fri 25 Sep, game `TXVKJB`, live `V2.81.57-unified.11`. The ping header named the seat that just finished. One post was "British Easy AI - UK Initial Deployment Phase" and tagged nobody while he was playing Germans. Another tagged Bastion under "Russian Easy AI - Russia…". Losses from earlier AI turns in the same gap were dropped. Resign on a phone in an in-app browser did nothing. The phone menu Phase tips row had no handler. The per-row Undo list disappeared after reload.
+
+Cause: `bindDiscordTurnPing` built the header from `prevPlayer` and kept one `eventCursor`, so the summary was only the last seat change. `api/discord-turn-ping.js` preferred `actorName` for that same header. Resign and Save & Exit called `window.confirm`, which Discord and some iOS web views block or auto-cancel. The phone sheet also lives inside `#hud`, which is `pointer-events: none`, so a real tap on Resign never reached the button. On that sheet, `querySelector('[data-action="phase-tips"]')` bound the `?` button and left the row alone. `moveHistory` / `undoLockMoveCount` were wiped in `loadFromJSON` and were not in `toJSON`.
+
+Fix: the header is the human being pinged (`name - power phase`). The summary is what that seat lost since their previous turn ended, with a per-seat cursor seeded on bind. AI seats are not pinged. Resign and Save & Exit use an in-app confirm: a bottom sheet on the phone (44px, above the home indicator) and a compact dialog on desktop (Esc cancels, Enter confirms). The open phone menu sets `pointer-events: auto` so its rows take taps. Phase tips uses `querySelectorAll`. `moveHistory` and `undoLockMoveCount` are optional save fields (missing loads as `[]` / `0`, schema stays 11) and still clear at turn end. A remote snapshot still cannot undo another seat's rows. Unlist creating a second game was not reproduced: after Unlist, My Games has one row for that lobby and Open Games has none.
+
+Receipt: `node tools/test-turn-ping-recipient.mjs`, `node tools/test-resign-confirm.mjs`, `node tools/test-undo-persist.mjs`, `node tools/test-unlist-single-game.mjs`, `node tools/test-discord-turn-ping.mjs`.
+
+---
+
 ## 9.25.26 — unified.11 lobby Discord name
 
 Stamp `V2.81.57-unified.11`. Schema stays 11.

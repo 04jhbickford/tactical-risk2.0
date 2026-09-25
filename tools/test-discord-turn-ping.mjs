@@ -37,7 +37,7 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-check('stamp is unified.2', GAME_VERSION === 'V2.81.57-unified.11');
+check('stamp is unified.2', GAME_VERSION === 'V2.81.57-unified.12');
 check('channel id documented', DISCORD_TURN_CHANNEL_ID === '1551283474303025292');
 check('Classic lobby field', classicLobby.includes('mp-discord-input') && classicLobby.includes('data-action="discord-id"'));
 check('New UX lobby field', threeChrome.includes('data-lobby-discord') && threeChrome.includes('three-lobby-discord'));
@@ -275,10 +275,10 @@ const enriched = buildDiscordTurnContent({
   summary: seaLosses,
   deepLink: 'https://tactical-risk20.vercel.app/?code=HENV42',
 });
-check('mention + finisher header + loss lines + resume link',
+check('mention + recipient header + loss lines + resume link',
   enriched === [
     '<@261711980526567428>',
-    'Robfox007 - Germany Develop Tech Phase',
+    'Bastion - UK Develop Tech Phase',
     '-1x Destroyer lost Baltic Sea - Russian Easy AI',
     '-1x Carrier, 2x Fighters, 1x Battleship lost North Atlantic - Bastion UK',
     '-No territories lost',
@@ -470,12 +470,12 @@ summaryGs.turnEvents.push(
 summaryGs.currentPlayer = { id: 'Germans', name: 'Bastion', isAI: false };
 summaryGs.currentPlayerIndex = 1;
 summaryListeners[0]();
-check('bind mentions next player from alias and summarizes prior turn',
+check('bind mentions next player and summarizes what that seat lost',
   summaryPosts.length === 1
   && summaryPosts[0] === [
     '<@261711980526567428>',
-    'rwts - Russia Combat Move Phase',
-    '-3x Infantry lost',
+    'Bastion - Germany Combat Move Phase',
+    '-No units lost',
     '-Ukraine Lost - rwts Russia',
     'https://tactical-risk20.vercel.app/?code=HENV42',
   ].join('\n'));
@@ -642,7 +642,7 @@ check('api aliases the next player and includes summary + link',
   && aliasedBody.ok === true
   && postedBody.includes([
     '<@261711980526567428>',
-    'Robfox007 - Germany Develop Tech Phase',
+    'Bastion - UK Develop Tech Phase',
     '-8x Infantry, 5x Tanks lost South Africa - Bastion UK',
     '-South Africa Lost - Bastion UK',
     'https://tactical-risk20.vercel.app/?code=HENV42',

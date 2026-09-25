@@ -3,8 +3,9 @@
 // Never ships the URL to the client. Never logs or echoes it.
 // Soft-fail only (always 200 for POST). Body: gameId, turnIndex, seatId,
 // discordUserId, faction, phase, summary, deepLink, actorName, actorFaction.
-// Name fields are a fallback when discordUserId is empty. actorName is the
-// player who just finished and is not used for the mention.
+// Name fields are a fallback when discordUserId is empty. The header is the
+// recipient (displayName + faction + phase). actorName is the legacy
+// finisher field and does not override that header. It is not the mention.
 
 const seen = new Set();
 const CONTENT_MAX = 1800;
@@ -195,9 +196,10 @@ function buildDiscordTurnContent({
     seatLabel,
     name: displayName,
   });
+  // Header is the recipient. actorName must not override displayName.
   const header = formatPingHeader({
-    displayName: actorName || displayName,
-    power: actorFaction || faction,
+    displayName: displayName || actorName,
+    power: faction || actorFaction,
     phase,
   });
   const sum = String(summary ?? '').replace(/\r\n/g, '\n').trim()
