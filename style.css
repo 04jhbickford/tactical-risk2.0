@@ -20208,10 +20208,30 @@ html.mobile-shell.tech-active .tech-popup {
   box-sizing: border-box;
 }
 .dice-stats-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.02em;
   margin-bottom: 8px;
+}
+.dice-stats-close {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  margin: -4px -4px -4px 0;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #e8e8ee;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
 }
 .dice-stats-tabs {
   display: flex;
@@ -20327,15 +20347,21 @@ html.mobile-shell.tech-active .tech-popup {
   max-width: 100%;
 }
 @media (max-width: 1023px) {
+  /* Stay to the right of the 180px menu. left: 0 put the panel under ☰ at 820. */
   .dice-stats-popover {
-    left: 0;
-    width: min(420px, calc(100vw - 16px));
+    width: min(360px, calc(100vw - 212px));
   }
   .dice-stats-tab,
-  .dice-stats-sheet .dice-stats-tab {
+  .dice-stats-sheet .dice-stats-tab,
+  .dice-stats-close {
     min-height: 44px;
     height: 44px;
+    min-width: 44px;
     font-size: 15px;
+  }
+  .dice-stats-close {
+    width: 44px;
+    font-size: 22px;
   }
 }
 @media (min-width: 1024px) {

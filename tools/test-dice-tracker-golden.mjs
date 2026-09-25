@@ -58,6 +58,8 @@ const { CombatUI } = await import('../src/ui/combatUI.js');
 const { phoneMenuHomeActions } = await import('../src/ui/mobileShell.js');
 const {
   flushDiceBuffer,
+  localDiceGameId,
+  observeRolledDie,
   peekDiceBuffer,
   setDiceSessionProvider,
   setDiceTrackerEnabled,
@@ -323,9 +325,45 @@ check('AA need is 1', payloads.some((p) => p.groups.some((g) => g.context === 'a
 check('tech need is 6', payloads.some((p) => p.groups.some((g) => g.context === 'tech' && g.dice.every((d) => d.need === 6))));
 check('rocket need is empty', payloads.some((p) => p.groups.some((g) => g.context === 'rocket' && g.dice.every((d) => d.need == null))));
 check('AI seat is marked on defender batches', payloads.some((p) => p.groups.some((g) => g.isAI && g.playerSeat === 'p2')));
-check('batch ids are game_round_seq_uid', payloads.every((p) => p.groups.every((g) => g.id === batchDocId({
-  gameId: p.gameId, round: p.round, seq: g.seq, uid: 'uid-robert',
-}))));
+check('batch ids are game_round_nonce_seq_uid', payloads.length > 0
+  && payloads.every((p) => p.nonce && p.nonce === payloads[0].nonce)
+  && payloads.every((p) => p.groups.every((g) => g.id === batchDocId({
+    gameId: p.gameId, round: p.round, seq: g.seq, uid: 'uid-robert', nonce: p.nonce,
+  }))));
+
+console.log('=== reload nonce and local game id ===');
+{
+  const seen = [];
+  setDiceSessionProvider(() => ({
+    uid: 'uid-robert',
+    signedIn: true,
+    seatId: 'p1',
+    displayName: 'Robert',
+    gameId: 'solo',
+  }));
+  setDiceTrackerEnabled(true);
+  setDiceWriter((payload) => { seen.push(payload); });
+  const first = makeGs();
+  const second = makeGs();
+  observeRolledDie(first, { context: 'combat', side: 'attacker', unit: 'infantry', need: 1, playerSeat: 'p1' }, 3);
+  observeRolledDie(second, { context: 'combat', side: 'attacker', unit: 'infantry', need: 1, playerSeat: 'p1' }, 4);
+  flushDiceBuffer(first);
+  flushDiceBuffer(second);
+  await new Promise((r) => setTimeout(r, 0));
+  check('a new game state gets a new batch nonce', seen.length === 2
+    && seen[0].nonce && seen[0].nonce !== seen[1].nonce
+    && seen[0].groups[0].id !== seen[1].groups[0].id);
+  check('local games do not share diceStats/game_solo',
+    seen[0].gameId !== 'solo' && seen[1].gameId !== 'solo' && seen[0].gameId !== seen[1].gameId
+    && seen[0].gameId === localDiceGameId(first, 'uid-robert'));
+  setDiceSessionProvider(() => ({
+    uid: 'uid-robert',
+    signedIn: true,
+    seatId: 'p1',
+    displayName: 'Robert',
+    gameId: 'GAME1',
+  }));
+}
 
 console.log('=== a throwing writer does not change the roll ===');
 {

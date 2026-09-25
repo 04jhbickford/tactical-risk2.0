@@ -16,6 +16,9 @@ import {
 
 const buffers = new WeakMap();
 const seqs = new WeakMap();
+const nonces = new WeakMap();
+const localGameIds = new WeakMap();
+let localSerial = 0;
 
 let enabled = true;
 let sessionProvider = () => ({
@@ -86,6 +89,34 @@ export function peekDiceBuffer(gameState) {
   return list ? list.slice() : [];
 }
 
+// One nonce per GameState. A reload constructs a new object, so the next
+// flush cannot reuse diceBatches ids from the previous page. A retry of
+// the same payload keeps the ids buildFlushPayload already assigned.
+function nonceOf(gameState) {
+  let nonce = nonces.get(gameState);
+  if (!nonce) {
+    const uuid = globalThis.crypto?.randomUUID?.();
+    nonce = safeIdPart(uuid ? uuid.replace(/-/g, '').slice(0, 12) : `n${Date.now().toString(36)}`, 'n');
+    nonces.set(gameState, nonce);
+  }
+  return nonce;
+}
+
+// Local games have no Firestore game id. `solo` would pool every local
+// game into diceStats/game_solo. This id lives only in memory; a reload
+// starts a new one.
+export function localDiceGameId(gameState, uid) {
+  const who = safeIdPart(uid || 'x', 'x');
+  if (!gameState || !uid) return safeIdPart(`local_${who}_${Date.now()}`);
+  let id = localGameIds.get(gameState);
+  if (!id) {
+    localSerial += 1;
+    id = safeIdPart(`local_${who}_${Date.now().toString(36)}${localSerial.toString(36)}`);
+    localGameIds.set(gameState, id);
+  }
+  return id;
+}
+
 // Called only after Math.random has already produced the face.
 export function observeRolledDie(gameState, context, face) {
   if (!enabled || !gameState) return;
@@ -97,13 +128,17 @@ export function observeRolledDie(gameState, context, face) {
 export function buildFlushPayload(gameState, dice, session = getDiceSession()) {
   const groups = groupDiceForBatches(dice);
   let seq = seqs.get(gameState) || 0;
-  const gameId = safeIdPart(session.gameId || 'solo', 'solo');
+  const rawGame = session.gameId && session.gameId !== 'solo'
+    ? session.gameId
+    : localDiceGameId(gameState, session.uid || null);
+  const gameId = safeIdPart(rawGame, 'local');
   const round = Number(gameState?.round) || 0;
   const uid = session.uid || '';
+  const nonce = nonceOf(gameState);
   const built = [];
   for (const group of groups) {
     seq += 1;
-    const id = batchDocId({ gameId, round, seq, uid: uid || 'anon' });
+    const id = batchDocId({ gameId, round, seq, uid: uid || 'anon', nonce });
     built.push({ ...group, seq, id });
   }
   seqs.set(gameState, seq);
@@ -117,6 +152,7 @@ export function buildFlushPayload(gameState, dice, session = getDiceSession()) {
   }
   return {
     gameId,
+    nonce,
     round,
     turnPhase: gameState?.turnPhase || '',
     clientVersion: GAME_VERSION,

@@ -88,9 +88,12 @@ export function renderDiceStatsFromModel({
   }
 
   const rootClass = placement === 'popover' ? 'dice-stats-popover' : 'dice-stats-sheet';
+  const close = placement === 'popover'
+    ? '<button type="button" class="dice-stats-close" data-action="close-dice-stats" aria-label="Close">×</button>'
+    : '';
   return `
     <div class="dice-stats ${rootClass}" tabindex="0" role="region" aria-label="Dice stats">
-      <div class="dice-stats-head">Dice stats</div>
+      <div class="dice-stats-head"><span>Dice stats</span>${close}</div>
       <div class="dice-stats-tabs" role="tablist">${tabHtml}</div>
       <div class="dice-stats-body">${body}</div>
       <p class="dice-stats-caveat">${esc(CAVEAT)}</p>

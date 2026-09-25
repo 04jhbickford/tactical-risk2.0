@@ -224,8 +224,14 @@ export function applyDiceBatch(totals, dice, meta = {}) {
   return totals;
 }
 
-export function batchDocId({ gameId, round, seq, uid }) {
-  return `${safeIdPart(gameId, 'solo')}_${Number(round) || 0}_${Number(seq) || 0}_${safeIdPart(uid, 'uid')}`;
+export function batchDocId({ gameId, round, seq, uid, nonce }) {
+  const idGame = safeIdPart(gameId, 'solo');
+  const idRound = Number(round) || 0;
+  const idSeq = Number(seq) || 0;
+  const idUid = safeIdPart(uid, 'uid');
+  const idNonce = safeIdPart(nonce || '', '');
+  if (!idNonce) return `${idGame}_${idRound}_${idSeq}_${idUid}`;
+  return `${idGame}_${idRound}_${idNonce}_${idSeq}_${idUid}`;
 }
 
 export function groupDiceForBatches(dice) {

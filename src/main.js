@@ -123,7 +123,7 @@ installClientErrorHooks();
 
 // Multiplayer imports
 import { initializeFirebase, isFirebaseConfigured, getFirebaseDb } from './multiplayer/firebase.js';
-import { setDiceSessionProvider } from './stats/diceTracker.js';
+import { localDiceGameId, setDiceSessionProvider } from './stats/diceTracker.js';
 import { getAuthManager } from './multiplayer/auth.js';
 import { getLobbyManager } from './multiplayer/lobbyManager.js';
 import { createSyncManager } from './multiplayer/syncManager.js';
@@ -1007,7 +1007,7 @@ async function init() {
       signedIn: !!uid,
       seatId: seat?.id || null,
       displayName: rawName && !rawName.includes('@') ? rawName.slice(0, 40) : null,
-      gameId: syncManager?.gameId || (inGame ? 'solo' : null),
+      gameId: syncManager?.gameId || (inGame ? localDiceGameId(gameState, uid) : null),
     };
   });
 

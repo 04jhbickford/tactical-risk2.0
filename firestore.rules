@@ -17,53 +17,52 @@ service cloud.firestore {
 
     // Dice stats (observe-only). Limits, documented for reviewers:
     // - diceBatches are create-only. writerUid must be the signed-in user.
-    //   Same id (game_round_seq_uid) makes a retry fail closed, so it cannot
-    //   double-count. Rules check the envelope plus the first and last die;
-    //   rules have no list loop for every face in the middle.
-    // - diceStats accepts non-negative numeric increases of at most 240 on
-    //   n / faces / high-low runs, and n's increase must equal the face
-    //   increases. longestStreak may only rise, by at most 240.
+    //   Same id (game_round_nonce_seq_uid) makes a retry fail closed, so it
+    //   cannot double-count. Rules check the envelope plus the first and last
+    //   die; rules have no list loop for every face in the middle.
+    // - Face and n deltas are let-bound (Firestore allows 10 lets per function
+    //   and 1000 expressions per request). Each face delta is >= 0, n's
+    //   increase equals the face increases, and n's increase is <= 240.
+    //   A missing counter defaults to 0, so deleteField() on a counter fails.
+    // - High/low run deltas are >= 0 and <= 240. longestStreak may only rise.
     // - Unit, seat, and transition fields are not each matched. A signed-in
     //   client can add other numeric fields. That is the tradeoff for
     //   increment() without a composite of every unit type.
     // - displayName is an in-game name: short string, no '@'. No email field.
     // - player_{uid} can be written only by that uid. global and game_* by
     //   any signed-in user. Nobody can delete.
-    function diceOld(key) {
-      return resource == null ? 0 : resource.data.get(key, 0);
+    function diceCountersOk() {
+      let o = resource == null ? {} : resource.data;
+      let a = request.resource.data;
+      let d1 = a.get('face_1', 0) - o.get('face_1', 0);
+      let d2 = a.get('face_2', 0) - o.get('face_2', 0);
+      let d3 = a.get('face_3', 0) - o.get('face_3', 0);
+      let d4 = a.get('face_4', 0) - o.get('face_4', 0);
+      let d5 = a.get('face_5', 0) - o.get('face_5', 0);
+      let d6 = a.get('face_6', 0) - o.get('face_6', 0);
+      let dn = a.get('n', 0) - o.get('n', 0);
+      return d1 >= 0 && d2 >= 0 && d3 >= 0 && d4 >= 0 && d5 >= 0 && d6 >= 0
+        && dn == d1 + d2 + d3 + d4 + d5 + d6
+        && dn <= 240;
     }
-    function diceNew(key) {
-      return request.resource.data.get(key, diceOld(key));
+    function diceRunsOk() {
+      let o = resource == null ? {} : resource.data;
+      let a = request.resource.data;
+      let hl = a.get('hl_low', 0) - o.get('hl_low', 0);
+      let hh = a.get('hl_high', 0) - o.get('hl_high', 0);
+      let hr = a.get('hl_runs', 0) - o.get('hl_runs', 0);
+      return hl >= 0 && hl <= 240 && hh >= 0 && hh <= 240 && hr >= 0 && hr <= 240;
     }
-    function diceDelta(key) {
-      return diceNew(key) - diceOld(key);
+    function diceStreakOk() {
+      let old = resource == null ? 0 : resource.data.get('longestStreak', 0);
+      return request.resource.data.get('longestStreak', 0) is int
+        && request.resource.data.get('longestStreak', 0) >= old;
     }
     function diceNameOk(name) {
       return name is string
         && name.size() > 0
         && name.size() <= 40
         && !name.matches('.*@.*');
-    }
-    function diceFacesOk() {
-      return diceDelta('face_1') >= 0 && diceDelta('face_1') <= 240
-        && diceDelta('face_2') >= 0 && diceDelta('face_2') <= 240
-        && diceDelta('face_3') >= 0 && diceDelta('face_3') <= 240
-        && diceDelta('face_4') >= 0 && diceDelta('face_4') <= 240
-        && diceDelta('face_5') >= 0 && diceDelta('face_5') <= 240
-        && diceDelta('face_6') >= 0 && diceDelta('face_6') <= 240
-        && diceDelta('n') == diceDelta('face_1') + diceDelta('face_2')
-            + diceDelta('face_3') + diceDelta('face_4')
-            + diceDelta('face_5') + diceDelta('face_6')
-        && diceDelta('n') <= 240
-        && diceDelta('hl_low') >= 0 && diceDelta('hl_low') <= 240
-        && diceDelta('hl_high') >= 0 && diceDelta('hl_high') <= 240
-        && diceDelta('hl_runs') >= 0 && diceDelta('hl_runs') <= 240;
-    }
-    function diceStreakOk() {
-      return !('longestStreak' in request.resource.data)
-        || (request.resource.data.longestStreak is int
-            && request.resource.data.longestStreak >= diceOld('longestStreak')
-            && request.resource.data.longestStreak - diceOld('longestStreak') <= 240);
     }
     function diceStatsIdOk(statId) {
       return statId == 'global'
@@ -184,7 +183,8 @@ service cloud.firestore {
       allow create, update: if request.auth != null
         && diceStatsIdOk(statId)
         && request.resource.data.size() < 800
-        && diceFacesOk()
+        && diceCountersOk()
+        && diceRunsOk()
         && diceStreakOk()
         && !('email' in request.resource.data)
         && (!('displayName' in request.resource.data)

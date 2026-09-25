@@ -64,6 +64,40 @@ export class HUD {
       if (this.menuTab === 'dice') this.menuTab = null;
       this._render();
     });
+
+    // A touch tap on the map does not synthesize a click (the canvas
+    // handler preventDefaults touch). Capture the gesture, close the
+    // popover, and swallow the rest so the tap does not select a land.
+    const onMap = (e) => !!(e.target && e.target.closest && (e.target.closest('#mapCanvas') || e.target.closest('#minimap')));
+    const swallowMap = (e) => {
+      if (!this._diceMapSwallow || !onMap(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    document.addEventListener('pointerdown', (e) => {
+      if (this._diceMapSwallow && onMap(e)) {
+        swallowMap(e);
+        return;
+      }
+      if (isMobileShell() || !this.diceStatsOpen || !onMap(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      this._diceMapSwallow = true;
+      clearTimeout(this._diceMapSwallowTimer);
+      this._diceMapSwallowTimer = setTimeout(() => { this._diceMapSwallow = false; }, 400);
+      this.menuOpen = false;
+      this.menuTab = null;
+      this._dismissDicePopover();
+      this._updateMenuState();
+    }, true);
+    for (const type of ['touchstart', 'mousedown', 'pointerup', 'mouseup', 'touchend', 'click']) {
+      document.addEventListener(type, swallowMap, true);
+    }
+  }
+
+  _dismissDicePopover() {
+    this.diceStatsOpen = false;
+    this.el?.querySelector('.dice-stats-popover')?.remove();
   }
 
   setAIStatus(message) {
@@ -435,7 +469,7 @@ export class HUD {
     this.menuOpen = !this.menuOpen;
     if (!this.menuOpen) {
       this.menuTab = null;
-      this.diceStatsOpen = false;
+      this._dismissDicePopover();
     }
     if (this.menuOpen) this.mapToolsOpen = false;
     if (this.menuOpen && typeof this.onMenuOpen === 'function') this.onMenuOpen();
@@ -467,6 +501,7 @@ export class HUD {
       if (this.mapToolsOpen) {
         this.menuOpen = false;
         this.menuTab = null;
+        this._dismissDicePopover();
       }
       this._syncMapToolsFlag();
       if (isMobileShell()) this._render();
@@ -511,6 +546,12 @@ export class HUD {
       }
     });
 
+    this.el.querySelector('[data-action="close-dice-stats"]')?.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this._dismissDicePopover();
+    });
+
     this.el.querySelectorAll('[data-dice-tab]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -537,6 +578,7 @@ export class HUD {
     this.el.querySelectorAll('[data-action="phase-tips"]').forEach((phaseTipsItem) => {
       phaseTipsItem.addEventListener('click', () => {
         this.menuOpen = false;
+        this._dismissDicePopover();
         this._updateMenuState();
         if (this.onPhaseTips) this.onPhaseTips();
       });
@@ -546,6 +588,7 @@ export class HUD {
     const rulesItem = this.el.querySelector('[data-action="rules"]');
     rulesItem?.addEventListener('click', () => {
       this.menuOpen = false;
+      this._dismissDicePopover();
       this._updateMenuState();
       if (this.onRulesToggle) {
         this.onRulesToggle();
@@ -557,6 +600,7 @@ export class HUD {
     const exitItem = this.el.querySelector('[data-action="exit-lobby"]');
     exitItem?.addEventListener('click', () => {
       this.menuOpen = false;
+      this._dismissDicePopover();
       this._updateMenuState();
       if (this.onExitToLobby) {
         // In multiplayer, game is auto-saved; in single player, progress is lost
@@ -577,6 +621,7 @@ export class HUD {
     const resignItem = this.el.querySelector('[data-action="resign"]');
     resignItem?.addEventListener('click', () => {
       this.menuOpen = false;
+      this._dismissDicePopover();
       this._updateMenuState();
       if (this.onResign) {
         const message = this.gameState?.isMultiplayer
