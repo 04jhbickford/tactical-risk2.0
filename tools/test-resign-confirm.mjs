@@ -270,6 +270,8 @@ check('phone sheet uses 44px buttons above the home indicator',
   && css.includes('env(safe-area-inset-bottom, 0px)'));
 check('desktop dialog is compact at 1024',
   /@media \(min-width: 1024px\) \{[\s\S]*\.tr-confirm--dialog \.tr-confirm-btn \{[\s\S]*min-height: 32px/.test(css));
+check('phone menu sheet accepts taps under the HUD',
+  /html\.mobile-shell \.phone-menu-sheet\.open \{[^}]*pointer-events:\s*auto/.test(css));
 
 const gs = {
   phase: 'playing',

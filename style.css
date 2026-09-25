@@ -18894,6 +18894,9 @@ html.mobile-shell.has-lobby.tr-open-games .lobby-overlay.modern {
     z-index: 200;
     max-height: 52dvh;
     overflow: hidden;
+    /* #hud is pointer-events: none so the map stays tappable under the bar.
+       The open sheet must take taps again or Resign / Phase tips do nothing. */
+    pointer-events: auto;
     background: #0b1020;
     border-bottom: 1px solid rgba(255, 255, 255, 0.12);
     padding: 0;
