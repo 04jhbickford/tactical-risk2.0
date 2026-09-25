@@ -123,6 +123,7 @@ installClientErrorHooks();
 
 // Multiplayer imports
 import { initializeFirebase, isFirebaseConfigured, getFirebaseDb } from './multiplayer/firebase.js';
+import { localDiceGameId, setDiceSessionProvider } from './stats/diceTracker.js';
 import { getAuthManager } from './multiplayer/auth.js';
 import { getLobbyManager } from './multiplayer/lobbyManager.js';
 import { createSyncManager } from './multiplayer/syncManager.js';
@@ -992,6 +993,23 @@ async function init() {
   const authManager = getAuthManager();
   const lobbyManager = getLobbyManager();
   presenceManager = getPresenceManager();
+  setDiceSessionProvider(() => {
+    const user = authManager.getUser?.() || null;
+    const uid = user?.id || null;
+    const players = gameState?.players || [];
+    const seat = uid
+      ? players.find((p) => p && (p.oderId === uid || p.id === uid))
+      : null;
+    const rawName = seat?.name ? String(seat.name).trim() : '';
+    const inGame = !!(gameState && gameState.phase && gameState.phase !== 'lobby');
+    return {
+      uid,
+      signedIn: !!uid,
+      seatId: seat?.id || null,
+      displayName: rawName && !rawName.includes('@') ? rawName.slice(0, 40) : null,
+      gameId: syncManager?.gameId || (inGame ? localDiceGameId(gameState, uid) : null),
+    };
+  });
 
   if (isFirebaseConfigured()) {
     authManager.initialize();

@@ -27,6 +27,7 @@ import { airCombatMoveMayOccupy, landOnlySeaAttackIllegal, moveSelectionProfile,
 import { cascadeUndoIndexes } from './moveUndo.js';
 import { emitGameEvent, summarizeUnits } from '../multiplayer/gameEventLog.js';
 import { omitUndefinedDeep } from './persistState.js';
+import { flushDiceBuffer, observeRolledDie } from '../stats/diceTracker.js';
 
 function cloneMoveHistory(rows) {
   if (!Array.isArray(rows)) return [];
@@ -3986,6 +3987,7 @@ export class GameState {
     });
 
     this._notify();
+    flushDiceBuffer(this);
     return result;
   }
 
@@ -3996,11 +3998,22 @@ export class GameState {
   // re-resolved across refreshes on un-persisted state → similar outcomes).
   // The log is in-memory only (never serialized into toJSON / Firestore) and
   // bounded to the last 500 rolls; inspect via getRollLog() from the console.
+  //
+  // context may be a string (legacy) or
+  // {context, side, unit, need, playerSeat}. The observe-only tracker records
+  // the face after it is chosen and never changes it. Tracker state is not
+  // part of the save (schema stays 11).
   _rollDie(context = 'combat') {
     const roll = Math.floor(Math.random() * 6) + 1;
     if (!this._rollLog) this._rollLog = [];
-    this._rollLog.push({ t: Date.now(), context, roll });
+    const label = typeof context === 'string' ? context : (context?.context || 'combat');
+    this._rollLog.push({ t: Date.now(), context: label, roll });
     if (this._rollLog.length > 500) this._rollLog.shift();
+    try {
+      observeRolledDie(this, context, roll);
+    } catch (err) {
+      try { console.debug('[dice] record skipped', err?.message || err); } catch { /* ignore */ }
+    }
     return roll;
   }
 
@@ -4073,7 +4086,13 @@ export class GameState {
       const hitValue = type === 'attack' ? def.attack : def.defense;
 
       for (let i = 0; i < unit.quantity; i++) {
-        const roll = this._rollDie(`combat:${type}`);
+        const roll = this._rollDie({
+          context: 'combat',
+          side: type === 'attack' ? 'attacker' : 'defender',
+          unit: unit.type,
+          need: hitValue,
+          playerSeat: unit.owner,
+        });
         rolls.push({ unit: unit.type, roll, hit: roll <= hitValue });
         if (roll <= hitValue) hits++;
       }
@@ -4119,7 +4138,13 @@ export class GameState {
         if (unit.type === 'battleship' || unit.type === 'cruiser') {
           const bombardValue = def.attack;
           for (let i = 0; i < unit.quantity; i++) {
-            const roll = this._rollDie('bombard');
+            const roll = this._rollDie({
+              context: 'bombard',
+              side: 'attacker',
+              unit: unit.type,
+              need: bombardValue,
+              playerSeat: attackerId,
+            });
             const isHit = roll <= bombardValue;
             rolls.push({ unit: unit.type, roll, hit: isHit, source: connName });
             if (isHit) hits++;
@@ -4735,7 +4760,13 @@ export class GameState {
     let breakthrough = false;
 
     for (let i = 0; i < techState.techTokens; i++) {
-      const roll = this._rollDie('tech');
+      const roll = this._rollDie({
+        context: 'tech',
+        side: 'attacker',
+        unit: 'tech',
+        need: 6,
+        playerSeat: playerId,
+      });
       rolls.push(roll);
       if (roll === 6) breakthrough = true;
     }
@@ -4744,6 +4775,7 @@ export class GameState {
     techState.techTokens = 0;
 
     this._notify();
+    flushDiceBuffer(this);
     return { success: breakthrough, rolls };
   }
 
@@ -5567,8 +5599,14 @@ export class GameState {
       return { success: false, error: 'Target must have a factory' };
     }
 
-    // Roll for damage (1d6)
-    const damage = Math.floor(Math.random() * 6) + 1;
+    // Roll for damage (1d6). Same formula as every other die; recorded after.
+    const damage = this._rollDie({
+      context: 'rocket',
+      side: 'attacker',
+      unit: 'aaGun',
+      need: null,
+      playerSeat: player.id,
+    });
     const targetIPCs = this.getIPCs(targetOwner);
     const actualDamage = Math.min(damage, targetIPCs);
 
@@ -5582,6 +5620,7 @@ export class GameState {
     const message = `Rocket attack on ${targetTerritory}! Rolled ${damage}, ${targetPlayer?.name || targetOwner} loses ${actualDamage} IPCs.`;
 
     this._notify();
+    flushDiceBuffer(this);
 
     return {
       success: true,

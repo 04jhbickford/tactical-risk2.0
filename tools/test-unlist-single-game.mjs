@@ -1,4 +1,4 @@
-// V2.81.57-unified.12 — Unlist must not create a second My Games / Open Games row.
+// V2.81.57-unified.13 — Unlist must not create a second My Games / Open Games row.
 // Verification only, using the existing pure helpers.
 // Run: node tools/test-unlist-single-game.mjs
 
@@ -15,7 +15,7 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-check('stamp is unified.12', GAME_VERSION === 'V2.81.57-unified.12');
+check('stamp is unified.13', GAME_VERSION === 'V2.81.57-unified.13');
 
 const lobby = {
   id: 'lobby-txvkjb',

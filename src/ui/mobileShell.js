@@ -162,6 +162,7 @@ export function phoneMenuHomeActions() {
     { action: 'menu-tab', tab: 'stats', label: 'Players', meta: '›' },
     { action: 'menu-tab', tab: 'territory', label: 'Territory', meta: '›' },
     { action: 'menu-tab', tab: 'log', label: 'Log', meta: '›' },
+    { action: 'menu-tab', tab: 'dice', label: 'Dice stats', meta: '›' },
     { action: 'phase-tips', label: 'Phase tips', meta: '›' },
     { action: 'rules', label: 'Game Rules', meta: '›' },
     { action: 'exit-lobby', label: 'Save & Exit', meta: '›' },

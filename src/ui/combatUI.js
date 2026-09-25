@@ -16,6 +16,7 @@ import {
 import { dequeueResolvedCombatHeads, applyTerritoryCapture } from '../state/combatFinalize.js';
 import { persistableUnit } from '../state/persistState.js';
 import { emitGameEvent, getGameEventLog } from '../multiplayer/gameEventLog.js';
+import { flushDiceBuffer } from '../stats/diceTracker.js';
 
 export {
   getEnemyCombatUnits,
@@ -248,6 +249,7 @@ export class CombatUI {
   }
 
   hide() {
+    flushDiceBuffer(this.gameState);
     this.el.classList.add('hidden');
     this._syncCombatChromeFlag();
     this.currentTerritory = null;
@@ -468,7 +470,13 @@ export class CombatUI {
 
     // Roll for each bombarding ship
     for (const roll of bombardmentRolls) {
-      roll.roll = Math.floor(Math.random() * 6) + 1;
+      roll.roll = this._rollD6({
+        context: 'bombard',
+        side: 'attacker',
+        unit: roll.unit,
+        need: roll.attackValue,
+        playerSeat: this.gameState?.currentPlayer?.id || null,
+      });
       roll.hit = roll.roll <= roll.attackValue;
       if (roll.hit) hits++;
     }
@@ -491,6 +499,7 @@ export class CombatUI {
     }
 
     this._render();
+    flushDiceBuffer(this.gameState);
   }
 
   _applyBombardmentCasualties() {
@@ -511,6 +520,7 @@ export class CombatUI {
 
     this._proceedAfterBombardment();
     this._render();
+    flushDiceBuffer(this.gameState);
   }
 
   _proceedAfterBombardment() {
@@ -546,8 +556,15 @@ export class CombatUI {
     // Roll 1 die per aircraft, hits on 1
     const rolls = [];
     let hits = 0;
+    const aaSeat = (this.combatState.defenders || []).find((u) => u.type === 'aaGun')?.owner || null;
     for (let i = 0; i < totalAircraft; i++) {
-      const roll = this._rollD6('aa');
+      const roll = this._rollD6({
+        context: 'aa',
+        side: 'defender',
+        unit: 'aaGun',
+        need: 1,
+        playerSeat: aaSeat,
+      });
       const hit = roll === 1;
       rolls.push({ roll, hit });
       if (hit) hits++;
@@ -582,6 +599,7 @@ export class CombatUI {
     this.combatState.phase = AA_RESULT_PHASE;
     this._logAAFireResults();
     this._render();
+    flushDiceBuffer(this.gameState);
   }
 
   _logAAFireResults() {
@@ -730,7 +748,13 @@ export class CombatUI {
       // Roll for active (non-submerged) subs only
       for (let i = 0; i < activeSubs; i++) {
         const def = this.unitDefs['submarine'];
-        const roll = Math.floor(Math.random() * 6) + 1;
+        const roll = this._rollD6({
+          context: 'sub',
+          side: 'attacker',
+          unit: 'submarine',
+          need: def.attack,
+          playerSeat: this.gameState?.currentPlayer?.id || null,
+        });
         const hit = roll <= def.attack;
         subFirstStrikeRolls.push({ roll, hit, unitType: 'submarine', side: 'attacker' });
         if (hit) attackerSubHits++;
@@ -752,7 +776,14 @@ export class CombatUI {
       // Roll for active (non-submerged) subs only
       for (let i = 0; i < activeSubs; i++) {
         const def = this.unitDefs['submarine'];
-        const roll = Math.floor(Math.random() * 6) + 1;
+        const defenderSeat = (defenders || []).find((u) => u.type === 'submarine')?.owner || null;
+        const roll = this._rollD6({
+          context: 'sub',
+          side: 'defender',
+          unit: 'submarine',
+          need: def.defense,
+          playerSeat: defenderSeat,
+        });
         const hit = roll <= def.defense;
         subFirstStrikeRolls.push({ roll, hit, unitType: 'submarine', side: 'defender' });
         if (hit) defenderSubHits++;
@@ -778,6 +809,7 @@ export class CombatUI {
     }
 
     this._render();
+    flushDiceBuffer(this.gameState);
   }
 
   // Apply submarine first strike casualties (they don't fire back)
@@ -951,7 +983,13 @@ export class CombatUI {
             attackValue += 1;
           }
 
-          const roll = this._rollD6('attack');
+          const roll = this._rollD6({
+            context: 'combat',
+            side: 'attacker',
+            unit: unit.type,
+            need: attackValue,
+            playerSeat: attackerId,
+          });
           const hit = roll <= attackValue;
           attackRolls.push({ roll, hit, unitType: unit.type, attackValue });
           if (hit) attackHits++;
@@ -977,7 +1015,13 @@ export class CombatUI {
           defenseValue += 1;
         }
 
-        const roll = this._rollD6('defense');
+        const roll = this._rollD6({
+          context: 'combat',
+          side: 'defender',
+          unit: unit.type,
+          need: defenseValue,
+          playerSeat: defenderId,
+        });
         const hit = roll <= defenseValue;
         defenseRolls.push({ roll, hit, unitType: unit.type, defenseValue });
         if (hit) defenseHits++;
@@ -1003,6 +1047,7 @@ export class CombatUI {
       defenseForce: summarizeCombatForce(defenders),
       survivors: summarizeCombatForce(attackers),
     });
+    flushDiceBuffer(this.gameState);
     return { attackHits, defenseHits };
   }
 

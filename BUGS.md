@@ -2,6 +2,18 @@
 
 ---
 
+## 9.25.26 — unified.13 dice stats (observe only)
+
+Stamp `V2.81.57-unified.13`. Schema stays 11.
+
+Rob, Discord `#wishlist` `1553112787130122402` / `1553112894093131879` (Fri 25 Sep 11:35am PT): confirm normal-mode dice are truly random, and that everyone can see that. Also `1551689256362053723` (21 Sep): look at defender rolls closely. Dice modes are out. The roller is unchanged.
+
+The four rolls that skipped `_rollDie` (combat bombardment, both sub first-strike sides, rocket damage) now use the same `Math.floor(Math.random()*6)+1` formula through `_rollDie`. A tracker records `{unit, need, face}` after the face is chosen, inside try/catch, and flushes one write-set when that roll set finishes. It never awaits before combat returns. Guests write nothing. If Firestore rules are not published yet, permission-denied writes are swallowed and the in-game Dice stats panel says "Stats will appear once enabled". Cosmetic spinning dice are not counted.
+
+Receipt: `node tools/test-dice-tracker-golden.mjs`, `node tools/test-dice-uniform.mjs`, `node tools/test-dice-stats-math.mjs`.
+
+---
+
 ## 9.25.26 — unified.12 turn ping, phone resign, undo list
 
 Stamp `V2.81.57-unified.12`. Schema stays 11.
