@@ -1,4 +1,4 @@
-// V2.81.57-unified.13 — per-row combat undo, waiting-lobby My Games.
+// V2.81.57-unified.14 — per-row combat undo, waiting-lobby My Games.
 // Classic | Experimental picker is restored in .17.
 // Run: node tools/test-dual-path-16-playtest.mjs
 
@@ -44,10 +44,10 @@ const bootSrc = readFileSync(join(root, 'src/map/threeSoloBoot.js'), 'utf8');
 const playSrc = readFileSync(join(root, 'src/map/threeSoloPlay.js'), 'utf8');
 const lobbyScreens = readFileSync(join(root, 'src/map/threeSoloLobby.js'), 'utf8');
 
-assert.equal(GAME_VERSION, 'V2.81.57-unified.13');
+assert.equal(GAME_VERSION, 'V2.81.57-unified.14');
 assert.equal(SCHEMA_VERSION, 11);
-assert.match(html, /content="V2\.81\.57-unified\.13"/);
-assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.13'/);
+assert.match(html, /content="V2\.81\.57-unified\.14"/);
+assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.14'/);
 
 function fresh() {
   const territories = [

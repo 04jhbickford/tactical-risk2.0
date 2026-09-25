@@ -1235,6 +1235,8 @@ async function init() {
         alliancesEnabled: false,
         teamsEnabled: settingsData?.teamsEnabled || false,
         startingIPCs: settingsData?.startingIPCs || 80,
+        maxPlayers: settingsData?.maxPlayers || 5,
+        gameOptions: settingsData?.gameOptions,
         isMultiplayer: true
       };
 
@@ -1483,6 +1485,7 @@ async function init() {
         }
 
         gameState = null;
+        rulesPanel.setGameState(null);
         const showReconnect = () => {
           ensureMultiplayerLobby();
           multiplayerLobby.showReconnectOnly();
@@ -1676,6 +1679,7 @@ async function init() {
 
     // Wire up components
     hud.setGameState(gameState);
+    rulesPanel.setGameState(gameState);
     hud.setActionLog(actionLog);
     // Pass-and-play handoff overlay (self-disables for multiplayer/AI-only)
     handoffScreen.setGameState(gameState);
@@ -1733,6 +1737,7 @@ async function init() {
         gameListUI.hide();
       }
       gameState = null;
+      rulesPanel.setGameState(null);
       lobby.show();
     };
 

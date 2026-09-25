@@ -13,6 +13,7 @@ import {
 import { getFirebaseDb } from '../multiplayer/firebase.js';
 import { getAuthManager } from '../multiplayer/auth.js';
 import { getLobbyManager } from '../multiplayer/lobbyManager.js';
+import { rulesChip } from '../gameOptions.js';
 import { leaveGame, isAllResignDeleteFailure, retryDeleteFinishedGame } from '../multiplayer/surrender.js';
 import {
   closestLeaveControl,
@@ -234,6 +235,7 @@ export class GameList {
                 <div class="mp-game-info">
                   <span class="mp-game-name">${lobby.name}</span>
                   <span class="mp-game-details">${lobby.players.length}/${lobby.settings?.maxPlayers || '?'} players · Code ${lobby.code}</span>
+                  <span class="mp-rules-chip">${rulesChip(lobby.settings?.gameOptions, lobby.settings)}</span>
                 </div>
                 <div class="mp-game-status"><span class="mp-waiting">In lobby</span></div>
                 <span class="mp-game-join">Resume lobby</span>
@@ -354,6 +356,7 @@ export class GameList {
             <span class="mp-game-details">
               ${isStarting ? 'Starting' : `Round ${round}`} · ${seatNames.length || players.length} players · ${lastUpdated}
             </span>
+            <span class="mp-rules-chip">${rulesChip(game.state?.gameOptions || game.lobbyData?.settings?.gameOptions, game.lobbyData?.settings)}</span>
           </div>
           <div class="mp-game-status">
             ${statusHtml}

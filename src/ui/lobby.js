@@ -9,6 +9,8 @@
 import { GAME_VERSION } from '../version.js';
 import { isMobileShell } from './mobileShell.js';
 import { captureLobbyScroll, restoreLobbyScroll } from './lobbyScroll.js';
+import { describe, normalizeGameOptions } from '../gameOptions.js';
+import { bindGameOptions, renderGameOptionsPanel } from './gameOptionsPanel.js';
 export { GAME_VERSION };
 
 // Native <select> option taps land on the card under the popup.
@@ -58,12 +60,6 @@ export const TEAM_COLORS = {
 export const STARTING_IPC_OPTIONS = [40, 60, 80, 100, 120, 150];
 export const DEFAULT_STARTING_IPCS = 80;
 
-function startingIpcOptionsHtml(selected) {
-  return STARTING_IPC_OPTIONS.map((n) => (
-    `<option value="${n}" ${Number(selected) === n ? 'selected' : ''}>${n}</option>`
-  )).join('');
-}
-
 export class Lobby {
   constructor(setup, onStart, onPlayOnline) {
     this.setup = setup;
@@ -76,8 +72,11 @@ export class Lobby {
     this.playerColors = {};
     this.playerAI = {};
     this.playerTeams = {};
-    this.teamsEnabled = false;
-    this.startingIPCs = DEFAULT_STARTING_IPCS;
+    this.gameOptions = normalizeGameOptions(null);
+    this.teamsEnabled = this.gameOptions.teams;
+    this.startingIPCs = this.gameOptions.startingIPCs;
+    this._optionsOpen = false;
+    this._optionsSheet = false;
     this.el = null;
     this._ignoreCardToggleUntil = 0;
     this._ignoreCardTogglePlayer = null;
@@ -202,6 +201,29 @@ export class Lobby {
     `;
   }
 
+  _optionsPanelHtml() {
+    return renderGameOptionsPanel(this.gameOptions, {
+      editable: true,
+      open: this._optionsOpen,
+      sheet: this._optionsSheet,
+      teamsToggleId: 'teams-enabled',
+      teamsToggleClass: 'lobby-phone-teams-toggle',
+    });
+  }
+
+  _applyGameOptions(next) {
+    const options = normalizeGameOptions(next);
+    this.gameOptions = options;
+    this.teamsEnabled = options.teams;
+    this.startingIPCs = options.startingIPCs;
+    if (!this.teamsEnabled) this.playerTeams = {};
+    if (this.selectedPlayers.length > options.maxPlayers) {
+      const keep = new Set(this.selectedPlayers.slice(0, options.maxPlayers));
+      this.selectedPlayers = this.selectedPlayers.filter((id) => keep.has(id));
+    }
+    this._render();
+  }
+
   _initFactionDefaults() {
     const factions = this.setup.risk.factions;
     factions.forEach((p, i) => {
@@ -235,21 +257,11 @@ export class Lobby {
           ${factions.map((p, i) => this._renderMobileFactionCard(p, i)).join('')}
         </div>
 
-        <div class="lobby-phone-options">
-          <label class="lobby-phone-option">
-            <span>Starting IPCs</span>
-            <select id="starting-ipcs" class="modern-select compact">
-              ${startingIpcOptionsHtml(this.startingIPCs)}
-            </select>
-          </label>
-        </div>
+        ${this._optionsPanelHtml()}
 
         <div class="setup-footer lobby-phone-start">
           <div class="lobby-phone-footer-opts">
-            <span class="lobby-phone-teams-name">Teams</span>
-            <button type="button" id="teams-enabled" class="lobby-phone-teams-toggle" aria-pressed="${this.teamsEnabled ? 'true' : 'false'}" aria-label="Teams">
-              ${this.teamsEnabled ? 'On' : 'Off'}
-            </button>
+            <span class="go-live-mirror">${describe(this.gameOptions)}</span>
           </div>
           <button class="start-game-btn ${canStart ? '' : 'disabled'}" data-action="start" ${canStart ? '' : 'disabled'}>
             ${canStart ? `Start Game (${selectedCount})` : 'Select at least 2 factions'}
@@ -392,32 +404,18 @@ export class Lobby {
           <div class="players-section">
             <div class="players-header">
               <h3 class="section-label">Players</h3>
-              <label class="teams-toggle-compact">
-                <input type="checkbox" id="teams-enabled" ${this.teamsEnabled ? 'checked' : ''}>
-                <span class="toggle-slider small"></span>
-                <span class="toggle-text">Teams</span>
-              </label>
             </div>
             <div class="player-grid modern">
               ${factions.map((p, i) => this._renderPlayerCard(p, i)).join('')}
             </div>
           </div>
 
-          <div class="options-row">
-            <label class="select-option inline">
-              <span class="select-label">Starting IPCs</span>
-              <select id="starting-ipcs" class="modern-select compact">
-                ${startingIpcOptionsHtml(this.startingIPCs)}
-              </select>
-            </label>
-          </div>
+          ${this._optionsPanelHtml()}
         </div>
 
         <div class="setup-footer">
           <div class="game-rules-preview">
-            <span>Random Territories</span>
-            <span class="dot">•</span>
-            <span>Capital Conquest Victory</span>
+            <span class="go-live-mirror">${describe(this.gameOptions)}</span>
           </div>
           <button class="start-game-btn ${canStart ? '' : 'disabled'}" data-action="start" ${canStart ? '' : 'disabled'}>
             ${canStart ? `Start Game (${selectedCount} Players)` : 'Select at least 2 players'}
@@ -705,31 +703,12 @@ export class Lobby {
       select.addEventListener('click', (e) => e.stopPropagation());
     });
 
-    // Starting IPCs
-    this.el.querySelector('#starting-ipcs')?.addEventListener('change', (e) => {
-      this.startingIPCs = parseInt(e.target.value, 10);
-    });
-
-    // Teams toggle
-    this.el.querySelector('#teams-enabled')?.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.currentTarget.type === 'checkbox') {
-        this.teamsEnabled = e.currentTarget.checked;
-      } else {
-        this.teamsEnabled = !this.teamsEnabled;
-      }
-      if (!this.teamsEnabled) {
-        this.playerTeams = {};
-      }
-      this._render();
-    });
-    this.el.querySelector('#teams-enabled')?.addEventListener('change', (e) => {
-      this.teamsEnabled = e.target.checked;
-      if (!this.teamsEnabled) {
-        this.playerTeams = {};
-      }
-      this._render();
+    bindGameOptions(this.el, {
+      onChange: (next) => this._applyGameOptions(next),
+      onToggle: ({ open, sheet }) => {
+        this._optionsOpen = open;
+        this._optionsSheet = sheet;
+      },
     });
 
     // Team buttons
@@ -778,6 +757,7 @@ export class Lobby {
       this.selectedPlayers.splice(idx, 1);
       delete this.playerNames[playerId];
     } else {
+      if (this.selectedPlayers.length >= (this.gameOptions?.maxPlayers || 5)) return;
       this.selectedPlayers.push(playerId);
       this.playerNames[playerId] = faction?.name || '';
     }
@@ -821,8 +801,10 @@ export class Lobby {
 
     const options = {
       alliancesEnabled: false,
-      teamsEnabled: this.teamsEnabled,
-      startingIPCs: this.startingIPCs,
+      teamsEnabled: this.gameOptions.teams,
+      startingIPCs: this.gameOptions.startingIPCs,
+      maxPlayers: this.gameOptions.maxPlayers,
+      gameOptions: this.gameOptions,
     };
 
     this.hide();

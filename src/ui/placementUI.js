@@ -151,7 +151,8 @@ export class PlacementUI {
     const unitsToPlace = this.gameState.getUnitsToPlace(player.id);
     const totalRemaining = this.gameState.getTotalUnitsToPlace(player.id);
     const placedThisRound = this.gameState.unitsPlacedThisRound || 0;
-    const maxThisRound = Math.min(6, totalRemaining + placedThisRound);
+    const roundLimit = this.gameState.getUnitsPerRoundLimit?.() || 6;
+    const maxThisRound = Math.min(roundLimit, totalRemaining + placedThisRound);
 
     let html = `
       <div class="pl-header" style="border-left: 5px solid ${player.color}; background: linear-gradient(90deg, ${player.color}33 0%, transparent 100%);">
@@ -279,9 +280,10 @@ export class PlacementUI {
       html += `</div>`;
     }
 
-    // Actions - must place 6 units before passing (unless no units left)
+    // Actions - must fill the setup-round cap before passing (unless no units left)
+    const limit = this.gameState.getUnitsPerRoundLimit?.() || 6;
     const canUndo = this.gameState.placementHistory && this.gameState.placementHistory.length > 0;
-    const roundComplete = placedThisRound >= 6 || totalRemaining === 0;
+    const roundComplete = placedThisRound >= limit || totalRemaining === 0;
 
     html += `
       <div class="pl-actions">
@@ -289,7 +291,7 @@ export class PlacementUI {
           <button class="pl-btn undo" data-action="undo">Undo Last</button>
         ` : ''}
         ${roundComplete ? '' : `
-          <div class="pl-progress-hint">Place ${6 - placedThisRound} more unit${6 - placedThisRound !== 1 ? 's' : ''} to continue</div>
+          <div class="pl-progress-hint">Place ${limit - placedThisRound} more unit${limit - placedThisRound !== 1 ? 's' : ''} to continue</div>
         `}
       </div>
     `;

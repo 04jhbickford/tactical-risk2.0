@@ -1,9 +1,17 @@
 // Game Rules Panel - Shows current game rules
 
+import { describe, optionRows } from '../gameOptions.js';
+
 export class RulesPanel {
   constructor() {
     this.isVisible = false;
+    this.gameState = null;
     this._create();
+  }
+
+  setGameState(gameState) {
+    this.gameState = gameState || null;
+    this._paintOptions();
   }
 
   _create() {
@@ -38,6 +46,7 @@ export class RulesPanel {
         <label class="rules-contents">
           <span>Contents</span>
           <select class="rules-contents-select" aria-label="Rules contents">
+            <option value="this-game" class="rules-options-jump">This game's options</option>
             <option value="phases">Turn Phases</option>
             <option value="units">Unit Types</option>
             <option value="combat">Combat Rules</option>
@@ -48,6 +57,11 @@ export class RulesPanel {
         </label>
 
         <div class="rules-sections">
+          <section class="rules-section rules-options-section" id="rules-this-game" data-rules-section="this-game" hidden>
+            <h3>This game's options</h3>
+            <p class="rules-options-summary"></p>
+            <ul class="rules-options-list"></ul>
+          </section>
           <section class="rules-section" id="rules-phases" data-rules-section="phases">
             <h3>Turn Phases</h3>
             <ol>
@@ -129,7 +143,31 @@ export class RulesPanel {
     `;
   }
 
+  _hasLiveGame() {
+    const phase = this.gameState?.phase;
+    return !!phase && phase !== 'lobby';
+  }
+
+  _paintOptions() {
+    const section = this.el?.querySelector('#rules-this-game');
+    const jump = this.el?.querySelector('.rules-options-jump');
+    if (!section) return;
+    const live = this._hasLiveGame();
+    section.hidden = !live;
+    if (jump) jump.hidden = !live;
+    if (!live) return;
+    const summary = this.el.querySelector('.rules-options-summary');
+    const list = this.el.querySelector('.rules-options-list');
+    if (summary) summary.textContent = describe(this.gameState.gameOptions);
+    if (list) {
+      list.innerHTML = optionRows(this.gameState.gameOptions)
+        .map(([label, value]) => `<li><strong>${label}:</strong> ${value}</li>`)
+        .join('');
+    }
+  }
+
   show() {
+    this._paintOptions();
     this.el.classList.remove('hidden');
     this.isVisible = true;
   }

@@ -1,4 +1,4 @@
-// V2.81.57-unified.13 — tracker on and off must roll the same dice.
+// V2.81.57-unified.14 — tracker on and off must roll the same dice.
 // Land, naval, AA, bombard, sub first strike, rocket, and tech.
 // Cosmetic spinning dice are not recorded.
 // Run: node tools/test-dice-tracker-golden.mjs
@@ -415,7 +415,7 @@ console.log('=== old saves and menu ===');
   const loaded = makeGs();
   loaded.loadFromJSON(saved);
   check('old save loads', loaded.round === gs.round && loaded.players.length === 2);
-  check('stamp is unified.13', GAME_VERSION === 'V2.81.57-unified.13');
+  check('stamp is unified.14', GAME_VERSION === 'V2.81.57-unified.14');
   const menu = phoneMenuHomeActions();
   const logAt = menu.findIndex((row) => row.tab === 'log');
   const diceAt = menu.findIndex((row) => row.label === 'Dice stats' && row.tab === 'dice');

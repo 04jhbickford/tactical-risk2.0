@@ -393,11 +393,13 @@ export class AIController {
       await this._delay(500);
 
       const result = this.gameState.rollTechDice(player.id);
-      if (result.success && availableTechs.length > 0) {
-        // Pick a tech to unlock
-        const techId = availableTechs[0];
-        this.gameState.unlockTech(player.id, techId);
-        this._updateStatus(`${player.name} unlocked ${techId}!`);
+      let picks = result.picks ?? (result.success ? 1 : 0);
+      while (picks > 0) {
+        const next = this.gameState.getAvailableTechs?.(player.id) || [];
+        if (next.length === 0) break;
+        this.gameState.unlockTech(player.id, next[0]);
+        this._updateStatus(`${player.name} unlocked ${next[0]}!`);
+        picks -= 1;
       }
       await this._delay(300);
     }
@@ -431,7 +433,8 @@ export class AIController {
     const strategy = this._analyzeStrategicSituation(player.id, aiPlayer.difficulty);
 
     const capitalZone = this.gameState.territoryByName?.[capital];
-    const islandStart = isIslandCapital(this.gameState.territoryByName, capital);
+    const landBridges = this.gameState.activeLandBridges?.();
+    const islandStart = isIslandCapital(this.gameState.territoryByName, capital, landBridges);
     let remaining = ipcs;
     const purchased = [];
 
@@ -449,6 +452,7 @@ export class AIController {
           ownedLands: owned,
           factoryAt: (name) => (this.gameState.units[name] || []).some((unit) => unit.type === 'factory'),
           friendlyAtStart: this.gameState.friendlyTerritoriesAtTurnStart,
+          landBridges,
         })
         : null;
       const plan = planIslandNavyPurchases({
@@ -1101,7 +1105,7 @@ export class AIController {
   // Combat unloads onto an enemy coast. Non-combat only sails.
   async _projectIslandNavy(player, mode) {
     const capital = this.gameState.playerState[player.id]?.capitalTerritory;
-    if (!isIslandCapital(this.gameState.territoryByName, capital)) return;
+    if (!isIslandCapital(this.gameState.territoryByName, capital, this.gameState.activeLandBridges?.())) return;
 
     const enemyLand = (name) => {
       const owner = this.gameState.getOwner(name);
