@@ -9,6 +9,8 @@
 
 const seen = new Set();
 const CONTENT_MAX = 1800;
+const MEMBER_CACHE_MS = 10 * 60 * 1000;
+const memberIdCache = new Map();
 
 const DISCORD_ALIAS_MAP = Object.freeze([
   {
@@ -17,7 +19,7 @@ const DISCORD_ALIAS_MAP = Object.freeze([
   },
   {
     snowflake: '600101834727620620',
-    aliases: ['rwts', 'robert', 'watts', 'robfox007'],
+    aliases: ['rwts', 'robert', 'watts', 'robfox007', 'robert007', 'robfox'],
   },
 ]);
 
@@ -43,13 +45,32 @@ function aliasTokens(raw) {
   return normAlias(raw).split(' ').filter(Boolean);
 }
 
+// Whole tokens only. Trailing digits fold (robert007 → robert, bastion2 → bastion).
+// A leftover single letter is not a token, and nothing matches by substring.
+function aliasMatchTokens(raw) {
+  const tokens = new Set();
+  for (const token of aliasTokens(raw)) {
+    if (token.length < 2) continue;
+    tokens.add(token);
+    const stripped = token.replace(/\d+$/, '');
+    if (stripped.length >= 2 && stripped !== token) tokens.add(stripped);
+  }
+  return tokens;
+}
+
 function lookupDiscordAlias(raw) {
-  const tokens = new Set(aliasTokens(raw));
+  const tokens = aliasMatchTokens(raw);
   if (!tokens.size) return '';
   for (const row of DISCORD_ALIAS_MAP) {
     for (const alias of row.aliases) {
-      const need = aliasTokens(alias);
-      if (need.length && need.every((token) => tokens.has(token))) return row.snowflake;
+      const need = aliasTokens(alias).filter((token) => token.length >= 2);
+      if (!need.length) continue;
+      const matched = need.every((token) => {
+        if (tokens.has(token)) return true;
+        const stripped = token.replace(/\d+$/, '');
+        return stripped.length >= 2 && tokens.has(stripped);
+      });
+      if (matched) return row.snowflake;
     }
   }
   return '';
@@ -75,6 +96,83 @@ function resolveDiscordSnowflake(body) {
     if (hit) return hit;
   }
   return '';
+}
+
+function exactMemberIds(rows, query) {
+  if (!Array.isArray(rows)) return [];
+  const want = String(query || '').trim().toLowerCase();
+  if (!want) return [];
+  const ids = [];
+  for (const row of rows) {
+    const user = row?.user;
+    const fields = [user?.username, user?.global_name, row?.nick];
+    const exact = fields.some((value) => String(value ?? '').trim().toLowerCase() === want);
+    if (!exact) continue;
+    const id = normalizeDiscordSnowflake(user?.id);
+    if (id && !ids.includes(id)) ids.push(id);
+  }
+  return ids;
+}
+
+function readBotEnv() {
+  const token = String(process.env.DISCORD_BOT_TOKEN || '').trim();
+  const guildId = String(process.env.DISCORD_GUILD_ID || '').trim();
+  if (!token || !/^\d{5,22}$/.test(guildId)) return null;
+  return { token, guildId };
+}
+
+async function lookupGuildMemberId(name) {
+  const env = readBotEnv();
+  const query = String(name ?? '').trim().replace(/^@+/, '');
+  if (!env || !query) return '';
+  const key = `${env.guildId}\n${query.toLowerCase()}`;
+  const cached = memberIdCache.get(key);
+  if (cached && cached.expires > Date.now()) return cached.id;
+  if (cached) memberIdCache.delete(key);
+
+  const url = new URL(`https://discord.com/api/v10/guilds/${env.guildId}/members/search`);
+  url.searchParams.set('query', query);
+  url.searchParams.set('limit', '5');
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 1500);
+  if (typeof timer.unref === 'function') timer.unref();
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { Authorization: `Bot ${env.token}` },
+      signal: ctrl.signal,
+    });
+    if (!res?.ok) return '';
+    const rows = await res.json();
+    const ids = exactMemberIds(rows, query);
+    if (ids.length !== 1) return '';
+    memberIdCache.set(key, { id: ids[0], expires: Date.now() + MEMBER_CACHE_MS });
+    return ids[0];
+  } catch {
+    return '';
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function lookupDiscordMemberMention(body) {
+  if (!readBotEnv()) return '';
+  const tried = new Set();
+  for (const raw of [body?.discordName, body?.displayName]) {
+    const name = String(raw ?? '').trim();
+    if (!name) continue;
+    const dedupe = name.toLowerCase();
+    if (tried.has(dedupe)) continue;
+    tried.add(dedupe);
+    const id = await lookupGuildMemberId(name);
+    if (id) return id;
+  }
+  return '';
+}
+
+function allowedMentionsFor(snowflake) {
+  if (snowflake) return { parse: [], users: [snowflake] };
+  return { parse: [] };
 }
 
 function cleanBit(raw) {
@@ -274,8 +372,17 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  const content = buildDiscordTurnContent({
+  const identity = {
     discordUserId: body.discordUserId,
+    displayName: body.displayName || '',
+    username: body.username || '',
+    discordName: body.discordName || '',
+    seatLabel: body.seatLabel || '',
+    name: body.displayName || '',
+  };
+  let mentionId = resolveDiscordSnowflake(identity);
+  const contentFields = {
+    discordUserId: mentionId || body.discordUserId,
     faction: body.faction || seatId,
     phase: body.phase || '',
     summary: body.summary || '',
@@ -286,18 +393,28 @@ module.exports = async function handler(req, res) {
     seatLabel: body.seatLabel || '',
     actorName: body.actorName || '',
     actorFaction: body.actorFaction || '',
-  });
+  };
+  let content = buildDiscordTurnContent(contentFields);
 
   if (isDiscordTurnProbe({ ...body, content })) {
     json(res, 200, { ok: false, reason: 'skip-probe' });
     return;
   }
 
+  if (!mentionId) {
+    mentionId = await lookupDiscordMemberMention(body);
+    if (mentionId) {
+      content = buildDiscordTurnContent({ ...contentFields, discordUserId: mentionId });
+    }
+  }
+
+  const allowed_mentions = allowedMentionsFor(mentionId);
+
   try {
     const posted = await fetch(webhook, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, allowed_mentions }),
     });
     if (!posted.ok) {
       json(res, 200, { ok: false, reason: 'soft-fail' });
