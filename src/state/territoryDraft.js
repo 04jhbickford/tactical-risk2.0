@@ -2,16 +2,12 @@
 // deal uses. Picks walk that order in a snake until every land territory
 // is taken. Optional on the save. An old client must not apply a draft.
 
-import { GAME_VERSION } from '../version.js';
+import { GAME_VERSION, unifiedReleaseParts } from '../version.js';
 
 export const DRAFT_PHASE = 'territory_draft';
 export const DRAFT_MIN_CLIENT = 'V2.81.57-unified.15';
 
-export function unifiedReleaseParts(version) {
-  const match = /unified\.(\d+)(?:\.(\d+))?/.exec(String(version || ''));
-  if (!match) return null;
-  return [Number(match[1]), match[2] != null ? Number(match[2]) : 0];
-}
+export { unifiedReleaseParts };
 
 export function clientSupportsTerritoryDraft(clientVersion = GAME_VERSION) {
   const have = unifiedReleaseParts(clientVersion);

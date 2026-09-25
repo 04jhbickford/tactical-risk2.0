@@ -20,7 +20,7 @@
       "id": "draft",
       "name": "Territory Draft",
       "description": "Players take turns drafting territories",
-      "enabled": true
+      "enabled": false
     }
   ],
   "factions": [

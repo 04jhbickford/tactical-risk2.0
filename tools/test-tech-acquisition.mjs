@@ -22,6 +22,7 @@ const {
   DEFAULT_GAME_OPTIONS,
   DIRECT_TECH_IPC_COST,
   normalizeGameOptions,
+  restoreProtectedGameOptions,
 } = await import(pathToFileURL(join(root, 'src/gameOptions.js')));
 
 let failures = 0;
@@ -147,6 +148,37 @@ diceBuyer.phase = GAME_PHASES.PLAYING;
 diceBuyer.turnPhase = TURN_PHASES.PURCHASE;
 check('dice mode cannot buy a technology directly',
   diceBuyer.buyTech(diceBuyer.players[0].id, 'jets') === false);
+
+const buyDice = boot({ techAcquisition: 'buy' }, mulberry32(0x0b17));
+buyDice.phase = GAME_PHASES.PLAYING;
+buyDice.turnPhase = TURN_PHASES.PURCHASE;
+const buySeat = buyDice.players[0].id;
+const buyIpcs = buyDice.getIPCs(buySeat);
+check('buy mode refuses tech dice in game state',
+  buyDice.purchaseTechDice(buySeat, 1) === false
+  && buyDice.getIPCs(buySeat) === buyIpcs
+  && (buyDice.playerTechs[buySeat]?.techTokens || 0) === 0);
+
+for (const mode of ['keep', 'buy']) {
+  const gs = boot({ techAcquisition: mode, territorySetup: 'draft' }, mulberry32(0x0f4));
+  const mirror = normalizeGameOptions(gs.gameOptions);
+  const stripped = gs.toJSON();
+  delete stripped.gameOptions.techAcquisition;
+  delete stripped.gameOptions.territorySetup;
+  const restored = restoreProtectedGameOptions(stripped, mirror);
+  const loaded = new GameState(setup, territories, continents);
+  loaded.loadFromJSON(restored);
+  check(`F4 ${mode} survives a stale options push`,
+    loaded.gameOptions.techAcquisition === mode
+    && loaded.gameOptions.territorySetup === 'draft');
+}
+const keptMode = restoreProtectedGameOptions(
+  { gameOptions: { techAcquisition: 'keep', startingIPCs: 80 } },
+  { techAcquisition: 'dice', territorySetup: 'random' },
+);
+check('F4 a live tech mode is not replaced by the mirror',
+  keptMode.gameOptions.techAcquisition === 'keep'
+  && keptMode.gameOptions.territorySetup === 'random');
 
 if (failures) {
   console.error(`\n${failures} failed`);

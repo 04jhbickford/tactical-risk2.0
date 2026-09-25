@@ -656,6 +656,33 @@ export class GameState {
     return this.draft.order[this.draft.pickIndex] || null;
   }
 
+  _draftStateUsable() {
+    const draft = this.draft;
+    const landCount = this.landTerritories.length;
+    if (!draft || !Array.isArray(draft.order) || draft.order.length !== landCount) return false;
+    const pickIndex = Number(draft.pickIndex);
+    if (!Number.isInteger(pickIndex) || pickIndex < 0 || pickIndex > landCount) return false;
+    return true;
+  }
+
+  // A stale push can drop `draft` while leaving phase and ownership. Seat
+  // order is the player array, so the snake and the next picker come back
+  // from the board. pickIndex is how many lands already have an owner.
+  _rebuildDraftFromBoard() {
+    const ids = (this.players || []).map((player) => player.id).filter(Boolean);
+    const lands = this.landTerritories || [];
+    const owned = lands.filter((territory) => territory?.name && this.getOwner(territory.name));
+    this.draft = {
+      order: buildSnakeDraftOrder(ids, lands.length),
+      pickIndex: owned.length,
+      picks: owned.map((territory) => ({
+        playerId: this.getOwner(territory.name),
+        territory: territory.name,
+      })),
+    };
+    this._syncDraftSeat();
+  }
+
   // One unowned land territory. Snake order lives in draft.order.
   pickDraftTerritory(territoryName) {
     if (this.phase !== GAME_PHASES.TERRITORY_DRAFT || !this.draft) return false;
@@ -5008,6 +5035,7 @@ export class GameState {
 
   // Purchase tech research dice (5 IPCs each)
   purchaseTechDice(playerId, count) {
+    if (this.gameOptions?.techAcquisition === 'buy') return false;
     const pState = this.playerState[playerId];
     if (!pState) return false;
 
@@ -6405,7 +6433,10 @@ export class GameState {
       this.teamsEnabled = this.gameOptions.teams;
     }
     this.draft = normalizeDraftState(data.draft);
-    if (this.phase === GAME_PHASES.TERRITORY_DRAFT) this._syncDraftSeat();
+    if (this.phase === GAME_PHASES.TERRITORY_DRAFT) {
+      if (!this._draftStateUsable()) this._rebuildDraftFromBoard();
+      else this._syncDraftSeat();
+    }
 
     // Reset per-turn state on load (fresh state for the turn)
     this.rocketsUsedThisTurn = {};

@@ -184,6 +184,33 @@ export function optionsFromSettings(settings) {
   return normalizeGameOptions(settings?.gameOptions, settings || {});
 }
 
+// Doc-level copy. A unified.14.1 push rewrites `state` and omits
+// territorySetup / techAcquisition. It does not delete sibling fields, so
+// this copy survives and load restores the keys the live options lost.
+export const PROTECTED_OPTION_KEYS = Object.freeze(['territorySetup', 'techAcquisition']);
+
+export function protectedGameOptions(raw) {
+  return normalizeGameOptions(raw);
+}
+
+export function restoreProtectedGameOptions(state, mirror) {
+  if (!state || typeof state !== 'object') return state;
+  if (!mirror || typeof mirror !== 'object') return state;
+  const live = state.gameOptions && typeof state.gameOptions === 'object'
+    ? state.gameOptions
+    : null;
+  const patch = {};
+  for (const key of PROTECTED_OPTION_KEYS) {
+    const missing = !live || live[key] == null || live[key] === '';
+    if (missing && mirror[key] != null && mirror[key] !== '') patch[key] = mirror[key];
+  }
+  if (!Object.keys(patch).length) return state;
+  return {
+    ...state,
+    gameOptions: { ...(live || {}), ...patch },
+  };
+}
+
 /**
  * Light is −⅓, Heavy is +⅓, rounded to the nearest unit.
  * Infantry never drops below 1. Standard returns the same quantities.

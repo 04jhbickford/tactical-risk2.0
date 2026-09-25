@@ -58,7 +58,7 @@ import { HUD } from './ui/hud.js';
 import { Minimap } from './ui/minimap.js';
 import { Lobby } from './ui/lobby.js';
 import { redirectUxAliasesIfNeeded } from './map/presentationMode.js';
-import { GAME_VERSION } from './version.js';
+import { GAME_VERSION, versionRefreshReason } from './version.js';
 
 function paintGameStamp() {
   if (typeof window === 'undefined' || typeof document === 'undefined') return GAME_VERSION;
@@ -1451,8 +1451,9 @@ async function init() {
 
       // A newer app version wrote the game doc (redeploy while this tab stayed
       // open) — show the persistent refresh banner (Dimension C)
-      if (event === 'version_outdated') {
-        showVersionBanner(data?.remoteVersion);
+      const refreshReason = versionRefreshReason(event, data);
+      if (refreshReason) {
+        showVersionBanner(refreshReason);
       }
 
       // Handle auth errors. Session-lost must not dump to home / Create Game (B27).

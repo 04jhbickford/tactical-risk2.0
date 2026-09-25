@@ -84,7 +84,9 @@ check('GAME_VERSION is V2.81.57-unified.15', GAME_VERSION === 'V2.81.57-unified.
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 const enabled = (setup.gameModes || []).filter((mode) => mode.enabled).map((mode) => mode.id);
-check('draft stub is the only newly enabled mode', JSON.stringify(enabled) === JSON.stringify(['classic', 'risk', 'draft']));
+const draftStub = (setup.gameModes || []).find((mode) => mode.id === 'draft');
+check('enabled modes stay classic and risk', JSON.stringify(enabled) === JSON.stringify(['classic', 'risk']));
+check('draft stub stays disabled', draftStub?.enabled === false);
 const draftRow = draftModeSource(setup);
 check('option label comes from the draft stub', draftRow.name === 'Territory Draft');
 const panel = renderGameOptionsPanel(null, { editable: true, draftMode: draftRow, seatedCount: 3 });
@@ -129,6 +131,22 @@ try {
   check('older client refuses a draft-phase game',
     draftOpenRefusal(mid, 'V2.81.57-unified.14.1')?.reason === 'draft-client-too-old');
   check('this client may open the draft', draftOpenRefusal(mid, GAME_VERSION) == null);
+
+  const stripped = JSON.parse(JSON.stringify(mid));
+  delete stripped.draft;
+  delete stripped.minClientVersion;
+  const healed = new GameState(setup, territories, continents);
+  healed.loadFromJSON(stripped);
+  const ownedLand = healed.landTerritories.filter((t) => healed.getOwner(t.name)).length;
+  check('F3 rebuilt pick index is the owned land count', healed.draft?.pickIndex === ownedLand && ownedLand > 0);
+  check('F3 rebuilt picker exists', !!healed.draftPickerId());
+  check('F3 rebuilt picker is the snake seat', healed.draftPickerId() === healed.draft.order[ownedLand]);
+  let healGuard = 0;
+  while (healed.phase === GAME_PHASES.TERRITORY_DRAFT && healGuard < 200) {
+    if (!stepDraft(healed)) break;
+    healGuard += 1;
+  }
+  check('F3 rebuilt draft reaches capital placement', healed.phase === GAME_PHASES.CAPITAL_PLACEMENT);
 
   guard = 0;
   while (gs.phase === GAME_PHASES.TERRITORY_DRAFT && guard < 200) {
