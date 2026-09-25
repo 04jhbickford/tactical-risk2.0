@@ -208,7 +208,7 @@ export class HUD {
           <div class="hud-current-turn">
             ${flagSrc ? `<img src="${flagSrc}" class="hud-flag-large" alt="${player.name}">` : ''}
             <div class="hud-turn-info">
-              <span class="hud-player-name" style="color: ${player.color}">${possessivePhrase(player.name, 'Turn')}</span>
+              <span class="hud-player-name" style="color: ${player.color}">${possessivePhrase(player.name, phase === GAME_PHASES.TERRITORY_DRAFT ? 'pick' : 'Turn')}</span>
               <span class="hud-phase-name">${this._getPhaseName(phase)}</span>
             </div>
           </div>`;
@@ -639,6 +639,7 @@ export class HUD {
   }
 
   _getPhaseName(phase) {
+    if (phase === GAME_PHASES.TERRITORY_DRAFT) return 'Territory Draft';
     if (phase === GAME_PHASES.CAPITAL_PLACEMENT) return 'Place Capital';
     if (phase === GAME_PHASES.UNIT_PLACEMENT) return 'Initial Deployment';
     if (phase === GAME_PHASES.PLAYING) {

@@ -1,4 +1,4 @@
-// V2.81.57-unified.14.1 — AI battles and non-battle captures show on the turn ping.
+// V2.81.57-unified.15 — AI battles and non-battle captures show on the turn ping.
 // Replays the TXVKJB seat gap: British Easy AI fights through resolveCombat
 // (the aiController._handleCombat loop) and walks into empty Egypt.
 // Run: node tools/test-turn-ping-ai-losses.mjs
@@ -39,7 +39,7 @@ const check = (label, cond, extra) => {
   }
 };
 
-check('stamp is unified.14.1', GAME_VERSION === 'V2.81.57-unified.14.1');
+check('stamp is unified.15', GAME_VERSION === 'V2.81.57-unified.15');
 check('schema stays 11', SCHEMA_VERSION === 11);
 
 const landDefs = {
@@ -208,6 +208,7 @@ function playTxCombat(gs, onRound) {
 }
 
 const EXPECTED_ROB = [
+  '<@600101834727620620>',
   'Robert007 - Germany Develop Tech Phase',
   '-2x Infantry, 1x Tank lost Turkey - British Easy AI',
   '-1x Infantry lost Kenya-Rhodesia - British Easy AI',

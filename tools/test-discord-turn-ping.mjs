@@ -37,7 +37,7 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-check('stamp is unified.2', GAME_VERSION === 'V2.81.57-unified.14.1');
+check('stamp is unified.2', GAME_VERSION === 'V2.81.57-unified.15');
 check('channel id documented', DISCORD_TURN_CHANNEL_ID === '1551283474303025292');
 check('Classic lobby field', classicLobby.includes('mp-discord-input') && classicLobby.includes('data-action="discord-id"'));
 check('New UX lobby field', threeChrome.includes('data-lobby-discord') && threeChrome.includes('three-lobby-discord'));
@@ -111,6 +111,10 @@ check('alias watts', resolveDiscordSnowflake({ displayName: 'Watts' }) === '6001
 check('alias Robert Watts', resolveDiscordSnowflake({ displayName: 'Robert Watts' }) === '600101834727620620');
 check('alias Robfox007', resolveDiscordSnowflake({ seatLabel: 'Robfox007' }) === '600101834727620620');
 check('alias robfox007', resolveDiscordSnowflake({ name: 'robfox007' }) === '600101834727620620');
+check('alias Robert007', resolveDiscordSnowflake({ displayName: 'Robert007' }) === '600101834727620620');
+check('alias robfox', resolveDiscordSnowflake({ name: 'robfox' }) === '600101834727620620');
+check('alias bastion2', resolveDiscordSnowflake({ name: 'bastion2' }) === '261711980526567428');
+check('bare Rob stays untagged', resolveDiscordSnowflake({ name: 'Rob' }) === '');
 check('explicit snowflake beats alias',
   resolveDiscordSnowflake({ discordUserId: '123456789012345678', name: 'Bastion' }) === '123456789012345678');
 check('unknown name stays untagged', resolveDiscordSnowflake({ name: 'James' }) === '');

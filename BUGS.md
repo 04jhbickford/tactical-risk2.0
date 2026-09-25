@@ -2,6 +2,22 @@
 
 ---
 
+## 9.25.26 — unified.15 draft territories and tech acquisition
+
+Stamp `V2.81.57-unified.15`. Schema stays 11.
+
+Rob, Discord `#wishlist`: draft territories before capitals, and a choice of how tech is acquired (dice tokens as today, keep tokens until a success, or buy a tech for 20 IPCs). Carry-over from unified.14: the waiting room could show 3/2 when Max players was below the seated count. Carry-over from unified.14.1: the turn-summary popup printed `[object Object]` for combat loss maps and still listed undone walk-in captures. The turn-ping alias hotfix (`#27`) is on main, so the client alias map matches the server (trailing digits, `robert007`, `robfox`).
+
+Draft is a host Game option, default Random deal. Snake order uses the same shuffled seat order as today's deal. Each pick owns one land territory and places one infantry. When the board is full, capital placement starts as before. AI picks prefer adjacent land and finishing a continent. `minClientVersion` is written only while the phase is `territory_draft`. `loadFromJSON` refuses that phase only on a client that already contains the gate and is older than unified.15, so it guards future clients. The unified.14.1 tab that shipped does not have the gate. Its refresh banner reads `clientVersion` as major.minor only, and this build writes `V2.82-unified.15` there so that tab shows "A newer version is live. Refresh". If a stale push drops `draft`, load rebuilds the snake from seat order and owned land. `protectedGameOptions` on the doc restores territory setup and tech mode when the live options omit those keys. Buy mode refuses `purchaseTechDice` in game state. Default Random deal omits `draft` and `minClientVersion`. The display stamp stays `V2.81.57-unified.15`.
+
+Tech: Keep leaves `playerTechs.techTokens` in place on a miss and clears them when a roll unlocks a tech. Buy directly spends 20 IPCs during Purchase and does not roll. Dice tokens stay the default and still consume every token.
+
+The turn summary formats loss maps as `2x Infantry, 1x Tank` and skips `undone` events. The Discord ping body is unchanged. Land-bridges off still treats Eire–UK and Syria Jordan–Anglo Sudan Egypt as adjacent because `territories.json` lists them as base neighbors; draft AI uses `getConnections`.
+
+Receipt: `node tools/test-draft-setup.mjs`, `node tools/test-tech-acquisition.mjs`, `node tools/test-turn-summary-losses.mjs`.
+
+---
+
 ## 9.25.26 — unified.14.1 turn ping lists AI battle losses
 
 Stamp `V2.81.57-unified.14.1`. Schema stays 11.

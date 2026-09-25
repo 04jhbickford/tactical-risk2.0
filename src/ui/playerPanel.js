@@ -2,6 +2,7 @@
 // Tabs: Actions, Stats, Territory, Log
 
 import { GAME_PHASES, TURN_PHASES, TURN_PHASE_NAMES, TECHNOLOGIES, shouldShowTechResearch, shouldShowPurchase } from '../state/gameState.js';
+import { DIRECT_TECH_IPC_COST } from '../gameOptions.js';
 import { getUnitIconPath } from '../utils/unitIcons.js';
 import { formatUnitName } from '../utils/unitNames.js';
 import { possessivePhrase } from '../utils/possessive.js';
@@ -121,6 +122,7 @@ import {
 
 // Compact phase hints — phone tray peek reads these next to End ${phase}.
 export const PHASE_HINTS = {
+  [GAME_PHASES.TERRITORY_DRAFT]: 'Click an open territory',
   [GAME_PHASES.CAPITAL_PLACEMENT]: 'Click your territory',
   [GAME_PHASES.UNIT_PLACEMENT]: 'Click to place units',
   [TURN_PHASES.DEVELOP_TECH]: '',
@@ -315,6 +317,7 @@ export function computeInitialPlacementUX({
 
 // One-line "what now" for the phone tray peek (and the desktop phase row).
 export function resolvePhaseHint(phase, turnPhase) {
+  if (phase === GAME_PHASES.TERRITORY_DRAFT) return PHASE_HINTS[GAME_PHASES.TERRITORY_DRAFT] || '';
   if (phase === GAME_PHASES.CAPITAL_PLACEMENT) return PHASE_HINTS[GAME_PHASES.CAPITAL_PLACEMENT] || '';
   if (phase === GAME_PHASES.UNIT_PLACEMENT) return PHASE_HINTS[GAME_PHASES.UNIT_PLACEMENT] || '';
   if (phase === GAME_PHASES.PLAYING) return PHASE_HINTS[turnPhase] || '';
@@ -326,6 +329,7 @@ export function resolvePhaseHint(phase, turnPhase) {
 export function resolvePhonePeekHint(phase, turnPhase, selectedUnitType, opts = {}) {
   const land = opts.territoryName || '';
   const dest = opts.destName || '';
+  if (phase === GAME_PHASES.TERRITORY_DRAFT) return 'Tap an open territory, then Pick';
   if (phase === GAME_PHASES.CAPITAL_PLACEMENT) return 'Tap your land, then Confirm';
   if (phase === GAME_PHASES.UNIT_PLACEMENT
     || (phase === GAME_PHASES.PLAYING && turnPhase === TURN_PHASES.MOBILIZE)) {
@@ -1921,6 +1925,21 @@ export class PlayerPanel {
     }
     // Capital placement — 22d4b13 tray. Own-land tap peeks; Confirm is
     // the only commit. Mount from selected land or the peeked name.
+    else if (phase === GAME_PHASES.TERRITORY_DRAFT && isMobileShell()) {
+      const name = this.selectedTerritory && !this.selectedTerritory.isWater
+        ? this.selectedTerritory.name
+        : '';
+      const open = !!(name && !this.gameState.getOwner?.(name));
+      warningHtml = `<div class="pp-bottom-warning draft-turn-banner">${possessivePhrase(player.name, 'pick')}</div>`;
+      if (open) {
+        buttons.push({
+          action: 'pick-territory',
+          label: 'Pick',
+          disabled: false,
+          primary: true,
+        });
+      }
+    }
     else if (phase === GAME_PHASES.CAPITAL_PLACEMENT) {
       const peekName = this._phoneCapitalLandName;
       const isOwnedLand = !!(peekName && this.gameState.getOwner?.(peekName) === player.id);
@@ -1974,8 +1993,15 @@ export class PlayerPanel {
         warningHtml = `<div class="pp-bottom-warning">${ux.hint}</div>`;
       }
     } else if (phase === GAME_PHASES.PLAYING && shouldShowTechResearch(phase, turnPhase)
-      && this.techDiceCount > 0) {
-      const techCta = resolvePhoneTechCta({ diceCount: this.techDiceCount });
+      && this._techAcquisition() !== 'buy'
+      && (this.techDiceCount > 0 || this._carriedTechTokens(player) > 0)) {
+      const carried = this._carriedTechTokens(player);
+      const techCta = resolvePhoneTechCta({
+        diceCount: this.techDiceCount > 0 ? this.techDiceCount : carried,
+      });
+      if (techCta && this.techDiceCount <= 0 && carried > 0) {
+        techCta.label = `Roll ${carried} carried`;
+      }
       if (techCta) buttons.push(techCta);
     } else if (phase === GAME_PHASES.PLAYING && turnPhase === TURN_PHASES.MOBILIZE
       && isMobileShell()
@@ -3000,15 +3026,34 @@ export class PlayerPanel {
     return counts;
   }
 
+  _techAcquisition() {
+    const mode = this.gameState?.gameOptions?.techAcquisition;
+    return mode === 'keep' || mode === 'buy' ? mode : 'dice';
+  }
+
+  _carriedTechTokens(player) {
+    if (this._techAcquisition() !== 'keep' || !player) return 0;
+    return Number(this.gameState?.playerTechs?.[player.id]?.techTokens) || 0;
+  }
+
+  _getPhaseHint(phase, turnPhase) {
+    if (phase === GAME_PHASES.TERRITORY_DRAFT) {
+      const name = this.gameState?.currentPlayer?.name;
+      const who = name ? possessivePhrase(name, 'pick') : 'Your pick';
+      const how = isMobileShell()
+        ? 'Tap an open territory, then Pick'
+        : 'Click an open territory';
+      return `${who} · ${how}`;
+    }
+    return phonePointerHint(resolvePhaseHint(phase, turnPhase), { mobile: isMobileShell() });
+  }
+
   _getPhaseName(phase, turnPhase) {
+    if (phase === GAME_PHASES.TERRITORY_DRAFT) return 'Territory Draft';
     if (phase === GAME_PHASES.CAPITAL_PLACEMENT) return 'Place Capital';
     if (phase === GAME_PHASES.UNIT_PLACEMENT) return 'Initial Deployment';
     if (phase === GAME_PHASES.PLAYING) return TURN_PHASE_NAMES[turnPhase] || turnPhase;
     return 'Setup';
-  }
-
-  _getPhaseHint(phase, turnPhase) {
-    return phonePointerHint(resolvePhaseHint(phase, turnPhase), { mobile: isMobileShell() });
   }
 
   _getContrastColor(hexColor) {
@@ -3157,6 +3202,23 @@ export class PlayerPanel {
         </div>`;
     }
 
+    if (this._techAcquisition() === 'buy') {
+      const available = this.gameState.getAvailableTechs?.(player.id) || [];
+      html += `<div class="pp-tech-list"><div class="pp-tech-list-header">Technologies · ${DIRECT_TECH_IPC_COST} IPCs</div>`;
+      if (!available.length) {
+        html += `<div class="pp-tech-item-desc">All technologies owned.</div>`;
+      }
+      for (const techId of available) {
+        const tech = TECHNOLOGIES[techId];
+        const afford = this.gameState.getIPCs(player.id) >= DIRECT_TECH_IPC_COST;
+        html += `
+          <button class="pp-action-btn secondary" data-action="buy-tech" data-tech="${techId}" ${afford ? '' : 'disabled'}>
+            Buy ${tech?.name || techId} · ${DIRECT_TECH_IPC_COST}
+          </button>`;
+      }
+      html += `</div>`;
+    }
+
     html += `</div>`;
     return html;
   }
@@ -3170,13 +3232,30 @@ export class PlayerPanel {
     const availableTechs = Object.entries(TECHNOLOGIES)
       .filter(([id, _]) => !unlockedTechs.includes(id));
 
+    const mode = this._techAcquisition();
+    const multi = this.gameState.gameOptions?.multipleTech === true;
+    const carried = this._carriedTechTokens(player);
+    let note = multi
+      ? '(5 per die, each 6 is a breakthrough)'
+      : '(5 per die, roll 6 = breakthrough)';
+    if (mode === 'keep') {
+      note = multi
+        ? '(5 per die, each 6 is a breakthrough, a miss keeps the dice)'
+        : '(5 per die, roll 6 = breakthrough, a miss keeps the dice)';
+    } else if (mode === 'buy') {
+      note = `(Buy a technology for ${DIRECT_TECH_IPC_COST} IPCs during Purchase. No dice.)`;
+    }
     let html = `
       <div class="pp-inline-tech">
         <div class="pp-tech-budget">
           <span>IPCs: ${ipcs}</span>
-          <span class="pp-tech-cost-note">${this.gameState.gameOptions?.multipleTech ? '(5 per die, each 6 is a breakthrough)' : '(5 per die, roll 6 = breakthrough)'}</span>
-        </div>
+          <span class="pp-tech-cost-note">${note}</span>
+        </div>`;
 
+    if (mode === 'buy') {
+      html += `<p class="pp-tech-item-desc">Technologies are bought during Purchase for ${DIRECT_TECH_IPC_COST} IPCs each.</p>`;
+    } else {
+      html += `
         <div class="pp-tech-dice-row">
           <span class="pp-tech-dice-label">Research Dice:</span>
           <div class="pp-tech-dice-controls">
@@ -3185,15 +3264,19 @@ export class PlayerPanel {
             <button class="pp-qty-btn" data-action="tech-dice-delta" data-delta="1" ${this.techDiceCount >= maxDice ? 'disabled' : ''}>+</button>
             <button class="pp-qty-btn max-btn" data-action="tech-dice-max" ${maxDice <= 0 ? 'disabled' : ''}>Max</button>
           </div>
-          <span class="pp-tech-cost">Cost: ${this.techDiceCount * 5} IPCs</span>
+          <span class="pp-tech-cost">Cost: ${this.techDiceCount * 5} IPCs${carried > 0 ? ` · ${carried} carried` : ''}</span>
         </div>`;
-
-    if (this.techDiceCount > 0) {
-      const techCta = resolvePhoneTechCta({ diceCount: this.techDiceCount });
-      html += `
+      const rolling = this.techDiceCount > 0 ? this.techDiceCount : carried;
+      if (rolling > 0) {
+        const techCta = resolvePhoneTechCta({ diceCount: rolling });
+        const label = this.techDiceCount <= 0 && carried > 0
+          ? `Roll ${carried} carried`
+          : techCta.label;
+        html += `
         <button class="pp-action-btn primary" data-action="roll-tech">
-          ${techCta.label}
+          ${label}
         </button>`;
+      }
     }
 
     // Show all technologies with descriptions and owned status
@@ -5140,8 +5223,10 @@ export class PlayerPanel {
 
         // Handle tech roll
         if (action === 'roll-tech') {
-          if (this.onAction && this.techDiceCount > 0) {
-            this.onAction('roll-tech', { diceCount: this.techDiceCount });
+          const carried = this._carriedTechTokens(this.gameState?.currentPlayer);
+          if (this.onAction && this._techAcquisition() !== 'buy'
+            && (this.techDiceCount > 0 || carried > 0)) {
+            this.onAction('roll-tech', { diceCount: this.techDiceCount, carried });
             this.techDiceCount = 0; // Reset after rolling
           }
           return;
@@ -5422,6 +5507,20 @@ export class PlayerPanel {
           if (this.onAction) {
             this.onAction('undo-all-moves', {});
           }
+          return;
+        }
+
+        if (action === 'pick-territory') {
+          const name = (this.selectedTerritory && !this.selectedTerritory.isWater)
+            ? this.selectedTerritory.name
+            : (territory || '');
+          if (this.onAction && name) this.onAction('pick-territory', { territory: name });
+          return;
+        }
+
+        if (action === 'buy-tech') {
+          const techId = btn.dataset.tech;
+          if (this.onAction && techId) this.onAction('buy-tech', { techId });
           return;
         }
 

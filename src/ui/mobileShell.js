@@ -85,6 +85,7 @@ export function pickMobilePrimaryButtons(buttons) {
 // Always-visible phase identity. Do not copy the tablet 9px / hidden-dots path.
 // Playing: "3/7 Combat Movement". Setup phases keep their name.
 export function formatMobilePhaseLabel(gamePhase, turnPhase) {
+  if (gamePhase === GAME_PHASES.TERRITORY_DRAFT) return 'Territory Draft';
   if (gamePhase === GAME_PHASES.CAPITAL_PLACEMENT) return 'Place Capital';
   if (gamePhase === GAME_PHASES.UNIT_PLACEMENT) return 'Initial Deployment';
   if (gamePhase === GAME_PHASES.PLAYING) {
@@ -98,6 +99,7 @@ export function formatMobilePhaseLabel(gamePhase, turnPhase) {
 
 // HUD chip: ONE phase word. The numbered line stays for logs / desktop.
 export function formatMobilePhaseWord(gamePhase, turnPhase) {
+  if (gamePhase === GAME_PHASES.TERRITORY_DRAFT) return 'Draft';
   if (gamePhase === GAME_PHASES.CAPITAL_PLACEMENT) return 'Capital';
   if (gamePhase === GAME_PHASES.UNIT_PLACEMENT) return 'Deploy';
   if (gamePhase === GAME_PHASES.PLAYING) {
@@ -1035,7 +1037,9 @@ export function shouldStrokePhoneLegalHairline(_zoom, { mobile = false } = {}) {
 }
 
 export function isPhoneSetupPhase(phase) {
-  return phase === GAME_PHASES.CAPITAL_PLACEMENT || phase === GAME_PHASES.UNIT_PLACEMENT;
+  return phase === GAME_PHASES.TERRITORY_DRAFT
+    || phase === GAME_PHASES.CAPITAL_PLACEMENT
+    || phase === GAME_PHASES.UNIT_PLACEMENT;
 }
 
 /** Baked smallMap/baseTiles carry dark-red country ink. Skip at Fit and

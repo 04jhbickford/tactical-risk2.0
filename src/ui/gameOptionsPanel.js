@@ -5,10 +5,14 @@
 import {
   DEFAULT_GAME_OPTIONS,
   STARTING_IPC_VALUES,
-  MAX_PLAYER_VALUES,
+  DIRECT_TECH_IPC_COST,
+  clampMaxPlayers,
   describe,
+  draftModeSource,
+  maxPlayerChoices,
   normalizeGameOptions,
   phoneOptionsLabel,
+  techAcquisitionLabel,
 } from '../gameOptions.js';
 
 function esc(value) {
@@ -23,6 +27,14 @@ function selectHtml(name, values, selected, { editable, label }) {
     `<option value="${n}" ${Number(selected) === n ? 'selected' : ''}>${n}</option>`
   )).join('');
   return `<select class="go-control modern-select" data-go="${name}" id="${name === 'startingIPCs' ? 'starting-ipcs' : `go-${name}`}" aria-label="${esc(label)}" ${editable ? '' : 'disabled'}>${options}</select>`;
+}
+
+function enumSelect(name, choices, selected, { editable, label, title = '' }) {
+  const options = choices.map(([id, text]) => (
+    `<option value="${esc(id)}" ${selected === id ? 'selected' : ''}>${esc(text)}</option>`
+  )).join('');
+  const tip = title ? ` title="${esc(title)}"` : '';
+  return `<select class="go-control modern-select" data-go="${name}" id="go-${name}" aria-label="${esc(label)}"${tip} ${editable ? '' : 'disabled'}>${options}</select>`;
 }
 
 function armySelect(selected, editable) {
@@ -52,11 +64,23 @@ function stepperHtml(value, editable) {
     </span>`;
 }
 
-function rowsHtml(options, { editable, teamsToggleId, teamsToggleClass }) {
+function rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMode, seatedCount }) {
   const o = normalizeGameOptions(options);
+  const draft = draftMode || draftModeSource(null);
+  const maxChoices = maxPlayerChoices(seatedCount);
+  const maxSelected = clampMaxPlayers(o.maxPlayers, seatedCount);
+  const territoryTitle = `${draft.name}: ${draft.description}. Random deal is today's setup.`;
+  const techTitle = `Dice tokens cost 5 IPCs and are spent on the roll. Keep tokens until success leaves them in place on a miss and spends them on a breakthrough. Buy directly pays ${DIRECT_TECH_IPC_COST} IPCs for one technology during Purchase, with no dice.`;
   return `
     <div class="go-group">
       <h3 class="go-group-label">Setup</h3>
+      <div class="go-row" title="${esc(territoryTitle)}">
+        <span class="go-label">Territories</span>
+        ${enumSelect('territorySetup', [
+          ['random', 'Random deal'],
+          ['draft', draft.name || 'Draft'],
+        ], o.territorySetup, { editable, label: 'Territories', title: territoryTitle })}
+      </div>
       <div class="go-row" title="IPCs each power starts with">
         <span class="go-label" id="go-label-ipcs">Starting IPCs</span>
         ${selectHtml('startingIPCs', STARTING_IPC_VALUES, o.startingIPCs, { editable, label: 'Starting IPCs' })}
@@ -72,6 +96,14 @@ function rowsHtml(options, { editable, teamsToggleId, teamsToggleClass }) {
     </div>
     <div class="go-group">
       <h3 class="go-group-label">Tech</h3>
+      <div class="go-row" title="${esc(techTitle)}">
+        <span class="go-label">How tech is acquired</span>
+        ${enumSelect('techAcquisition', [
+          ['dice', 'Dice tokens'],
+          ['keep', 'Keep tokens until success'],
+          ['buy', techAcquisitionLabel('buy')],
+        ], o.techAcquisition, { editable, label: 'How tech is acquired', title: techTitle })}
+      </div>
       <div class="go-row" title="When on, each 6 is its own breakthrough">
         <span class="go-label">Multiple breakthroughs</span>
         ${toggleHtml('multipleTech', o.multipleTech, { editable })}
@@ -97,7 +129,7 @@ function rowsHtml(options, { editable, teamsToggleId, teamsToggleClass }) {
       </div>
       <div class="go-row" title="Seat cap. Stays at 5.">
         <span class="go-label">Max players</span>
-        ${selectHtml('maxPlayers', MAX_PLAYER_VALUES, o.maxPlayers, { editable, label: 'Max players' })}
+        ${selectHtml('maxPlayers', maxChoices, maxSelected, { editable, label: 'Max players' })}
       </div>
     </div>
     <button type="button" class="go-reset" data-action="go-reset" ${editable ? '' : 'disabled'}>Reset to standard</button>
@@ -110,6 +142,8 @@ export function renderGameOptionsPanel(raw, {
   sheet = false,
   teamsToggleId = 'teams-enabled',
   teamsToggleClass = 'lobby-phone-teams-toggle',
+  draftMode = null,
+  seatedCount = 0,
 } = {}) {
   const options = normalizeGameOptions(raw);
   const summary = describe(options);
@@ -132,7 +166,7 @@ export function renderGameOptionsPanel(raw, {
       ${editable ? '' : '<p class="go-host-note">Set by host</p>'}
       <div class="go-anchor">
         <div class="go-body">
-          ${rowsHtml(options, { editable, teamsToggleId, teamsToggleClass })}
+          ${rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMode, seatedCount })}
         </div>
       </div>
       <div class="go-sheet" ${sheet ? '' : 'hidden'}>
@@ -167,6 +201,8 @@ export function readGameOptionsFrom(root) {
     multipleTech: flag('multipleTech'),
     landBridges: flag('landBridges'),
     teams: flag('teams'),
+    territorySetup: valueOf('territorySetup')?.value,
+    techAcquisition: valueOf('techAcquisition')?.value,
   });
 }
 
@@ -268,9 +304,13 @@ export function bindGameOptions(root, { onChange, onToggle } = {}) {
       const ipc = panel.querySelector('[data-go="startingIPCs"]');
       const army = panel.querySelector('[data-go="startingArmy"]');
       const max = panel.querySelector('[data-go="maxPlayers"]');
+      const territories = panel.querySelector('[data-go="territorySetup"]');
+      const tech = panel.querySelector('[data-go="techAcquisition"]');
       if (ipc) ipc.value = String(next.startingIPCs);
       if (army) army.value = next.startingArmy;
       if (max) max.value = String(next.maxPlayers);
+      if (territories) territories.value = next.territorySetup;
+      if (tech) tech.value = next.techAcquisition;
       for (const name of ['multipleTech', 'landBridges', 'teams']) {
         const el = panel.querySelector(`[data-go="${name}"]`);
         if (!el) continue;

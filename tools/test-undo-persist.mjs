@@ -1,4 +1,4 @@
-// V2.81.57-unified.14.1 — per-row Undo survives reload. Schema stays 11.
+// V2.81.57-unified.15 — per-row Undo survives reload. Schema stays 11.
 // Run: node tools/test-undo-persist.mjs
 
 import { pathToFileURL } from 'node:url';
@@ -24,7 +24,7 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-check('GAME_VERSION is V2.81.57-unified.14.1', GAME_VERSION === 'V2.81.57-unified.14.1');
+check('GAME_VERSION is V2.81.57-unified.15', GAME_VERSION === 'V2.81.57-unified.15');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 const unitDefs = {

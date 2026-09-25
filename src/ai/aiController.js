@@ -3,6 +3,7 @@
 
 import { AIPlayer } from './aiPlayer.js';
 import { GAME_PHASES, TURN_PHASES } from '../state/gameState.js';
+import { DIRECT_TECH_IPC_COST } from '../gameOptions.js';
 import {
   adjacentSeas,
   countOwned,
@@ -198,13 +199,29 @@ export class AIController {
     if (!this._hasAuthority()) return;
 
     // Handle different game phases
-    if (phase === GAME_PHASES.CAPITAL_PLACEMENT) {
+    if (phase === GAME_PHASES.TERRITORY_DRAFT) {
+      await this._handleDraftPick(player);
+    } else if (phase === GAME_PHASES.CAPITAL_PLACEMENT) {
       await this._handleCapitalPlacement(aiPlayer, player);
     } else if (phase === GAME_PHASES.UNIT_PLACEMENT) {
       await this._handleInitialPlacement(aiPlayer, player);
     } else if (phase === GAME_PHASES.PLAYING) {
       await this._handlePlayingPhase(aiPlayer, player, turnPhase);
     }
+  }
+
+  // ============================================
+  // TERRITORY DRAFT
+  // ============================================
+  async _handleDraftPick(player) {
+    this._updateStatus(`${player.name} is drafting a territory...`);
+    const choice = this.gameState.chooseAiDraftTerritory(player.id);
+    if (!choice) return;
+    const ok = this.gameState.pickDraftTerritory(choice);
+    if (ok !== true) return;
+    this._updateStatus(`${player.name} drafts ${choice}`);
+    this._logAction('draft', { message: `${player.name} drafted ${choice}`, territory: choice }, player);
+    this._notifyAction('draftPick', { territory: choice });
   }
 
   // ============================================
@@ -369,6 +386,11 @@ export class AIController {
   // TECH RESEARCH
   // ============================================
   async _handleTechResearch(aiPlayer, player) {
+    if (this.gameState.gameOptions?.techAcquisition === 'buy') {
+      this.gameState.nextPhase();
+      this._notifyAction('nextPhase', {});
+      return;
+    }
     this._updateStatus(`${player.name} considering technology research...`);
     await this._delay(this._getActionDelay() / 2);
 
@@ -411,7 +433,19 @@ export class AIController {
   // ============================================
   // PURCHASE PHASE - Strategic
   // ============================================
+  _maybeBuyDirectTech(player) {
+    if (this.gameState.gameOptions?.techAcquisition !== 'buy') return;
+    if (player?.aiDifficulty === 'easy') return;
+    const available = this.gameState.getAvailableTechs?.(player.id) || [];
+    if (!available.length) return;
+    const ipcs = this.gameState.getIPCs(player.id);
+    const reserve = player.aiDifficulty === 'hard' ? 0 : 35;
+    if (ipcs < DIRECT_TECH_IPC_COST + reserve) return;
+    this.gameState.buyTech(player.id, available[0]);
+  }
+
   async _handlePurchase(aiPlayer, player) {
+    this._maybeBuyDirectTech(player);
     this._updateStatus(`${player.name} purchasing units...`);
     await this._delay(this._getActionDelay());
 

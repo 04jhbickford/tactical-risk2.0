@@ -9,7 +9,7 @@
 import { GAME_VERSION } from '../version.js';
 import { isMobileShell } from './mobileShell.js';
 import { captureLobbyScroll, restoreLobbyScroll } from './lobbyScroll.js';
-import { describe, normalizeGameOptions } from '../gameOptions.js';
+import { describe, draftModeSource, normalizeGameOptions } from '../gameOptions.js';
 import { bindGameOptions, renderGameOptionsPanel } from './gameOptionsPanel.js';
 export { GAME_VERSION };
 
@@ -208,6 +208,7 @@ export class Lobby {
       sheet: this._optionsSheet,
       teamsToggleId: 'teams-enabled',
       teamsToggleClass: 'lobby-phone-teams-toggle',
+      draftMode: draftModeSource(this.setup),
     });
   }
 

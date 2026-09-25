@@ -11,7 +11,9 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { getFirebaseDb } from './firebase.js';
 import { getAuthManager } from './auth.js';
-import { GAME_VERSION, compareGameVersions } from '../version.js';
+import { GAME_VERSION, compareGameVersions, compatClientVersion } from '../version.js';
+import { protectedGameOptions, restoreProtectedGameOptions } from '../gameOptions.js';
+import { DRAFT_MIN_CLIENT, draftOpenRefusal } from '../state/territoryDraft.js';
 import { createPushQueue } from './pushCoalesce.js';
 import { deferredSnapshotShouldApply, shouldApplyRemoteGameState } from '../state/placementPass.js';
 import {
@@ -62,6 +64,34 @@ export class SyncManager {
   // surface a one-shot 'version_outdated' event so the UI can prompt a refresh.
   // Older clients simply ignore the extra doc-level field, and a missing/garbled
   // stamp never triggers the banner (compareGameVersions fails safe).
+  _loadRemoteState(state, docData) {
+    if (!state || !this.gameState) return false;
+    const next = restoreProtectedGameOptions(state, docData?.protectedGameOptions);
+    const refusal = draftOpenRefusal(next, GAME_VERSION);
+    if (refusal) {
+      console.warn(`[Sync] Refusing territory draft (need ${refusal.minClientVersion}, we are ${GAME_VERSION})`);
+      this._notifyListeners('draft_client_blocked', refusal);
+      return false;
+    }
+    this.gameState.loadFromJSON(next);
+    return true;
+  }
+
+  _draftDocFields(state) {
+    if (state?.phase !== 'territory_draft') return {};
+    return { minClientVersion: state.minClientVersion || DRAFT_MIN_CLIENT };
+  }
+
+  // clientVersion is the compat stamp .14.1's banner reads. protectedGameOptions
+  // sits beside `state` so a stale transaction.update cannot erase tech mode.
+  _compatDocFields(state) {
+    return {
+      clientVersion: compatClientVersion(GAME_VERSION),
+      protectedGameOptions: protectedGameOptions(state?.gameOptions),
+      ...this._draftDocFields(state),
+    };
+  }
+
   _checkRemoteVersion(newData) {
     if (this._versionOutdatedNotified) return;
     const remote = newData?.clientVersion;
@@ -166,7 +196,7 @@ export class SyncManager {
 
     // If state exists, load it
     if (data.state) {
-      this.gameState.loadFromJSON(data.state);
+      this._loadRemoteState(data.state, data);
     }
 
     // Determine if we're the active player
@@ -207,7 +237,7 @@ export class SyncManager {
 
         this.localVersion = data.stateVersion;
         this.isLoadingRemoteState = true;
-        this.gameState.loadFromJSON(data.state);
+        this._loadRemoteState(data.state, data);
         this.isLoadingRemoteState = false;
         this._updateActivePlayer(data.currentPlayerId);
         this.applyHostFromDoc(data);
@@ -283,7 +313,7 @@ export class SyncManager {
         this.localVersion = Math.max(this.localVersion, newData.stateVersion || 0);
         if (newData.state) {
           this.isLoadingRemoteState = true;
-          this.gameState.loadFromJSON(newData.state);
+          this._loadRemoteState(newData.state, newData);
           this.isLoadingRemoteState = false;
         }
         this._updateActivePlayer(newData.currentPlayerId);
@@ -535,9 +565,9 @@ export class SyncManager {
         state,
         stateVersion: remoteVersion + 1,
         currentPlayerId,
-        clientVersion: GAME_VERSION,
         schemaVersion: state.version ?? null,
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
+        ...this._compatDocFields(state),
       });
       return remoteVersion + 1;
     });
@@ -587,7 +617,7 @@ export class SyncManager {
         this.localVersion = remoteVersion;
         if (data.state) {
           this.isLoadingRemoteState = true;
-          this.gameState.loadFromJSON(data.state);
+          this._loadRemoteState(data.state, data);
           this.isLoadingRemoteState = false;
         }
         this._updateActivePlayer(data.currentPlayerId);
@@ -618,10 +648,10 @@ export class SyncManager {
         state,
         stateVersion: 1,
         currentPlayerId,
-        clientVersion: GAME_VERSION,
         schemaVersion: state.version ?? null,
         status: 'active',
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
+        ...this._compatDocFields(state),
       });
 
       this.localVersion = 1;
@@ -662,7 +692,7 @@ export class SyncManager {
     console.log(`[Sync] Applying snapshot deferred while pushing: v${this.localVersion} -> v${deferred.stateVersion}, seat ${localSeat} -> ${remoteSeat}`);
     this.localVersion = Math.max(this.localVersion, deferred.stateVersion || 0);
     this.isLoadingRemoteState = true;
-    this.gameState.loadFromJSON(deferred.state);
+    this._loadRemoteState(deferred.state, deferred);
     this.isLoadingRemoteState = false;
     this._updateActivePlayer(remoteSeat);
     this._notifyListeners('state_updated', this._turnSnapshotPayload(remoteSeat));
