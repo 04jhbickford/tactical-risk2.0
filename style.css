@@ -4869,13 +4869,64 @@ iframe[title="Vercel Live Feedback"] {
 }
 
 /* Deploy list scrolls inside the panel so Confirm stays on screen.
-   touch-action pan-y keeps a one-finger drag scrolling the list. */
+   touch-action pan-y keeps a one-finger drag scrolling the list.
+   The max-height is the budget ceiling (420px, or the viewport minus a
+   400px chrome guess). Short windows use the flex rule below so the list
+   is only as tall as the space under the header and above the buttons. */
 .pp-inline-placement .pp-unit-list {
   overflow-y: auto;
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   max-height: min(420px, max(120px, calc(100dvh - 400px)));
+}
+
+/* D1: pin Deploy and Confirm. #sidebar's id overflow used to scroll the
+   whole sheet, so a sea-zone list at the 400px budget pushed the buttons
+   past the bottom of a short desktop window. The list shrinks to
+   min(that budget, leftover height). Phone tray rules stay on
+   html.mobile-shell and are not restated here. */
+html:not(.mobile-shell) #sidebar.player-panel {
+  overflow: hidden;
+}
+html:not(.mobile-shell) #sidebar.player-panel > .pp-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+html:not(.mobile-shell) #sidebar.player-panel > .pp-content > .pp-header,
+html:not(.mobile-shell) #sidebar.player-panel > .pp-content > .pp-phase,
+html:not(.mobile-shell) #sidebar.player-panel > .pp-content > .pp-tabs,
+html:not(.mobile-shell) #sidebar.player-panel > .pp-content > .pp-bottom-actions {
+  flex-shrink: 0;
+}
+html:not(.mobile-shell) .pp-tab-content:has(.pp-inline-placement) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+html:not(.mobile-shell) .pp-actions-tab:has(.pp-inline-placement) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+html:not(.mobile-shell) .pp-inline-placement {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+html:not(.mobile-shell) .pp-inline-placement > :not(.pp-unit-list) {
+  flex-shrink: 0;
+}
+html:not(.mobile-shell) .pp-inline-placement .pp-unit-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .pp-content {
