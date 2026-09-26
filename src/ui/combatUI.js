@@ -89,6 +89,69 @@ export function shouldCompactPhoneCombatHero({ viewportHeight = 0 } = {}) {
   return Number.isFinite(h) && h > 0 && h <= 500;
 }
 
+function escapeReportText(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[ch]));
+}
+
+// Group rolls that were already made. Does not roll.
+export function groupRollsByUnitType(rolls) {
+  const groups = [];
+  const index = new Map();
+  for (const roll of rolls || []) {
+    const unitType = roll?.unitType || 'unit';
+    let group = index.get(unitType);
+    if (!group) {
+      group = { unitType, rolls: [], hits: 0 };
+      index.set(unitType, group);
+      groups.push(group);
+    }
+    group.rolls.push(roll);
+    if (roll?.hit) group.hits += 1;
+  }
+  return groups;
+}
+
+// Classic naval battle report. Reads lastRolls only — never calls Math.random.
+export function renderNavalDiceReport(lastRolls) {
+  if (!lastRolls) return '';
+  const attackGroups = groupRollsByUnitType(lastRolls.attackRolls);
+  const defenseGroups = groupRollsByUnitType(lastRolls.defenseRolls);
+
+  const side = (label, groups, totalHits, sideClass) => {
+    const rows = groups.length
+      ? groups.map((group) => {
+        const faces = group.rolls.map((roll) => {
+          const face = Number(roll?.roll);
+          const shown = Number.isFinite(face) ? String(face) : '';
+          return `<span class="die-mini ${roll?.hit ? 'hit' : 'miss'}">${shown}</span>`;
+        }).join('');
+        const hits = group.hits;
+        return `<div class="naval-dice-row">
+          <span class="naval-dice-type">${escapeReportText(group.unitType)}</span>
+          <span class="naval-dice-faces">${faces}</span>
+          <span class="naval-dice-hits">${hits} hit${hits === 1 ? '' : 's'}</span>
+        </div>`;
+      }).join('')
+      : '<div class="naval-dice-empty">No dice</div>';
+    const total = Number(totalHits) || 0;
+    return `<div class="naval-dice-side ${sideClass}">
+      <div class="naval-dice-head"><span>${label}</span><span class="naval-dice-total">${total} hit${total === 1 ? '' : 's'}</span></div>
+      ${rows}
+    </div>`;
+  };
+
+  return `<div class="naval-dice-report" data-naval-dice-report="1">
+    ${side('Attack', attackGroups, lastRolls.attackHits, 'attacker')}
+    ${side('Defense', defenseGroups, lastRolls.defenseHits, 'defender')}
+  </div>`;
+}
+
 // Same simplified expected-hits model the desktop bar uses. UI only —
 // does not change combat resolution.
 export function phoneCombatAttackerWinPercent({
@@ -937,6 +1000,10 @@ export class CombatUI {
     return countLivingUnits(units);
   }
 
+  _currentTerritoryIsWater() {
+    return !!this.gameState?.territoryByName?.[this.currentTerritory]?.isWater;
+  }
+
   _rollDice() {
     const { attackers, defenders } = this.combatState;
     const attackerId = this.gameState.currentPlayer?.id;
@@ -1127,19 +1194,29 @@ export class CombatUI {
 
     // Attacker casualties: defenderSubHits must go to non-air units
     this.combatState.selectedAttackerCasualties = this._selectCasualtiesWithSubHits(
-      attackers, pendingAttackerCasualties, defenderSubHits || 0
+      attackers, pendingAttackerCasualties, defenderSubHits || 0,
+      this._casualtyDefaultOptions(attackers),
     );
 
     // Defender casualties: attackerSubHits must go to non-air units
     this.combatState.selectedDefenderCasualties = this._selectCasualtiesWithSubHits(
-      defenders, pendingDefenderCasualties, attackerSubHits || 0
+      defenders, pendingDefenderCasualties, attackerSubHits || 0,
+      this._casualtyDefaultOptions(defenders),
     );
   }
 
+  // Human sides damage an undamaged battleship before spending a cheaper hull.
+  // A missing owner is treated as human. AI sides keep cheapest-first.
+  _casualtyDefaultOptions(units) {
+    const owner = (units || []).find((unit) => unit?.owner != null)?.owner;
+    const player = owner != null ? this.gameState?.getPlayer?.(owner) : null;
+    return { preferBattleshipDamage: !player?.isAI };
+  }
+
   // Select casualties accounting for submarine hits (which can't hit air)
-  _selectCasualtiesWithSubHits(units, totalHits, subHits) {
+  _selectCasualtiesWithSubHits(units, totalHits, subHits, options = {}) {
     if (subHits === 0 || totalHits === 0) {
-      return this._selectCheapestCasualties(units, totalHits);
+      return this._selectCheapestCasualties(units, totalHits, options);
     }
 
     // First, assign submarine hits to non-air sea units only
@@ -1148,7 +1225,7 @@ export class CombatUI {
       return def && def.isSea && !def.isAir && u.quantity > 0;
     });
 
-    const subCasualties = this._selectCheapestCasualties(seaUnits, subHits);
+    const subCasualties = this._selectCheapestCasualties(seaUnits, subHits, options);
 
     // Calculate remaining non-sub hits
     const nonSubHits = totalHits - subHits;
@@ -1157,13 +1234,22 @@ export class CombatUI {
     }
 
     // For remaining hits, select from all units (including air)
-    // But account for units already selected as sub casualties
+    // But account for units already selected as sub casualties.
+    // A battleship damaged in the sub pass must stay damaged so the
+    // next pass does not assign a second free damage hit.
     const remainingUnits = units.map(u => {
+      if (u.type === 'battleship') {
+        const destroyed = subCasualties.battleship || 0;
+        const damaged = subCasualties.battleship_damage || 0;
+        const quantity = u.quantity - destroyed;
+        const damagedCount = Math.min(quantity, (u.damagedCount || 0) + damaged);
+        return { ...u, quantity, damagedCount };
+      }
       const alreadyTaken = subCasualties[u.type] || 0;
       return { ...u, quantity: u.quantity - alreadyTaken };
     }).filter(u => u.quantity > 0);
 
-    const nonSubCasualties = this._selectCheapestCasualties(remainingUnits, nonSubHits);
+    const nonSubCasualties = this._selectCheapestCasualties(remainingUnits, nonSubHits, options);
 
     // Merge the two selections
     const merged = { ...subCasualties };
@@ -1174,71 +1260,91 @@ export class CombatUI {
     return merged;
   }
 
-  _selectCheapestCasualties(units, count) {
+  _selectCheapestCasualties(units, count, options = {}) {
     // A&A Anniversary Rule: Transports are defenseless and cannot be taken as casualties
     // They are automatically destroyed when all other combat units are eliminated
     // Factories are captured, not destroyed - exclude from casualties
     // Default casualty priority: cheapest units first, then battleship damage (which is free)
+    // A human side with an undamaged battleship takes that free damage hit first.
     const selected = {};
     let remaining = count;
 
     // Get battleships for later
     const battleships = units.filter(u => u.type === 'battleship' && u.quantity > 0);
-
-    // First, destroy cheapest units by IPC cost (excluding battleships, transports, factories)
-    const sorted = [...units]
-      .filter(u => u.quantity > 0 && u.type !== 'transport' && u.type !== 'factory' && u.type !== 'battleship')
-      .sort((a, b) => {
-        const costA = this.unitDefs[a.type]?.cost || 999;
-        const costB = this.unitDefs[b.type]?.cost || 999;
-        return costA - costB;
-      });
-
-    for (const unit of sorted) {
-      if (remaining <= 0) break;
-      const take = Math.min(unit.quantity, remaining);
-      selected[unit.type] = take;
-      remaining -= take;
-    }
-
-    // Then, damage undamaged battleships (2-hit system - this absorbs hits for free)
-    for (const battleship of battleships) {
-      if (remaining <= 0) break;
+    const hasUndamagedBattleship = battleships.some((battleship) => {
       const def = this.unitDefs[battleship.type];
-      if (def?.hp > 1) {
-        // Count undamaged battleships
-        const undamaged = battleship.quantity - (battleship.damagedCount || 0);
-        if (undamaged > 0) {
-          const toDamage = Math.min(undamaged, remaining);
-          selected['battleship_damage'] = (selected['battleship_damage'] || 0) + toDamage;
-          remaining -= toDamage;
-        }
-      }
-    }
+      if (!(def?.hp > 1)) return false;
+      return battleship.quantity - (battleship.damagedCount || 0) > 0;
+    });
+    const damageFirst = !!options.preferBattleshipDamage && hasUndamagedBattleship;
 
-    // Then, destroy damaged battleships
-    for (const battleship of battleships) {
-      if (remaining <= 0) break;
-      const damagedCount = battleship.damagedCount || 0;
-      if (damagedCount > 0) {
-        const toDestroy = Math.min(damagedCount, remaining);
-        selected['battleship'] = (selected['battleship'] || 0) + toDestroy;
-        remaining -= toDestroy;
-      }
-    }
+    const takeCheapest = () => {
+      const sorted = [...units]
+        .filter(u => u.quantity > 0 && u.type !== 'transport' && u.type !== 'factory' && u.type !== 'battleship')
+        .sort((a, b) => {
+          const costA = this.unitDefs[a.type]?.cost || 999;
+          const costB = this.unitDefs[b.type]?.cost || 999;
+          return costA - costB;
+        });
 
-    // Finally, destroy remaining undamaged battleships if still hits left
-    if (remaining > 0) {
+      for (const unit of sorted) {
+        if (remaining <= 0) break;
+        const take = Math.min(unit.quantity, remaining);
+        selected[unit.type] = (selected[unit.type] || 0) + take;
+        remaining -= take;
+      }
+    };
+
+    // Damage undamaged battleships (2-hit system - this absorbs a hit for free)
+    const damageUndamaged = () => {
       for (const battleship of battleships) {
         if (remaining <= 0) break;
-        const undamaged = battleship.quantity - (battleship.damagedCount || 0) - (selected['battleship_damage'] || 0);
-        if (undamaged > 0) {
-          const toDestroy = Math.min(undamaged, remaining);
-          selected['battleship'] = (selected['battleship'] || 0) + toDestroy;
+        const def = this.unitDefs[battleship.type];
+        if (def?.hp > 1) {
+          const undamaged = battleship.quantity - (battleship.damagedCount || 0);
+          if (undamaged > 0) {
+            const toDamage = Math.min(undamaged, remaining);
+            selected.battleship_damage = (selected.battleship_damage || 0) + toDamage;
+            remaining -= toDamage;
+          }
+        }
+      }
+    };
+
+    // Destroy battleships that were already damaged before this default.
+    const destroyPredamaged = () => {
+      for (const battleship of battleships) {
+        if (remaining <= 0) break;
+        const damagedCount = battleship.damagedCount || 0;
+        if (damagedCount > 0) {
+          const toDestroy = Math.min(damagedCount, remaining);
+          selected.battleship = (selected.battleship || 0) + toDestroy;
           remaining -= toDestroy;
         }
       }
-    }
+    };
+
+    // A ship damaged in this same default can still take its second hit.
+    // Do not subtract battleship_damage from the undamaged count — that
+    // zeroed the ship and left Confirm short (Red Sea, 3 of 4).
+    const destroyJustDamaged = () => {
+      if (remaining <= 0) return;
+      const preDamaged = battleships.reduce((sum, ship) => sum + (ship.damagedCount || 0), 0);
+      const damagedThisPass = selected.battleship_damage || 0;
+      const freshDestroys = Math.max(0, (selected.battleship || 0) - preDamaged);
+      const room = Math.max(0, damagedThisPass - freshDestroys);
+      const toDestroy = Math.min(room, remaining);
+      if (toDestroy > 0) {
+        selected.battleship = (selected.battleship || 0) + toDestroy;
+        remaining -= toDestroy;
+      }
+    };
+
+    if (damageFirst) damageUndamaged();
+    takeCheapest();
+    if (!damageFirst) damageUndamaged();
+    destroyPredamaged();
+    destroyJustDamaged();
 
     return selected;
   }
@@ -1917,6 +2023,9 @@ export class CombatUI {
         <div class="combat-forces-expanded">
           ${this._renderExpandedForces(attackers, defenders, player, defenderPlayer)}
         </div>
+        ${phase === 'selectCasualties' && this._currentTerritoryIsWater()
+          ? renderNavalDiceReport(this.lastRolls)
+          : ''}
     `;
 
     // Shore Bombardment section
@@ -2487,7 +2596,10 @@ export class CombatUI {
 
   _renderPhoneCombatSelectBody(phase) {
     if (phase === 'selectCasualties') {
-      return `<p class="phone-combat-blurb">Assign hits, then Confirm. This is the only verb that spends them.</p>${this._renderCasualtySelection()}`;
+      const navalReport = this._currentTerritoryIsWater()
+        ? renderNavalDiceReport(this.lastRolls)
+        : '';
+      return `<p class="phone-combat-blurb">Assign hits, then Confirm. This is the only verb that spends them.</p>${navalReport}${this._renderCasualtySelection()}`;
     }
     if (phase === 'selectAACasualties') {
       const { pendingAACasualties, selectedAACasualties } = this.combatState;

@@ -341,7 +341,7 @@ function getContinentColor(name) {
     'North America': '#C4A35A',      // Tan/Gold (classic Risk yellow)
     'South America': '#8B4513',      // Saddle brown (classic Risk red-brown)
     'Europe': '#4682B4',             // Steel blue (classic Risk blue)
-    'Middle East': '#CD853F',        // Peru/tan (desert tones)
+    'Middle East': '#F3D36B',        // Bright sand — distinct from Africa's orange
     'Africa': '#D2691E',             // Chocolate brown
     'Asia': '#6B8E23',               // Olive drab (military green)
     'Oceania': '#708090',            // Slate gray (classic Risk purple-gray)

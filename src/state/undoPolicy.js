@@ -122,6 +122,37 @@ export function resolveUndoAction({
   return { show: false, action: null, reason: null };
 }
 
+// Labeled action-bar Undo. Placement, purchase, and mobilize keep their
+// existing controls. Movement and combat air-landing are the bar cases.
+export function resolveMovementUndoBar({
+  phase = null,
+  turnPhase = null,
+  moveHistory = [],
+  undoLockMoveCount = 0,
+  airLandingCount = 0,
+} = {}) {
+  if (phase !== GAME_PHASES.PLAYING) {
+    return { show: false, count: 0, action: null };
+  }
+  if (turnPhase === TURN_PHASES.COMBAT_MOVE || turnPhase === TURN_PHASES.NON_COMBAT_MOVE) {
+    const count = listAddressableMoveRows(moveHistory, { undoLockMoveCount, turnPhase })
+      .filter((row) => row.canUndo).length;
+    if (count <= 0) return { show: false, count: 0, action: null };
+    return { show: true, count, action: 'undo-move' };
+  }
+  if (turnPhase === TURN_PHASES.COMBAT) {
+    const count = Number(airLandingCount) || 0;
+    if (count <= 0) return { show: false, count: 0, action: null };
+    return { show: true, count, action: 'undo-air-landing' };
+  }
+  return { show: false, count: 0, action: null };
+}
+
+export function formatUndoBarLabel(count) {
+  const n = Number(count);
+  return `Undo (${Number.isFinite(n) && n > 0 ? n : 0})`;
+}
+
 export function shouldShowUndoChrome({
   mobile = false,
   phase = null,

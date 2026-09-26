@@ -3,7 +3,7 @@
 // multiplayer core (syncManager) can both import it without coupling UI code
 // into the sync path. Bump GAME_VERSION for every deployed change.
 
-export const GAME_VERSION = 'V2.81.57-unified.15';
+export const GAME_VERSION = 'V2.81.57-unified.16';
 
 // Schema version of the serialized game state (mirrors gameState.toJSON().version).
 // Bump only when the persisted state shape changes; a mismatch here is a harder
@@ -21,8 +21,8 @@ export function unifiedReleaseParts(version) {
 // only the first two numbers, and every unified.N display stamp is V2.81,
 // so the display stamp never prompts that tab. V2.82 is newer than V2.81.
 // The unified suffix is what this build compares, so a later release
-// (V2.82-unified.16) still prompts a stale unified.15 tab, while our own
-// write (V2.82-unified.15) does not.
+// (V2.82-unified.17) still prompts a stale unified.16 tab, while our own
+// write (V2.82-unified.16) does not.
 export function compatClientVersion(version = GAME_VERSION) {
   const parts = unifiedReleaseParts(version);
   if (!parts) return String(version || '');

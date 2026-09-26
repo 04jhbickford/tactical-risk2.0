@@ -66,6 +66,8 @@ import {
   shouldApplyUndoAction,
   listAddressableMoveRows,
   formatRecentMove,
+  resolveMovementUndoBar,
+  formatUndoBarLabel,
 } from '../state/undoPolicy.js';
 
 export { formatRecentMove };
@@ -2122,8 +2124,19 @@ export class PlayerPanel {
       peekRow = this._renderPhonePeekRow(player, phase, turnPhase);
     }
 
-    // No buttons to show (a warning-only bar is still useful — e.g. naval hint)
-    if (buttons.length === 0 && !warningHtml && !peekHint && !this._looksBrokenReason && !mobile) return '';
+    const airLandingCount = Object.keys(this.airLandingSelections || {}).length;
+    const undoBar = resolveMovementUndoBar({
+      phase,
+      turnPhase,
+      moveHistory: this.gameState?.moveHistory,
+      undoLockMoveCount: this.gameState?.undoLockMoveCount || 0,
+      airLandingCount,
+    });
+    const showUndoBar = undoBar.show && Date.now() >= (this._ignoreUndoUntil || 0);
+
+    // No buttons to show (a warning-only bar is still useful — e.g. naval hint).
+    // A movement / air-landing Undo (n) is enough to keep the bar.
+    if (buttons.length === 0 && !warningHtml && !peekHint && !this._looksBrokenReason && !mobile && !showUndoBar) return '';
 
     let html = `<div class="pp-bottom-actions${mobile ? ' pp-tray-peek' : ''}">`;
     if (shouldShowPhonePlaceMeta({ mobile, phase, peek: mobile && this.el.classList.contains('player-panel--peek') })) {
@@ -2172,9 +2185,13 @@ export class PlayerPanel {
         || showCapitalUndoGhost;
       html += `<div class="pp-peek-undo-slot">`;
       if (showUndo) {
+        const barUndo = showUndoBar
+          && (undo.action === 'undo-move' || undo.action === 'undo-air-landing');
+        const undoLabel = barUndo ? formatUndoBarLabel(undoBar.count) : 'Undo';
+        const barAttr = barUndo ? ' data-undo-bar="1"' : '';
         html += `
-        <button class="pp-confirm-btn pp-undo-ghost" data-action="${undo.action || 'undo-capital'}">
-          Undo
+        <button class="pp-confirm-btn pp-undo-ghost${barUndo ? ' pp-undo-bar' : ''}" data-action="${undo.action || 'undo-capital'}"${barAttr}>
+          ${undoLabel}
         </button>`;
       }
       html += `</div>`;
@@ -2199,6 +2216,13 @@ export class PlayerPanel {
           Max
         </button>`;
       }
+    }
+
+    if (!mobile && showUndoBar) {
+      html += `
+        <button type="button" class="pp-confirm-btn pp-undo-bar" data-action="${undoBar.action}" data-undo-bar="1">
+          ${formatUndoBarLabel(undoBar.count)}
+        </button>`;
     }
 
     for (const btn of buttons) {

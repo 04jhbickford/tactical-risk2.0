@@ -3131,6 +3131,18 @@ async function init() {
       }
     }
 
+    // Undo the movement / combat-air-landing bar. Placement undo stays on
+    // its own button so Ctrl-Z does not walk back a deploy.
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'z' || e.key === 'Z')) {
+      if (document.querySelector('.tr-confirm')) return;
+      const undoBtn = document.querySelector('[data-undo-bar="1"]:not([disabled])');
+      if (undoBtn) {
+        e.preventDefault();
+        undoBtn.click();
+      }
+      return;
+    }
+
     if (e.ctrlKey && e.key === 's') {
       e.preventDefault();
       if (gameState) gameState.saveToFile();

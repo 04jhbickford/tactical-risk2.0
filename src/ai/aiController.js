@@ -4,6 +4,7 @@
 import { AIPlayer } from './aiPlayer.js';
 import { GAME_PHASES, TURN_PHASES } from '../state/gameState.js';
 import { DIRECT_TECH_IPC_COST } from '../gameOptions.js';
+import { capitalChoicePool, pickCapitalFromPool } from './capitalSpacing.js';
 import {
   adjacentSeas,
   countOwned,
@@ -239,22 +240,27 @@ export class AIController {
 
     if (owned.length === 0) return;
 
-    // Choose based on difficulty
-    let choice;
-    if (aiPlayer.difficulty === 'hard') {
-      // Pick territory with most connections (strategic)
-      choice = owned.reduce((best, t) => {
-        const connections = this.gameState.getConnections(t).length;
-        const bestConnections = this.gameState.getConnections(best).length;
-        return connections > bestConnections ? t : best;
-      });
-    } else if (aiPlayer.difficulty === 'easy') {
-      // Random choice
-      choice = owned[Math.floor(Math.random() * owned.length)];
-    } else {
-      // Medium: pick territory with most friendly neighbors
-      choice = this._findCentralTerritory(owned, player.id);
+    // Prefer a territory at least two steps from capitals already placed.
+    // If none exist, the pool is `owned` in today's order and the same
+    // difficulty rules run on it.
+    const existingCapitals = [];
+    for (const [id, state] of Object.entries(this.gameState.playerState || {})) {
+      if (id !== player.id && state?.capitalTerritory) {
+        existingCapitals.push(state.capitalTerritory);
+      }
     }
+    const pool = capitalChoicePool(
+      owned,
+      existingCapitals,
+      (name) => this.gameState.getConnections(name),
+    );
+    const choice = pickCapitalFromPool(pool, aiPlayer.difficulty, {
+      connectionCount: (territory) => this.gameState.getConnections(territory).length,
+      friendlyNeighborCount: (territory) => this.gameState.getConnections(territory)
+        .filter((neighbor) => this.gameState.getOwner(neighbor) === player.id).length,
+      random: Math.random,
+    });
+    if (!choice) return;
 
     this._updateStatus(`${player.name} places capital in ${choice}`);
     this.gameState.placeCapital(choice);
