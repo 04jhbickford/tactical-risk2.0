@@ -12,7 +12,9 @@ Grouped carriers are individualized before aircraft land on them, and combat fin
 
 S4: an aircraft hit cannot be assigned to a submarine unless that aircraft's side still has a destroyer in the battle. The check runs again every round, after surprise-strike losses, on attack and defense. Extra air hits that have no legal target except a sub are lost. Ship and sub hits still land as before. When those air hits are wasted, the casualty step says "Aircraft can't hit subs without a destroyer".
 
-Receipt: `node tools/test-carrier-landing-grouped.mjs`, `node tools/test-ai-carrier-aircraft.mjs`, `node tools/test-turn-ping-naval-cargo.mjs`, `node tools/test-sub-first-strike-targets.mjs`, `node tools/test-submerged-sub-owner.mjs`, `node tools/test-amphibious-after-move.mjs`, `node tools/test-mobilize-deploy-all.mjs`, `node tools/test-battle-order.mjs`, `node tools/test-air-vs-sub.mjs`.
+D1: on a short desktop window the sea-zone Deploy and Confirm stayed below the fold because the unit list's height budget was a fixed 400px chrome guess. The list is now min(that budget, the space under the header and above the action bar), so the list scrolls and the buttons stay pinned. The 390 phone tray is unchanged.
+
+Receipt: `node tools/test-carrier-landing-grouped.mjs`, `node tools/test-ai-carrier-aircraft.mjs`, `node tools/test-turn-ping-naval-cargo.mjs`, `node tools/test-sub-first-strike-targets.mjs`, `node tools/test-submerged-sub-owner.mjs`, `node tools/test-amphibious-after-move.mjs`, `node tools/test-mobilize-deploy-all.mjs`, `node tools/test-battle-order.mjs`, `node tools/test-air-vs-sub.mjs`, `node tools/test-deploy-panel-fit.mjs`.
 
 ---
 
