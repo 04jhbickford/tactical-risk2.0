@@ -1,4 +1,4 @@
-// V2.81.57-unified.15 — tech acquisition modes. Dice tokens match today.
+// V2.81.57-unified.16 — tech acquisition modes. Dice tokens match today.
 // Run: node tools/test-tech-acquisition.mjs
 
 import { readFileSync } from 'fs';
@@ -93,8 +93,8 @@ function research(gs, faces, { count = 3 } = {}) {
   }
 }
 
-console.log('=== V2.81.57-unified.15 tech acquisition ===');
-check('GAME_VERSION is V2.81.57-unified.15', GAME_VERSION === 'V2.81.57-unified.15');
+console.log('=== V2.81.57-unified.16 tech acquisition ===');
+check('GAME_VERSION is V2.81.57-unified.16', GAME_VERSION === 'V2.81.57-unified.16');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 check('direct tech cost is 20 IPCs', DIRECT_TECH_IPC_COST === 20);
 check('defaults are dice tokens and a random deal',

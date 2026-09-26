@@ -461,13 +461,18 @@ export class TerritoryRenderer {
 
       const continent = this.continentByTerritory[t.name];
       const color = continent?.color || '#888888';
+      const middleEast = continent?.name === 'Middle East';
+      // Modest rim so Arabia reads apart from Africa. Fat strokes alias.
+      const rim = middleEast
+        ? Math.min(2.5, Math.max(1.25, 1.5 / Math.max(Number(zoom) || 1, 0.35)))
+        : seam;
 
       ctx.save();
       ctx.fillStyle = color;
-      ctx.strokeStyle = color;
+      ctx.strokeStyle = middleEast ? '#8A6A12' : color;
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
-      ctx.lineWidth = seam;
+      ctx.lineWidth = rim;
       ctx.globalAlpha = 1.0;
 
       for (const polygon of t.polygons) {
@@ -479,7 +484,7 @@ export class TerritoryRenderer {
         }
         ctx.closePath();
         ctx.fill();
-        if (seam > 0) ctx.stroke();
+        if (rim > 0) ctx.stroke();
       }
 
       ctx.restore();

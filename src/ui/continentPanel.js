@@ -157,10 +157,11 @@ export class ContinentPanel {
       const controllerColor = controller ? controller.color : '#555';
       const territoryCount = continent.territories.length;
 
+      const middleEast = continent.name === 'Middle East';
       html += `
-        <div class="continent-row">
+        <div class="continent-row${middleEast ? ' continent-row--middle-east' : ''}">
           <div class="cr-name">
-            <span class="cr-color" style="background:${continent.color}"></span>
+            <span class="cr-color${middleEast ? ' cr-color--middle-east' : ''}" style="background:${continent.color}"></span>
             <span>${continent.name}</span>
           </div>
           <div class="cr-bonus">+${continent.bonus}</div>

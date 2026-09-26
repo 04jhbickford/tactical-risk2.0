@@ -2,6 +2,18 @@
 
 ---
 
+## 9.25.26 — unified.16 polish
+
+Stamp `V2.81.57-unified.16`. Schema stays 11. Display stamp only; game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.16`).
+
+Rob, `#tactical-risk`: naval battles should show the defender's dice in Classic (21 Sep, deferred from dual-path.15). Bastion: Undo works but is hard to notice, and the deploy list scrolls the Confirm button off a short window. Bastion and James: Arabia's continent color is too close to its neighbors. Rob: AI capitals sit next to ours. Rob, 25 Sep 3:08pm PT, Red Sea screenshots: the casualty default assigned 3 of 4 hits, so Confirm stayed disabled. The battleship's free damage hit was counted, then the destroy pass subtracted that same hit and skipped the second one. Follow-up at 3:11pm: if a battleship is present, its first damage hit should be the default.
+
+Classic sea casualty steps now render a report of the attack and defense faces already stored on `lastRolls`. Nothing is re-rolled. The action bar shows `Undo (n)` during combat move, non-combat move, and combat air landing, including Ctrl/Cmd-Z when the player is not typing. The deploy unit list scrolls inside the panel (`touch-action: pan-y`) so Confirm stays on screen. Middle East (the continent that contains Saudi Arabia) uses a brighter sand fill and a modest border; the bonus is unchanged. AI capital choice prefers a territory at least two graph steps from capitals already placed, and falls back to today's difficulty pick. Human casualty defaults damage an undamaged battleship first, then fill a second hit on that ship when hits remain. AI casualty order in `gameState` is unchanged. The combat-screen fill applies when that screen assigns hits for an AI side, so a 4-hit battleship case reaches 4 of 4 there too, still cheapest-first.
+
+Receipt: `node tools/test-naval-report-defender-dice.mjs`, `node tools/test-battleship-casualty-default.mjs`, `node tools/test-ai-capital-spacing.mjs`.
+
+---
+
 ## 9.25.26 — unified.15 draft territories and tech acquisition
 
 Stamp `V2.81.57-unified.15`. Schema stays 11.

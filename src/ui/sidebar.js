@@ -97,7 +97,7 @@ export class Sidebar {
           <div class="sb-section">
             <div class="sb-label">Continent</div>
             <div class="sb-value">
-              <span class="sb-continent-dot" style="background:${continent.color}"></span>
+              <span class="sb-continent-dot${continent.name === 'Middle East' ? ' sb-continent-dot--middle-east' : ''}" style="background:${continent.color}"></span>
               ${continent.name} (+${continent.bonus} bonus)
             </div>
           </div>`;
