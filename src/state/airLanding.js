@@ -1,4 +1,4 @@
-import { seaZoneCarrierCapacity } from './carrierPlacement.js';
+import { individualizeCarrier, seaZoneCarrierCapacity } from './carrierPlacement.js';
 
 // Post-combat air landing plan + board apply.
 // Selections must live on GameState (not only the combat overlay) so a
@@ -185,6 +185,26 @@ export function takeAirUnitsFromTerritory(territoryUnits, { type, owner, quantit
   return quantity - remaining;
 }
 
+function peelCarrierHull(destUnits, carrier) {
+  if (!carrier || carrier.id || (carrier.quantity || 1) <= 1) return carrier;
+  carrier.quantity -= 1;
+  const hull = {
+    type: 'carrier',
+    quantity: 1,
+    owner: carrier.owner,
+    aircraft: [],
+    cargo: [],
+    moved: !!carrier.moved,
+    movementUsed: carrier.movementUsed || 0,
+  };
+  destUnits.push(hull);
+  if (carrier.quantity <= 0) {
+    const idx = destUnits.indexOf(carrier);
+    if (idx >= 0) destUnits.splice(idx, 1);
+  }
+  return hull;
+}
+
 export function addMovedAirToTerritory(unitsByTerr, {
   destination,
   type,
@@ -192,22 +212,27 @@ export function addMovedAirToTerritory(unitsByTerr, {
   quantity,
   destIsWater = false,
   unitDefs = {},
+  gameState = null,
 } = {}) {
   if (!destination || !type || quantity <= 0) return 0;
   const destUnits = unitsByTerr[destination] || [];
 
   if (destIsWater) {
-    const carriers = destUnits.filter((unit) => unit.type === 'carrier' && unit.owner === owner);
     const carrierDef = unitDefs.carrier || { aircraftCapacity: 2, canCarry: ['fighter'] };
     if (!carrierDef.canCarry || carrierDef.canCarry.includes(type)) {
       let remaining = quantity;
+      const perHull = carrierDef.aircraftCapacity || 2;
+      const carriers = destUnits.filter((unit) => unit.type === 'carrier' && unit.owner === owner);
       for (const carrier of carriers) {
         if (remaining <= 0) break;
-        carrier.aircraft = carrier.aircraft || [];
-        const capacity = Math.max(0, (carrierDef.aircraftCapacity || 2) - carrier.aircraft.length);
+        let hull = carrier;
+        if (!hull.id && (hull.quantity || 1) > 1) hull = peelCarrierHull(destUnits, hull);
+        individualizeCarrier(gameState, hull);
+        hull.aircraft = hull.aircraft || [];
+        const capacity = Math.max(0, perHull - hull.aircraft.length);
         const toAdd = Math.min(remaining, capacity);
         for (let i = 0; i < toAdd; i++) {
-          carrier.aircraft.push({ type, owner, moved: true });
+          hull.aircraft.push({ type, owner, moved: true });
         }
         remaining -= toAdd;
       }
@@ -239,6 +264,7 @@ export function applyAirLandingPlan({
   owner,
   plan = [],
   unitDefs = {},
+  gameState = null,
 } = {}) {
   const applied = [];
   if (!originTerritory || !owner || !Array.isArray(plan)) return applied;
@@ -263,6 +289,7 @@ export function applyAirLandingPlan({
           quantity: takenHere,
           destIsWater: true,
           unitDefs,
+          gameState,
         });
         if (placedHere > 0) {
           applied.push({ ...item, quantity: placedHere });
@@ -291,6 +318,7 @@ export function applyAirLandingPlan({
       quantity: taken,
       destIsWater: !!destT?.isWater,
       unitDefs,
+      gameState,
     });
     const unplaced = taken - placed;
     if (unplaced > 0) {
@@ -413,16 +441,66 @@ export function hasLegalAirLandingFrom(gameState, origin, remaining, unitType, u
   return false;
 }
 
+function looseCraftUnit(craft) {
+  if (!craft?.type) return null;
+  return {
+    type: craft.type,
+    quantity: Number(craft.quantity) || 1,
+    owner: craft.owner ?? null,
+    ...(craft.moved ? { moved: true } : {}),
+  };
+}
+
+function pushLooseCraft(result, craft) {
+  const loose = looseCraftUnit(craft);
+  if (!loose) return;
+  const existing = result.find((unit) => (
+    unit.type === loose.type && unit.owner === loose.owner && !unit.id && !Array.isArray(unit.aircraft)
+  ));
+  if (existing) existing.quantity = (Number(existing.quantity) || 1) + loose.quantity;
+  else result.push(loose);
+}
+
 // Combat finalize rebuilds a sea zone from the overlay copy and drops
-// aircraft that landing just pushed onto the live carrier.
+// aircraft that landing just pushed onto the live carrier. Match by id
+// first, then by owner and order, and never throw an unmatched aircraft away.
 export function mergeLiveCarrierLoads(liveUnits = [], nextUnits = []) {
-  const aircraftById = new Map();
-  for (const unit of liveUnits || []) {
-    if (!unit?.id || unit.type !== 'carrier' || !Array.isArray(unit.aircraft)) continue;
-    aircraftById.set(unit.id, unit.aircraft.map((craft) => ({ ...craft })));
+  const liveCarriers = (liveUnits || []).filter((unit) => unit?.type === 'carrier');
+  const used = new Set();
+  const result = (nextUnits || []).map((unit) => ({ ...unit }));
+
+  const takeById = (unit) => {
+    if (!unit?.id) return null;
+    const idx = liveCarriers.findIndex((carrier, i) => !used.has(i) && carrier.id === unit.id);
+    if (idx < 0) return null;
+    used.add(idx);
+    return liveCarriers[idx];
+  };
+
+  for (const unit of result) {
+    if (unit?.type !== 'carrier') continue;
+    const live = takeById(unit);
+    if (!live || !Array.isArray(live.aircraft)) continue;
+    unit.aircraft = live.aircraft.map((craft) => ({ ...craft }));
   }
-  return (nextUnits || []).map((unit) => {
-    if (!unit?.id || !aircraftById.has(unit.id)) return unit;
-    return { ...unit, aircraft: aircraftById.get(unit.id) };
-  });
+
+  const unmatched = liveCarriers
+    .map((carrier, index) => ({ carrier, index }))
+    .filter(({ index, carrier }) => !used.has(index) && Array.isArray(carrier.aircraft) && carrier.aircraft.length > 0);
+
+  for (const unit of result) {
+    if (unit?.type !== 'carrier') continue;
+    if (Array.isArray(unit.aircraft) && unit.aircraft.length > 0) continue;
+    const idx = unmatched.findIndex(({ carrier }) => carrier.owner === unit.owner);
+    if (idx < 0) continue;
+    const [{ carrier, index }] = unmatched.splice(idx, 1);
+    used.add(index);
+    unit.aircraft = carrier.aircraft.map((craft) => ({ ...craft }));
+    if (!unit.id && carrier.id) unit.id = carrier.id;
+  }
+
+  for (const { carrier } of unmatched) {
+    for (const craft of carrier.aircraft || []) pushLooseCraft(result, craft);
+  }
+  return result;
 }

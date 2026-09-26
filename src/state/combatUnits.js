@@ -50,3 +50,18 @@ export function summarizeCombatForce(units) {
   }
   return [...byType.entries()].map(([type, quantity]) => ({ type, quantity }));
 }
+
+// Submarine first strike uses the same filter as casualty assignment:
+// a sub cannot hit a sub or an aircraft. AA guns and ships can be hit.
+export function unitIsFirstStrikeTarget(unit, unitDefs = {}) {
+  if (!unit || (Number(unit.quantity) || 0) <= 0) return false;
+  if (unit.type === 'submarine' || unit.type === 'factory') return false;
+  if (unitDefs?.[unit.type]?.isAir) return false;
+  return true;
+}
+
+export function sideCanFirstStrike(subs, enemyUnits, enemyHasDestroyer, unitDefs = {}) {
+  const hasSubs = (subs || []).some((u) => u?.type === 'submarine' && (Number(u.quantity) || 0) > 0);
+  if (!hasSubs || enemyHasDestroyer) return false;
+  return (enemyUnits || []).some((u) => unitIsFirstStrikeTarget(u, unitDefs));
+}

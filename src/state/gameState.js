@@ -58,10 +58,12 @@ import { captureIfAttackerHolds, finalizeAttackerHoldsOnBoard } from './combatFi
 import {
   canPlaceAirOnCarrierInSeaZone,
   countCarrierAir,
+  individualizeCarrier,
   loadOneAirOntoCarrier,
   takeAirFromCarriers,
   unloadOneAirFromCarrier,
 } from './carrierPlacement.js';
+import { sideCanFirstStrike, unitIsFirstStrikeTarget } from './combatUnits.js';
 import {
   factoryProductionLimit,
   factoryProductionUsed,
@@ -3980,15 +3982,145 @@ export class GameState {
     return hasEnemyShips;
   }
 
+  // Human combat may pick any queued battle. A land battle whose troops
+  // came from a sea zone that is still queued has to wait for that battle.
+  amphibiousSeaStillQueued(territory) {
+    const seaZone = this.amphibiousAssaultDetails?.[territory]?.seaZone;
+    if (!seaZone) return '';
+    return (this.combatQueue || []).includes(seaZone) ? seaZone : '';
+  }
+
+  moveCombatToFront(territory) {
+    const queue = this.combatQueue || [];
+    const idx = queue.indexOf(territory);
+    if (idx < 0) return { success: false, reason: 'not queued' };
+    const blockingSea = this.amphibiousSeaStillQueued(territory);
+    if (blockingSea) return { success: false, reason: `after ${blockingSea}` };
+    if (idx > 0) {
+      queue.splice(idx, 1);
+      queue.unshift(territory);
+      this.combatQueue = queue;
+      this._notify();
+    }
+    return { success: true };
+  }
+
+  _launchCarrierAircraft(units) {
+    for (const unit of units || []) {
+      if (unit?.type !== 'carrier' || !Array.isArray(unit.aircraft) || unit.aircraft.length === 0) continue;
+      for (const craft of unit.aircraft) {
+        if (!craft?.type) continue;
+        const qty = Number(craft.quantity) || 1;
+        const existing = units.find((other) => (
+          other !== unit
+          && other.fromCarrier
+          && other.type === craft.type
+          && other.owner === craft.owner
+        ));
+        if (existing) existing.quantity = (Number(existing.quantity) || 0) + qty;
+        else {
+          units.push({
+            type: craft.type,
+            quantity: qty,
+            owner: craft.owner,
+            fromCarrier: true,
+            ...(craft.moved ? { moved: true } : {}),
+          });
+        }
+      }
+      unit.aircraft = [];
+    }
+  }
+
+  _noteSunkCargo(unit) {
+    if (!unit || unit._cargoNoted) return;
+    if ((Number(unit.quantity) || 0) > 0) return;
+    if (unit.type !== 'transport' && unit.type !== 'carrier') return;
+    unit._cargoNoted = true;
+    const rows = [];
+    const manifest = unit.type === 'transport' ? unit.cargo : unit.aircraft;
+    for (const item of manifest || []) {
+      if (!item?.type) continue;
+      rows.push({
+        owner: item.owner || unit.owner,
+        type: item.type,
+        quantity: Number(item.quantity) || 1,
+      });
+    }
+    if (!this._pendingCarriedLosses) this._pendingCarriedLosses = [];
+    this._pendingCarriedLosses.push(...rows);
+    if (unit.type === 'transport') unit.cargo = [];
+    if (unit.type === 'carrier') unit.aircraft = [];
+  }
+
+  _dropDefenderAirWithoutCarrier(units, attackerId, unitDefs) {
+    const carriers = (units || []).filter((unit) => unit.type === 'carrier' && (Number(unit.quantity) || 0) > 0);
+    const hasRoom = (owner) => carriers.some((carrier) => (
+      carrier.owner === owner || this.areAllies(carrier.owner, owner) || this.areAllies(owner, carrier.owner)
+    ));
+    for (let i = (units || []).length - 1; i >= 0; i--) {
+      const unit = units[i];
+      if (!unit?.fromCarrier || !unitDefs?.[unit.type]?.isAir) continue;
+      if (unit.owner === attackerId) continue;
+      if (hasRoom(unit.owner)) continue;
+      units.splice(i, 1);
+    }
+  }
+
+  _restowCarrierAir(units, unitDefs) {
+    const capacity = unitDefs?.carrier?.aircraftCapacity || 2;
+    for (const air of units || []) {
+      if (!air?.fromCarrier || (Number(air.quantity) || 0) <= 0) continue;
+      let left = Number(air.quantity) || 0;
+      const carriers = units.filter((unit) => (
+        unit.type === 'carrier'
+        && (Number(unit.quantity) || 0) > 0
+        && (unit.owner === air.owner || this.areAllies(unit.owner, air.owner) || this.areAllies(air.owner, unit.owner))
+      ));
+      for (const carrier of carriers) {
+        if (left <= 0) break;
+        const hulls = carrier.id ? 1 : (Number(carrier.quantity) || 1);
+        carrier.aircraft = carrier.aircraft || [];
+        const room = Math.max(0, hulls * capacity - carrier.aircraft.length);
+        const take = Math.min(room, left);
+        for (let i = 0; i < take; i++) {
+          carrier.aircraft.push({ type: air.type, owner: air.owner });
+        }
+        left -= take;
+      }
+      air.quantity = left;
+    }
+    for (let i = units.length - 1; i >= 0; i--) {
+      if (units[i]?.fromCarrier && (Number(units[i].quantity) || 0) <= 0) units.splice(i, 1);
+      else if (units[i]?.fromCarrier) delete units[i].fromCarrier;
+    }
+  }
+
+  _addCarriedLossesToLedger(territory) {
+    const ledger = this._combatLossLedger?.[territory];
+    const rows = this._pendingCarriedLosses || [];
+    this._pendingCarriedLosses = [];
+    if (!ledger) return;
+    for (const row of rows) {
+      if (!row?.owner || !row.type || !(row.quantity > 0)) continue;
+      const bucket = ledger.byOwner[row.owner] || (ledger.byOwner[row.owner] = {});
+      bucket[row.type] = (bucket[row.type] || 0) + row.quantity;
+    }
+  }
+
   // Resolve combat in a territory (dice combat with naval rules)
   resolveCombat(territory, unitDefs) {
     const units = this.units[territory] || [];
     const player = this.currentPlayer;
     if (!player) return null;
 
-    const attackers = units.filter(u => u.owner === player.id);
+    const t = this.territoryByName[territory];
+    const isNavalBattle = t?.isWater;
+    if (isNavalBattle) this._launchCarrierAircraft(units);
+
+    const attackers = units.filter(u => u.owner === player.id && (Number(u.quantity) || 0) > 0);
     // All enemy units in territory (for rolling dice - AA guns still roll at aircraft)
-    const allDefenders = units.filter(u => u.owner !== player.id && !this.areAllies(player.id, u.owner));
+    const allDefenders = units.filter(u => u.owner !== player.id && !this.areAllies(player.id, u.owner) && (Number(u.quantity) || 0) > 0);
     // Combat defenders - units that can actually stop an attack (exclude factories and 0/0 units)
     const combatDefenders = allDefenders.filter(u => {
       // Factories are captured, not combat units
@@ -4020,9 +4152,6 @@ export class GameState {
       };
     }
 
-    const t = this.territoryByName[territory];
-    const isNavalBattle = t?.isWater;
-
     // Count diff for the turn ping. attackerCasualties are the defender's
     // hits, so the arrays are the wrong source; a damaged battleship is not
     // a loss until its quantity drops. Ledger is in-memory only (not saved).
@@ -4035,6 +4164,7 @@ export class GameState {
         ? this._mainEnemyOwner(allDefenders, player.id)
         : (landOwner || this._mainEnemyOwner(allDefenders, player.id)),
     );
+    this._pendingCarriedLosses = [];
 
     // Shore bombardment: ships in adjacent sea zones can bombard land battles (first round only)
     let bombardmentHits = 0;
@@ -4048,6 +4178,28 @@ export class GameState {
     if (!this._combatRoundsTracker) this._combatRoundsTracker = {};
     this._combatRoundsTracker[territory] = (this._combatRoundsTracker[territory] || 0) + 1;
 
+    // Submarine first strike, same gate as the combat screen: active subs,
+    // no enemy destroyer, and at least one unit those hits can be assigned to.
+    // Subs still roll again in the normal round, matching the human battle.
+    const attackerHasDestroyer = attackers.some((u) => u.type === 'destroyer' && (Number(u.quantity) || 0) > 0);
+    const defenderHasDestroyer = allDefenders.some((u) => u.type === 'destroyer' && (Number(u.quantity) || 0) > 0);
+    const attackerSubs = attackers.filter((u) => u.type === 'submarine');
+    const defenderSubs = allDefenders.filter((u) => u.type === 'submarine');
+    let firstStrikeAttackDice = 0;
+    let firstStrikeDefenseDice = 0;
+    if (sideCanFirstStrike(attackerSubs, allDefenders, defenderHasDestroyer, unitDefs)) {
+      const strike = this._rollCombatWithRolls(attackerSubs, 'attack', unitDefs, 'sub');
+      firstStrikeAttackDice = strike.rolls.length;
+      const targets = allDefenders.filter((u) => unitIsFirstStrikeTarget(u, unitDefs));
+      this._applyCasualtiesWithDamage(targets, strike.hits, unitDefs, isNavalBattle);
+    }
+    if (sideCanFirstStrike(defenderSubs, attackers, attackerHasDestroyer, unitDefs)) {
+      const strike = this._rollCombatWithRolls(defenderSubs, 'defense', unitDefs, 'sub');
+      firstStrikeDefenseDice = strike.rolls.length;
+      const targets = attackers.filter((u) => unitIsFirstStrikeTarget(u, unitDefs));
+      this._applyCasualtiesWithDamage(targets, strike.hits, unitDefs, isNavalBattle);
+    }
+
     // Roll dice for combat (allDefenders includes AA guns which can fire at aircraft)
     const { hits: attackHits, rolls: attackRolls } = this._rollCombatWithRolls(attackers, 'attack', unitDefs);
     const { hits: defenseHits, rolls: defenseRolls } = this._rollCombatWithRolls(allDefenders, 'defense', unitDefs);
@@ -4060,10 +4212,14 @@ export class GameState {
     const attackerCasualties = this._applyCasualtiesWithDamage(allDefenders, totalAttackHits, unitDefs, isNavalBattle);
     const defenderCasualties = this._applyCasualtiesWithDamage(attackers, defenseHits, unitDefs, isNavalBattle);
 
+    if (isNavalBattle) this._dropDefenderAirWithoutCarrier(units, player.id, unitDefs);
+
     // Clean up destroyed units (quantity <= 0)
     // IMPORTANT: Preserve factories - they are captured, never destroyed
     this.units[territory] = units.filter(u => u.quantity > 0 || u.type === 'factory');
     this._noteCombatRoundLosses(territory, beforeCounts);
+    this._addCarriedLossesToLedger(territory);
+    if (isNavalBattle) this._restowCarrierAir(this.units[territory], unitDefs);
 
     // Check if combat is over
     // Note: Factories are captured (not destroyed) and AA guns have 0 combat value
@@ -4086,6 +4242,8 @@ export class GameState {
       bombardmentRolls,
       attackRolls,
       defenseRolls,
+      firstStrikeAttackDice,
+      firstStrikeDefenseDice,
       attackerCasualties,
       defenderCasualties,
       attackersRemaining: remainingAttackers.reduce((sum, u) => sum + u.quantity, 0),
@@ -4251,18 +4409,19 @@ export class GameState {
     return this.combatTelemetry ? this.combatTelemetry.slice() : [];
   }
 
-  _rollCombatWithRolls(units, type, unitDefs) {
+  _rollCombatWithRolls(units, type, unitDefs, contextLabel = 'combat') {
     let hits = 0;
     const rolls = [];
 
     for (const unit of units) {
       const def = unitDefs[unit.type];
       if (!def) continue;
+      if ((Number(unit.quantity) || 0) <= 0) continue;
       const hitValue = type === 'attack' ? def.attack : def.defense;
 
       for (let i = 0; i < unit.quantity; i++) {
         const roll = this._rollDie({
-          context: 'combat',
+          context: contextLabel,
           side: type === 'attack' ? 'attacker' : 'defender',
           unit: unit.type,
           need: hitValue,
@@ -4351,6 +4510,7 @@ export class GameState {
           unit.quantity--;
           remaining--;
           casualties.push({ type: unit.type, destroyed: true, wasDamaged: true });
+          this._noteSunkCargo(unit);
         }
       }
 
@@ -4386,6 +4546,7 @@ export class GameState {
       const remove = Math.min(unit.quantity, remaining);
       unit.quantity -= remove;
       remaining -= remove;
+      this._noteSunkCargo(unit);
       for (let i = 0; i < remove; i++) {
         casualties.push({ type: unit.type, destroyed: true });
       }
@@ -5748,15 +5909,32 @@ export class GameState {
       return { success: false, error: `No ${fighterType} available` };
     }
 
-    // Move fighter to carrier
+    // Move fighter to carrier. A grouped stack is peeled first so
+    // individualizeCarrier cannot collapse the other hulls to quantity 1.
     sourceUnit.quantity--;
     if (sourceUnit.quantity <= 0) {
       const idx = sourceUnits.indexOf(sourceUnit);
       sourceUnits.splice(idx, 1);
     }
 
-    carrier.aircraft = carrier.aircraft || [];
-    carrier.aircraft.push({ type: fighterType, owner: player.id });
+    let hull = carrier;
+    if (!hull.id && (hull.quantity || 1) > 1) {
+      hull.quantity -= 1;
+      const peeled = {
+        type: 'carrier',
+        quantity: 1,
+        owner: hull.owner,
+        aircraft: [],
+        cargo: [],
+        moved: !!hull.moved,
+        movementUsed: hull.movementUsed || 0,
+      };
+      seaUnits.push(peeled);
+      hull = peeled;
+    }
+    individualizeCarrier(this, hull);
+    hull.aircraft = hull.aircraft || [];
+    hull.aircraft.push({ type: fighterType, owner: player.id });
 
     this._notify();
     return { success: true };
@@ -6007,6 +6185,7 @@ export class GameState {
               destination: choice.territory,
             }],
             unitDefs,
+            gameState: this,
           });
           const n = (applied || []).reduce((sum, item) => sum + (item.stayed ? 0 : (item.quantity || 0)), 0);
           if (n <= 0) {
@@ -6070,6 +6249,7 @@ export class GameState {
             destination: choice.territory,
           }],
           unitDefs,
+          gameState: this,
         });
         const moved = (applied || []).reduce((sum, item) => sum + (item.stayed ? 0 : (item.quantity || 0)), 0);
         if (moved <= 0) {
@@ -6165,6 +6345,7 @@ export class GameState {
       owner: player.id,
       plan,
       unitDefs,
+      gameState: this,
     });
 
     this.pendingAirLandings = markPendingAirLandingsApplied(

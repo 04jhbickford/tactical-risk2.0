@@ -2,6 +2,18 @@
 
 ---
 
+## 9.26.26 — unified.17 Rob's battle bugs
+
+Stamp `V2.81.57-unified.17`. Schema stays 11. Display stamp only; game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.17`). T1 (stale host overwrite) is not in this build.
+
+Rob, `#tactical-risk`, 25 Sep: a fighter landed on a grouped carrier in the Red Sea was gone on the next turn. AI sea battles ignored aircraft sitting on carriers. Turn pings listed a sunk carrier and transport but not the infantry in the hold or the fighter on the deck. Caspian offered Fire First Strike for a sub facing only a bomber, and after every sub submerged the button still said Fire First Strike. A submerged sub came back with owner null and drew as an empty circle. Two infantry loaded in Southern Europe could not assault Syria Jordan after the transport had sailed. Mobilization needed a Deploy all here button. Combat should let the player pick which battle opens.
+
+Grouped carriers are individualized before aircraft land on them, and combat finalize matches a carrier with no id by owner and order instead of dropping the aircraft. AI `resolveCombat` launches `carrier.aircraft` before rolling, drops defending aircraft whose carrier sank, and counts that cargo on the loss ledger under each unit's own owner. A side gets submarine first strike only when the other side has a unit a sub can hit; otherwise the button says Continue to battle and still advances with zero dice. Submerge records `{owner, id}` and restores that owner. An unknown owner draws the submarine silhouette in grey and the tooltip says Unknown owner. Moved transports still list unspent cargo, and Deploy all here places the pending stack in one notify. On a phone the expanded mobilize sheet is tall enough to show that button above the pinned phase control, and the duplicate peek chips are omitted once the list is open. The combat sidebar (and the phone battle sheet) lists queued battles; a land battle whose sea zone is still queued stays disabled. Tablet widths use 44px battle and deploy rows; desktop stays compact.
+
+Receipt: `node tools/test-carrier-landing-grouped.mjs`, `node tools/test-ai-carrier-aircraft.mjs`, `node tools/test-turn-ping-naval-cargo.mjs`, `node tools/test-sub-first-strike-targets.mjs`, `node tools/test-submerged-sub-owner.mjs`, `node tools/test-amphibious-after-move.mjs`, `node tools/test-mobilize-deploy-all.mjs`, `node tools/test-battle-order.mjs`.
+
+---
+
 ## 9.25.26 — unified.16 polish
 
 Stamp `V2.81.57-unified.16`. Schema stays 11. Display stamp only; game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.16`).

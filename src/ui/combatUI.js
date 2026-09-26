@@ -12,11 +12,13 @@ import {
   territoryHasEnemyCombatUnits,
   territoryCombatAlreadyResolved,
   summarizeCombatForce,
+  sideCanFirstStrike,
 } from '../state/combatUnits.js';
 import { dequeueResolvedCombatHeads, applyTerritoryCapture } from '../state/combatFinalize.js';
 import { persistableUnit } from '../state/persistState.js';
 import { emitGameEvent, getGameEventLog } from '../multiplayer/gameEventLog.js';
 import { flushDiceBuffer } from '../stats/diceTracker.js';
+import { renderCombatBattleList } from './battleOrder.js';
 
 export {
   getEnemyCombatUnits,
@@ -392,9 +394,9 @@ export class CombatUI {
     const defenderSubs = defenders.filter(u => u.type === 'submarine' && u.quantity > 0);
     const attackerHasDestroyer = attackers.some(u => u.type === 'destroyer' && u.quantity > 0);
     const defenderHasDestroyer = defenders.some(u => u.type === 'destroyer' && u.quantity > 0);
-    // Submarines have first strike if opposing side has no destroyer
-    const attackerSubsHaveFirstStrike = attackerSubs.length > 0 && !defenderHasDestroyer;
-    const defenderSubsHaveFirstStrike = defenderSubs.length > 0 && !attackerHasDestroyer;
+    // First strike only when the other side has a unit a sub can hit.
+    const attackerSubsHaveFirstStrike = sideCanFirstStrike(attackerSubs, defenders, defenderHasDestroyer, this.unitDefs);
+    const defenderSubsHaveFirstStrike = sideCanFirstStrike(defenderSubs, attackers, attackerHasDestroyer, this.unitDefs);
     const hasSubmarineFirstStrike = attackerSubsHaveFirstStrike || defenderSubsHaveFirstStrike;
 
     // Calculate shore bombardment for amphibious assaults
@@ -447,6 +449,7 @@ export class CombatUI {
       defenderSubmergedSubs: 0, // Count of submerged defending subs
       attackerHasOnlyAir,
       defenderHasOnlyAir,
+      defenderSeatId: defenders.find((u) => u.owner)?.owner || null,
       // Track submarine hits in regular combat (can't hit air)
       attackerSubHits: 0,
       defenderSubHits: 0,
@@ -883,12 +886,26 @@ export class CombatUI {
     if (subUnit && count > 0) {
       // Store submerged subs to be restored to the zone after combat
       if (!this.combatState.submergedSubsToRestore) {
-        this.combatState.submergedSubsToRestore = { attacker: 0, defender: 0 };
+        this.combatState.submergedSubsToRestore = { attacker: [], defender: [] };
       }
-      this.combatState.submergedSubsToRestore[side] += count;
+      const bag = this.combatState.submergedSubsToRestore;
+      const owner = subUnit.owner || null;
+      if (typeof bag[side] === 'number') {
+        const kept = bag[side];
+        bag[side] = [];
+        for (let i = 0; i < kept; i++) bag[side].push({ owner });
+      }
+      if (!Array.isArray(bag[side])) bag[side] = [];
+      const take = Math.min(count, subUnit.quantity || 0);
+      const wholeStack = take >= (subUnit.quantity || 0);
+      for (let i = 0; i < take; i++) {
+        const entry = { owner };
+        if (wholeStack && subUnit.id && i === 0) entry.id = subUnit.id;
+        bag[side].push(entry);
+      }
 
       // Remove from combat (reduce quantity)
-      subUnit.quantity = Math.max(0, subUnit.quantity - count);
+      subUnit.quantity = Math.max(0, subUnit.quantity - take);
       if (subUnit.quantity === 0) {
         if (side === 'attacker') {
           this.combatState.attackers = this.combatState.attackers.filter(u => u.type !== 'submarine');
@@ -1591,8 +1608,8 @@ export class CombatUI {
       const unit = attackers.find(u => u.type === type);
       if (unit) {
         unit.quantity -= count;
-        // Track total losses for battle summary
         totalAttackerLosses[type] = (totalAttackerLosses[type] || 0) + count;
+        this._recordHullCargo(unit, totalAttackerLosses, this._extraLossMap());
       }
     }
 
@@ -1610,8 +1627,8 @@ export class CombatUI {
       const unit = defenders.find(u => u.type === type);
       if (unit) {
         unit.quantity -= count;
-        // Track total losses for battle summary
-        totalDefenderLosses[type] = (totalDefenderLosses[type] || 0) + count;
+        this._addTypedLoss(totalDefenderLosses, unit.owner, type, count);
+        this._recordHullCargo(unit, totalDefenderLosses, this._extraLossMap());
       }
     }
 
@@ -1643,13 +1660,17 @@ export class CombatUI {
       // Attacker only has transports left - they are destroyed
       for (const transport of this.combatState.attackers.filter(u => u.type === 'transport')) {
         totalAttackerLosses['transport'] = (totalAttackerLosses['transport'] || 0) + transport.quantity;
+        transport.quantity = 0;
+        this._recordHullCargo(transport, totalAttackerLosses, this._extraLossMap());
       }
       this.combatState.attackers = [];
     }
     if (defenderCombatUnits.length === 0 && this.combatState.defenders.length > 0) {
       // Defender only has transports left - they are destroyed
       for (const transport of this.combatState.defenders.filter(u => u.type === 'transport')) {
-        totalDefenderLosses['transport'] = (totalDefenderLosses['transport'] || 0) + transport.quantity;
+        this._addTypedLoss(totalDefenderLosses, transport.owner, 'transport', transport.quantity);
+        transport.quantity = 0;
+        this._recordHullCargo(transport, totalDefenderLosses, this._extraLossMap());
       }
       this.combatState.defenders = [];
     }
@@ -1713,6 +1734,115 @@ export class CombatUI {
     this.gameState._notify();
   }
 
+  _seatedOwner(owner) {
+    if (!owner) return null;
+    return this.gameState?.getPlayer?.(owner) ? owner : null;
+  }
+
+  _unambiguousSubOwner(side) {
+    const lists = [
+      side === 'attacker' ? this.combatState?.attackers : this.combatState?.defenders,
+      this.combatState?.initialAttackers,
+      this.combatState?.initialDefenders,
+    ];
+    const owners = new Set();
+    if (side === 'defender') {
+      for (const unit of this.combatState?.defenders || []) {
+        if (unit?.owner) owners.add(unit.owner);
+      }
+      const seeded = this.combatState?.defenderSeatId;
+      if (seeded) owners.add(seeded);
+    }
+    if (side === 'attacker' && this.gameState?.currentPlayer?.id) {
+      return this.gameState.currentPlayer.id;
+    }
+    for (const list of lists) {
+      for (const unit of list || []) {
+        if (unit?.type === 'submarine' && unit.owner) owners.add(unit.owner);
+      }
+    }
+    if (owners.size === 1) return [...owners][0];
+    return null;
+  }
+
+  _restoreSubmergedSide(units, raw, fallbackOwner, moved) {
+    let entries = [];
+    if (Array.isArray(raw)) entries = raw;
+    else if ((Number(raw) || 0) > 0 && fallbackOwner) {
+      entries = Array.from({ length: Number(raw) }, () => ({ owner: fallbackOwner }));
+    }
+    for (const entry of entries) {
+      const owner = entry?.owner || fallbackOwner;
+      if (!owner) continue;
+      if (entry?.id) {
+        units.push({
+          type: 'submarine',
+          owner,
+          quantity: 1,
+          id: entry.id,
+          ...(moved ? { moved: true } : {}),
+        });
+        continue;
+      }
+      const existing = units.find((unit) => unit.type === 'submarine' && unit.owner === owner && !unit.id);
+      if (existing) existing.quantity = (existing.quantity || 1) + 1;
+      else units.push({ type: 'submarine', owner, quantity: 1, ...(moved ? { moved: true } : {}) });
+    }
+  }
+
+  _extraLossMap() {
+    if (!this.combatState.extraDefenderLosses) this.combatState.extraDefenderLosses = {};
+    return this.combatState.extraDefenderLosses;
+  }
+
+  _addTypedLoss(primaryMap, owner, type, count) {
+    const qty = Number(count) || 0;
+    if (!type || qty <= 0) return;
+    const attackerId = this.gameState?.currentPlayer?.id;
+    const seat = this.combatState?.defenderSeatId || null;
+    if (owner && owner !== attackerId && seat && owner !== seat) {
+      const extra = this._extraLossMap();
+      const bucket = extra[owner] || (extra[owner] = {});
+      bucket[type] = (bucket[type] || 0) + qty;
+      return;
+    }
+    primaryMap[type] = (primaryMap[type] || 0) + qty;
+  }
+
+  _subFirstStrikeCanFire() {
+    const state = this.combatState;
+    if (!state) return false;
+    const active = (side) => {
+      const list = side === 'attacker' ? state.attackers : state.defenders;
+      const total = (list || []).filter((u) => u.type === 'submarine').reduce((sum, u) => sum + (Number(u.quantity) || 0), 0);
+      const submerged = side === 'attacker' ? (state.attackerSubmergedSubs || 0) : (state.defenderSubmergedSubs || 0);
+      return Math.max(0, total - submerged);
+    };
+    return (state.attackerSubsHaveFirstStrike && active('attacker') > 0)
+      || (state.defenderSubsHaveFirstStrike && active('defender') > 0);
+  }
+
+  _recordHullCargo(unit, lossMap, ownerMap) {
+    if (!unit || (Number(unit.quantity) || 0) > 0 || unit._cargoNoted) return;
+    if (unit.type !== 'transport' && unit.type !== 'carrier') return;
+    unit._cargoNoted = true;
+    const manifest = unit.type === 'transport' ? (unit.cargo || []) : (unit.aircraft || []);
+    const attackerId = this.gameState?.currentPlayer?.id;
+    const seat = this.combatState?.defenderSeatId || null;
+    for (const item of manifest) {
+      if (!item?.type) continue;
+      const qty = Number(item.quantity) || 1;
+      const owner = item.owner || unit.owner;
+      if (!owner) continue;
+      if (owner === attackerId || !seat || owner === seat) {
+        if (lossMap) lossMap[item.type] = (lossMap[item.type] || 0) + qty;
+      }
+      if (!ownerMap) continue;
+      const bucket = ownerMap[owner] || (ownerMap[owner] = {});
+      bucket[item.type] = (bucket[item.type] || 0) + qty;
+    }
+  }
+
   _finalizeCombat() {
     if (this.combatState?._finalized) return;
     // Apply final state to game. Snapshot carrier loads first: applyAirLandings
@@ -1766,41 +1896,48 @@ export class CombatUI {
     // Restore submerged submarines to the zone (they exited combat but stay in the zone)
     const submergedSubs = this.combatState.submergedSubsToRestore;
     if (submergedSubs) {
-      if (submergedSubs.attacker > 0) {
-        // Find existing attacker sub unit or create one
-        const existingSub = units.find(u => u.type === 'submarine' && u.owner === player.id);
-        if (existingSub) {
-          existingSub.quantity += submergedSubs.attacker;
-        } else {
-          units.push({ type: 'submarine', owner: player.id, quantity: submergedSubs.attacker, moved: true });
-        }
-      }
-      if (submergedSubs.defender > 0) {
-        // Find existing defender sub unit or create one
-        const existingSub = units.find(u => u.type === 'submarine' && u.owner === previousOwner);
-        if (existingSub) {
-          existingSub.quantity += submergedSubs.defender;
-        } else {
-          units.push({ type: 'submarine', owner: previousOwner, quantity: submergedSubs.defender });
-        }
-      }
+      const attackerOwner = player.id;
+      const defenderOwner = this._unambiguousSubOwner('defender') || this._seatedOwner(previousOwner);
+      this._restoreSubmergedSide(units, submergedSubs.attacker, attackerOwner, true);
+      this._restoreSubmergedSide(units, submergedSubs.defender, defenderOwner, false);
     }
 
     this.gameState.units[this.currentTerritory] = mergeLiveCarrierLoads(liveCarrierBoard, units);
 
-    // Log combat result
+    // Log combat result. Sea zones have no owner, so the defender seat is
+    // the side that actually had units in the battle.
+    const defenderId = this._seatedOwner(previousOwner) || this.combatState.defenderSeatId || null;
+    const extra = this.combatState.extraDefenderLosses || {};
     this.gameState.logCombat({
       territory: this.currentTerritory,
       attacker: player.name,
-      defender: defenderPlayer?.name || 'Unknown',
+      defender: defenderPlayer?.name || this.gameState.getPlayer?.(defenderId)?.name || 'Unknown',
       attackerId: player.id,
-      defenderId: previousOwner || null,
+      defenderId,
       winner: this.combatState.winner,
       attackerSurvivors: this._getTotalUnits(this.combatState.attackers),
       defenderSurvivors: this._getTotalUnits(this.combatState.defenders),
       attackerLosses: this.combatState.totalAttackerLosses || {},
       defenderLosses: this.combatState.totalDefenderLosses || {},
     });
+    for (const [owner, losses] of Object.entries(extra)) {
+      if (!owner || owner === player.id || owner === defenderId) continue;
+      const copy = {};
+      for (const [type, n] of Object.entries(losses || {})) {
+        if ((Number(n) || 0) > 0) copy[type] = Number(n);
+      }
+      if (!Object.keys(copy).length) continue;
+      this.gameState.logCombat({
+        territory: this.currentTerritory,
+        attacker: player.name,
+        defender: this.gameState.getPlayer?.(owner)?.name || owner,
+        attackerId: player.id,
+        defenderId: owner,
+        winner: this.combatState.winner,
+        attackerLosses: {},
+        defenderLosses: copy,
+      });
+    }
 
     // Update territory ownership if attacker won AND has land units
     // Air units cannot capture territory - only land units can
@@ -2372,7 +2509,7 @@ export class CombatUI {
 
           <div style="text-align: center; margin-top: 12px;">
             <button class="combat-btn roll" data-action="submarine-first-strike">
-              🔱 Fire First Strike (Remaining Subs)
+              ${this._subFirstStrikeCanFire() ? '🔱 Fire First Strike (Remaining Subs)' : 'Continue to battle'}
             </button>
           </div>
         </div>
@@ -2560,6 +2697,7 @@ export class CombatUI {
           <div class="phone-combat-steps" role="tablist" aria-label="Battle steps">${chips}</div>
         </div>
         <div class="phone-combat-body">
+          ${renderCombatBattleList(this.gameState, { phone: true })}
           ${this._renderPhoneCombatBody(step, player, defenderPlayer, phase, winner, compact)}
         </div>
         <div class="phone-combat-cta">
@@ -2729,7 +2867,8 @@ export class CombatUI {
       return `<button class="combat-btn confirm" data-action="confirm-aa-casualties" ${!canConfirm ? 'disabled' : ''}>Confirm: Take AA hits</button>`;
     }
     if (phase === 'submarineFirstStrike') {
-      return `<button class="combat-btn roll" data-action="submarine-first-strike">Confirm: Fire First Strike</button>`;
+      const label = this._subFirstStrikeCanFire() ? 'Confirm: Fire First Strike' : 'Continue to battle';
+      return `<button class="combat-btn roll" data-action="submarine-first-strike">${label}</button>`;
     }
     if (phase === 'ready') {
       return `
@@ -3585,6 +3724,15 @@ export class CombatUI {
         if (!PHONE_COMBAT_STEPS.includes(step)) return;
         this._phoneCombatStepPin = step;
         this._render();
+      });
+    });
+
+    this.el.querySelectorAll('[data-action="pick-battle"]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const territory = btn.dataset.territory;
+        if (!territory || btn.disabled || territory === this.currentTerritory) return;
+        const picked = this.gameState.moveCombatToFront?.(territory);
+        if (picked?.success) this.showNextCombat();
       });
     });
 

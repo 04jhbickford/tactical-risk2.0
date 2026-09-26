@@ -2,6 +2,8 @@
 // Tabs: Actions, Stats, Territory, Log
 
 import { GAME_PHASES, TURN_PHASES, TURN_PHASE_NAMES, TECHNOLOGIES, shouldShowTechResearch, shouldShowPurchase } from '../state/gameState.js';
+import { renderCombatBattleList } from './battleOrder.js';
+import { adjacentMobilizeSeas } from './mobilizeDeployAll.js';
 import { DIRECT_TECH_IPC_COST } from '../gameOptions.js';
 import { getUnitIconPath } from '../utils/unitIcons.js';
 import { formatUnitName } from '../utils/unitNames.js';
@@ -1018,6 +1020,10 @@ export class PlayerPanel {
     else this._scheduleRender();
   }
 
+  setMobilizeDeployNote(note) {
+    this.mobilizeDeployNote = note || '';
+  }
+
   _shouldStagePhonePairLand(territory) {
     if (!territory?.name) return false;
     if (!shouldUsePhonePairGrammar({
@@ -1722,7 +1728,7 @@ export class PlayerPanel {
 
   _renderUnsafe() {
     if (!this.gameState) {
-      this.el.classList.remove('player-panel--peek', 'player-panel--expanded', 'player-panel--place-tray');
+      this.el.classList.remove('player-panel--peek', 'player-panel--expanded', 'player-panel--place-tray', 'player-panel--mobilize');
       this.contentEl.innerHTML = '<div class="pp-loading">Loading match…</div>';
       return;
     }
@@ -1730,7 +1736,7 @@ export class PlayerPanel {
 
     const player = this.gameState.currentPlayer;
     if (!player) {
-      this.el.classList.remove('player-panel--peek', 'player-panel--expanded', 'player-panel--place-tray');
+      this.el.classList.remove('player-panel--peek', 'player-panel--expanded', 'player-panel--place-tray', 'player-panel--mobilize');
       this.contentEl.innerHTML = '<div class="pp-loading">Loading match…</div>';
       return;
     }
@@ -1808,6 +1814,7 @@ export class PlayerPanel {
     this.el.classList.toggle('player-panel--peek', peek);
     this.el.classList.toggle('player-panel--expanded', mobile && !peek);
     this.el.classList.toggle('player-panel--place-tray', phoneTray && !peek);
+    this.el.classList.toggle('player-panel--mobilize', mobile && turnPhase === TURN_PHASES.MOBILIZE);
 
     if (mobile) {
       html += peek ? '' : this._renderSeatChip(chrome);
@@ -2519,6 +2526,7 @@ export class PlayerPanel {
       if (turnPhase === TURN_PHASES.COMBAT) {
         const combatCount = this.gameState.combatQueue?.length || 0;
         if (combatCount > 0) {
+          html += renderCombatBattleList(this.gameState, { phone: isMobileShell() });
           html += `
             <button class="pp-action-btn combat" data-action="open-combat">
               ⚔️ Resolve ${combatCount} Battle${combatCount > 1 ? 's' : ''}
@@ -3555,6 +3563,9 @@ export class PlayerPanel {
           countLabel: String(qty),
         });
       }
+    } else if (phase === GAME_PHASES.PLAYING && turnPhase === TURN_PHASES.MOBILIZE && this.trayExpanded) {
+      // The expanded tray already lists every pending type plus Deploy all.
+      // Keeping the peek chips as well ate the 30dvh sheet and hid that button.
     } else if (phase === GAME_PHASES.PLAYING && turnPhase === TURN_PHASES.MOBILIZE) {
       pairHint = resolvePhonePeekHint(phase, turnPhase, this.selectedUnitType, {
         territoryName: pairLand,
@@ -3967,7 +3978,11 @@ export class PlayerPanel {
       const def = this.unitDefs?.[u.type];
       if (!def || def.movement <= 0 || def.isBuilding) return false;
       // Check if unit hasn't moved yet
-      return !u.moved;
+      return !u.moved || (
+        territory.isWater
+        && u.type === 'transport'
+        && (u.cargo || []).some((item) => item && !item.moved && (item.quantity || 1) > 0)
+      );
     });
   }
 
@@ -4012,6 +4027,30 @@ export class PlayerPanel {
         }
       }
 
+      // Cargo can still unload after the transport has spent its movement.
+      // Cargo that already unloaded this turn stays hidden.
+      if (territory.isWater && u.type === 'transport' && (u.cargo || []).length > 0) {
+        for (const cargoUnit of u.cargo) {
+          if (!cargoUnit || cargoUnit.moved) continue;
+          const cargoQty = cargoUnit.quantity || 1;
+          if (cargoQty <= 0) continue;
+          const cargoKey = `cargo:${u.id || 'group'}:${cargoUnit.type}`;
+          const existing = cargoUnits.find(c => c.cargoKey === cargoKey);
+          if (existing) {
+            existing.quantity += cargoQty;
+          } else {
+            cargoUnits.push({
+              type: cargoUnit.type,
+              quantity: cargoQty,
+              transportId: u.id || null,
+              isCargo: true,
+              cargoKey,
+              displayName: `${cargoUnit.type} (on transport)`
+            });
+          }
+        }
+      }
+
       // Skip units that have already moved (for non-aircraft handling)
       if (u.moved) continue;
 
@@ -4032,26 +4071,6 @@ export class PlayerPanel {
           displayName: `${u.type}${cargoDesc}`,
           isIndividual: true
         });
-
-        // Add cargo units as separately selectable for amphibious assault
-        if (territory.isWater && u.type === 'transport' && cargo.length > 0) {
-          for (const cargoUnit of cargo) {
-            const cargoKey = `cargo:${u.id}:${cargoUnit.type}`;
-            const existing = cargoUnits.find(c => c.cargoKey === cargoKey);
-            if (existing) {
-              existing.quantity += cargoUnit.quantity || 1;
-            } else {
-              cargoUnits.push({
-                type: cargoUnit.type,
-                quantity: cargoUnit.quantity || 1,
-                transportId: u.id,
-                isCargo: true,
-                cargoKey: cargoKey,
-                displayName: `${cargoUnit.type} (on transport)`
-              });
-            }
-          }
-        }
 
         // Skip the duplicate aircraft handling below since we already handled it above
         if (u.type === 'carrier') continue;
@@ -4875,6 +4894,25 @@ export class PlayerPanel {
 
     html += `</div>`;
 
+    const navalSeas = (!isWater && isFactoryTerritory && this.selectedTerritory)
+      ? adjacentMobilizeSeas(this.gameState, this.selectedTerritory.name, player.id)
+      : [];
+    const shipsCanAutoPlace = navalUnits.length > 0 && navalSeas.length === 1 && !needsFactoryPick;
+    const canDeployAll = !!(
+      isValidPlacement
+      && this.selectedTerritory
+      && !needsFactoryPick
+      && (placeableUnits.length > 0 || shipsCanAutoPlace)
+    );
+    const esc = (value) => String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;');
+    html += `<button type="button" class="pp-deploy-all" data-action="mobilize-deploy-all" data-territory="${esc(this.selectedTerritory?.name || '')}" ${canDeployAll ? '' : 'disabled'}>Deploy all here</button>`;
+    if (this.mobilizeDeployNote) {
+      html += `<div class="pp-mobilize-note">${esc(this.mobilizeDeployNote)}</div>`;
+    }
+
     // Remaining units indicator
     html += `<div class="pp-mobilize-remaining">${totalPending} unit${totalPending !== 1 ? 's' : ''} remaining</div>`;
 
@@ -5485,6 +5523,18 @@ export class PlayerPanel {
               unitType,
               territory: this.selectedTerritory.name,
               sourceFactory: this._mobilizeSourceFactory(this.selectedTerritory, player),
+            });
+          }
+          return;
+        }
+
+        if (action === 'mobilize-deploy-all') {
+          const mobPlayer = this.gameState?.currentPlayer;
+          if (this.onAction && this.selectedTerritory) {
+            if (this._mobilizeNeedsFactoryPick(this.selectedTerritory, mobPlayer)) return;
+            this.onAction('mobilize-deploy-all', {
+              territory: this.selectedTerritory.name,
+              sourceFactory: this._mobilizeSourceFactory(this.selectedTerritory, mobPlayer),
             });
           }
           return;
