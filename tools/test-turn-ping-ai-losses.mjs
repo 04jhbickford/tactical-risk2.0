@@ -1,4 +1,4 @@
-// V2.81.57-unified.16 — AI battles and non-battle captures show on the turn ping.
+// V2.81.57-unified.16.1 — AI battles and non-battle captures show on the turn ping.
 // Replays the TXVKJB seat gap: British Easy AI fights through resolveCombat
 // (the aiController._handleCombat loop) and walks into empty Egypt.
 // Run: node tools/test-turn-ping-ai-losses.mjs
@@ -39,7 +39,7 @@ const check = (label, cond, extra) => {
   }
 };
 
-check('stamp is unified.15', GAME_VERSION === 'V2.81.57-unified.16');
+check('stamp is unified.15', GAME_VERSION === 'V2.81.57-unified.16.1');
 check('schema stays 11', SCHEMA_VERSION === 11);
 
 const landDefs = {

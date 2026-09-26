@@ -1226,7 +1226,9 @@ async function init() {
     });
 
     if (hasExistingState) {
-      // Rejoining a game that already has state - just load it
+      // "Still in CODE — you were away" (justResumed) rejoins here.
+      // startSync reads the live doc before the state subscriber exists,
+      // so a stale board cannot push first. forcePush is init-only.
       console.log('[MP] Rejoining existing game...');
       const stateLoaded = await syncManager.startSync();
       if (!stateLoaded) {
@@ -1322,7 +1324,14 @@ async function init() {
     // Subscribe to sync events
     syncManager.subscribe(async (event, data) => {
       // Log all sync events to debug tab
-      playerPanel.logSyncEvent(event, {
+      playerPanel.logSyncEvent(event, event === 'push_stale_blocked' ? {
+        localVersion: data?.localVersion,
+        remoteVersion: data?.remoteVersion,
+        localSeq: data?.localSeq,
+        remoteSeq: data?.remoteSeq,
+        confirmedSeat: data?.confirmedSeat,
+        remoteSeat: data?.remoteSeat,
+      } : {
         version: data?.version,
         currentPlayerId: data?.currentPlayerId,
         isActivePlayer: data?.isActivePlayer
@@ -1532,10 +1541,11 @@ async function init() {
     });
 
     // Set up gameState observer to push changes
-    // Host pushes all state changes (including AI turns), others only push their own turns
+    // The confirmed seat's owner pushes, and the AI-authority client pushes an
+    // AI seat. A host does not push during a human opponent's turn.
     // IMPORTANT: Don't push if we're loading remote state (prevents feedback loop)
     gameState.subscribe(() => {
-      // Push gate uses canPushLocalChange() (cached-flag authorization), NOT the
+      // Push gate uses canPushLocalChange() (last confirmed seat), NOT the
       // live checkIsActivePlayer() — a turn-ENDING action has already advanced
       // the live currentPlayer, so a live check would drop that final push.
       if (syncManager && !syncManager.isLoading() && syncManager.canPushLocalChange()) {
@@ -1600,7 +1610,8 @@ async function init() {
     if (gameState._deployPoolRestored && syncManager && !syncManager.isLoading?.()) {
       if (typeof syncManager.pushStateNow === 'function') {
         await syncManager.pushStateNow();
-      } else if (typeof syncManager.forcePush === 'function') {
+      } else if (!hasExistingState && typeof syncManager.forcePush === 'function') {
+        // forcePush stamps stateVersion 1. Init only — never on rejoin.
         await syncManager.forcePush();
       }
       gameState._deployPoolRestored = false;

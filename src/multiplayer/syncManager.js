@@ -17,6 +17,12 @@ import { DRAFT_MIN_CLIENT, draftOpenRefusal } from '../state/territoryDraft.js';
 import { createPushQueue } from './pushCoalesce.js';
 import { deferredSnapshotShouldApply, shouldApplyRemoteGameState } from '../state/placementPass.js';
 import {
+  canPushFromConfirmedSeat,
+  confirmedSeatFromPlayer,
+  evaluateAuthoritativePush,
+  newSyncSessionId,
+} from './syncAuthority.js';
+import {
   shouldReplaceSnapshotListener,
   shouldResumeSnapshots,
 } from './presencePolicy.js';
@@ -30,6 +36,16 @@ export class SyncManager {
     this.gameId = gameId;
     this.gameState = gameState;
     this.localVersion = 0;
+    this.sessionId = newSyncSessionId();
+    // Seat we last successfully pushed or applied. Push authorization reads
+    // this, not the live currentPlayer (a turn-ending action moves that
+    // first) and not hasAIAuthority() alone (that let the host write during
+    // a human opponent's turn).
+    this._confirmedSeat = null;
+    this._awaitingResumeRead = false;
+    this._resumeRead = null;
+    this._lastResumeApplied = false;
+    this._staleBlock = null;
     this.isActivePlayer = false;
     this.isHost = false; // Whether this client is the game host (follows lobbyData)
     this.hostOderId = null;
@@ -197,6 +213,7 @@ export class SyncManager {
     // If state exists, load it
     if (data.state) {
       this._loadRemoteState(data.state, data);
+      this._noteConfirmedSeat();
     }
 
     // Determine if we're the active player
@@ -239,6 +256,7 @@ export class SyncManager {
         this.isLoadingRemoteState = true;
         this._loadRemoteState(data.state, data);
         this.isLoadingRemoteState = false;
+        this._noteConfirmedSeat();
         this._updateActivePlayer(data.currentPlayerId);
         this.applyHostFromDoc(data);
 
@@ -315,6 +333,7 @@ export class SyncManager {
           this.isLoadingRemoteState = true;
           this._loadRemoteState(newData.state, newData);
           this.isLoadingRemoteState = false;
+          this._noteConfirmedSeat();
         }
         this._updateActivePlayer(newData.currentPlayerId);
         this._notifyListeners('state_updated', this._turnSnapshotPayload(newData.currentPlayerId));
@@ -347,7 +366,38 @@ export class SyncManager {
     })) {
       return;
     }
+    // "Still in CODE — you were away": re-read the live doc before any push.
+    // A backgrounded host used to write its stale board the moment the tab woke.
+    this._beginResumeRead();
     this._ensureGameSnapshot({ persistedPageShow: persisted });
+  }
+
+  // Block pushes until getDoc applies (or decides not to). Synchronous flag
+  // so a visibility listener that runs later in the same turn cannot push first.
+  _beginResumeRead() {
+    if (this._awaitingResumeRead) return;
+    this._awaitingResumeRead = true;
+    this._lastResumeApplied = false;
+    this._resumeRead = (async () => {
+      try {
+        const applied = await this._reloadRemoteState();
+        this._lastResumeApplied = !!applied;
+      } catch (error) {
+        console.error('[Sync] Resume re-read failed', error);
+        this._lastResumeApplied = false;
+      } finally {
+        this._awaitingResumeRead = false;
+      }
+    })();
+  }
+
+  // True when the resume re-read replaced local state, so the push that was
+  // waiting must not write the pre-read board. False when there was nothing
+  // to wait for, or the doc was not newer.
+  async _pauseForResumeRead() {
+    if (!this._awaitingResumeRead || !this._resumeRead) return false;
+    await this._resumeRead;
+    return !!this._lastResumeApplied;
   }
 
   _bindLifecycleFlush() {
@@ -355,16 +405,18 @@ export class SyncManager {
     this._lifecycleBound = true;
     window.addEventListener('pagehide', this._onLifecycleHide);
     document.addEventListener('visibilitychange', this._onLifecycleHide);
-    window.addEventListener('pageshow', this._onLifecycleResume);
-    document.addEventListener('visibilitychange', this._onLifecycleResume);
+    // Capture so the doc re-read is armed before a bubble listener (AI)
+    // can notify and push the stale board.
+    window.addEventListener('pageshow', this._onLifecycleResume, true);
+    document.addEventListener('visibilitychange', this._onLifecycleResume, true);
   }
 
   _unbindLifecycleFlush() {
     if (!this._lifecycleBound || typeof window === 'undefined') return;
     window.removeEventListener('pagehide', this._onLifecycleHide);
     document.removeEventListener('visibilitychange', this._onLifecycleHide);
-    window.removeEventListener('pageshow', this._onLifecycleResume);
-    document.removeEventListener('visibilitychange', this._onLifecycleResume);
+    window.removeEventListener('pageshow', this._onLifecycleResume, true);
+    document.removeEventListener('visibilitychange', this._onLifecycleResume, true);
     this._lifecycleBound = false;
   }
 
@@ -399,12 +451,24 @@ export class SyncManager {
     };
   }
 
+  // Confirmed seat wins over the cached doc seat. A null userId (AI with no
+  // oderId) must stay null — `??` would skip it and look like another human.
+  _localSeatId() {
+    if (this._confirmedSeat) return this._confirmedSeat.userId ?? null;
+    return this._lastCurrentPlayerId ?? null;
+  }
+
+  _noteConfirmedSeat(player = this.gameState?.currentPlayer, index = this.gameState?.currentPlayerIndex) {
+    const seat = confirmedSeatFromPlayer(player, index);
+    if (seat) this._confirmedSeat = seat;
+  }
+
   _shouldApplyRemote(newData) {
     return shouldApplyRemoteGameState({
       remoteVersion: newData?.stateVersion || 0,
       localVersion: this.localVersion,
       remoteCurrentPlayerId: newData?.currentPlayerId || null,
-      localCurrentPlayerId: this._lastCurrentPlayerId || null,
+      localCurrentPlayerId: this._localSeatId(),
       remoteActionSeq: newData?.state?.actionSeq || 0,
       localActionSeq: this.gameState?.actionSeq || 0,
       localGestureActive: !!this.gameState?.uiGestureActive,
@@ -426,11 +490,10 @@ export class SyncManager {
 
   // Push state to Firestore (called after local state changes)
   async pushState() {
-    // Allow push if: 1) We're the active player, OR 2) We may act for AI
-    // (host, or failover authority when the host is offline)
-    const canPush = this.isActivePlayer || this.hasAIAuthority();
-    if (!canPush) {
-      console.warn('SyncManager: Non-active non-host player attempted to push state');
+    // Last confirmed seat: our userId, or an AI seat when we have AI authority.
+    // Not the live seat, and not "host may always push".
+    if (!this.canPushLocalChange()) {
+      console.warn('SyncManager: Confirmed seat does not authorize this push');
       return false;
     }
 
@@ -451,8 +514,7 @@ export class SyncManager {
   // Push immediately without debounce — used for phase and turn transitions so that
   // a hard refresh mid-turn restores the correct phase rather than a stale earlier one.
   async pushStateNow() {
-    const canPush = this.isActivePlayer || this.hasAIAuthority();
-    if (!canPush) return false;
+    if (!this.canPushLocalChange()) return false;
 
     // Cancel any pending debounced push — this one supersedes it
     if (this._pendingPush) {
@@ -468,6 +530,9 @@ export class SyncManager {
   // in-flight pre-Done place write.
   async _doPush() {
     if (!this.db || !this.gameId) return false;
+    // Resume re-read first. If it applied a newer doc, drop this push.
+    if (await this._pauseForResumeRead()) return false;
+    if (!this.canPushLocalChange()) return false;
     return this._pushQueue.enqueue();
   }
 
@@ -486,15 +551,20 @@ export class SyncManager {
 
         if (outcome.status === 'gone') return false; // doc deleted
         if (outcome.status === 'stale') {
+          const details = this._staleBlock || { localVersion: this.localVersion };
+          this._staleBlock = null;
+          this._notifyListeners('push_stale_blocked', details);
           this._notifyListeners('push_stale', { localVersion: this.localVersion });
           // The winning update's snapshot may have been skipped while isPushing
-          // was set — reload explicitly so we don't sit on stale state.
-          await this._reloadRemoteState();
+          // was set. Force the reload: a higher per-client seq must not refuse
+          // the doc we just declined to overwrite.
+          await this._reloadRemoteState({ force: true });
           return false;
         }
 
         // status === 'ok'
         this.localVersion = outcome.version;
+        if (outcome.writtenSeat) this._confirmedSeat = outcome.writtenSeat;
         if (outcome.currentPlayerId !== this._lastCurrentPlayerId) {
           this._updateActivePlayer(outcome.currentPlayerId);
         }
@@ -544,37 +614,45 @@ export class SyncManager {
     const currentPlayer = this.gameState.currentPlayer;
     const currentPlayerId = currentPlayer?.oderId || null;
 
+    const writtenIndex = this.gameState?.currentPlayerIndex;
+    const writtenPlayer = this.gameState?.players?.[writtenIndex] || currentPlayer || null;
+    const writtenSeat = confirmedSeatFromPlayer(writtenPlayer, writtenIndex);
+
     const pushedVersion = await runTransaction(this.db, async (transaction) => {
       const snapshot = await transaction.get(gameRef);
       if (!snapshot.exists()) return null;
 
       const remoteDoc = snapshot.data();
-      const remoteVersion = remoteDoc.stateVersion || 0;
-      const remoteSeq = Number(remoteDoc.state?.actionSeq) || 0;
-      const localSeq = Number(this.gameState?.actionSeq) || 0;
-      // A higher version with an older board revision is a stale clobber
-      // (host AI-authority push, or an in-flight pre-confirm write). The
-      // active client's newer actionSeq must win or Confirm Attack / Undo
-      // snap back to the previous cloud doc.
-      if (remoteVersion > this.localVersion && remoteSeq >= localSeq) {
-        console.warn(`[Sync] Push aborted: remote v${remoteVersion} > local v${this.localVersion}`);
+      const decision = evaluateAuthoritativePush({
+        remoteDoc,
+        localVersion: this.localVersion,
+        localSeq: Number(this.gameState?.actionSeq) || 0,
+        sessionId: this.sessionId,
+        confirmedSeat: this._confirmedSeat,
+        nextState: state,
+        nextCurrentPlayerId: currentPlayerId,
+      });
+      if (decision.status === 'stale') {
+        // Own in-flight save (same session, newer seq) is not stale: Confirm
+        // Attack / Undo must still land. Anyone else's newer doc, or a seat
+        // we have not confirmed, aborts. Missing lastWriterSession is never ours.
+        this._staleBlock = decision.details;
+        console.warn(`[Sync] Push aborted: remote v${decision.details.remoteVersion} > local v${this.localVersion} (or seat changed)`);
         return -1;
       }
 
       transaction.update(gameRef, {
-        state,
-        stateVersion: remoteVersion + 1,
-        currentPlayerId,
+        ...decision.patch,
         schemaVersion: state.version ?? null,
         updatedAt: serverTimestamp(),
         ...this._compatDocFields(state),
       });
-      return remoteVersion + 1;
+      return decision.version;
     });
 
     if (pushedVersion === null) return { status: 'gone' };
     if (pushedVersion === -1) return { status: 'stale' };
-    return { status: 'ok', version: pushedVersion, currentPlayerId };
+    return { status: 'ok', version: pushedVersion, currentPlayerId, writtenSeat };
   }
 
   // Exponential backoff with jitter (~150ms, ~300ms) between push retries.
@@ -591,12 +669,12 @@ export class SyncManager {
   // is the exhausted-retry case: local gameState has uncommitted mutations
   // sitting on the same version the server still holds.
   async _reloadRemoteState({ force = false } = {}) {
-    if (!this.db || !this.gameId) return;
+    if (!this.db || !this.gameId) return false;
     try {
       const snapshot = await getDoc(doc(this.db, 'games', this.gameId));
       if (!snapshot.exists()) {
         this._notifyListeners('game_deleted', null);
-        return;
+        return false;
       }
 
       const data = snapshot.data();
@@ -606,7 +684,7 @@ export class SyncManager {
         remoteVersion,
         localVersion: this.localVersion,
         remoteCurrentPlayerId: data.currentPlayerId || null,
-        localCurrentPlayerId: this._lastCurrentPlayerId || null,
+        localCurrentPlayerId: this._localSeatId(),
         remoteActionSeq: data.state?.actionSeq || 0,
         localActionSeq: this.gameState?.actionSeq || 0,
         localGestureActive: !!this.gameState?.uiGestureActive,
@@ -619,14 +697,18 @@ export class SyncManager {
           this.isLoadingRemoteState = true;
           this._loadRemoteState(data.state, data);
           this.isLoadingRemoteState = false;
+          this._noteConfirmedSeat();
         }
         this._updateActivePlayer(data.currentPlayerId);
         if (!force) {
           this._notifyListeners('state_updated', this._turnSnapshotPayload(data.currentPlayerId));
         }
+        return true;
       }
+      return false;
     } catch (error) {
       console.error('[Sync] Reload after stale push failed', error);
+      return false;
     }
   }
 
@@ -655,6 +737,7 @@ export class SyncManager {
       });
 
       this.localVersion = 1;
+      this._noteConfirmedSeat();
       this._updateActivePlayer(currentPlayerId);
 
       return true;
@@ -680,7 +763,7 @@ export class SyncManager {
     this._deferredRemote = null;
     if (!deferred?.state || !this.gameState) return;
     const remoteSeat = deferred.currentPlayerId || null;
-    const localSeat = this.gameState.currentPlayer?.oderId || null;
+    const localSeat = this._localSeatId();
     if (!deferredSnapshotShouldApply({
       remoteVersion: deferred.stateVersion || 0,
       localVersion: this.localVersion,
@@ -694,6 +777,7 @@ export class SyncManager {
     this.isLoadingRemoteState = true;
     this._loadRemoteState(deferred.state, deferred);
     this.isLoadingRemoteState = false;
+    this._noteConfirmedSeat();
     this._updateActivePlayer(remoteSeat);
     this._notifyListeners('state_updated', this._turnSnapshotPayload(remoteSeat));
   }
@@ -710,14 +794,20 @@ export class SyncManager {
     return this.isActivePlayer;
   }
 
-  // Push AUTHORIZATION — deliberately uses the cached flag, NOT live state.
+  // Push AUTHORIZATION — the last confirmed seat, NOT live state.
   // Rationale: your own turn-ENDING action advances the live currentPlayer to
   // the next player before the notify fires, so a live check would refuse to
   // push the very transition that ends your turn (leaving it stranded locally —
-  // the exact V2.55 failure). The cached flag stays true across that final push
-  // because it only updates once the push confirms. AI authority may always push.
+  // the exact V2.55 failure). The confirmed seat stays ours across that final
+  // push because it only updates once the push confirms. An AI seat may be
+  // pushed by the client that has AI authority. A human opponent's seat may not,
+  // including when this client is the host.
   canPushLocalChange() {
-    return this.isActivePlayer || this.hasAIAuthority();
+    return canPushFromConfirmedSeat({
+      confirmedSeat: this._confirmedSeat,
+      userId: this.userId,
+      hasAIAuthority: this.hasAIAuthority(),
+    });
   }
 
   // Get the current player ID from Firestore
