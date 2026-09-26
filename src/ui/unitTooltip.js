@@ -1,6 +1,7 @@
 // Unit tooltip that appears on hover over unit icons on the map
 
 import { formatUnitName } from '../utils/unitNames.js';
+import { describeUnitOwner, NEUTRAL_UNIT_COLOR } from '../utils/unitIcons.js';
 
 export class UnitTooltip {
   constructor() {
@@ -76,14 +77,12 @@ export class UnitTooltip {
     const totalMovement = baseMovement + movementBonus;
 
     // Get player info for color
-    let playerColor = '#888';
-    let playerName = unitInfo.owner;
-    if (this.gameState && unitInfo.owner) {
+    const presented = describeUnitOwner(unitInfo.owner, (id) => this.gameState?.getPlayer?.(id));
+    let playerColor = presented.color || NEUTRAL_UNIT_COLOR;
+    let playerName = presented.ownerLabel;
+    if (presented.known && this.gameState && unitInfo.owner) {
       const player = this.gameState.getPlayer(unitInfo.owner);
-      if (player) {
-        playerColor = player.color;
-        playerName = player.name;
-      }
+      if (player?.color) playerColor = player.color;
     }
 
     // Build tooltip HTML

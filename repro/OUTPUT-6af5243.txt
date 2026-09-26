@@ -1,0 +1,29 @@
+== carrier-fighter
+Air landing: No reachable territories from Red Sea with range 0
+Air units cannot capture territory - territory remains contested
+carrier id=(none, grouped) options=[Red Sea(carrier)] → after finalize: fighters on carrier=0, loose=0, anywhere=false
+Air landing: No reachable territories from Red Sea with range 0
+Air units cannot capture territory - territory remains contested
+carrier id=carrier_Germans_1 options=[Red Sea(carrier)] → after finalize: fighters on carrier=1, loose=0, anywhere=true
+== naval-ping
+board after: ["British:3xbattleship","British:4xfighter"]
+-1x Carrier, 1x Transport lost Red Sea - British Easy AI
+-No territories lost
+== sub-submerge
+initial phase: submarineFirstStrike | defenderSubsHaveFirstStrike: true | attackers: bomber
+after "Fire First Strike" with 0 active subs: dice rolled = 0 | phase = ready
+Air units cannot capture territory - territory remains contested
+Caspian after battle: [{"type":"bomber","quantity":1,"owner":"Germans","moved":true},{"type":"submarine","owner":null,"quantity":1}]
+getOwner(sea zone) = null
+== amphibious
+sail out (hop 1): true 
+load: true transport {"type":"transport","quantity":1,"owner":"Germans","id":"transport_1","aircraft":[],"cargo":[{"type":"infantry","owner":"Germans"},{"type":"infantry","owner":"Germans"}],"moved":false,"movementUsed":1}
+sail: true  [{"type":"transport","quantity":1,"owner":"Germans","id":"transport_1","aircraft":[],"cargo":[{"type":"infantry","owner":"Germans"},{"type":"infantry","owner":"Germans"}],"moved":true,"movementUsed":2}]
+movable in East Med: []
+state-level unloadSingleUnit (bypassing UI): {"success":true}
+== sync-stale-clobber
+force reload applies while Rob offline?  false
+Rob applies newer snapshot v58?         false
+Rob stale push aborted?                 false
+Doc now: {"v":59,"seq":213,"who":"Rob","board":"R4-Rob-combat-move(stale)"}
+BUG REPRODUCED: stale client overwrote a newer doc (turn and board reverted)

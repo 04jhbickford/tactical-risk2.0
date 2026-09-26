@@ -6075,6 +6075,120 @@ iframe[title="Vercel Live Feedback"] {
   margin-bottom: 12px;
 }
 
+.pp-inline-mobilize .pp-unit-list {
+  overflow-y: auto;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  max-height: min(280px, max(96px, calc(100dvh - 460px)));
+}
+
+.pp-deploy-all {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 8px;
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #4caf50;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.pp-deploy-all:hover:not(:disabled) {
+  background: rgba(255,255,255,0.12);
+}
+
+.pp-deploy-all:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.pp-mobilize-note {
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: #e0a060;
+  text-align: center;
+}
+
+.pp-battle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.pp-battle-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 12px;
+  text-align: left;
+  color: #eee;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.pp-battle-row:hover:not(:disabled),
+.pp-battle-row:focus-visible {
+  background: rgba(255,255,255,0.12);
+  outline: 1px solid rgba(255,255,255,0.35);
+}
+
+.pp-battle-row:disabled,
+.pp-battle-row.is-blocked {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pp-battle-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pp-battle-counts {
+  margin-left: auto;
+  color: #aaa;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pp-battle-hint {
+  color: #e0a060;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+html.mobile-shell .pp-deploy-all,
+html.mobile-shell .pp-battle-row,
+.pp-battle-row-phone {
+  min-height: 44px;
+  font-size: 14px;
+}
+
+/* Tablet 641–1023 (the 820 check) keeps 44px rows. Desktop ≥1024 stays compact. */
+@media (max-width: 1023px) {
+  .pp-battle-row,
+  .pp-deploy-all {
+    min-height: 44px;
+    font-size: 14px;
+  }
+}
+
 .pp-mobilize-remaining {
   font-size: 12px;
   color: #aaa;
@@ -17205,6 +17319,32 @@ html.mobile-shell.has-lobby.tr-open-games .lobby-overlay.modern {
    500 CSS-px Chrome boxes must keep this bottom tray, not the 280px rail.
    Landscape phones (short side ≤640, long <1024) stay on this tree so
    Confirm/Done clear the home indicator the same as 390/500 portrait. */
+
+/* Expanded mobilize: the peek chips are hidden, and the sheet has to be
+   tall enough that Deploy all sits above the pinned phase control. */
+html.mobile-shell #sidebar.player-panel--expanded.player-panel--mobilize,
+html.mobile-shell .player-panel.player-panel--expanded.player-panel--mobilize {
+  height: 58dvh;
+  max-height: 58dvh;
+}
+
+html.mobile-shell .player-panel--expanded.player-panel--mobilize .pp-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+html.mobile-shell .player-panel--expanded.player-panel--mobilize .phone-tray-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  touch-action: pan-y;
+}
+
+html.mobile-shell .player-panel--expanded.player-panel--mobilize .pp-inline-mobilize .pp-unit-list {
+  max-height: 132px;
+}
+
 @media (max-width: 640px), (max-height: 640px) and (max-width: 1023px) {
   html,
   body {
