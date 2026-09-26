@@ -1,4 +1,4 @@
-// V2.81.57-unified.16 — tracker on and off must roll the same dice.
+// V2.81.57-unified.17 — tracker on and off must roll the same dice.
 // Land, naval, AA, bombard, sub first strike, rocket, and tech.
 // Cosmetic spinning dice are not recorded.
 // Run: node tools/test-dice-tracker-golden.mjs
@@ -79,6 +79,7 @@ const unitDefs = {
   fighter: { cost: 10, attack: 3, defense: 4, isAir: true },
   cruiser: { cost: 12, attack: 3, defense: 3, isSea: true },
   submarine: { cost: 6, attack: 2, defense: 1, isSea: true },
+  transport: { cost: 7, attack: 0, defense: 0, isSea: true },
   destroyer: { cost: 8, attack: 2, defense: 2, isSea: true },
   aaGun: { cost: 5, attack: 0, defense: 0, isLand: true, antiAir: true },
   factory: { cost: 15, attack: 0, defense: 0, isBuilding: true },
@@ -231,6 +232,9 @@ function runScript() {
     gs.units.SeaC = [
       { type: 'submarine', owner: 'p1', quantity: 2 },
       { type: 'submarine', owner: 'p2', quantity: 1 },
+      // A sub cannot hit a sub. The transport is what makes this a real
+      // first-strike roll, which is the die this golden records.
+      { type: 'transport', owner: 'p2', quantity: 1 },
     ];
     const subs = openUi(gs, 'SeaC');
     subs._rollSubmarineFirstStrike();
@@ -415,7 +419,7 @@ console.log('=== old saves and menu ===');
   const loaded = makeGs();
   loaded.loadFromJSON(saved);
   check('old save loads', loaded.round === gs.round && loaded.players.length === 2);
-  check('stamp is unified.14', GAME_VERSION === 'V2.81.57-unified.16');
+  check('stamp is unified.14', GAME_VERSION === 'V2.81.57-unified.17');
   const menu = phoneMenuHomeActions();
   const logAt = menu.findIndex((row) => row.tab === 'log');
   const diceAt = menu.findIndex((row) => row.label === 'Dice stats' && row.tab === 'dice');

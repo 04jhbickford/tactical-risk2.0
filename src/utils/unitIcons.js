@@ -54,6 +54,38 @@ export function getUnitIconPath(unitType, factionId) {
  * @param {object} unitDefs - Unit definitions from units.json
  * @returns {string} The path to the unit icon
  */
+export const UNKNOWN_OWNER_LABEL = 'Unknown owner';
+export const NEUTRAL_UNIT_COLOR = '#9aa0a6';
+
+// A unit whose owner is missing or not a seated player still draws its
+// type icon on a grey chip. The tooltip never prints the word "null".
+export function describeUnitOwner(owner, lookupPlayer) {
+  const player = owner ? lookupPlayer?.(owner) : null;
+  if (!player) {
+    return {
+      known: false,
+      ownerLabel: UNKNOWN_OWNER_LABEL,
+      color: NEUTRAL_UNIT_COLOR,
+    };
+  }
+  return {
+    known: true,
+    ownerLabel: player.name || String(owner),
+    color: player.color || NEUTRAL_UNIT_COLOR,
+  };
+}
+
+// Unknown owners reuse a real faction silhouette (the art is the type,
+// the chip color carries ownership). Americans is only the file folder.
+export function unitIconForOwner(unitType, owner, lookupPlayer) {
+  const described = describeUnitOwner(owner, lookupPlayer);
+  const faction = described.known ? owner : 'Americans';
+  return {
+    ...described,
+    iconPath: getUnitIconPath(unitType, faction),
+  };
+}
+
 export function getGenericUnitIconPath(unitType, unitDefs) {
   const def = unitDefs?.[unitType];
   if (def?.image) {

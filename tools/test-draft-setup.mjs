@@ -1,4 +1,4 @@
-// V2.81.57-unified.16 — territory draft deals every land once, then capitals.
+// V2.81.57-unified.17 — territory draft deals every land once, then capitals.
 // Run: node tools/test-draft-setup.mjs
 
 import { readFileSync } from 'fs';
@@ -79,8 +79,8 @@ function stepDraft(gs) {
   return choice ? gs.pickDraftTerritory(choice) === true : false;
 }
 
-console.log('=== V2.81.57-unified.16 territory draft ===');
-check('GAME_VERSION is V2.81.57-unified.16', GAME_VERSION === 'V2.81.57-unified.16');
+console.log('=== V2.81.57-unified.17 territory draft ===');
+check('GAME_VERSION is V2.81.57-unified.17', GAME_VERSION === 'V2.81.57-unified.17');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 const enabled = (setup.gameModes || []).filter((mode) => mode.enabled).map((mode) => mode.id);

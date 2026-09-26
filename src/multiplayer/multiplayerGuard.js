@@ -39,6 +39,7 @@ export class MultiplayerGuard {
       'undoMobilization',
       // Combat
       'resolveCombat',
+      'moveCombatToFront',
       'retreatUnits',
       'finishCombat',
       'finishAllCombats',

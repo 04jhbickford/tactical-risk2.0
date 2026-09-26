@@ -50,3 +50,34 @@ export function summarizeCombatForce(units) {
   }
   return [...byType.entries()].map(([type, quantity]) => ({ type, quantity }));
 }
+
+// Submarine first strike uses the same filter as casualty assignment:
+// a sub cannot hit a sub or an aircraft. AA guns and ships can be hit.
+export function unitIsFirstStrikeTarget(unit, unitDefs = {}) {
+  if (!unit || (Number(unit.quantity) || 0) <= 0) return false;
+  if (unit.type === 'submarine' || unit.type === 'factory') return false;
+  if (unitDefs?.[unit.type]?.isAir) return false;
+  return true;
+}
+
+export function sideCanFirstStrike(subs, enemyUnits, enemyHasDestroyer, unitDefs = {}) {
+  const hasSubs = (subs || []).some((u) => u?.type === 'submarine' && (Number(u.quantity) || 0) > 0);
+  if (!hasSubs || enemyHasDestroyer) return false;
+  return (enemyUnits || []).some((u) => unitIsFirstStrikeTarget(u, unitDefs));
+}
+
+// Aircraft can hit a submarine only while their own side still has a destroyer.
+// Re-checked every round from living quantity, including after a surprise strike.
+export function sideHasDestroyer(units) {
+  return (units || []).some((u) => u?.type === 'destroyer' && (Number(u.quantity) || 0) > 0);
+}
+
+export function countAirHits(rolls, unitDefs = {}) {
+  return (rolls || []).reduce((count, roll) => {
+    if (!roll?.hit) return count;
+    const type = roll.unit || roll.unitType;
+    return count + (unitDefs?.[type]?.isAir ? 1 : 0);
+  }, 0);
+}
+
+export const AIR_CANNOT_HIT_SUBS_HINT = "Aircraft can't hit subs without a destroyer";

@@ -1,6 +1,6 @@
 // Renders unit icons at territory centers using sprite images
 
-import { getUnitIconPath } from '../utils/unitIcons.js';
+import { getUnitIconPath, unitIconForOwner, NEUTRAL_UNIT_COLOR } from '../utils/unitIcons.js';
 import { isMobileShell, phoneUnitIconSize, phoneMapStackOffsets, shouldHideUnitsAtZoom } from '../ui/mobileShell.js';
 
 export class UnitRenderer {
@@ -50,7 +50,12 @@ export class UnitRenderer {
   }
 
   _getUnitImage(unitType, factionId) {
-    return this.factionUnitImages[factionId]?.[unitType] || null;
+    const direct = this.factionUnitImages[factionId]?.[unitType];
+    if (direct) return direct;
+    for (const pack of Object.values(this.factionUnitImages)) {
+      if (pack?.[unitType]) return pack[unitType];
+    }
+    return null;
   }
 
   render(ctx, zoom) {
@@ -168,14 +173,15 @@ export class UnitRenderer {
       for (let col = 0; col < unitsInRow && unitIndex < units.length; col++) {
         const unitInfo = units[unitIndex];
         const x = startX + col * spacingX;
-        const color = this.gameState.getPlayerColor(unitInfo.owner);
+        const presented = unitIconForOwner(unitInfo.type, unitInfo.owner, (id) => this.gameState.getPlayer(id));
+        const color = presented.known ? this.gameState.getPlayerColor(unitInfo.owner) : NEUTRAL_UNIT_COLOR;
 
         // Determine visual flags based on section type
         const isOnCarrier = unitInfo.isOnCarrier || false;
         const isOnTransport = unitInfo.isOnTransport || false;
         const isFlying = sectionType === 'air';
 
-        this._drawUnitIcon(ctx, x, rowY, iconSize, unitInfo.type, color, unitInfo.owner,
+        this._drawUnitIcon(ctx, x, rowY, iconSize, unitInfo.type, color, presented.known ? unitInfo.owner : null,
                           isOnCarrier, isOnTransport, unitInfo.damaged || 0, isFlying,
                           this.highlightUnitType === unitInfo.type);
 
@@ -206,9 +212,10 @@ export class UnitRenderer {
         const key = types[typeIndex];
         const { total, owner, type: unitType, isOnCarrier, isOnTransport, damaged } = grouped[key];
         const x = startX + col * spacingX;
-        const color = this.gameState.getPlayerColor(owner);
+        const presented = unitIconForOwner(unitType, owner, (id) => this.gameState.getPlayer(id));
+        const color = presented.known ? this.gameState.getPlayerColor(owner) : NEUTRAL_UNIT_COLOR;
 
-        this._drawUnitIcon(ctx, x, rowY, iconSize, unitType, color, owner, isOnCarrier, isOnTransport, damaged, false,
+        this._drawUnitIcon(ctx, x, rowY, iconSize, unitType, color, presented.known ? owner : null, isOnCarrier, isOnTransport, damaged, false,
                           this.highlightUnitType === unitType);
 
         if (total > 1) {
@@ -632,6 +639,10 @@ export class UnitRenderer {
         ctx.lineTo(x + r, y + r);
         ctx.lineTo(x - r, y + r);
         ctx.closePath();
+        break;
+      case 'submarine':
+        ctx.ellipse(x, y + r * 0.15, r, r * 0.45, 0, 0, Math.PI * 2);
+        ctx.rect(x - r * 0.15, y - r * 0.85, r * 0.3, r * 0.55);
         break;
       default:
         ctx.arc(x, y, r, 0, Math.PI * 2);
