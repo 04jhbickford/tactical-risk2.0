@@ -63,7 +63,7 @@ import {
   takeAirFromCarriers,
   unloadOneAirFromCarrier,
 } from './carrierPlacement.js';
-import { sideCanFirstStrike, unitIsFirstStrikeTarget } from './combatUnits.js';
+import { countAirHits, sideCanFirstStrike, sideHasDestroyer, unitIsFirstStrikeTarget } from './combatUnits.js';
 import {
   factoryProductionLimit,
   factoryProductionUsed,
@@ -4207,10 +4207,18 @@ export class GameState {
     // Add bombardment hits to attack hits
     const totalAttackHits = attackHits + bombardmentHits;
 
-    // Apply casualties (handles multi-hit ships)
-    // Defenders take hits from attacks + bombardment
-    const attackerCasualties = this._applyCasualtiesWithDamage(allDefenders, totalAttackHits, unitDefs, isNavalBattle);
-    const defenderCasualties = this._applyCasualtiesWithDamage(attackers, defenseHits, unitDefs, isNavalBattle);
+    // Aircraft hits cannot be assigned to subs unless that side still has a
+    // destroyer. First-strike losses above already removed a sunk destroyer.
+    const attackerSpotsSubs = sideHasDestroyer(attackers);
+    const defenderSpotsSubs = sideHasDestroyer(allDefenders);
+    const attackerCasualties = this._applyCasualtiesWithDamage(allDefenders, totalAttackHits, unitDefs, isNavalBattle, {
+      airHits: countAirHits(attackRolls, unitDefs),
+      canAirHitSubs: attackerSpotsSubs,
+    });
+    const defenderCasualties = this._applyCasualtiesWithDamage(attackers, defenseHits, unitDefs, isNavalBattle, {
+      airHits: countAirHits(defenseRolls, unitDefs),
+      canAirHitSubs: defenderSpotsSubs,
+    });
 
     if (isNavalBattle) this._dropDefenderAirWithoutCarrier(units, player.id, unitDefs);
 
@@ -4490,9 +4498,33 @@ export class GameState {
     return { hits, rolls };
   }
 
-  _applyCasualtiesWithDamage(units, hits, unitDefs, isNavalBattle) {
+  _applyCasualtiesWithDamage(units, hits, unitDefs, isNavalBattle, profile) {
     const casualties = [];
-    let remaining = hits;
+    let otherLeft = Math.max(0, Number(hits) || 0);
+    let airLeft = 0;
+    // Air hits are spent on non-subs first so a surface hit still follows
+    // today's cheapest / battleship order. Subs refuse those air hits.
+    if (profile?.canAirHitSubs === false) {
+      airLeft = Math.min(Math.max(0, Number(profile?.airHits) || 0), otherLeft);
+      otherLeft -= airLeft;
+    }
+    const hitsLeft = () => airLeft + otherLeft;
+    const takeHit = (unit) => {
+      if (unit?.type === 'submarine') {
+        if (otherLeft <= 0) return false;
+        otherLeft -= 1;
+        return true;
+      }
+      if (airLeft > 0) {
+        airLeft -= 1;
+        return true;
+      }
+      if (otherLeft > 0) {
+        otherLeft -= 1;
+        return true;
+      }
+      return false;
+    };
 
     // For naval battles, first try to damage multi-hit ships before destroying units
     if (isNavalBattle) {
@@ -4504,11 +4536,10 @@ export class GameState {
 
       // First, finish off damaged ships
       for (const unit of multiHitShips) {
-        if (remaining <= 0) break;
-        if (unit.damaged && unit.quantity > 0) {
+        if (hitsLeft() <= 0) break;
+        if (unit.damaged && unit.quantity > 0 && takeHit(unit)) {
           // Destroy damaged ship
           unit.quantity--;
-          remaining--;
           casualties.push({ type: unit.type, destroyed: true, wasDamaged: true });
           this._noteSunkCargo(unit);
         }
@@ -4516,13 +4547,12 @@ export class GameState {
 
       // Then, damage undamaged multi-hit ships
       for (const unit of multiHitShips) {
-        if (remaining <= 0) break;
+        if (hitsLeft() <= 0) break;
         const undamaged = unit.quantity - (unit.damagedCount || 0);
-        if (undamaged > 0) {
+        if (undamaged > 0 && takeHit(unit)) {
           // Damage the ship instead of destroying
           unit.damagedCount = (unit.damagedCount || 0) + 1;
           unit.damaged = true;
-          remaining--;
           casualties.push({ type: unit.type, damaged: true });
         }
       }
@@ -4542,10 +4572,14 @@ export class GameState {
     });
 
     for (const unit of sorted) {
-      if (remaining <= 0) break;
-      const remove = Math.min(unit.quantity, remaining);
+      if (hitsLeft() <= 0) break;
+      let remove = 0;
+      while (remove < unit.quantity && hitsLeft() > 0) {
+        if (!takeHit(unit)) break;
+        remove += 1;
+      }
+      if (remove <= 0) continue;
       unit.quantity -= remove;
-      remaining -= remove;
       this._noteSunkCargo(unit);
       for (let i = 0; i < remove; i++) {
         casualties.push({ type: unit.type, destroyed: true });

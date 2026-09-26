@@ -65,3 +65,19 @@ export function sideCanFirstStrike(subs, enemyUnits, enemyHasDestroyer, unitDefs
   if (!hasSubs || enemyHasDestroyer) return false;
   return (enemyUnits || []).some((u) => unitIsFirstStrikeTarget(u, unitDefs));
 }
+
+// Aircraft can hit a submarine only while their own side still has a destroyer.
+// Re-checked every round from living quantity, including after a surprise strike.
+export function sideHasDestroyer(units) {
+  return (units || []).some((u) => u?.type === 'destroyer' && (Number(u.quantity) || 0) > 0);
+}
+
+export function countAirHits(rolls, unitDefs = {}) {
+  return (rolls || []).reduce((count, roll) => {
+    if (!roll?.hit) return count;
+    const type = roll.unit || roll.unitType;
+    return count + (unitDefs?.[type]?.isAir ? 1 : 0);
+  }, 0);
+}
+
+export const AIR_CANNOT_HIT_SUBS_HINT = "Aircraft can't hit subs without a destroyer";

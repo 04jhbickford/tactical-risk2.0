@@ -10934,6 +10934,13 @@ html.mobile-shell .pp-battle-row,
   margin-left: 4px;
 }
 
+.casualty-air-sub-hint {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: #ffb74d;
+}
+
 .casualty-units-compact {
   display: flex;
   flex-direction: column;
