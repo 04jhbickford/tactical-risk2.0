@@ -150,6 +150,57 @@ const atkTransport = { type: 'transport', quantity: 1, owner: 'Germans' };
   }
 }
 
+function surpriseStrikeRounds(attackers, defenders, side) {
+  const zone = 'Caspian Sea Zone';
+  const { gs } = openCombat(attackers, defenders);
+  const rounds = [];
+  for (let round = 1; round <= 3; round++) {
+    const seen = [];
+    gs._rollDie = (ctx) => {
+      seen.push(ctx);
+      return 6;
+    };
+    const result = gs.resolveCombat(zone, unitDefs);
+    const ofSide = (context) => seen.filter((ctx) => (
+      ctx?.side === side && ctx?.unit === 'submarine' && ctx?.context === context
+    )).length;
+    rounds.push({
+      round,
+      resolved: !!result?.resolved,
+      sub: ofSide('sub'),
+      combat: ofSide('combat'),
+    });
+  }
+  return rounds;
+}
+
+{
+  const attack = surpriseStrikeRounds(
+    [{ type: 'submarine', quantity: 2, owner: 'Germans' }],
+    [{ type: 'battleship', quantity: 2, owner: 'Americans' }],
+    'attacker',
+  );
+  check('AI attacker surprise strike is round 1 only',
+    attack.length === 3
+    && attack.every((row) => !row.resolved && row.combat === 2)
+    && attack[0].sub === 2
+    && attack[1].sub === 0
+    && attack[2].sub === 0,
+    attack);
+  const defense = surpriseStrikeRounds(
+    [{ type: 'battleship', quantity: 2, owner: 'Germans' }],
+    [{ type: 'submarine', quantity: 2, owner: 'Americans' }],
+    'defender',
+  );
+  check('AI defender surprise strike is round 1 only',
+    defense.length === 3
+    && defense.every((row) => !row.resolved && row.combat === 2)
+    && defense[0].sub === 2
+    && defense[1].sub === 0
+    && defense[2].sub === 0,
+    defense);
+}
+
 {
   documentElement.classList.remove('mobile-shell');
   const { ui } = openCombat([atkTransport], [{ ...sub }]);

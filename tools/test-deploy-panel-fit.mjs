@@ -10,11 +10,9 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
-const HTTP_PORT = 8766;
-const CDP_PORT = 9333;
 const CASES = [
   { name: '1024x700', width: 1024, height: 700, mobile: false },
   { name: '1366x650', width: 1366, height: 650, mobile: false },
@@ -193,7 +191,7 @@ function contentType(filePath) {
 
 function startServer() {
   const server = http.createServer((req, res) => {
-    const url = new URL(req.url, `http://127.0.0.1:${HTTP_PORT}`);
+    const url = new URL(req.url, 'http://127.0.0.1');
     if (url.pathname === '/__fit.html') {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       res.end(FIT_HTML);
@@ -209,9 +207,35 @@ function startServer() {
     res.writeHead(200, { 'content-type': contentType(filePath) });
     fs.createReadStream(filePath).pipe(res);
   });
-  return new Promise((resolve) => {
-    server.listen(HTTP_PORT, '127.0.0.1', () => resolve(server));
+  return new Promise((resolve, reject) => {
+    server.on('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      resolve({ server, port: server.address().port });
+    });
   });
+}
+
+async function resolveWebSocket() {
+  if (typeof globalThis.WebSocket === 'function') return globalThis.WebSocket;
+  try {
+    const mod = await import('ws');
+    const WS = mod.WebSocket || mod.default;
+    if (typeof WS === 'function') return WS;
+  } catch { /* ws is optional; Node 22 has a global WebSocket */ }
+  if (!process.env.DEPLOY_FIT_WS_RETRY) {
+    const result = spawnSync(process.execPath, [
+      '--experimental-websocket',
+      ...process.execArgv,
+      process.argv[1],
+      ...process.argv.slice(2),
+    ], {
+      stdio: 'inherit',
+      env: { ...process.env, DEPLOY_FIT_WS_RETRY: '1' },
+    });
+    process.exit(result.status ?? 1);
+  }
+  process.stderr.write('deploy panel fit: skipped, no WebSocket (install the ws package or use Node 22 / --experimental-websocket)\n');
+  process.exit(0);
 }
 
 function chromePath() {
@@ -240,12 +264,21 @@ async function waitForJson(url) {
   throw new Error(`CDP not ready: ${last}`);
 }
 
-function connect(url) {
-  const ws = new WebSocket(url);
+function connect(url, WS) {
+  const ws = new WS(url);
+  const on = (event, fn) => {
+    if (typeof ws.addEventListener === 'function') {
+      ws.addEventListener(event, fn);
+      return;
+    }
+    ws.on(event, event === 'message'
+      ? (data) => fn({ data: typeof data === 'string' ? data : data.toString() })
+      : fn);
+  };
   let id = 0;
   const pending = new Map();
   return new Promise((resolve, reject) => {
-    ws.addEventListener('open', () => {
+    on('open', () => {
       resolve({
         send(method, params = {}) {
           const msgId = ++id;
@@ -257,7 +290,7 @@ function connect(url) {
         close() { ws.close(); },
       });
     });
-    ws.addEventListener('message', (ev) => {
+    on('message', (ev) => {
       const msg = JSON.parse(ev.data);
       if (!msg.id || !pending.has(msg.id)) return;
       const { res, rej } = pending.get(msg.id);
@@ -265,7 +298,7 @@ function connect(url) {
       if (msg.error) rej(new Error(`${msg.error.message || JSON.stringify(msg.error)}`));
       else res(msg.result || {});
     });
-    ws.addEventListener('error', () => reject(new Error('CDP socket error')));
+    on('error', () => reject(new Error('CDP socket error')));
   });
 }
 
@@ -350,26 +383,40 @@ async function gesture(cdp, kind) {
   return evaluate(cdp, 'window.__scrollTop()');
 }
 
+async function cdpPortFromUserData(userData) {
+  const file = path.join(userData, 'DevToolsActivePort');
+  for (let i = 0; i < 50; i++) {
+    if (fs.existsSync(file)) {
+      const port = Number(fs.readFileSync(file, 'utf8').split('\n')[0]);
+      if (port > 0) return port;
+    }
+    await sleep(100);
+  }
+  throw new Error('Chrome did not publish a debugging port');
+}
+
 async function main() {
-  const server = await startServer();
+  const WS = await resolveWebSocket();
+  const { server, port: httpPort } = await startServer();
   const userData = `/tmp/deploy-fit-chrome-${process.pid}`;
   const chrome = spawn(chromePath(), [
     '--headless=new',
     '--no-sandbox',
     '--disable-gpu',
     '--disable-dev-shm-usage',
-    `--remote-debugging-port=${CDP_PORT}`,
+    '--remote-debugging-port=0',
     `--user-data-dir=${userData}`,
-    `http://127.0.0.1:${HTTP_PORT}/__fit.html`,
+    `http://127.0.0.1:${httpPort}/__fit.html`,
   ], { stdio: 'ignore' });
 
   let cdp;
   const failures = [];
   try {
-    const list = await waitForJson(`http://127.0.0.1:${CDP_PORT}/json/list`);
+    const cdpPort = await cdpPortFromUserData(userData);
+    const list = await waitForJson(`http://127.0.0.1:${cdpPort}/json/list`);
     const page = list.find((t) => t.type === 'page' && String(t.url).includes('__fit'));
     if (!page) throw new Error(`no fit page in ${JSON.stringify(list.map((t) => t.url))}`);
-    cdp = await connect(page.webSocketDebuggerUrl);
+    cdp = await connect(page.webSocketDebuggerUrl, WS);
     await cdp.send('Runtime.enable');
     await cdp.send('Page.enable');
     for (let i = 0; i < 50; i++) {

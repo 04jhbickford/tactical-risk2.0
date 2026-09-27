@@ -4178,26 +4178,29 @@ export class GameState {
     if (!this._combatRoundsTracker) this._combatRoundsTracker = {};
     this._combatRoundsTracker[territory] = (this._combatRoundsTracker[territory] || 0) + 1;
 
-    // Submarine first strike, same gate as the combat screen: active subs,
-    // no enemy destroyer, and at least one unit those hits can be assigned to.
-    // Subs still roll again in the normal round, matching the human battle.
+    // Submarine surprise strike once per battle, on round 1, matching the
+    // combat screen. The gate is the same: active subs, no enemy destroyer,
+    // and at least one unit those hits can be assigned to. Later rounds roll
+    // subs only in the normal combat step.
     const attackerHasDestroyer = attackers.some((u) => u.type === 'destroyer' && (Number(u.quantity) || 0) > 0);
     const defenderHasDestroyer = allDefenders.some((u) => u.type === 'destroyer' && (Number(u.quantity) || 0) > 0);
     const attackerSubs = attackers.filter((u) => u.type === 'submarine');
     const defenderSubs = allDefenders.filter((u) => u.type === 'submarine');
     let firstStrikeAttackDice = 0;
     let firstStrikeDefenseDice = 0;
-    if (sideCanFirstStrike(attackerSubs, allDefenders, defenderHasDestroyer, unitDefs)) {
-      const strike = this._rollCombatWithRolls(attackerSubs, 'attack', unitDefs, 'sub');
-      firstStrikeAttackDice = strike.rolls.length;
-      const targets = allDefenders.filter((u) => unitIsFirstStrikeTarget(u, unitDefs));
-      this._applyCasualtiesWithDamage(targets, strike.hits, unitDefs, isNavalBattle);
-    }
-    if (sideCanFirstStrike(defenderSubs, attackers, attackerHasDestroyer, unitDefs)) {
-      const strike = this._rollCombatWithRolls(defenderSubs, 'defense', unitDefs, 'sub');
-      firstStrikeDefenseDice = strike.rolls.length;
-      const targets = attackers.filter((u) => unitIsFirstStrikeTarget(u, unitDefs));
-      this._applyCasualtiesWithDamage(targets, strike.hits, unitDefs, isNavalBattle);
+    if (this._combatRoundsTracker[territory] === 1) {
+      if (sideCanFirstStrike(attackerSubs, allDefenders, defenderHasDestroyer, unitDefs)) {
+        const strike = this._rollCombatWithRolls(attackerSubs, 'attack', unitDefs, 'sub');
+        firstStrikeAttackDice = strike.rolls.length;
+        const targets = allDefenders.filter((u) => unitIsFirstStrikeTarget(u, unitDefs));
+        this._applyCasualtiesWithDamage(targets, strike.hits, unitDefs, isNavalBattle);
+      }
+      if (sideCanFirstStrike(defenderSubs, attackers, attackerHasDestroyer, unitDefs)) {
+        const strike = this._rollCombatWithRolls(defenderSubs, 'defense', unitDefs, 'sub');
+        firstStrikeDefenseDice = strike.rolls.length;
+        const targets = attackers.filter((u) => unitIsFirstStrikeTarget(u, unitDefs));
+        this._applyCasualtiesWithDamage(targets, strike.hits, unitDefs, isNavalBattle);
+      }
     }
 
     // Roll dice for combat (allDefenders includes AA guns which can fire at aircraft)
