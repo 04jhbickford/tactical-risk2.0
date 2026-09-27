@@ -1,4 +1,4 @@
-// V2.81.57-unified.16 — battleship casualty default fills every hit.
+// V2.81.57-unified.16.1 — battleship casualty default fills every hit.
 // A human side damages an undamaged battleship first. The second hit on
 // that same ship is part of the default. AI sides stay cheapest-first.
 // Run: node tools/test-battleship-casualty-default.mjs

@@ -2,6 +2,20 @@
 
 ---
 
+## 9.26.26 — unified.16.1 stale client cannot overwrite the live game
+
+Stamp `V2.81.57-unified.16.1`. Schema stays 11. Display stamp only; game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.16.1`).
+
+Rob, `#tactical-risk` `1553190699032248551`, 25 Sep 4:45pm PT: Round 4 said Robert007's turn, Combat Movement, "Still in TXVKJB — you were away", while it was Bastion's turn. Bastion's screen showed the same. No turn ping. Rob was the host. Screenshot `briefs/2026-09-25-tr-plan/unified.17/rob-bugs/4.44pm-wrong-turn-1553190698172420206.png`.
+
+Cause: `actionSeq` is a per-browser counter, and both sync guards compared it across browsers. A stale host tab with a higher local seq refused the newer doc, including the forced reload, and its push was allowed because the version check also required the remote seq to be at least as high. The host also pushed on every change, because `hasAIAuthority()` is true during a human opponent's turn.
+
+Fix: push authorization uses the last confirmed seat (our user id, or an AI seat when this client has AI authority). A turn-ending push still goes out, because that seat stays ours until the push confirms. Each tab writes `lastWriterSession`. A push aborts when the doc is newer, unless that write is our own in-flight save and our seq is newer (Confirm Attack / Undo). A seat change we have not confirmed also aborts. The blocked client reloads the live doc. A backgrounded tab re-reads the doc before it can push. `lastWriterSession` is optional; a doc without it is never treated as our in-flight save. `forcePush` stays the host's game-init write and does not run on rejoin.
+
+Receipt: `node tools/test-sync-stale-clobber.mjs`.
+
+---
+
 ## 9.25.26 — unified.16 polish
 
 Stamp `V2.81.57-unified.16`. Schema stays 11. Display stamp only; game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.16`).

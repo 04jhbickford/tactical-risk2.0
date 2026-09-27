@@ -114,7 +114,7 @@ function makeUsTheater() {
 }
 
 console.log('=== Version ===');
-check('GAME_VERSION is V2.81.57-unified.16', GAME_VERSION === 'V2.81.57-unified.16');
+check('GAME_VERSION is V2.81.57-unified.16.1', GAME_VERSION === 'V2.81.57-unified.16.1');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== omitUndefinedDeep ===');

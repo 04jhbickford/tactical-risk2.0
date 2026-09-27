@@ -1,4 +1,4 @@
-// V2.81.57-unified.16 — playtest P0s: single-row undo, transport load,
+// V2.81.57-unified.16.1 — playtest P0s: single-row undo, transport load,
 // amphibious assault, empty-land air, desktop right-click / unit drag.
 // Run: node tools/test-unified-3-playtest.mjs
 
@@ -95,9 +95,9 @@ const html = readFileSync(join(root, 'index.html'), 'utf8');
 const mainSrc = readFileSync(join(root, 'src/main.js'), 'utf8');
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-unified.16', GAME_VERSION === 'V2.81.57-unified.16');
+check('GAME_VERSION is V2.81.57-unified.16.1', GAME_VERSION === 'V2.81.57-unified.16.1');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
-check('index.html stamp is unified.5', html.includes('content="V2.81.57-unified.16"'));
+check('index.html stamp is unified.5', html.includes('content="V2.81.57-unified.16.1"'));
 
 console.log('=== 9.22.26.04 one undo row ===');
 {

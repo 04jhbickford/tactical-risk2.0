@@ -195,9 +195,18 @@ export function remainingDeployByPlayer(unitsToPlace, playerIds, unitDefs) {
   return out;
 }
 
+// Both missing, or the same id. A null AI seat matches a null AI seat.
+// One known id and one missing id are not the same seat.
+function seatIdsUnknownOrEqual(remoteId, localId) {
+  return (remoteId ?? null) === (localId ?? null);
+}
+
 // Guest must apply the remote doc when the seat changes even if
 // stateVersion did not bump — otherwise currentPlayer flips and
 // unitsToPlace stays at the starting 25.
+// actionSeq is per browser. A higher local seq refuses a snapshot only
+// when this is not a forced reload and the seat is unchanged (or both
+// unknown). A strictly newer doc whose seat differs always applies.
 export function shouldApplyRemoteGameState({
   remoteVersion = 0,
   localVersion = 0,
@@ -210,9 +219,12 @@ export function shouldApplyRemoteGameState({
 } = {}) {
   const remoteSeq = Number(remoteActionSeq) || 0;
   const localSeq = Number(localActionSeq) || 0;
-  // In-progress selection / unpushed moves win over a stale cloud snapshot.
-  if (localSeq > remoteSeq) return false;
-  if (localGestureActive && remoteSeq <= localSeq && !force) return false;
+  const seatsSame = seatIdsUnknownOrEqual(remoteCurrentPlayerId, localCurrentPlayerId);
+  if (!force && localSeq > remoteSeq && seatsSame) return false;
+  if (localGestureActive && remoteSeq <= localSeq && !force) {
+    const newerOtherSeat = Number(remoteVersion) > Number(localVersion) && !seatsSame;
+    if (!newerOtherSeat) return false;
+  }
   if (force) return true;
   if (Number(remoteVersion) > Number(localVersion)) return true;
   if (remoteCurrentPlayerId && remoteCurrentPlayerId !== localCurrentPlayerId) {
@@ -234,8 +246,10 @@ export function deferredSnapshotShouldApply({
 } = {}) {
   const remote = Number(remoteVersion) || 0;
   const local = Number(localVersion) || 0;
+  const seatsSame = seatIdsUnknownOrEqual(remotePlayerId, localPlayerId);
   // In-flight place/move echo must not wipe a newer local undo or attack.
-  if ((Number(localActionSeq) || 0) > (Number(remoteActionSeq) || 0)) return false;
+  // A different seat is not that echo: a strictly newer doc still applies.
+  if ((Number(localActionSeq) || 0) > (Number(remoteActionSeq) || 0) && seatsSame) return false;
   if (remote < local) return false;
   if (remote > local) return true;
   return !!(remotePlayerId && localPlayerId && remotePlayerId !== localPlayerId);
