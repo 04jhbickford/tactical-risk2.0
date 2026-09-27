@@ -35,6 +35,7 @@ import { PurchasePopup } from './ui/purchasePopup.js';
 import { MovementUI } from './ui/movementUI.js';
 import { pointerStartsUnitDrag, rightClickConfirmsMove } from './ui/mapPointer.js';
 import { CombatUI } from './ui/combatUI.js';
+import { runMobilizeDeployAll } from './ui/mobilizeDeployAll.js';
 import { TechUI } from './ui/techUI.js';
 import { PlacementUI } from './ui/placementUI.js';
 import { MobilizeUI } from './ui/mobilizeUI.js';
@@ -746,6 +747,17 @@ async function init() {
         }
         break;
 
+      case 'pick-battle':
+        if (data.territory) {
+          const picked = gameState.moveCombatToFront(data.territory);
+          if (picked?.success && combatUI.hasCombats()) {
+            purchasePopup.hide();
+            techUI.hide();
+            combatUI.showNextCombat();
+          }
+        }
+        break;
+
       case 'finish-placement': {
         // Lock the UI before the local pass so a double-tap cannot skip the
         // next seat, and so kill-after-tap cannot look like "still my turn".
@@ -859,6 +871,21 @@ async function init() {
           });
           if (result.success) {
             actionLog.logMobilize(gameState.currentPlayer, [{ type: data.unitType, quantity: 1 }], data.territory);
+            camera.dirty = true;
+          }
+        }
+        break;
+
+      case 'mobilize-deploy-all':
+        if (data.territory) {
+          const deployed = runMobilizeDeployAll(gameState, unitDefs, {
+            territory: data.territory,
+            sourceFactory: data.sourceFactory || null,
+          }, {
+            beforeFlush: ({ note }) => playerPanel.setMobilizeDeployNote?.(note),
+          });
+          if (deployed.placed.length > 0) {
+            actionLog.logMobilize(gameState.currentPlayer, deployed.placed, data.territory);
             camera.dirty = true;
           }
         }
