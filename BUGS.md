@@ -12,7 +12,9 @@ Bastion, `#general-chat` `1554242767260090379`, 28 Sep 2:25pm PT: auto battle so
 
 Dice stats chart, owner UX: All-time, This game, and each player card show one bar per face, one shared dotted fair-share line, and a percent to one decimal. The legend, chi-square fit line, skew meter, streak, and the caveat paragraph are gone. A muted “N rolls” line remains, plus the verdict. All-time still reads the `global` doc. Opening the panel fetches again instead of painting the previous totals.
 
-Receipt: `node tools/test-lobby-list-unlist.mjs`, `node tools/test-auto-battle-hits.mjs`, `node tools/test-dice-stats-v2.mjs`.
+Rob, `#tactical-risk` `1554271888564428820`, 28 Sep 4:21pm PT, on live unified.19: a faint border still ran through Kazakh S.S.R. He first reported the stem on 27 Sep (`1553841740203565117`). The unified.18 cut removed the long stem (points 190–255) and left a short out-and-back at the south edge, `[1619,746]` up to `[1620,727]` and back. That stub is inside the fill, so the country hairline still drew it. Those three vertices are gone from `data/territories.json` and `map/polygons.txt`. The ring is 411 points. Name, IPC, owner, and neighbors are unchanged. Afghanistan stays merged into India.
+
+Receipt: `node tools/test-lobby-list-unlist.mjs`, `node tools/test-auto-battle-hits.mjs`, `node tools/test-dice-stats-v2.mjs`, `node tools/test-kazakh-outline.mjs`.
 
 ---
 
