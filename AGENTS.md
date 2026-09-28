@@ -37,7 +37,7 @@ Current save schema is **11**:
 
 Bump the schema only when the persisted shape changes. Display version and schema version are different stamps.
 
-Current display stamp is `GAME_VERSION` in `src/version.js`: `V2.81.57-unified.17`. Read the file. After a later bump, the file wins over this sentence.
+Current display stamp is `GAME_VERSION` in `src/version.js`: `V2.81.57-unified.18`. Read the file. After a later bump, the file wins over this sentence.
 
 ## 3. Layout bars
 
@@ -132,7 +132,7 @@ No cargo: hull only (`-1x Destroyer lost Red Sea - British Easy AI`). An allied 
 
 ## 5. LIVE stamp proof
 
-Every release bumps the display version and proves the same string everywhere it shows. Today that string is `V2.81.57-unified.17`. Set all of these together; do not leave one behind:
+Every release bumps the display version and proves the same string everywhere it shows. Today that string is `V2.81.57-unified.18`. Set all of these together; do not leave one behind:
 
 | Place | What |
 |---|---|
@@ -146,13 +146,15 @@ Every release bumps the display version and proves the same string everywhere it
 
 `vercel.json` sends `Cache-Control: no-store` for `/`, `/index.html`, `/src/version.js`, `/src/*`, and `/style.css`.
 
-After deploy, prove the live site:
+Live hosting is Vercel project `tactical-risk2.0` at `https://tactical-risk20.vercel.app`. A reviewer merges to `main` and Vercel Production deploys. Agents never merge and never deploy. Firebase stays Auth and Firestore.
 
-1. Run `node tools/verify-deployed.mjs` from the repo root. It fetches live `src/version.js` (default `https://tactical-risk.web.app`, or pass the origin) and exits non-zero unless live `GAME_VERSION` equals the local file.
+After that Production deploy, prove the live site:
+
+1. Run `node tools/verify-deployed.mjs` from the repo root. It fetches live `src/version.js` (default `https://tactical-risk20.vercel.app`, or pass the origin) and exits non-zero unless live `GAME_VERSION` equals the local file.
 2. Fetch live `/` with no cache. Confirm `tr-game-version`, `__TR_GAME_VERSION`, `LOCKED`, and both `?v=` values equal that stamp.
 3. Hard-reload the game. Confirm `document.querySelector('meta[name="tr-game-version"]').content`, `window.__TR_GAME_VERSION`, `document.documentElement.getAttribute('data-game-version')`, and the lobby badge text are the same string.
 
-Deploy only as `CLAUDE.md` says: `firebase deploy` from a clean `main`. `tools/predeploy-check.mjs` blocks detached HEAD, non-main, dirty tracked files, and stranded `.claude/worktrees/*` diffs. Do not set `ALLOW_DIRTY_DEPLOY=1`.
+Do not `firebase deploy` the live site. Do not set `ALLOW_DIRTY_DEPLOY=1`.
 
 ## 6. Release announce
 

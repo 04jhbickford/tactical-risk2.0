@@ -504,3 +504,47 @@ export function mergeLiveCarrierLoads(liveUnits = [], nextUnits = []) {
   }
   return result;
 }
+
+export function airMovementBadge({
+  movement = 0,
+  distance = 0,
+  longRange = false,
+} = {}) {
+  const traveled = Number(distance) >= 999 ? 0 : (Number(distance) || 0);
+  const total = (Number(movement) || 0) + (longRange ? 2 : 0);
+  const remaining = Math.max(0, total - traveled);
+  return {
+    remaining,
+    total,
+    label: `M${remaining}/${total}`,
+    title: `Movement ${remaining} of ${total}`,
+  };
+}
+
+export function assignLandingToIndexes(units, indexes, destination, selections = {}) {
+  const next = { ...(selections || {}) };
+  const list = Array.isArray(indexes) ? indexes : [];
+  for (const index of list) {
+    const unit = units?.[index];
+    if (!unit) continue;
+    const legal = (unit.landingOptions || []).some((opt) => opt.territory === destination);
+    if (!legal) continue;
+    next[landingKeyFor(unit, index)] = destination;
+  }
+  return next;
+}
+
+// Origin is assigned only when that territory is already a legal landing.
+export function returnToBaseAssignments(units, originsByType, selections = {}) {
+  const next = { ...(selections || {}) };
+  const unresolved = [];
+  (units || []).forEach((unit, index) => {
+    const key = landingKeyFor(unit, index);
+    if (next[key]) return;
+    const origin = originsByType?.[unit.type]?.origin || '';
+    const legal = !!origin && (unit.landingOptions || []).some((opt) => opt.territory === origin);
+    if (legal) next[key] = origin;
+    else unresolved.push(key);
+  });
+  return { selections: next, unresolved };
+}

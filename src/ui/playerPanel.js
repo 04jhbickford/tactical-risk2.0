@@ -80,10 +80,14 @@ import {
   remainingAirLandingsToAssign,
   mergeLandingSelections,
   resolveLandingDestination,
+  airMovementBadge,
+  assignLandingToIndexes,
+  returnToBaseAssignments,
 } from '../state/airLanding.js';
 import {
   airCombatMoveMayOccupy,
   airSelectionType,
+  decomposeMoveSelection,
   maxMoveSelection,
   moveSelectionProfile,
   moveUnitKey,
@@ -396,6 +400,10 @@ export function resolvePhoneTechCta({ diceCount } = {}) {
     disabled: false,
     primary: true,
   };
+}
+
+export function phaseOwnsMovementConfirm(turnPhase) {
+  return turnPhase === TURN_PHASES.COMBAT_MOVE || turnPhase === TURN_PHASES.NON_COMBAT_MOVE;
 }
 
 export function resolvePhoneMoveCta({ destName, isAttack = false, selectedSummary = '' } = {}) {
@@ -887,23 +895,7 @@ export class PlayerPanel {
       return;
     }
     if (e.target.matches('.pp-air-landing-dropdown') && e.target.value && this.isAirLandingActive()) {
-      const currentUnit = this.airLandingData.airUnitsToLand[this.airLandingIndex];
-      if (currentUnit) {
-        const unitKey = currentUnit.id || `${currentUnit.type}_${this.airLandingIndex}`;
-        this.airLandingSelections[unitKey] = e.target.value;
-        this.gameState?.recordAirLandingSelection?.({
-          originTerritory: this.airLandingData.combatTerritory,
-          id: unitKey,
-          type: currentUnit.type,
-          quantity: currentUnit.quantity || 1,
-          destination: e.target.value,
-        });
-        if (this.airLandingIndex < this.airLandingData.airUnitsToLand.length - 1) {
-          this.airLandingIndex++;
-        }
-        this._maybeApplyReadyAirLandings();
-        this._scheduleRender();
-      }
+      this._assignAirLandingDestination(e.target.value);
     }
   }
 
@@ -1490,6 +1482,8 @@ export class PlayerPanel {
   setAirLanding(airUnitsToLand, combatTerritory, isRetreating, onComplete) {
     this.airLandingData = { airUnitsToLand, combatTerritory, isRetreating };
     this.airLandingIndex = 0;
+    this.airLandingSelected = new Set([0]);
+    this.airLandingUnresolved = new Set();
     this.airLandingSelections = {};
     this.onAirLandingComplete = onComplete;
     this.activeTab = 'actions'; // Switch to actions tab
@@ -1502,6 +1496,8 @@ export class PlayerPanel {
   clearAirLanding() {
     this.airLandingData = null;
     this.airLandingIndex = 0;
+    this.airLandingSelected = new Set();
+    this.airLandingUnresolved = new Set();
     this.airLandingSelections = {};
     this.onAirLandingComplete = null;
             this._scheduleRender();
@@ -1536,6 +1532,8 @@ export class PlayerPanel {
       nextSeatId: seatId,
     });
     if (!should) return null;
+    this.movePendingDest = null;
+    this.moveSelectedUnits = {};
     const flushed = flushPeekState({
       hadCapitalPeekName: !!this._phoneCapitalLandName,
       capitalPeekStillLegal,
@@ -1633,34 +1631,75 @@ export class PlayerPanel {
     return Array.from(allDests);
   }
 
-  handleAirLandingTerritoryClick(territory) {
-    if (!this.isAirLandingActive()) return false;
+  _airLandingIndexes() {
+    const units = this.airLandingData?.airUnitsToLand || [];
+    const picked = this.airLandingSelected instanceof Set ? [...this.airLandingSelected] : [];
+    const legal = picked.filter((index) => index >= 0 && index < units.length);
+    if (legal.length > 0) return legal;
+    return units[this.airLandingIndex] ? [this.airLandingIndex] : [];
+  }
 
-    const currentUnit = this.airLandingData.airUnitsToLand[this.airLandingIndex];
-    if (!currentUnit) return false;
-
-    const validDest = currentUnit.landingOptions?.find(opt => opt.territory === territory.name);
-    if (validDest) {
-      const unitKey = currentUnit.id || `${currentUnit.type}_${this.airLandingIndex}`;
-      this.airLandingSelections[unitKey] = territory.name;
+  _assignAirLandingDestination(destination) {
+    if (!this.isAirLandingActive() || !destination) return false;
+    const units = this.airLandingData.airUnitsToLand;
+    const indexes = this._airLandingIndexes();
+    const next = assignLandingToIndexes(units, indexes, destination, this.airLandingSelections);
+    const changed = indexes.some((index) => {
+      const unit = units[index];
+      const key = unit?.id || `${unit?.type}_${index}`;
+      return next[key] === destination && this.airLandingSelections[key] !== destination;
+    });
+    if (!changed) return false;
+    this.airLandingSelections = next;
+    for (const index of indexes) {
+      const unit = units[index];
+      const key = unit?.id || `${unit?.type}_${index}`;
+      if (next[key] !== destination) continue;
+      this.airLandingUnresolved?.delete?.(key);
       this.gameState?.recordAirLandingSelection?.({
         originTerritory: this.airLandingData.combatTerritory,
-        id: unitKey,
-        type: currentUnit.type,
-        quantity: currentUnit.quantity || 1,
-        destination: territory.name,
+        id: key,
+        type: unit.type,
+        quantity: unit.quantity || 1,
+        destination,
       });
-
-      // Move to next unit if available
-      if (this.airLandingIndex < this.airLandingData.airUnitsToLand.length - 1) {
-        this.airLandingIndex++;
-      }
-
-      this._maybeApplyReadyAirLandings();
-            this._scheduleRender();
-      return true;
     }
-    return false;
+    const open = units.findIndex((unit, index) => {
+      const key = unit.id || `${unit.type}_${index}`;
+      return !next[key];
+    });
+    if (open >= 0) this.airLandingIndex = open;
+    this._maybeApplyReadyAirLandings();
+    this._scheduleRender();
+    return changed;
+  }
+
+  _returnAirToBase() {
+    if (!this.isAirLandingActive()) return false;
+    const units = this.airLandingData.airUnitsToLand;
+    const origins = this.gameState?.airUnitOrigins?.[this.airLandingData.combatTerritory] || {};
+    const result = returnToBaseAssignments(units, origins, this.airLandingSelections);
+    this.airLandingSelections = result.selections;
+    this.airLandingUnresolved = new Set(result.unresolved);
+    for (const [key, destination] of Object.entries(result.selections)) {
+      const unit = units.find((row, index) => (row.id || `${row.type}_${index}`) === key);
+      if (!unit) continue;
+      this.gameState?.recordAirLandingSelection?.({
+        originTerritory: this.airLandingData.combatTerritory,
+        id: key,
+        type: unit.type,
+        quantity: unit.quantity || 1,
+        destination,
+      });
+    }
+    this._maybeApplyReadyAirLandings();
+    this._scheduleRender();
+    return true;
+  }
+
+  handleAirLandingTerritoryClick(territory) {
+    if (!this.isAirLandingActive()) return false;
+    return this._assignAirLandingDestination(territory?.name);
   }
 
   show() {
@@ -1675,7 +1714,10 @@ export class PlayerPanel {
   _publishMoveGesture() {
     const gs = this.gameState;
     if (!gs) return;
-    if (!this._gestureRestored && gs.uiGesture?.fork === 'classic'
+    if (!phaseOwnsMovementConfirm(gs.turnPhase)) {
+      this.movePendingDest = null;
+      this.moveSelectedUnits = {};
+    } else if (!this._gestureRestored && gs.uiGesture?.fork === 'classic'
       && gs.uiGesture.turnPhase === gs.turnPhase
       && gs.uiGesture.playerId === gs.currentPlayer?.id) {
       this._gestureRestored = true;
@@ -1732,8 +1774,6 @@ export class PlayerPanel {
       this.contentEl.innerHTML = '<div class="pp-loading">Loading match…</div>';
       return;
     }
-    this._publishMoveGesture();
-
     const player = this.gameState.currentPlayer;
     if (!player) {
       this.el.classList.remove('player-panel--peek', 'player-panel--expanded', 'player-panel--place-tray', 'player-panel--mobilize');
@@ -1754,6 +1794,7 @@ export class PlayerPanel {
     this._lastRenderedPlayerId = player.id;
     this._peekPhase = phase;
     this._peekTurnPhase = turnPhase;
+    this._publishMoveGesture();
     if (flushedPeek) {
       this.selectedTerritory = null;
     }
@@ -1905,7 +1946,7 @@ export class PlayerPanel {
     }
     // Movement confirm — desktop always. Phone Combat / Fortify use the
     // same named Confirm (Move to X / Attack X). Deploy still icon-commits.
-    else if (this.movePendingDest && (this.activeTab === 'actions' || isMobileShell())
+    else if (phaseOwnsMovementConfirm(turnPhase) && this.movePendingDest && (this.activeTab === 'actions' || isMobileShell())
       && !shouldHidePhonePairConfirm({
         mobile: isMobileShell(),
         pairGrammar: shouldUsePhonePairGrammar({
@@ -2079,7 +2120,9 @@ export class PlayerPanel {
         action: 'next-phase',
         label: airLandingReady
           ? 'Done →'
-          : `End Phase · ${TURN_PHASE_NAMES[turnPhase] || 'Phase'}`,
+          : turnPhase === TURN_PHASES.DEVELOP_TECH
+            ? 'Develop technology'
+            : `End Phase · ${TURN_PHASE_NAMES[turnPhase] || 'Phase'}`,
         disabled: hasUnresolvedCombats || hasUnplacedUnits,
         primary: true
       });
@@ -3999,6 +4042,7 @@ export class PlayerPanel {
       if (u.owner !== player.id) continue;
       const def = this.unitDefs?.[u.type];
       if (!def || def.movement <= 0 || def.isBuilding) continue;
+      if (u.type === 'aaGun' && this.gameState?.turnPhase === TURN_PHASES.COMBAT_MOVE) continue;
 
       // Aircraft on carriers can move independently - check them even if carrier has moved
       // This allows aircraft to fly off during non-combat even if carrier moved during combat
@@ -4637,7 +4681,7 @@ export class PlayerPanel {
           <span class="pp-air-landing-counter${remaining === 0 ? ' remaining-done' : ''}">${remaining} / ${needAssign} UNITS REMAINING</span>
         </div>
         <div class="pp-air-landing-from">From: <strong>${combatTerritory}</strong></div>
-        <div class="pp-air-landing-hint">Click unit to select, then click map to assign landing</div>
+        <div class="pp-air-landing-hint">Select one or more planes, then Land at or Return to base</div>
 
         <div class="pp-air-landing-grid">`;
 
@@ -4646,25 +4690,34 @@ export class PlayerPanel {
       const unit = airUnitsToLand[i];
       const unitKey = unit.id || `${unit.type}_${i}`;
       const selectedLanding = resolveLandingDestination(unit, i, merged);
-      const isCurrent = i === this.airLandingIndex && !selectedLanding;
+      const isPicked = this.airLandingSelected instanceof Set
+        ? this.airLandingSelected.has(i)
+        : i === this.airLandingIndex;
+      const needsLanding = this.airLandingUnresolved instanceof Set && this.airLandingUnresolved.has(unitKey);
       const hasNoOptions = !unit.landingOptions || unit.landingOptions.length === 0;
       const imageSrc = getUnitIconPath(unit.type, player.id);
       const def = this.unitDefs?.[unit.type];
+      const originInfo = this.gameState?.airUnitOrigins?.[combatTerritory]?.[unit.type];
+      const badge = airMovementBadge({
+        movement: def?.movement || 0,
+        distance: originInfo?.distance || 0,
+        longRange: !!this.gameState?.hasTech?.(player.id, 'longRangeAircraft'),
+      });
 
       html += `
-        <div class="pp-air-landing-card ${isCurrent ? 'current' : ''} ${selectedLanding ? 'landed' : ''} ${hasNoOptions ? 'crashed' : ''}"
-             data-action="select-air-unit" data-index="${i}">
+        <div class="pp-air-landing-card ${isPicked ? 'current' : ''} ${selectedLanding ? 'landed' : ''} ${hasNoOptions || needsLanding ? 'crashed' : ''}"
+             data-action="select-air-unit" data-index="${i}" aria-pressed="${isPicked ? 'true' : 'false'}">
           <div class="pp-air-card-icon">
             ${imageSrc ? `<img src="${imageSrc}" alt="${unit.type}">` : ''}
           </div>
           <div class="pp-air-card-name">${formatUnitName(unit.type)}</div>
-          <div class="pp-air-card-stats">M${def?.movement || 0}</div>
+          <div class="pp-air-card-stats" title="${badge.title}">${badge.label}</div>
           <div class="pp-air-card-status">
             ${hasNoOptions
               ? '<span class="status-crashed">CRASH</span>'
               : selectedLanding
                 ? `<span class="status-landed">${selectedLanding}</span>`
-                : isCurrent
+                : isPicked
                   ? '<span class="status-selecting">SELECT</span>'
                   : '<span class="status-pending">...</span>'}
           </div>
@@ -4674,31 +4727,31 @@ export class PlayerPanel {
     html += `</div>`;
 
     // Current unit landing options (dropdown as backup)
-    if (currentUnit && currentUnit.landingOptions?.length > 0 && !resolveLandingDestination(currentUnit, this.airLandingIndex, merged)) {
+    const landingChoices = new Map();
+    for (const index of this._airLandingIndexes()) {
+      const row = airUnitsToLand[index];
+      if (!row || resolveLandingDestination(row, index, merged)) continue;
+      for (const opt of row.landingOptions || []) landingChoices.set(opt.territory, opt);
+    }
+    if (landingChoices.size > 0) {
       html += `
         <div class="pp-air-landing-dest">
           <span class="pp-air-landing-label">Land at:</span>
           <select class="pp-air-landing-dropdown" data-action="select-air-landing">
             <option value="">-- Click map or select --</option>
-            ${currentUnit.landingOptions.map(opt => `
+            ${[...landingChoices.values()].map(opt => `
               <option value="${opt.territory}">${opt.territory} (${opt.distance} moves)</option>
             `).join('')}
           </select>
         </div>`;
     }
 
-    // Check if any selections have been made (for undo button)
     const hasSelections = remaining < needAssign || Object.keys(this.airLandingSelections).length > 0;
-
-    // Action buttons - Confirm button is in bottom actions bar
-    if (hasSelections) {
-      html += `
-        <div class="pp-air-landing-actions">
-          <button class="pp-action-btn secondary" data-action="undo-air-landing">
-            ↩ Undo Selections
-          </button>
-        </div>`;
-    }
+    html += `
+      <div class="pp-air-landing-actions">
+        <button class="pp-action-btn secondary" data-action="return-air-to-base" type="button">Return to base</button>
+        ${hasSelections ? `<button class="pp-action-btn secondary" data-action="undo-air-landing" type="button">↩ Undo Selections</button>` : ''}
+      </div>`;
     html += `</div>`;
 
     return html;
@@ -5382,35 +5435,10 @@ export class PlayerPanel {
         // Handle confirm move
         if (action === 'confirm-move') {
           if (this.onAction && this.movePendingDest && this.selectedTerritory) {
-            const units = [];
-            const shipIds = [];
-            const cargoUnloads = []; // Track cargo units to unload for amphibious assault
-
-            // Separate regular units from individual ships and cargo units
-            for (const [key, qty] of Object.entries(this.moveSelectedUnits)) {
-              if (qty <= 0) continue;
-
-              if (key.startsWith('ship:')) {
-                // Individual ship with cargo - extract ID
-                const shipId = key.replace('ship:', '');
-                shipIds.push(shipId);
-              } else if (key.startsWith('cargo:')) {
-                // Cargo unit for amphibious assault - format: cargo:transportId:unitType
-                const parts = key.split(':');
-                if (parts.length >= 3) {
-                  cargoUnloads.push({
-                    transportId: parts[1],
-                    unitType: parts[2],
-                    quantity: qty
-                  });
-                }
-              } else if (key.startsWith('aircraft:')) {
-                units.push({ type: airSelectionType(key), quantity: qty });
-              } else {
-                // Regular unit type
-                units.push({ type: key, quantity: qty });
-              }
-            }
+            const picked = decomposeMoveSelection(this.moveSelectedUnits);
+            const units = picked.units;
+            const shipIds = picked.shipIds;
+            const cargoUnloads = picked.cargoUnloads;
 
             if (units.length > 0 || shipIds.length > 0 || cargoUnloads.length > 0) {
               // Check if this is an amphibious unload (from sea zone to land)
@@ -5465,9 +5493,20 @@ export class PlayerPanel {
         if (action === 'select-air-unit') {
           const index = parseInt(btn.dataset.index, 10);
           if (!isNaN(index) && this.isAirLandingActive()) {
+            if (!(this.airLandingSelected instanceof Set)) this.airLandingSelected = new Set();
+            if (this.airLandingSelected.has(index) && this.airLandingSelected.size > 1) {
+              this.airLandingSelected.delete(index);
+            } else {
+              this.airLandingSelected.add(index);
+            }
             this.airLandingIndex = index;
             this._scheduleRender();
           }
+          return;
+        }
+
+        if (action === 'return-air-to-base') {
+          this._returnAirToBase();
           return;
         }
 

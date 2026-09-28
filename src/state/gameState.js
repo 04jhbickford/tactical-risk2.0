@@ -2741,6 +2741,12 @@ export class GameState {
     const landUnits = unitsToMove.filter(u => unitDefs[u.type]?.isLand);
     const seaUnits = unitsToMove.filter(u => unitDefs[u.type]?.isSea);
 
+    // Classic: AA guns move in non-combat only. Rockets fires at industry;
+    // it does not let an AA gun attack.
+    if (isCombatMove && landUnits.some((unit) => unit.type === 'aaGun')) {
+      return { success: false, error: 'AA guns move in non-combat only' };
+    }
+
     // For sea units, check if destination is reachable within movement range
     if (seaUnits.length > 0) {
       if (!toT?.isWater) {

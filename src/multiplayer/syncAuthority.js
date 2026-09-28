@@ -64,6 +64,58 @@ export function pushIsStale({
   return false;
 }
 
+// A blocked turn-ending push retries when the server still has our seat.
+// A seat we do not hold is reloaded, and the player is told the turn was not saved.
+export function staleTurnRecovery({
+  confirmedSeatId = null,
+  remoteSeatId = null,
+} = {}) {
+  if ((remoteSeatId ?? null) === (confirmedSeatId ?? null)) {
+    return { action: 'retry', notice: '' };
+  }
+  return {
+    action: 'reload',
+    notice: 'Could not save your turn — the match has moved on.',
+  };
+}
+
+export function recoverStalePush({
+  confirmedSeatId = null,
+  remoteSeatId = null,
+  remoteVersion = 0,
+  localVersion = 0,
+} = {}) {
+  const recovery = staleTurnRecovery({ confirmedSeatId, remoteSeatId });
+  if (recovery.action === 'retry') {
+    return {
+      action: 'retry',
+      localVersion: Math.max(Number(localVersion) || 0, Number(remoteVersion) || 0),
+      notice: '',
+    };
+  }
+  return {
+    action: 'reload',
+    localVersion: Number(localVersion) || 0,
+    notice: recovery.notice,
+  };
+}
+
+// Local nextPhase already handed the seat off, and the server still shows
+// our seat. Keep that turn and rebase the version. A forced reload is the
+// give-up path and must apply the doc.
+export function shouldPreserveLocalTurn({
+  confirmedSeatId = null,
+  liveSeatId = null,
+  remoteSeatId = null,
+  force = false,
+} = {}) {
+  if (force) return false;
+  const ended = liveSeatId != null
+    && confirmedSeatId != null
+    && liveSeatId !== confirmedSeatId;
+  return ended && (remoteSeatId ?? null) === (confirmedSeatId ?? null);
+}
+
 export function evaluateAuthoritativePush({
   remoteDoc = null,
   localVersion = 0,

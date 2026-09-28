@@ -103,6 +103,24 @@ export function shouldResumeSnapshots({ event } = {}) {
   return event === 'visibility-visible' || event === 'pageshow';
 }
 
+// A visible tab whose listener died (sleep, websocket drop) must re-attach
+// without waiting for a hide/show cycle.
+export function shouldReattachDeadSnapshot({
+  listenerLive = true,
+  visibility = 'visible',
+} = {}) {
+  if (visibility === 'hidden') return false;
+  return listenerLive !== true;
+}
+
+// Wake events that must re-read the game doc even when the tab never went hidden.
+export function shouldRereadRemoteOnWake({ event = null } = {}) {
+  return event === 'visibility-visible'
+    || event === 'pageshow'
+    || event === 'online'
+    || event === 'focus';
+}
+
 // Re-attach only when the listener is dead. A live unsubscribe must not
 // get a second onSnapshot (dual writer / duplicate apply).
 export function shouldReplaceSnapshotListener({

@@ -285,6 +285,7 @@ export class CombatUI {
   }
 
   showNextCombat() {
+    this._airLandingDelegatedTerritory = null;
     const skipped = this._dequeueResolvedCombatHeads();
     if (!this.hasCombats()) {
       this.hide();
@@ -320,6 +321,7 @@ export class CombatUI {
     flushDiceBuffer(this.gameState);
     this.el.classList.add('hidden');
     this._syncCombatChromeFlag();
+    this._airLandingDelegatedTerritory = null;
     this.currentTerritory = null;
     this.combatState = null;
     this.diceAnimation = null;
@@ -1608,9 +1610,10 @@ export class CombatUI {
       this.combatState.selectedLandings = {};
       this.combatState.phase = 'airLanding';
 
-      // If external air landing UI is connected, delegate to it and hide combat popup
+      // The player panel owns the landing prompt. Do not also paint one here.
       if (this.onAirLandingRequired) {
-        // Hide combat popup - only show the air landing panel
+        if (this._airLandingDelegatedTerritory === territory) return;
+        this._airLandingDelegatedTerritory = territory;
         this.el.classList.add('hidden');
         this._syncCombatChromeFlag();
 
@@ -1619,6 +1622,7 @@ export class CombatUI {
           combatTerritory: this.currentTerritory,
           isRetreating: this.combatState.isRetreating || false,
         });
+        return;
       }
     } else {
       this.combatState.phase = 'resolved';
@@ -1627,6 +1631,7 @@ export class CombatUI {
 
   // Called from external AirLandingUI / player panel when landing selection is complete
   handleAirLandingComplete(result) {
+    this._airLandingDelegatedTerritory = null;
     const origin = result?.combatTerritory || this.currentTerritory;
     if (!this.combatState) {
       // Overlay was dismissed (resync / hide) — still land from board state.
@@ -2445,8 +2450,9 @@ export class CombatUI {
       `;
     }
 
-    // Air Landing phase - select where air units will land
-    if (phase === 'airLanding') {
+    // Air Landing phase - select where air units will land.
+    // When the panel owns the prompt, this modal must not ask again.
+    if (phase === 'airLanding' && !this.onAirLandingRequired) {
       const { airUnitsToLand, selectedLandings, isRetreating } = this.combatState;
       html += `
         <div class="air-landing-section">
@@ -2752,7 +2758,7 @@ export class CombatUI {
           Confirm Casualties
         </button>
       `;
-    } else if (phase === 'airLanding') {
+    } else if (phase === 'airLanding' && !this.onAirLandingRequired) {
       const { airUnitsToLand, selectedLandings } = this.combatState;
       const remaining = remainingAirLandingsToAssign(airUnitsToLand, selectedLandings);
       html += `
@@ -3001,7 +3007,7 @@ export class CombatUI {
       const canConfirm = attackerTotal >= effectiveAttacker && defenderTotal >= effectiveDefender;
       return `<button class="combat-btn confirm" data-action="confirm-casualties" ${!canConfirm ? 'disabled' : ''}>Confirm: Take hits</button>`;
     }
-    if (phase === 'airLanding') {
+    if (phase === 'airLanding' && !this.onAirLandingRequired) {
       const { airUnitsToLand, selectedLandings } = this.combatState;
       const remaining = remainingAirLandingsToAssign(airUnitsToLand, selectedLandings);
       return `<button class="combat-btn confirm" data-action="confirm-landing" ${remaining > 0 ? 'disabled' : ''}>Confirm: All Landings</button>`;
@@ -3668,63 +3674,50 @@ export class CombatUI {
       const def = this.unitDefs[u.type];
       const imageSrc = u.owner ? getUnitIconPath(u.type, u.owner) : (def?.image ? `assets/units/${def.image}` : null);
 
-      // Special handling for battleships (2-hit system)
+      // One battleship, two ways to spend hits. Not two ships.
       if (u.type === 'battleship') {
         const damagedCount = u.damagedCount || 0;
         const undamagedCount = u.quantity - damagedCount;
-
-        // Show damage option for undamaged battleships
+        const damageSelected = selected['battleship_damage'] || 0;
+        const destroySelected = selected['battleship'] || 0;
+        const pendingDamage = damageSelected;
+        const maxDestroyable = damagedCount + Math.max(0, undamagedCount - pendingDamage);
+        const choiceRow = (key, label, selectedCount, maxCount) => `
+            <div class="casualty-unit ${selectedCount > 0 ? 'has-casualties' : ''}">
+              <div class="casualty-unit-info">
+                <span class="casualty-name">${label}</span>
+              </div>
+              ${!readonly ? `
+                <div class="casualty-controls">
+                  <button class="casualty-btn minus" data-side="${side}" data-unit="${key}" ${selectedCount <= 0 ? 'disabled' : ''}>−</button>
+                  <span class="casualty-selected">${selectedCount}</span>
+                  <button class="casualty-btn plus" data-side="${side}" data-unit="${key}" ${selectedCount >= maxCount ? 'disabled' : ''}>+</button>
+                </div>
+              ` : `
+                <div class="casualty-controls readonly">
+                  <span class="casualty-selected">${selectedCount}</span>
+                </div>
+              `}
+            </div>`;
+        html += `
+          <div class="casualty-unit">
+            <div class="casualty-unit-info">
+              ${imageSrc ? `<img src="${imageSrc}" class="casualty-icon" alt="battleship" title="Battleship">` : ''}
+              <span class="casualty-name">Battleship</span>
+              <span class="casualty-avail">(${u.quantity})</span>
+            </div>
+          </div>
+        `;
         if (undamagedCount > 0) {
-          const damageSelected = selected['battleship_damage'] || 0;
-          html += `
-            <div class="casualty-unit ${damageSelected > 0 ? 'has-casualties' : ''}">
-              <div class="casualty-unit-info">
-                ${imageSrc ? `<img src="${imageSrc}" class="casualty-icon" alt="battleship" title="Battleship (Damage): Absorb hit without destroying">` : ''}
-                <span class="casualty-name">Battleship</span>
-                <span class="casualty-avail damage">(${undamagedCount} undamaged)</span>
-              </div>
-              ${!readonly ? `
-                <div class="casualty-controls">
-                  <button class="casualty-btn minus" data-side="${side}" data-unit="battleship_damage" ${damageSelected <= 0 ? 'disabled' : ''}>−</button>
-                  <span class="casualty-selected">${damageSelected}</span>
-                  <button class="casualty-btn plus" data-side="${side}" data-unit="battleship_damage" ${damageSelected >= undamagedCount ? 'disabled' : ''}>+</button>
-                </div>
-              ` : `
-                <div class="casualty-controls readonly">
-                  <span class="casualty-selected">${damageSelected}</span>
-                </div>
-              `}
-            </div>
-          `;
+          html += choiceRow(
+            'battleship_damage',
+            'Battleship — take 1 hit (damaged)',
+            damageSelected,
+            undamagedCount,
+          );
         }
-
-        // Show destroy option for damaged battleships (or all if no undamaged)
         if (damagedCount > 0 || undamagedCount > 0) {
-          const destroySelected = selected['battleship'] || 0;
-          // Can destroy: damaged battleships + any undamaged that weren't selected for damage
-          const pendingDamage = selected['battleship_damage'] || 0;
-          const maxDestroyable = damagedCount + Math.max(0, undamagedCount - pendingDamage);
-          const statusText = damagedCount > 0 ? `(${damagedCount} damaged)` : '(destroy)';
-          html += `
-            <div class="casualty-unit ${destroySelected > 0 ? 'has-casualties' : ''}">
-              <div class="casualty-unit-info">
-                ${imageSrc ? `<img src="${imageSrc}" class="casualty-icon damaged" alt="battleship" title="Battleship (Destroy): Remove from battle">` : ''}
-                <span class="casualty-name">Battleship</span>
-                <span class="casualty-avail destroy">${statusText}</span>
-              </div>
-              ${!readonly ? `
-                <div class="casualty-controls">
-                  <button class="casualty-btn minus" data-side="${side}" data-unit="battleship" ${destroySelected <= 0 ? 'disabled' : ''}>−</button>
-                  <span class="casualty-selected">${destroySelected}</span>
-                  <button class="casualty-btn plus" data-side="${side}" data-unit="battleship" ${destroySelected >= maxDestroyable ? 'disabled' : ''}>+</button>
-                </div>
-              ` : `
-                <div class="casualty-controls readonly">
-                  <span class="casualty-selected">${destroySelected}</span>
-                </div>
-              `}
-            </div>
-          `;
+          html += choiceRow('battleship', 'Battleship — sunk', destroySelected, maxDestroyable);
         }
       } else {
         // Standard units
@@ -4077,10 +4070,10 @@ export class CombatUI {
     // Check for air landing BEFORE removing from queue
     this._checkAirLanding();
 
-    // If air landing is required, render and wait for confirmation
+    // If air landing is required, render and wait for confirmation.
+    // The panel path already opened the one landing prompt.
     if (this.combatState.phase === 'airLanding') {
-      // Don't remove from queue yet - will be done after air landing confirmed
-      this._render();
+      if (!this.onAirLandingRequired) this._render();
     } else {
       // No air units to land - remove from combat queue and proceed
       this.gameState.combatQueue = this.gameState.combatQueue.filter(t => t !== this.currentTerritory);
@@ -4090,11 +4083,8 @@ export class CombatUI {
   }
 
   _nextCombat() {
-    if (this.hasCombats()) {
-      const result = this.showNextCombat();
-      if (result?.shown) return;
-    }
     this.hide();
+    if (this.hasCombats()) return;
 
     if (this.onAllCombatsResolved) {
       this.onAllCombatsResolved();

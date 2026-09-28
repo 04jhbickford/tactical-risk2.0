@@ -92,6 +92,7 @@ const {
   resolveJoinNotFoundError,
   resolveLobbyCodeFromGameDoc,
   resolveHostReconnectCopy,
+  unsavedPhaseLeaveWarning,
   shouldShowHostReconnect,
   shouldLeaveGameView,
   resolveMenuCardAction,
@@ -188,7 +189,7 @@ const unitDefs = {
 };
 
 console.log('=== Version stamps ===');
-check('GAME_VERSION is V2.81.57-unified.17', GAME_VERSION === 'V2.81.57-unified.17');
+check('GAME_VERSION is V2.81.57-unified.18', GAME_VERSION === 'V2.81.57-unified.18');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== Presence: background must not delete or go offline ===');
@@ -651,13 +652,19 @@ console.log('=== B25 confirmed: last match + host reconnect copy ===');
       hostPresence: 'idle', hostName: 'Bastion', gameCode: 'ZUJMNP',
     }))
     && shouldShowHostReconnect({ hostPresence: 'idle' }) === true);
-  check('missing host is reconnecting — guest must stay',
+  check('missing host is reconnecting — the match is saved',
     /reconnect/i.test(resolveHostReconnectCopy({
       hostPresence: 'offline', hostName: 'Bastion', gameCode: 'ZUJMNP',
     }))
-    && /Do not leave/i.test(resolveHostReconnectCopy({
+    && /The match is saved/i.test(resolveHostReconnectCopy({
       hostPresence: 'offline', hostName: 'Bastion', gameCode: 'ZUJMNP',
-    })));
+    }))
+    && !/Do not leave/i.test(resolveHostReconnectCopy({
+      hostPresence: 'offline', hostName: 'Bastion', gameCode: 'ZUJMNP',
+    }))
+    && unsavedPhaseLeaveWarning({ hasUnsavedPhaseChanges: false }) === ''
+    && unsavedPhaseLeaveWarning({ hasUnsavedPhaseChanges: true })
+      === 'You have unsaved changes this phase. Stay until they save.');
   check('online host has no reconnect banner',
     resolveHostReconnectCopy({ hostPresence: 'online' }) === null);
 }
@@ -1730,7 +1737,7 @@ console.log('=== V2.81.42 My Games hygiene + presence comments ===');
     && shouldStartHostFailover({ hostPresence: 'offline', offlineForMs: 90000 }) === true);
 }
 
-console.log('=== V2.81.57-unified.17 Bastion same-match rejoin ===');
+console.log('=== V2.81.57-unified.18 Bastion same-match rejoin ===');
 {
   const seated = [{
     id: 'game_a29',

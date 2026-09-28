@@ -64,6 +64,11 @@ function stepperHtml(value, editable) {
     </span>`;
 }
 
+function shownValue(editable, controlHtml, text) {
+  if (editable) return controlHtml;
+  return `<span class="go-readonly">${esc(text)}</span>`;
+}
+
 function rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMode, seatedCount }) {
   const o = normalizeGameOptions(options);
   const draft = draftMode || draftModeSource(null);
@@ -76,63 +81,63 @@ function rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMod
       <h3 class="go-group-label">Setup</h3>
       <div class="go-row" title="${esc(territoryTitle)}">
         <span class="go-label">Territories</span>
-        ${enumSelect('territorySetup', [
+        ${shownValue(editable, enumSelect('territorySetup', [
           ['random', 'Random deal'],
           ['draft', draft.name || 'Draft'],
-        ], o.territorySetup, { editable, label: 'Territories', title: territoryTitle })}
+        ], o.territorySetup, { editable, label: 'Territories', title: territoryTitle }), o.territorySetup === 'draft' ? (draft.name || 'Draft') : 'Random deal')}
       </div>
       <div class="go-row" title="IPCs each power starts with">
         <span class="go-label" id="go-label-ipcs">Starting IPCs</span>
-        ${selectHtml('startingIPCs', STARTING_IPC_VALUES, o.startingIPCs, { editable, label: 'Starting IPCs' })}
+        ${shownValue(editable, selectHtml('startingIPCs', STARTING_IPC_VALUES, o.startingIPCs, { editable, label: 'Starting IPCs' }), String(o.startingIPCs))}
       </div>
       <div class="go-row" title="How many units each power places in a setup round">
         <span class="go-label">Units per round</span>
-        ${stepperHtml(o.unitsPerRound, editable)}
+        ${shownValue(editable, stepperHtml(o.unitsPerRound, editable), String(o.unitsPerRound))}
       </div>
       <div class="go-row" title="Light is one third fewer starting units. Heavy is one third more.">
         <span class="go-label">Starting army</span>
-        ${armySelect(o.startingArmy, editable)}
+        ${shownValue(editable, armySelect(o.startingArmy, editable), o.startingArmy === 'light' ? 'Light' : o.startingArmy === 'heavy' ? 'Heavy' : 'Standard')}
       </div>
     </div>
     <div class="go-group">
       <h3 class="go-group-label">Tech</h3>
       <div class="go-row" title="${esc(techTitle)}">
         <span class="go-label">How tech is acquired</span>
-        ${enumSelect('techAcquisition', [
+        ${shownValue(editable, enumSelect('techAcquisition', [
           ['dice', 'Dice tokens'],
           ['keep', 'Keep tokens until success'],
           ['buy', techAcquisitionLabel('buy')],
-        ], o.techAcquisition, { editable, label: 'How tech is acquired', title: techTitle })}
+        ], o.techAcquisition, { editable, label: 'How tech is acquired', title: techTitle }), techAcquisitionLabel(o.techAcquisition))}
       </div>
       <div class="go-row" title="When on, each 6 is its own breakthrough">
         <span class="go-label">Multiple breakthroughs</span>
-        ${toggleHtml('multipleTech', o.multipleTech, { editable })}
+        ${shownValue(editable, toggleHtml('multipleTech', o.multipleTech, { editable }), o.multipleTech ? 'On' : 'Off')}
       </div>
     </div>
     <div class="go-group">
       <h3 class="go-group-label">Map</h3>
       <div class="go-row" title="Cross-water land connections such as Alaska to Soviet Far East">
         <span class="go-label">Land bridges</span>
-        ${toggleHtml('landBridges', o.landBridges, { editable })}
+        ${shownValue(editable, toggleHtml('landBridges', o.landBridges, { editable }), o.landBridges ? 'On' : 'Off')}
       </div>
     </div>
     <div class="go-group">
       <h3 class="go-group-label">Players</h3>
       <div class="go-row lobby-phone-teams" title="Powers on the same team do not fight">
         <span class="go-label lobby-phone-teams-name">Teams</span>
-        ${toggleHtml('teams', o.teams, {
+        ${shownValue(editable, toggleHtml('teams', o.teams, {
           editable,
           extraClass: teamsToggleClass || '',
           id: teamsToggleId || 'teams-enabled',
           pressed: true,
-        })}
+        }), o.teams ? 'On' : 'Off')}
       </div>
       <div class="go-row" title="Seat cap. Stays at 5.">
         <span class="go-label">Max players</span>
-        ${selectHtml('maxPlayers', maxChoices, maxSelected, { editable, label: 'Max players' })}
+        ${shownValue(editable, selectHtml('maxPlayers', maxChoices, maxSelected, { editable, label: 'Max players' }), String(maxSelected))}
       </div>
     </div>
-    <button type="button" class="go-reset" data-action="go-reset" ${editable ? '' : 'disabled'}>Reset to standard</button>
+    ${editable ? '<button type="button" class="go-reset" data-action="go-reset">Reset to standard</button>' : ''}
   `;
 }
 
@@ -155,7 +160,7 @@ export function renderGameOptionsPanel(raw, {
         <span class="go-dot" aria-hidden="true">·</span>
         <span class="go-summary-text">${esc(summary)}</span>
         <span class="go-dot" aria-hidden="true">·</span>
-        <span class="go-customize">${open ? 'Hide' : 'Customize'}</span>
+        <span class="go-customize">${open ? 'Hide' : (editable ? 'Customize' : 'View')}</span>
       </button>
       <button type="button" class="go-phone-launch" data-action="go-open-sheet">
         <span>Game options</span>
