@@ -12,14 +12,20 @@ import {
   faceVerdict,
   faceVerdictSentence,
 } from '../src/stats/diceMath.js';
+import { setDiceSessionProvider } from '../src/stats/diceTracker.js';
 import {
   DICE_STATS_BACKFILL_CAVEAT,
   DICE_STATS_NONE,
   DICE_STATS_RULES,
   DICE_STATS_SIGN_IN,
+  diceStatsViewFromRows,
+  ensureDiceStatsLoaded,
+  getDiceStatsView,
   lobbyDiceEntryMarkup,
   noteDiceReadFailure,
   renderDiceStatsFromModel,
+  renderDiceStatsMarkup,
+  setDiceStatsViewForTest,
 } from '../src/ui/diceStatsPanel.js';
 import {
   collectBackfillRecords,
@@ -58,14 +64,23 @@ check('empty sample has no sentence', faceVerdictSentence(null, 0) == null);
 console.log('=== scopes ===');
 {
   const all = renderDiceStatsFromModel({ status: 'ready', signedIn: true, tab: 'all', globalDoc: even });
-  check('all-time sentence', all.includes(SENTENCE_FAIR) && all.includes('Looks fair'));
-  check('all-time chi-square and p', all.includes('Chi-square 0.00') && all.includes('p='));
-  check('all-time paired bars', all.includes('dice-bar-fill') && all.includes('dice-bar-expected'));
+  check('all-time sentence', all.includes(SENTENCE_FAIR) && all.includes('Looks fair') && all.includes('p='));
+  check('all-time one fill and one fair line',
+    (all.match(/dice-bar-fill/g) || []).length === 6
+    && (all.match(/dice-fair-line/g) || []).length === 1
+    && !all.includes('dice-bar-expected'));
+  check('all-time percent column', all.includes('16.7%') && !all.includes('dice-face-count'));
   check('all-time sample size', all.includes('600 rolls'));
-  check('all-time caveat', all.includes('all-time verdict counts'));
+  check('all-time drops legend, fit, meter, and caveat',
+    !all.includes('dice-bar-legend')
+    && !all.includes('Chi-square')
+    && !all.includes('dice-progress')
+    && !all.includes('2-point skew')
+    && !all.includes('all-time verdict counts')
+    && !all.includes('dice-stats-caveat'));
 
   const game = renderDiceStatsFromModel({ status: 'ready', signedIn: true, tab: 'game', gameDoc: even });
-  check('this game sentence', game.includes(SENTENCE_FAIR) && game.includes('Chi-square'));
+  check('this game sentence', game.includes(SENTENCE_FAIR) && game.includes('p=') && !game.includes('Chi-square'));
 
   const players = renderDiceStatsFromModel({
     status: 'ready',
@@ -87,7 +102,12 @@ console.log('=== scopes ===');
   check('this game scope switch', players.includes('data-dice-scope="game"') && players.includes('All games'));
   check('this game splits humans and AI', players.includes('Robert') && players.includes('German Easy AI')
     && players.includes('>Players<') && players.includes('>AI<'));
-  check('this game player faces and rates', players.includes('Chi-square') && players.includes('Attack') && players.includes('Defense'));
+  check('this game player faces and rates',
+    (players.match(/dice-fair-line/g) || []).length === 2
+    && players.includes('16.7%')
+    && players.includes('Attack')
+    && players.includes('Defense')
+    && !players.includes('Chi-square'));
   check('this game hides email and uid', !players.includes('@') && !players.includes('uid'));
 
   const allGames = renderDiceStatsFromModel({
@@ -351,7 +371,10 @@ console.log('=== backfill ===');
     tab: 'all',
     globalDoc: statDocFromFlat(rebuiltEvents.global),
   });
-  check('panel caveat says backfilled dice have no hit rate', caveatHtml.includes(DICE_STATS_BACKFILL_CAVEAT));
+  check('backfill totals omit the caveat and show the roll count',
+    !caveatHtml.includes(DICE_STATS_BACKFILL_CAVEAT)
+    && !caveatHtml.includes('all-time verdict counts')
+    && caveatHtml.includes('rolls'));
   const plainHtml = renderDiceStatsFromModel({
     status: 'ready',
     signedIn: true,
@@ -394,6 +417,49 @@ console.log('=== backfill ===');
     gameStatDoc(namedEven, namedRebuilt.games.LIVE).name_p1 === 'Robert'
     && gameStatDoc(namedEven, namedRebuilt.games.LIVE).name_ai1 === 'German Easy AI'
     && gameStatDoc(namedEven, namedRebuilt.games.LIVE).n === 4);
+}
+
+console.log('=== global doc and reopen ===');
+{
+  const globalDoc = {
+    n: 2484,
+    face_1: 580, face_2: 381, face_3: 381, face_4: 381, face_5: 381, face_6: 380,
+  };
+  const gameDoc = { n: 30, face_1: 30 };
+  const mapped = diceStatsViewFromRows([
+    { id: 'game_LIVE', data: gameDoc },
+    { id: 'global', data: globalDoc },
+    { id: 'player_uid', data: { displayName: 'Robert', n: 6, face_1: 6 } },
+  ], 'game_LIVE');
+  check('all-time slot is the global doc', mapped.global === globalDoc && mapped.global.n === 2484);
+  check('this-game slot is not the global doc', mapped.game === gameDoc && mapped.game.n === 30);
+  const allTime = renderDiceStatsFromModel({
+    status: 'ready', signedIn: true, tab: 'all', globalDoc: mapped.global, gameDoc: mapped.game,
+  });
+  check('all-time renders the global total', allTime.includes('2,484 rolls') && allTime.includes('23.3%') && !allTime.includes('>30 rolls'));
+
+  setDiceStatsViewForTest({
+    status: 'ready',
+    global: { n: 30, face_1: 5, face_2: 5, face_3: 5, face_4: 5, face_5: 5, face_6: 5 },
+  });
+  setDiceSessionProvider(() => ({ uid: 'owner', signedIn: true, gameId: 'LIVE' }));
+  let calls = 0;
+  const load = async () => {
+    calls += 1;
+    const n = calls === 1 ? 30 : 2484;
+    return diceStatsViewFromRows([
+      { id: 'global', data: { n, face_1: n } },
+      { id: 'game_LIVE', data: { n: 30, face_1: 30 } },
+    ], 'game_LIVE');
+  };
+  const open = () => new Promise((resolve) => ensureDiceStatsLoaded(resolve, load));
+  await open();
+  check('first open fetches', calls === 1 && getDiceStatsView().global.n === 30);
+  await open();
+  const fresh = renderDiceStatsMarkup({ placement: 'sheet' });
+  check('reopen fetches again and paints the new global doc',
+    calls === 2 && getDiceStatsView().global.n === 2484 && fresh.includes('2,484 rolls') && !fresh.includes('30 rolls'));
+  setDiceSessionProvider(() => ({ uid: null, signedIn: false }));
 }
 
 console.log('=== rules untouched ===');

@@ -7,22 +7,18 @@
 import { getDiceSession } from '../stats/diceTracker.js';
 import {
   FACE_COUNT,
-  SKEW_DETECT_ROLLS,
   aggregateAiCards,
   cardsFromGameSeats,
   chiSquareFaces,
   faceVerdictSentence,
-  formatChi,
   formatHitRate,
   formatInt,
   formatP,
   humanCardFromPlayerDoc,
   safeDisplayName,
-  skewProgressLabel,
   totalsFromFlat,
 } from '../stats/diceMath.js';
 
-const CAVEAT = 'With many breakdowns, about 1 in 20 look \'worth watching\' by chance; the all-time verdict counts.';
 export const DICE_STATS_EMPTY = 'Stats will appear once enabled';
 export const DICE_STATS_SIGN_IN = 'Sign in to see dice stats';
 export const DICE_STATS_RULES = "Dice logging is switched off until the game's database rules are published.";
@@ -79,12 +75,6 @@ function esc(value) {
     '"': '&quot;',
     "'": '&#39;',
   }[ch]));
-}
-
-function expectedLabel(value) {
-  const n = Number(value) || 0;
-  if (Math.abs(n - Math.round(n)) < 0.05) return formatInt(Math.round(n));
-  return n.toFixed(1);
 }
 
 export function isDicePermissionDenied(err) {
@@ -147,9 +137,9 @@ export function renderDiceStatsFromModel({
       lobby,
     });
   } else if (useTab === 'game') {
-    body = renderFaces(gameDoc, { meter: true });
+    body = renderFaces(gameDoc);
   } else {
-    body = renderFaces(globalDoc, { meter: true });
+    body = renderFaces(globalDoc);
   }
 
   const hasRolls = (doc) => !!(doc && (Number(doc.n) || totalsFromFlat(doc).n));
@@ -171,13 +161,6 @@ export function renderDiceStatsFromModel({
     body = '';
   }
 
-  const caveatDocs = useTab === 'game' || (useTab === 'players' && useScope !== 'all')
-    ? [gameDoc]
-    : [globalDoc, ...(gameDocs || [])];
-  const caveat = caveatDocs.some((doc) => Number(doc?.backfillEventDice) > 0)
-    ? `${CAVEAT} ${DICE_STATS_BACKFILL_CAVEAT}`
-    : CAVEAT;
-
   const rootClass = placement === 'popover'
     ? 'dice-stats-popover'
     : placement === 'lobby'
@@ -191,7 +174,6 @@ export function renderDiceStatsFromModel({
       <div class="dice-stats-head"><span>Dice stats</span>${close}</div>
       <div class="dice-stats-tabs" role="tablist">${tabHtml}</div>
       <div class="dice-stats-body">${body}</div>
-      <p class="dice-stats-caveat">${esc(caveat)}</p>
     </div>`;
 }
 
@@ -203,43 +185,32 @@ function renderFaceChart(totals) {
   const stats = chiSquareFaces(faces, faceN);
   const expected = faceN / FACE_COUNT;
   const scale = Math.max(expected, ...faces, 1);
+  const fair = expected / scale;
   const sentence = faceVerdictSentence(stats.p, faceN);
+  const rolls = Number(totals?.n) || faceN;
   const rows = faces.map((count, i) => {
     const obsW = Math.max(0, Math.min(100, (count / scale) * 100));
-    const expW = Math.max(0, Math.min(100, (expected / scale) * 100));
+    const pct = ((Number(count) || 0) / faceN) * 100;
     return `
       <div class="dice-face-row">
         <span class="dice-face-num">${i + 1}</span>
-        <span class="dice-bar-pair">
-          <span class="dice-bar-track">
-            <span class="dice-bar-fill" style="width:${obsW.toFixed(2)}%"></span>
-          </span>
-          <span class="dice-bar-track">
-            <span class="dice-bar-expected" style="width:${expW.toFixed(2)}%"></span>
-          </span>
+        <span class="dice-bar-track">
+          <span class="dice-bar-fill" style="width:${obsW.toFixed(2)}%"></span>
         </span>
-        <span class="dice-face-count">${formatInt(count)}<span class="dice-face-exp">/${expectedLabel(expected)}</span></span>
+        <span class="dice-face-pct">${pct.toFixed(1)}%</span>
       </div>`;
   }).join('');
   return `
     ${sentence ? `<p class="dice-stats-verdict" data-verdict="${esc(stats.verdict || '')}">${esc(sentence)} <span class="dice-stats-p">p=${esc(formatP(stats.p))}</span></p>` : ''}
-    <p class="dice-bar-legend"><span class="dice-swatch dice-swatch-obs"></span>Rolled <span class="dice-swatch dice-swatch-exp"></span>Fair share, 1 in 6</p>
-    <div class="dice-face-list">${rows}</div>
-    <p class="dice-stats-fit">Chi-square ${esc(formatChi(stats.chi2))} · p=${esc(formatP(stats.p))} · ${formatInt(faceN)} rolls</p>`;
+    <div class="dice-face-list">
+      <span class="dice-fair-line" style="--dice-fair:${fair.toFixed(4)}"></span>
+      ${rows}
+    </div>
+    <p class="dice-stats-meta">${formatInt(rolls)} rolls</p>`;
 }
 
-function renderFaces(doc, { meter }) {
-  const totals = totalsFromFlat(doc);
-  const chart = renderFaceChart(totals);
-  if (!chart) return '';
-  const meterPct = Math.max(0, Math.min(100, (totals.n / SKEW_DETECT_ROLLS) * 100));
-  const meterHtml = meter ? `
-    <div class="dice-progress" role="meter" aria-valuemin="0" aria-valuemax="${SKEW_DETECT_ROLLS}" aria-valuenow="${totals.n}">
-      <span class="dice-progress-fill" style="width:${meterPct.toFixed(2)}%"></span>
-    </div>
-    <p class="dice-progress-label">${esc(skewProgressLabel(totals.n))}</p>
-    <p class="dice-stats-meta">${formatInt(totals.n)} rolls · longest same-face streak ${formatInt(totals.longestStreak)}</p>` : '';
-  return `${chart}${meterHtml}`;
+function renderFaces(doc) {
+  return renderFaceChart(totalsFromFlat(doc));
 }
 
 function renderPlayerCard(card) {
@@ -346,7 +317,8 @@ export function bindDiceStatsControls(root, onChange) {
   });
 }
 
-export function ensureDiceStatsLoaded(onDone) {
+// Every open calls the loader. A ready view is not reused.
+export function ensureDiceStatsLoaded(onDone, load = loadDiceStats) {
   const token = ++loadToken;
   const session = getDiceSession();
   if (!session.signedIn) {
@@ -355,15 +327,39 @@ export function ensureDiceStatsLoaded(onDone) {
     return;
   }
   view = { ...view, status: view.status === 'ready' ? 'ready' : 'loading' };
-  loadDiceStats(session).then((next) => {
+  Promise.resolve(load(session)).then((next) => {
     if (token !== loadToken) return;
     view = next;
     if (typeof onDone === 'function') onDone();
-  }).catch((err) => {
+  }).catch(() => {
     if (token !== loadToken) return;
     view = { status: 'disabled', global: null, game: null, playerDocs: [], gameDocs: [] };
     if (typeof onDone === 'function') onDone();
   });
+}
+
+// All-time is the doc whose id is `global`. Other ids never fill that slot.
+export function diceStatsViewFromRows(rows, gameId) {
+  let globalDoc = null;
+  let gameDoc = null;
+  const playerDocs = [];
+  const gameDocs = [];
+  for (const row of rows || []) {
+    const data = row?.data || {};
+    if (row?.id === 'global') globalDoc = data;
+    else if (String(row?.id || '').startsWith('player_')) playerDocs.push(data);
+    else if (String(row?.id || '').startsWith('game_')) {
+      gameDocs.push(data);
+      if (gameId && row.id === gameId) gameDoc = data;
+    }
+  }
+  return {
+    status: 'ready',
+    global: globalDoc,
+    game: gameDoc,
+    playerDocs,
+    gameDocs,
+  };
 }
 
 async function loadDiceStats(session) {
@@ -374,26 +370,11 @@ async function loadDiceStats(session) {
     const { collection, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
     const snap = await getDocs(collection(db, 'diceStats'));
     const gameId = session.gameId ? `game_${session.gameId}` : null;
-    let globalDoc = null;
-    let gameDoc = null;
-    const playerDocs = [];
-    const gameDocs = [];
+    const rows = [];
     snap.forEach((row) => {
-      const data = row.data() || {};
-      if (row.id === 'global') globalDoc = data;
-      else if (row.id.startsWith('player_')) playerDocs.push(data);
-      else if (row.id.startsWith('game_')) {
-        gameDocs.push(data);
-        if (gameId && row.id === gameId) gameDoc = data;
-      }
+      rows.push({ id: row.id, data: row.data() || {} });
     });
-    return {
-      status: 'ready',
-      global: globalDoc,
-      game: gameDoc,
-      playerDocs,
-      gameDocs,
-    };
+    return diceStatsViewFromRows(rows, gameId);
   } catch (err) {
     return {
       status: noteDiceReadFailure(err),

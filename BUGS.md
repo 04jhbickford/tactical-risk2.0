@@ -10,7 +10,9 @@ Bastion, `#tactical-risk` `1554261960378556488`, 28 Sep 3:42pm PT, on live unifi
 
 Bastion, `#general-chat` `1554242767260090379`, 28 Sep 2:25pm PT: auto battle sometimes looks like more hits than units. Seeded auto battles (AI `resolveCombat` and the human dice steps) keep each step's dice at or under the living units in that step. Heavy bombers are allowed two dice on the human step. Hits never exceed that step's dice. Removed pieces were on the board. A battleship rolls one die. Carrier aircraft roll once. AA hits are not added to the attack total. Dead stacks do not roll. Round 1 subs with no enemy destroyer also roll in the general combat step after the surprise strike. That is the current shared rule, not an extra hit inside one roll. The screen that can still read as one pile of hits is the combat popup (paired infantry/artillery quantity, unlabeled surprise-strike line). That copy is held until unified.20 merges, because the lines live in `src/ui/combatUI.js`.
 
-Receipt: `node tools/test-lobby-list-unlist.mjs`, `node tools/test-auto-battle-hits.mjs`.
+Dice stats chart, owner UX: All-time, This game, and each player card show one bar per face, one shared dotted fair-share line, and a percent to one decimal. The legend, chi-square fit line, skew meter, streak, and the caveat paragraph are gone. A muted “N rolls” line remains, plus the verdict. All-time still reads the `global` doc. Opening the panel fetches again instead of painting the previous totals.
+
+Receipt: `node tools/test-lobby-list-unlist.mjs`, `node tools/test-auto-battle-hits.mjs`, `node tools/test-dice-stats-v2.mjs`.
 
 ---
 

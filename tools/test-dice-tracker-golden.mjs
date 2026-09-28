@@ -454,8 +454,8 @@ console.log('=== old saves and menu ===');
       longestStreak: 2,
     },
   });
-  check('all-time fair verdict', fairHtml.includes('Looks fair') && fairHtml.includes('all-time verdict counts'));
-  check('progress meter copy', fairHtml.includes('600 / 4,500 rolls to detect a 2-point skew'));
+  check('all-time fair verdict', fairHtml.includes('Looks fair') && fairHtml.includes('600 rolls'));
+  check('progress meter copy is gone', !fairHtml.includes('2-point skew') && !fairHtml.includes('dice-progress'));
   const playersHtml = renderDiceStatsFromModel({
     status: 'ready',
     signedIn: true,
