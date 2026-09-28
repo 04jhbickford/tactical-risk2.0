@@ -6710,7 +6710,7 @@ export class GameState {
     // is present. Older docs without the field load as the safe default.
     this.aiRunsWhenUnattended = data.aiRunsWhenUnattended ?? false;
     // Game options are optional. An old save has no field and plays with
-    // today's defaults (land bridges on, 6 per round, standard army).
+    // today's defaults (land bridges on, tactical bombers off, 6 per round).
     this.gameOptions = normalizeGameOptions(data.gameOptions, {
       teamsEnabled: this.teamsEnabled,
     });

@@ -92,12 +92,12 @@ export class RulesPanel {
                 <tr><td>Artillery</td><td>4</td><td>2</td><td>2</td><td>1</td><td>Boosts paired infantry</td></tr>
                 <tr><td>Armour (Tank)</td><td>6</td><td>3</td><td>3</td><td>2</td><td>Can blitz through friendly territory</td></tr>
                 <tr><td>Fighter</td><td>10</td><td>3</td><td>4</td><td>4</td><td>Air unit, can land on carriers</td></tr>
-                <tr data-rules-tactical><td>Tactical Bomber</td><td>11</td><td>3</td><td>3</td><td>4</td><td>Attacks at 4 when paired with a fighter or tank in the same battle. Can land on a carrier.</td></tr>
+                <tr data-rules-tactical hidden><td>Tactical Bomber</td><td>11</td><td>3</td><td>3</td><td>4</td><td>Attacks at 4 when paired with a fighter or tank in the same battle. Can land on a carrier.</td></tr>
                 <tr><td>Bomber</td><td>12</td><td>4</td><td>1</td><td>6</td><td>Cannot capture. Strategic bombing raids are not yet available.</td></tr>
                 <tr><td>Submarine</td><td>6</td><td>2</td><td>1</td><td>2</td><td>First strike, can submerge</td></tr>
                 <tr><td>Destroyer</td><td>8</td><td>2</td><td>2</td><td>2</td><td>Blocks sub first strike</td></tr>
                 <tr><td>Cruiser</td><td>12</td><td>3</td><td>3</td><td>2</td><td>Shore bombardment</td></tr>
-                <tr><td>Carrier</td><td>14</td><td>1</td><td>2</td><td>2</td><td data-rules-carrier-table>Carries 2 air units (fighters or tactical bombers)</td></tr>
+                <tr><td>Carrier</td><td>14</td><td>1</td><td>2</td><td>2</td><td data-rules-carrier-table>Carries 2 fighters</td></tr>
                 <tr><td>Battleship</td><td>20</td><td>4</td><td>4</td><td>2</td><td>2 HP, shore bombardment</td></tr>
                 <tr><td>Transport</td><td>7</td><td>0</td><td>0</td><td>2</td><td>Carries 2 infantry or 1 infantry + 1 other</td></tr>
               </tbody>
@@ -119,7 +119,7 @@ export class RulesPanel {
             <h3>Transport & Carrier Rules</h3>
             <ul>
               <li><strong>Transports:</strong> Can carry 2 infantry OR 1 infantry + 1 other land unit.</li>
-              <li><strong>Carriers:</strong> <span data-rules-carrier-bullet>Can carry up to 2 air units (fighters or tactical bombers).</span></li>
+              <li><strong>Carriers:</strong> <span data-rules-carrier-bullet>Can carry up to 2 fighters.</span></li>
               <li><strong>Loading:</strong> Units can load during non-combat movement from adjacent coastal territories.</li>
               <li><strong>Unloading:</strong> Units can unload during combat movement for amphibious assault.</li>
             </ul>

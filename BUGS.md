@@ -6,7 +6,7 @@
 
 Stamp `V2.81.57-unified.20`. Schema stays 11. Display stamp only; game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.20`).
 
-James approved the tactical-bomber audit (via Arc, 28 Sep). Tactical bombers are a game option, default on. Old saves and online games that omit the field load as on. Off hides them from purchase, the rules sheet, and the attack-4 pairing. The AI still does not buy them, and they are still not in any setup. Strategic bombing raids are still not in this build.
+James approved the tactical-bomber audit (via Arc, 28 Sep). The owner decision (G1) is that tactical bombers default off. A new game is off until the host turns the option on. A save that omits the field loads off. An explicit true or false is kept. Off hides them from purchase, the rules sheet, and the attack-4 pairing. Fighters and bombers keep the air-landing rules from this build. The AI still does not buy them, and they are still not in any setup. Strategic bombing raids are still not in this build.
 
 A tactical bomber attacks at 4 when a fighter or tank in the same battle is still alive to pair with it, one for one. Otherwise it attacks at 3. Defence stays 3. Pairing is counted again each round after casualties. The combat list shows "Tac bomber 4 (paired)". With the option off, or with no tactical bomber in the stack, the dice sequence and the hits match a stack that uses the catalog attack.
 

@@ -191,9 +191,9 @@ export function phoneCombatAttackerWinPercent({
   attackers = [],
   defenders = [],
   unitDefs = {},
-  tacticalBombers = true,
+  tacticalBombers = false,
 } = {}) {
-  const pairing = countPairing(attackers, { enabled: tacticalBombers !== false });
+  const pairing = countPairing(attackers, { enabled: tacticalBombers === true });
   let pairedLeft = pairing.paired;
   let attackPower = 0;
   let attackUnits = 0;

@@ -136,6 +136,7 @@ console.log('=== pairing ===');
   check('pairing: bombers with no partner', alone.paired === 0 && alone.bombers === 2);
 
   const gs = makePlayingState();
+  gs.gameOptions = normalizeGameOptions({ tacticalBombers: true });
   const pairedHit = withRandom(0.5, () => attackRoll(gs, [
     { type: 'tacticalBomber', quantity: 1, owner: 'usa' },
     { type: 'fighter', quantity: 1, owner: 'usa' },
@@ -412,9 +413,14 @@ console.log('=== option and old saves ===');
     unitDefs,
     tacticalBombers: false,
   });
+  const fresh = makePlayingState();
+  check('option: a fresh game defaults OFF',
+    fresh.gameOptions.tacticalBombers === false
+    && normalizeGameOptions(null).tacticalBombers === false
+    && normalizeGameOptions({}).tacticalBombers === false
+    && normalizeGameOptions({ startingIPCs: 80 }).tacticalBombers === false);
   check('option: ON shows tactical bombers and pairs',
-    normalizeGameOptions(null).tacticalBombers === true
-    && bought === true
+    bought === true
     && on.pendingPurchases.some((p) => p.type === 'tacticalBomber')
     && onRoll.hits === 1
     && oddsOn > oddsOff
@@ -422,7 +428,6 @@ console.log('=== option and old saves ===');
 
   const off = makePlayingState();
   off.turnPhase = TURN_PHASES.PURCHASE;
-  off.gameOptions = normalizeGameOptions({ tacticalBombers: false });
   const ipcs = off.playerState.usa.ipcs;
   const refused = off.purchaseForMobilization('tacticalBomber', 1, unitDefs);
   const offRoll = withRandom(0.5, () => attackRoll(off, [
@@ -454,9 +459,21 @@ console.log('=== option and old saves ===');
   const loaded = makePlayingState();
   loaded.loadFromJSON(data);
   const loadedCarrier = (loaded.units['North Sea'] || []).find((u) => u.type === 'carrier');
-  check('save: missing option loads as ON', loaded.gameOptions.tacticalBombers === true);
+  check('save: missing option loads as OFF', loaded.gameOptions.tacticalBombers === false);
   check('save: existing carrier fighters still load',
     loadedCarrier?.aircraft?.filter((c) => c.type === 'fighter').length === 2);
+
+  const bare = saved.toJSON();
+  delete bare.gameOptions;
+  const legacy = makePlayingState();
+  legacy.loadFromJSON(bare);
+  check('save: a legacy save without the field loads OFF', legacy.gameOptions.tacticalBombers === false);
+
+  const explicitOn = makePlayingState();
+  explicitOn.gameOptions = normalizeGameOptions({ tacticalBombers: true });
+  const keptOn = makePlayingState();
+  keptOn.loadFromJSON(explicitOn.toJSON());
+  check('save: a save with the field ON stays ON', keptOn.gameOptions.tacticalBombers === true);
 
   const explicit = makePlayingState();
   explicit.gameOptions = normalizeGameOptions({ tacticalBombers: false });

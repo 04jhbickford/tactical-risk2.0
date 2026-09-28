@@ -15,10 +15,9 @@ export const DEFAULT_GAME_OPTIONS = Object.freeze({
   territorySetup: 'random',
   // Dice tokens are spent on the roll, hit or miss. Today's research.
   techAcquisition: 'dice',
-  // Tactical bombers are part of the standard game. Old saves omit the
-  // field and load as on. Off hides them from purchase, the rules, and
-  // the attack-4 pairing.
-  tacticalBombers: true,
+  // Tactical bombers are off until the host turns them on. Old saves
+  // omit the field and load as off. An explicit true or false is kept.
+  tacticalBombers: false,
 });
 
 export const STARTING_IPC_VALUES = Object.freeze([40, 60, 80, 100, 120, 150]);
@@ -119,8 +118,8 @@ export function normalizeGameOptions(raw, legacy = {}) {
       TECH_ACQUISITION_VALUES,
       DEFAULT_GAME_OPTIONS.techAcquisition,
     ),
-    // Default ON. Only an explicit false removes tactical bombers.
-    tacticalBombers: tacRaw === false ? false : true,
+    // Default OFF. Only an explicit true adds tactical bombers.
+    tacticalBombers: tacRaw === true,
   };
 }
 
@@ -157,7 +156,7 @@ export function describe(raw, legacy) {
   if (o.territorySetup === 'draft') parts.push('Draft territories');
   if (o.techAcquisition === 'keep') parts.push('keep tech tokens');
   if (o.techAcquisition === 'buy') parts.push(`buy tech (${DIRECT_TECH_IPC_COST})`);
-  if (!o.tacticalBombers) parts.push('no tactical bombers');
+  if (o.tacticalBombers) parts.push('tactical bombers');
   if (parts.length === 0) return 'Standard rules';
   return `Custom: ${parts.join(', ')}`;
 }

@@ -11,8 +11,7 @@ export const TACTICAL_PAIR_LABEL = 'Tac bomber 4 (paired)';
 const PARTNERS = new Set(['fighter', 'armour']);
 
 export function tacticalBombersEnabled(gameOptions) {
-  if (!gameOptions || typeof gameOptions !== 'object') return true;
-  return gameOptions.tacticalBombers !== false;
+  return gameOptions?.tacticalBombers === true;
 }
 
 export function countPairing(units, { enabled = true } = {}) {
