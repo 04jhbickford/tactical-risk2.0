@@ -9760,6 +9760,7 @@ html.mobile-shell .pp-battle-row,
 .combat-unit-icons.paired-icons .combat-unit-qty {
   font-size: 16px;
   min-width: 20px;
+  white-space: nowrap;
 }
 
 .combat-unit-stat {
@@ -10824,6 +10825,17 @@ html.mobile-shell .pp-battle-row,
   padding: 2px 6px;
   background: rgba(0,0,0,0.2);
   border-radius: 3px;
+}
+
+@media (max-width: 500px) {
+  .inline-dice-group {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+  .inline-dice-hits,
+  .hit-counter-label {
+    white-space: normal;
+  }
 }
 
 .inline-dice-hits.has-hits {

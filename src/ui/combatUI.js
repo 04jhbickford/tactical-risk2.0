@@ -493,6 +493,7 @@ export class CombatUI {
       attackerHasOnlyAir,
       defenderHasOnlyAir,
       defenderSeatId: defenders.find((u) => u.owner)?.owner || null,
+      combatRound: 1,
       // Track submarine hits in regular combat (can't hit air)
       attackerSubHits: 0,
       defenderSubHits: 0,
@@ -1855,6 +1856,7 @@ export class CombatUI {
     } else {
       // Continue combat
       this.combatState.phase = 'ready';
+      this.combatState.combatRound = (this.combatState.combatRound || 1) + 1;
       this.combatState.pendingAttackerCasualties = 0;
       this.combatState.pendingDefenderCasualties = 0;
       this.combatState.selectedAttackerCasualties = {};
@@ -2703,7 +2705,7 @@ export class CombatUI {
         html += `
           <div class="sub-strike-result" style="background: rgba(100,149,237,0.15); padding: 10px; border-radius: 6px; margin-bottom: 12px; border-left: 3px solid #6495ED;">
             <div style="font-weight: 600; color: #7ab3ff; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
-              <span>🔱</span> Submarine First Strike Result
+              <span>🔱</span> Round 1 surprise strike
             </div>
             <div style="display: flex; gap: 12px; flex-wrap: wrap;">
               ${attackerRolls.length > 0 ? `
@@ -3250,13 +3252,14 @@ export class CombatUI {
     const renderInlineDice = (rolls) => {
       if (!rolls || rolls.length === 0) return '';
       const hits = rolls.filter(r => r.hit).length;
+      const round = this.combatState?.combatRound || 1;
       return `
         <div class="inline-dice-group">
           <div class="inline-dice">
             ${rolls.slice(0, 8).map(r => `<span class="die-mini ${r.hit ? 'hit' : 'miss'}">${r.roll}</span>`).join('')}
             ${rolls.length > 8 ? `<span class="dice-overflow">+${rolls.length - 8}</span>` : ''}
           </div>
-          <span class="inline-dice-hits ${hits > 0 ? 'has-hits' : ''}">${hits} hit${hits !== 1 ? 's' : ''}</span>
+          <span class="inline-dice-hits ${hits > 0 ? 'has-hits' : ''}">Round ${round}: ${hits} hit${hits !== 1 ? 's' : ''} from ${rolls.length} dice</span>
         </div>
       `;
     };
@@ -3301,7 +3304,7 @@ export class CombatUI {
           <div class="combat-unit-side attacker ${showDice ? 'with-dice' : ''}">
             ${showDice ? renderInlineDice(pairedDice) : ''}
             <div class="combat-unit-icons paired-icons" style="--player-color: ${attackerPlayer.color}">
-              <span class="combat-unit-qty">${pairedCount}</span>
+              <span class="combat-unit-qty">${pairedCount} + ${pairedCount}</span>
               ${infantryIcon ? `<img src="${infantryIcon}" class="combat-unit-icon" alt="infantry" title="Infantry (supported): Attack 2">` : ''}
               ${artilleryIcon ? `<img src="${artilleryIcon}" class="combat-unit-icon" alt="artillery" title="Artillery: Attack 2">` : ''}
             </div>
@@ -3692,7 +3695,7 @@ export class CombatUI {
         </div>
         ${pendingAttackerCasualties > 0 ? `
           <div class="casualty-hit-counter ${attackerComplete ? 'complete' : 'incomplete'}">
-            <span class="hit-counter-label">Hits to assign:</span>
+            <span class="hit-counter-label">Round ${this.combatState.combatRound || 1} hits to assign:</span>
             <span class="hit-counter-value">${attackerTotal}</span>
             <span class="hit-counter-sep">of</span>
             <span class="hit-counter-total">${effectiveAttackerCasualties}</span>
@@ -3719,7 +3722,7 @@ export class CombatUI {
         </div>
         ${pendingDefenderCasualties > 0 ? `
           <div class="casualty-hit-counter ${defenderComplete ? 'complete' : 'incomplete'}">
-            <span class="hit-counter-label">Hits to assign:</span>
+            <span class="hit-counter-label">Round ${this.combatState.combatRound || 1} hits to assign:</span>
             <span class="hit-counter-value">${defenderTotal}</span>
             <span class="hit-counter-sep">of</span>
             <span class="hit-counter-total">${effectiveDefenderCasualties}</span>
