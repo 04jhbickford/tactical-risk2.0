@@ -34,8 +34,8 @@ const ping = readFileSync(join(root, 'src/multiplayer/discordTurnPing.js'), 'utf
 
 assert.equal(GAME_VERSION, 'V2.81.57-unified.18');
 assert.equal(SCHEMA_VERSION, 11);
-assert.match(html, /content="V2\.81\.57-unified\.17"/);
-assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.17'/);
+assert.match(html, /content="V2\.81\.57-unified\.18"/);
+assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.18'/);
 
 function listedRow() {
   return {

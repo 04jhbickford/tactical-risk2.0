@@ -1714,7 +1714,10 @@ export class PlayerPanel {
   _publishMoveGesture() {
     const gs = this.gameState;
     if (!gs) return;
-    if (!this._gestureRestored && gs.uiGesture?.fork === 'classic'
+    if (!phaseOwnsMovementConfirm(gs.turnPhase)) {
+      this.movePendingDest = null;
+      this.moveSelectedUnits = {};
+    } else if (!this._gestureRestored && gs.uiGesture?.fork === 'classic'
       && gs.uiGesture.turnPhase === gs.turnPhase
       && gs.uiGesture.playerId === gs.currentPlayer?.id) {
       this._gestureRestored = true;
@@ -1771,8 +1774,6 @@ export class PlayerPanel {
       this.contentEl.innerHTML = '<div class="pp-loading">Loading match…</div>';
       return;
     }
-    this._publishMoveGesture();
-
     const player = this.gameState.currentPlayer;
     if (!player) {
       this.el.classList.remove('player-panel--peek', 'player-panel--expanded', 'player-panel--place-tray', 'player-panel--mobilize');
@@ -1793,6 +1794,7 @@ export class PlayerPanel {
     this._lastRenderedPlayerId = player.id;
     this._peekPhase = phase;
     this._peekTurnPhase = turnPhase;
+    this._publishMoveGesture();
     if (flushedPeek) {
       this.selectedTerritory = null;
     }
@@ -4715,7 +4717,7 @@ export class PlayerPanel {
               ? '<span class="status-crashed">CRASH</span>'
               : selectedLanding
                 ? `<span class="status-landed">${selectedLanding}</span>`
-                : isCurrent
+                : isPicked
                   ? '<span class="status-selecting">SELECT</span>'
                   : '<span class="status-pending">...</span>'}
           </div>
