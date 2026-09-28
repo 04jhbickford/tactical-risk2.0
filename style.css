@@ -20516,7 +20516,6 @@ html.mobile-shell.tech-active .tech-popup {
   line-height: 1.35;
   padding: 10px 12px 12px;
   box-sizing: border-box;
-  max-width: 100%;
   overflow-x: hidden;
 }
 .dice-stats-head {
@@ -20524,6 +20523,8 @@ html.mobile-shell.tech-active .tech-popup {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -20535,7 +20536,7 @@ html.mobile-shell.tech-active .tech-popup {
   height: 28px;
   min-width: 28px;
   min-height: 28px;
-  margin: -4px -4px -4px 0;
+  margin: -4px 0;
   padding: 0;
   border: none;
   border-radius: 6px;
