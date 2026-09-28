@@ -4,6 +4,7 @@ import { TURN_PHASES } from '../state/gameState.js';
 import { getUnitIconPath } from '../utils/unitIcons.js';
 import { airCombatMoveMayOccupy, combatMoveReachableDests, maxMoveSelection, seaZoneHasEnemyForAirAttack } from '../state/combatMoveEligibility.js';
 import { hasLegalAirLandingFrom, wasFriendlyAtTurnStart } from '../state/airLanding.js';
+import { isLandingCarrier } from '../state/carrierPlacement.js';
 
 export class MovementUI {
   constructor() {
@@ -295,7 +296,7 @@ export class MovementUI {
 
         // Non-combat move or no enemies: need a carrier with capacity
         const seaUnits = this.gameState.getUnitsAt(territory.name);
-        const carriers = seaUnits.filter(u => u.type === 'carrier' && u.owner === player.id);
+        const carriers = seaUnits.filter(u => isLandingCarrier(this.gameState, u, player.id));
         const carrierDef = this.unitDefs.carrier;
         if (!carrierDef) return false;
 
@@ -541,7 +542,7 @@ export class MovementUI {
 
           // Non-combat or no enemies: need carrier with capacity
           const seaUnits = this.gameState.getUnitsAt(destName);
-          const carriers = seaUnits.filter(u => u.type === 'carrier' && u.owner === player.id);
+          const carriers = seaUnits.filter(u => isLandingCarrier(this.gameState, u, player.id));
           const carrierDef = this.unitDefs.carrier;
           if (!carrierDef || carriers.length === 0) return false;
 

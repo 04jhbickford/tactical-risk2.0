@@ -67,6 +67,7 @@ export function describeTurnSummaryEvent(ev) {
   if (ev.type === 'territory_captured') {
     return `Captured ${ev.territory || ''} from ${ev.fromPlayer || ''}`;
   }
+  if (ev.type === 'air_destroyed' && ev.message) return ev.message;
   return ev.type || 'Unknown event';
 }
 
@@ -188,6 +189,7 @@ export class TurnSummaryModal {
     if (ev.type === 'territory_captured') {
       return `Captured <strong>${this._escapeHtml(ev.territory)}</strong> from ${this._escapeHtml(ev.fromPlayer)}`;
     }
+    if (ev.type === 'air_destroyed' && ev.message) return this._escapeHtml(ev.message);
     return this._escapeHtml(ev.type || 'Unknown event');
   }
 

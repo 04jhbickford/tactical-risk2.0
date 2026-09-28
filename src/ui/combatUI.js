@@ -22,6 +22,12 @@ import { persistableUnit } from '../state/persistState.js';
 import { emitGameEvent, getGameEventLog } from '../multiplayer/gameEventLog.js';
 import { flushDiceBuffer } from '../stats/diceTracker.js';
 import { renderCombatBattleList } from './battleOrder.js';
+import {
+  consumePairedAttack,
+  countPairing,
+  TACTICAL_PAIR_LABEL,
+  tacticalBombersEnabled,
+} from '../state/tacticalPairing.js';
 
 export {
   getEnemyCombatUnits,
@@ -41,6 +47,28 @@ export function formatCombatForceLine(units, formatName = formatUnitName) {
   return summarizeCombatForce(units)
     .map(({ type, quantity }) => `${quantity} ${String(formatName(type) || type).toLowerCase()}`)
     .join(' · ');
+}
+
+// Attackers only. A paired tactical bomber shows its boosted attack.
+// Defenders keep the plain catalog line.
+export function formatAttackerCombatLine(units, { enabled = true } = {}) {
+  const pairing = countPairing(units, { enabled: enabled !== false });
+  let pairedLeft = pairing.paired;
+  const parts = [];
+  for (const { type, quantity } of summarizeCombatForce(units)) {
+    const qty = Math.max(0, Number(quantity) || 0);
+    if (qty <= 0) continue;
+    if (type === 'tacticalBomber' && pairedLeft > 0) {
+      const boosted = Math.min(qty, pairedLeft);
+      pairedLeft -= boosted;
+      parts.push(`${boosted} ${TACTICAL_PAIR_LABEL}`);
+      const rest = qty - boosted;
+      if (rest > 0) parts.push(`${rest} ${formatUnitName(type).toLowerCase()}`);
+      continue;
+    }
+    parts.push(`${qty} ${String(formatUnitName(type) || type).toLowerCase()}`);
+  }
+  return parts.join(' · ');
 }
 
 export function resolveCombatNextLine(phase, { winner = null } = {}) {
@@ -163,14 +191,24 @@ export function phoneCombatAttackerWinPercent({
   attackers = [],
   defenders = [],
   unitDefs = {},
+  tacticalBombers = false,
 } = {}) {
+  const pairing = countPairing(attackers, { enabled: tacticalBombers === true });
+  let pairedLeft = pairing.paired;
   let attackPower = 0;
   let attackUnits = 0;
   for (const unit of attackers || []) {
     const def = unitDefs?.[unit.type];
-    if (def && def.attack > 0) {
-      attackPower += (def.attack / 6) * unit.quantity;
-      attackUnits += unit.quantity;
+    const qty = Number(unit?.quantity) || 0;
+    if (def && def.attack > 0 && qty > 0) {
+      let power = (def.attack / 6) * qty;
+      if (unit.type === 'tacticalBomber' && pairedLeft > 0) {
+        const boosted = Math.min(qty, pairedLeft);
+        power = (4 / 6) * boosted + (def.attack / 6) * (qty - boosted);
+        pairedLeft -= boosted;
+      }
+      attackPower += power;
+      attackUnits += qty;
     }
   }
 
@@ -1019,6 +1057,7 @@ export class CombatUI {
       attackers: this.combatState?.attackers,
       defenders: this.combatState?.defenders,
       unitDefs: this.unitDefs,
+      tacticalBombers: tacticalBombersEnabled(this.gameState?.gameOptions),
     });
   }
 
@@ -1043,6 +1082,9 @@ export class CombatUI {
     const artilleryCount = attackers.filter(u => u.type === 'artillery')
       .reduce((sum, u) => sum + u.quantity, 0);
     let supportedInfantry = artilleryCount; // Number of infantry that get +1 attack
+    let pairedBombers = countPairing(attackers, {
+      enabled: tacticalBombersEnabled(this.gameState?.gameOptions),
+    }).paired;
 
     // Check attacker technologies
     const hasJets = attackerId && this.gameState.hasTech(attackerId, 'jets');
@@ -1074,6 +1116,13 @@ export class CombatUI {
           // Super Submarines: Submarines +1 attack
           if (unit.type === 'submarine' && hasSuperSubs) {
             attackValue += 1;
+          }
+
+          // Tactical bomber + fighter or tank, same battle, 1:1. Defence is unchanged.
+          if (d === 0) {
+            const paired = consumePairedAttack(unit.type, attackValue, pairedBombers);
+            attackValue = paired.attack;
+            pairedBombers = paired.pairedLeft;
           }
 
           const roll = this._rollD6({
@@ -3113,7 +3162,9 @@ export class CombatUI {
 
   _renderPhoneCombatSummary(attackerPlayer, defenderPlayer, phase, winner, { compact = false } = {}) {
     const { attackers, defenders } = this.combatState;
-    const atk = formatCombatForceLine(attackers) || 'none';
+    const atk = formatAttackerCombatLine(attackers, {
+      enabled: tacticalBombersEnabled(this.gameState?.gameOptions),
+    }) || 'none';
     const def = formatCombatForceLine(defenders) || 'none';
     const next = resolveCombatNextLine(phase, { winner });
     const hero = formatPhoneCombatHeroOdds({
@@ -3132,11 +3183,27 @@ export class CombatUI {
     let detailHtml = '';
     if (detail) {
       const rows = summarizeCombatForce(detailUnits);
+      const pairing = detail === 'defender'
+        ? { paired: 0 }
+        : countPairing(detailUnits, { enabled: tacticalBombersEnabled(this.gameState?.gameOptions) });
+      let pairedLeft = pairing.paired;
+      const detailLines = [];
+      for (const { type, quantity } of rows) {
+        const qty = Math.max(0, Number(quantity) || 0);
+        if (type === 'tacticalBomber' && pairedLeft > 0) {
+          const boosted = Math.min(qty, pairedLeft);
+          pairedLeft -= boosted;
+          detailLines.push(`${boosted} ${TACTICAL_PAIR_LABEL}`);
+          const rest = qty - boosted;
+          if (rest > 0) detailLines.push(`${rest} ${formatUnitName(type)}`);
+          continue;
+        }
+        detailLines.push(`${qty} ${formatUnitName(type)}`);
+      }
       detailHtml = `<div class="phone-combat-detail">
         <div class="phone-combat-detail-title">${detailName}</div>
-        ${rows.length
-          ? rows.map(({ type, quantity }) =>
-            `<div class="phone-combat-detail-row">${quantity} ${formatUnitName(type)}</div>`).join('')
+        ${detailLines.length
+          ? detailLines.map((line) => `<div class="phone-combat-detail-row">${line}</div>`).join('')
           : '<div class="phone-combat-detail-row">None left</div>'}
       </div>`;
     }
@@ -3209,6 +3276,10 @@ export class CombatUI {
     const pairedCount = Math.min(attackerArtillery, attackerInfantry);
     const extraInfantry = attackerInfantry - pairedCount;
     const extraArtillery = attackerArtillery - pairedCount;
+    const tacPairing = countPairing(attackers, {
+      enabled: tacticalBombersEnabled(this.gameState?.gameOptions),
+    });
+    const pairedTac = tacPairing.paired;
 
     // Build custom sorted list: paired units first, then other units
     let html = '';
@@ -3238,6 +3309,28 @@ export class CombatUI {
           </div>
           <div class="combat-unit-type">
             <span class="combat-type-name">Inf + Art</span>
+          </div>
+          <div class="combat-unit-side defender empty"></div>
+        </div>`;
+    }
+
+    if (pairedTac > 0) {
+      const tacIcon = attackerPlayer ? getUnitIconPath('tacticalBomber', attackerPlayer.id) : null;
+      const pairedDice = showDice
+        ? (diceRolls.attackRolls || []).filter((r) => r.unitType === 'tacticalBomber' && r.attackValue === 4)
+        : [];
+      html += `
+        <div class="combat-unit-row ${showDice ? 'with-dice' : ''}">
+          <div class="combat-unit-side attacker ${showDice ? 'with-dice' : ''}">
+            ${showDice ? renderInlineDice(pairedDice) : ''}
+            <div class="combat-unit-icons" style="--player-color: ${attackerPlayer.color}">
+              <span class="combat-unit-qty">${pairedTac}</span>
+              ${tacIcon ? `<img src="${tacIcon}" class="combat-unit-icon" alt="Tactical bomber">` : ''}
+            </div>
+            <span class="combat-unit-stat supported">A4</span>
+          </div>
+          <div class="combat-unit-type">
+            <span class="combat-type-name is-paired">${TACTICAL_PAIR_LABEL}</span>
           </div>
           <div class="combat-unit-side defender empty"></div>
         </div>`;
@@ -3279,6 +3372,9 @@ export class CombatUI {
       if (unitType === 'artillery' && pairedCount > 0) {
         attackQty = extraArtillery;
       }
+      if (unitType === 'tacticalBomber' && pairedTac > 0) {
+        attackQty = Math.max(0, attackQty - pairedTac);
+      }
 
       // Get dice for this unit type (excluding paired infantry which was handled above)
       let attackerDice = [];
@@ -3287,6 +3383,8 @@ export class CombatUI {
         if (unitType === 'infantry' && pairedCount > 0) {
           // Only unsupported infantry dice (attack value 1)
           attackerDice = (diceRolls.attackRolls || []).filter(r => r.unitType === 'infantry' && r.attackValue === 1);
+        } else if (unitType === 'tacticalBomber' && pairedTac > 0) {
+          attackerDice = (diceRolls.attackRolls || []).filter(r => r.unitType === 'tacticalBomber' && r.attackValue !== 4);
         } else if (unitType === 'artillery' && pairedCount > 0) {
           // Artillery dice already shown in paired row
           attackerDice = [];

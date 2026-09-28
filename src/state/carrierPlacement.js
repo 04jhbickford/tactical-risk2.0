@@ -29,15 +29,33 @@ export function friendlyCarriersAt(gameState, seaZoneName, playerId) {
     .filter((u) => u.type === 'carrier' && u.owner === playerId);
 }
 
+// NCM landing and the end-of-phase check. Own carriers and allied carriers.
+// Mobilize keeps friendlyCarriersAt (your own hulls only).
+export function isLandingCarrier(gameState, carrier, playerId) {
+  if (!carrier || carrier.type !== 'carrier' || !playerId) return false;
+  if (carrier.owner === playerId) return true;
+  if (typeof gameState?.areAllies !== 'function') return false;
+  return !!gameState.areAllies(playerId, carrier.owner)
+    || !!gameState.areAllies(carrier.owner, playerId);
+}
+
+export function landingCarriersAt(gameState, seaZoneName, playerId) {
+  return unitsAt(gameState, seaZoneName)
+    .filter((unit) => isLandingCarrier(gameState, unit, playerId));
+}
+
 export function carrierOpenSlots(carrier, unitDefs) {
   const aboard = Array.isArray(carrier?.aircraft) ? carrier.aircraft.length : 0;
   return Math.max(0, carrierCapacity(unitDefs) - aboard);
 }
 
-export function seaZoneCarrierCapacity(gameState, seaZoneName, playerId, unitDefs, unitType = 'fighter') {
+export function seaZoneCarrierCapacity(gameState, seaZoneName, playerId, unitDefs, unitType = 'fighter', { includeAllies = false } = {}) {
   if (!carrierCanCarry(unitDefs, unitType)) return 0;
+  const carriers = includeAllies
+    ? landingCarriersAt(gameState, seaZoneName, playerId)
+    : friendlyCarriersAt(gameState, seaZoneName, playerId);
   let slots = 0;
-  for (const carrier of friendlyCarriersAt(gameState, seaZoneName, playerId)) {
+  for (const carrier of carriers) {
     slots += carrierOpenSlots(carrier, unitDefs);
   }
   return slots;

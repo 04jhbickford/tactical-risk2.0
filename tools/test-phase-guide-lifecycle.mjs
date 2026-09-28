@@ -67,7 +67,7 @@ const check = (label, cond) => {
 };
 
 console.log('=== Version + schema ===');
-check('GAME_VERSION is V2.81.57-unified.19', GAME_VERSION === 'V2.81.57-unified.19');
+check('GAME_VERSION is V2.81.57-unified.20', GAME_VERSION === 'V2.81.57-unified.20');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== Store / never / turn gate ===');

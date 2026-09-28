@@ -440,6 +440,25 @@ export function statDocFromFlat(flat, extra = {}) {
   return data;
 }
 
+// Live game docs store `name_<seat>` even when the batches used to rebuild
+// that game have no playerName. A wholesale set() would drop those names.
+// A name the rebuild did compute wins. An empty rebuild keeps the live one.
+const NAME_FIELD = /^name_[A-Za-z0-9]+$/;
+
+export function preserveNameFields(existing, next) {
+  const out = { ...(next || {}) };
+  const prev = existing && typeof existing === 'object' ? existing : {};
+  for (const key of Object.keys(prev)) {
+    if (!NAME_FIELD.test(key)) continue;
+    if (out[key] == null || out[key] === '') out[key] = prev[key];
+  }
+  return out;
+}
+
+export function gameStatDoc(existing, flat) {
+  return preserveNameFields(existing, statDocFromFlat(flat));
+}
+
 function norm(value) {
   if (value == null || value === '') return 0;
   if (typeof value === 'number') return value;
@@ -472,7 +491,10 @@ export function diffRebuiltStats(currentDocs, rebuilt) {
     ...Object.keys(currentDocs?.games || {}),
   ]);
   for (const gameId of gameIds) {
-    const changes = diffStatDoc(currentDocs?.games?.[gameId], statDocFromFlat(rebuilt.games[gameId]));
+    const changes = diffStatDoc(
+      currentDocs?.games?.[gameId],
+      gameStatDoc(currentDocs?.games?.[gameId], rebuilt.games[gameId]),
+    );
     if (changes.length) lines.push({ id: `game_${gameId}`, changes });
   }
   const playerIds = new Set([
@@ -599,7 +621,7 @@ async function runFirestore(commit) {
   };
   await queue('global', statDocFromFlat(rebuilt.global));
   for (const [gameId, flat] of Object.entries(rebuilt.games)) {
-    await queue(`game_${safeIdPart(gameId, 'game')}`, statDocFromFlat(flat));
+    await queue(`game_${safeIdPart(gameId, 'game')}`, gameStatDoc(current.games[gameId], flat));
   }
   for (const [uid, flat] of Object.entries(rebuilt.players)) {
     await queue(`player_${safeIdPart(uid, 'uid')}`, statDocFromFlat(flat));

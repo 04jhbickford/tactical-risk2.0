@@ -2,6 +2,26 @@
 
 ---
 
+## 9.28.26 — unified.20 tactical bombers and air landing
+
+Stamp `V2.81.57-unified.20`. Schema stays 11. Display stamp only; game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.20`).
+
+James approved the tactical-bomber audit (via Arc, 28 Sep). The owner decision (G1) is that tactical bombers default off. A new game is off until the host turns the option on. A save that omits the field loads off. An explicit true or false is kept. Off hides them from purchase, the rules sheet, and the attack-4 pairing. Fighters and bombers keep the air-landing rules from this build. The AI still does not buy them, and they are still not in any setup. Strategic bombing raids are still not in this build.
+
+A tactical bomber attacks at 4 when a fighter or tank in the same battle is still alive to pair with it, one for one. Otherwise it attacks at 3. Defence stays 3. Pairing is counted again each round after casualties. The combat list shows "Tac bomber 4 (paired)". With the option off, or with no tactical bomber in the stack, the dice sequence and the hits match a stack that uses the catalog attack.
+
+A carrier holds 2 air units, fighters or tactical bombers, including one of each. A strategic bomber still cannot land. Mobilize onto a carrier uses the same capacity. An allied carrier counts for non-combat landing and for the end-of-phase check. Mobilize still uses your own carriers.
+
+End of Non-Combat Move destroys aircraft that are not already on a legal spot: land that power or an ally controlled at the start of the turn, or a friendly or allied carrier with room. The action log and the turn summary record it. Humans get a warning first ("N aircraft will be destroyed for lack of a landing site"), with the units and territories, Go back, and End anyway. The AI does not see that prompt. Phone width is a bottom sheet. Wider layouts use the compact dialog.
+
+What already landed aircraft before this build: `airLandingUI.js` is the post-combat map picker. Those choices sit on `pendingAirLandings` and apply when the phase advances. Leaving combat, `nextPhase` still runs `relocateAirFromCapturedLand` and `resolveLooseAirOverWater`, which fly a loose fighter onto friendly land or crash it. Leaving non-combat does not run that rescue again, so the same aircraft is not moved and then destroyed. A plane sitting in a sea zone is not landed until it is in a carrier's aircraft. Combat can still crash aircraft that have no landing option during the battle.
+
+`tools/recompute-dice-stats.mjs --commit` keeps live `name_<seat>` fields when the rebuild has no player name for that seat. A name the rebuild did compute replaces the live one.
+
+Receipt: `node tools/test-tactical-bombers.mjs`, `node tools/test-tactical-bomber-copy.mjs`, `node tools/test-dice-stats-v2.mjs`, `node tools/test-dice-tracker-golden.mjs`.
+
+---
+
 ## 9.28.26 — unified.19 dice stats
 
 Stamp `V2.81.57-unified.19`. Schema stays 11. Display stamp only; game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.19`).

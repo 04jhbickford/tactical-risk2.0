@@ -122,6 +122,13 @@ function rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMod
       </div>
     </div>
     <div class="go-group">
+      <h3 class="go-group-label">Units</h3>
+      <div class="go-row" title="Tactical bombers can be purchased. They attack at 4 when paired with a fighter or tank, and they can land on a carrier.">
+        <span class="go-label">Tactical bombers</span>
+        ${shownValue(editable, toggleHtml('tacticalBombers', o.tacticalBombers, { editable }), o.tacticalBombers ? 'On' : 'Off')}
+      </div>
+    </div>
+    <div class="go-group">
       <h3 class="go-group-label">Players</h3>
       <div class="go-row lobby-phone-teams" title="Powers on the same team do not fight">
         <span class="go-label lobby-phone-teams-name">Teams</span>
@@ -206,6 +213,7 @@ export function readGameOptionsFrom(root) {
     multipleTech: flag('multipleTech'),
     landBridges: flag('landBridges'),
     teams: flag('teams'),
+    tacticalBombers: flag('tacticalBombers'),
     territorySetup: valueOf('territorySetup')?.value,
     techAcquisition: valueOf('techAcquisition')?.value,
   });
@@ -316,7 +324,7 @@ export function bindGameOptions(root, { onChange, onToggle } = {}) {
       if (max) max.value = String(next.maxPlayers);
       if (territories) territories.value = next.territorySetup;
       if (tech) tech.value = next.techAcquisition;
-      for (const name of ['multipleTech', 'landBridges', 'teams']) {
+      for (const name of ['multipleTech', 'landBridges', 'teams', 'tacticalBombers']) {
         const el = panel.querySelector(`[data-go="${name}"]`);
         if (!el) continue;
         const on = !!next[name];

@@ -218,11 +218,16 @@ export function addMovedAirToTerritory(unitsByTerr, {
   const destUnits = unitsByTerr[destination] || [];
 
   if (destIsWater) {
-    const carrierDef = unitDefs.carrier || { aircraftCapacity: 2, canCarry: ['fighter'] };
+    const carrierDef = unitDefs.carrier || { aircraftCapacity: 2, canCarry: ['fighter', 'tacticalBomber'] };
     if (!carrierDef.canCarry || carrierDef.canCarry.includes(type)) {
       let remaining = quantity;
       const perHull = carrierDef.aircraftCapacity || 2;
-      const carriers = destUnits.filter((unit) => unit.type === 'carrier' && unit.owner === owner);
+      const carriers = destUnits.filter((unit) => {
+        if (unit.type !== 'carrier') return false;
+        if (unit.owner === owner) return true;
+        if (!gameState?.areAllies) return false;
+        return gameState.areAllies(owner, unit.owner) || gameState.areAllies(unit.owner, owner);
+      });
       for (const carrier of carriers) {
         if (remaining <= 0) break;
         let hull = carrier;
@@ -415,7 +420,7 @@ export function wasFriendlyAtTurnStart(gameState, name, playerId) {
 }
 
 function carrierRoom(gameState, seaName, playerId, unitType, unitDefs) {
-  return seaZoneCarrierCapacity(gameState, seaName, playerId, unitDefs, unitType) > 0;
+  return seaZoneCarrierCapacity(gameState, seaName, playerId, unitDefs, unitType, { includeAllies: true }) > 0;
 }
 
 // After flying `remaining` movement from `origin`, can this aircraft end

@@ -1,4 +1,4 @@
-// V2.81.57-unified.19 — dice stats panel, sentences, lobby entry, backfill.
+// V2.81.57-unified.20 — dice stats panel, sentences, lobby entry, backfill.
 // Run: node tools/test-dice-stats-v2.mjs
 
 import { readFileSync } from 'fs';
@@ -26,6 +26,8 @@ import {
   dedupeBackfillEvents,
   diffRebuiltStats,
   gameIdFromEventPath,
+  gameStatDoc,
+  preserveNameFields,
   rebuildDiceStats,
   statDocFromFlat,
 } from './recompute-dice-stats.mjs';
@@ -357,6 +359,41 @@ console.log('=== backfill ===');
     globalDoc: { n: 6, face_1: 1, face_2: 1, face_3: 1, face_4: 1, face_5: 1, face_6: 1 },
   });
   check('fresh totals omit the backfill caveat', !plainHtml.includes(DICE_STATS_BACKFILL_CAVEAT));
+
+  const namedLive = {
+    n: 10,
+    name_p1: 'Robert',
+    name_ai1: 'German Easy AI',
+    face_1: 10,
+  };
+  const namelessRebuild = statDocFromFlat({ inc: { n: 4, face_1: 4 }, names: {} });
+  const kept = preserveNameFields(namedLive, namelessRebuild);
+  check('names: live name_* fields survive a nameless rebuild',
+    kept.name_p1 === 'Robert'
+    && kept.name_ai1 === 'German Easy AI'
+    && kept.n === 4
+    && kept.face_1 === 4
+    && !('face_1' in namedLive && kept.face_1 === 10));
+  check('names: a rebuilt playerName replaces the live one',
+    preserveNameFields(namedLive, { ...namelessRebuild, name_p1: 'Bastion' }).name_p1 === 'Bastion'
+    && preserveNameFields(namedLive, { ...namelessRebuild, name_p1: 'Bastion' }).name_ai1 === 'German Easy AI');
+  const namedEven = { n: 4, face_1: 4, name_p1: 'Robert', name_ai1: 'German Easy AI' };
+  const namedCurrent = {
+    global: { n: 4, face_1: 4 },
+    games: { LIVE: namedEven },
+    players: {},
+  };
+  const namedRebuilt = {
+    global: { inc: { n: 4, face_1: 4 } },
+    games: { LIVE: { inc: { n: 4, face_1: 4 }, names: {} } },
+    players: {},
+  };
+  check('names: dry-run does not flag preserved seat names',
+    diffRebuiltStats(namedCurrent, namedRebuilt).length === 0);
+  check('names: the commit doc is the same merge',
+    gameStatDoc(namedEven, namedRebuilt.games.LIVE).name_p1 === 'Robert'
+    && gameStatDoc(namedEven, namedRebuilt.games.LIVE).name_ai1 === 'German Easy AI'
+    && gameStatDoc(namedEven, namedRebuilt.games.LIVE).n === 4);
 }
 
 console.log('=== rules untouched ===');

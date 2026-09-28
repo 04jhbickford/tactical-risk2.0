@@ -1,5 +1,4 @@
-// V2.81.57-unified.19 — tactical bomber labels only.
-// Purchase row and rules copy. No units.json, canCarry, or combat changes.
+// V2.81.57-unified.20 — tactical bomber labels, pairing copy, carrier text.
 // Run: node tools/test-tactical-bomber-copy.mjs
 
 import { readFileSync } from 'fs';
@@ -42,17 +41,19 @@ console.log('=== purchase row ===');
 console.log('=== rules copy ===');
 {
   const rules = readFileSync(join(root, 'src/ui/rulesPanel.js'), 'utf8');
-  check('carrier bullet is 2 fighters', rules.includes('<strong>Carriers:</strong> Can carry up to 2 fighters.'));
-  check('carrier bullet does not offer tactical bombers', !rules.includes('fighters/tactical bombers'));
-  check('carrier table row is 2 fighters', rules.includes('<td>Carries 2 fighters</td>'));
+  check('carrier bullet is 2 air units', rules.includes('Can carry up to 2 air units (fighters or tactical bombers).'));
+  check('carrier bullet does not use the slash form', !rules.includes('fighters/tactical bombers'));
+  check('carrier table row is 2 air units', rules.includes('Carries 2 air units (fighters or tactical bombers)'));
+  check('option off still has the fighter-only sentence', rules.includes('Can carry up to 2 fighters.'));
+  check('tactical bomber pairs in the same battle', rules.includes('Attacks at 4 when paired with a fighter or tank in the same battle.'));
   check('bomber note matches the code', rules.includes('Cannot capture. Strategic bombing raids are not yet available.'));
   check('bomber note does not claim a raid', !rules.includes('Strategic bombing, cannot capture'));
 }
 
-console.log('=== catalog untouched ===');
+console.log('=== catalog ===');
 {
   const units = JSON.parse(readFileSync(join(root, 'data/units.json'), 'utf8'));
-  check('carrier canCarry is fighters only', JSON.stringify(units.carrier.canCarry) === '["fighter"]');
+  check('carrier canCarry is fighters and tactical bombers', JSON.stringify(units.carrier.canCarry) === '["fighter","tacticalBomber"]');
   check('bomber has no raid field', units.bomber.attack === 4 && units.bomber.defense === 1 && !units.bomber.strategicBombing);
   check('tactical bomber stats unchanged', units.tacticalBomber.cost === 11
     && units.tacticalBomber.attack === 3
