@@ -194,7 +194,7 @@ function renderFaceChart(totals) {
     return `
       <div class="dice-face-row">
         <span class="dice-face-num">${i + 1}</span>
-        <span class="dice-bar-track">
+        <span class="dice-bar">
           <span class="dice-bar-fill" style="width:${obsW.toFixed(2)}%"></span>
         </span>
         <span class="dice-face-pct">${pct.toFixed(1)}%</span>

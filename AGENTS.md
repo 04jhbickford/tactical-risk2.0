@@ -45,6 +45,18 @@ Desktop at **1024px and wider** must feel desktop-native. Map-dominant layout, s
 
 Mobile at **390px wide** must be solid: no overlap, no horizontal scroll, compact controls. Primary Confirm / Max / Resign stay fully on screen and clear the home indicator (METHOD: ≥44pt at 390 and 500). Check portrait 390 and a short landscape height. 500px is the second phone width in `doc/METHOD-SETTLECOAST.md`.
 
+## 3a. Charts and stat panels (house principles, 28 Sep 2026)
+
+These apply to every chart, stat panel and data readout in the game (Dice stats, turn summaries, anything new). They come from the owner's house visual language, which is the source of truth; if this section and a brief disagree, ask.
+- Highest signal-to-ink. One mark per value. A reference or expected value is a single dotted line.
+- No track backgrounds, no gridline clutter, no per-row ticks, no redundant labels.
+- A one-line verdict instead of paragraphs of stats. Plain words, no jargon. Phone first at 390px.
+- Worked example (Dice stats): one solid bar per face, one dotted "fair" line at the expected count, and one plain verdict line such as "Consistent with fair dice". No grey tracks behind the bars, no tick on every row, no paragraphs of chi-square text. Use palette tokens only.
+- Pre-ship checklist (fail-closed; one failure means do not ship):
+  1. Can each element be removed without losing meaning? If yes, remove it.
+  2. Is the takeaway readable in 3 seconds?
+  3. Does it work at 390px (and at 1024px and wider, per section 3)?
+
 ## 4. Turn notices to Discord
 
 Do not change these formats unless the task explicitly says to. Contracts live in `src/multiplayer/discordTurnPing.js` and `api/discord-turn-ping.js`. Tests: `tools/test-discord-turn-ping.mjs`, `tools/test-turn-ping-recipient.mjs`, `tools/test-turn-ping-naval-cargo.mjs`.
