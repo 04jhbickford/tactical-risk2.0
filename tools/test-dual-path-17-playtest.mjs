@@ -1,4 +1,4 @@
-// V2.81.57-unified.20 — Unlist Game vs Main Menu (9.21.26.13).
+// V2.81.57-unified.20.1 — Unlist Game vs Main Menu (9.21.26.13).
 // Unlist writes isPublished false (drops Open Games). Main Menu navigates
 // and leaves the listed flag alone. Both forks share the helper.
 // Run: node tools/test-dual-path-17-playtest.mjs
@@ -32,10 +32,10 @@ const mgr = readFileSync(join(root, 'src/multiplayer/lobbyManager.js'), 'utf8');
 const lobbySrc = readFileSync(join(root, 'src/ui/lobby.js'), 'utf8');
 const ping = readFileSync(join(root, 'src/multiplayer/discordTurnPing.js'), 'utf8');
 
-assert.equal(GAME_VERSION, 'V2.81.57-unified.20');
+assert.equal(GAME_VERSION, 'V2.81.57-unified.20.1');
 assert.equal(SCHEMA_VERSION, 11);
-assert.match(html, /content="V2\.81\.57-unified\.20"/);
-assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.20'/);
+assert.match(html, /content="V2\.81\.57-unified\.20\.1"/);
+assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.20\.1'/);
 
 function listedRow() {
   return {
@@ -57,7 +57,7 @@ function listedRow() {
   assert.equal(hostListed.list.visible, false);
 
   const hostHidden = resolveLobbyRoomChrome({ isHost: true, isPublished: false });
-  assert.equal(hostHidden.unlist.visible, true);
+  assert.equal(hostHidden.unlist.visible, false);
   assert.equal(hostHidden.list.visible, true);
   assert.equal(shouldShowListInOpenGames({ isHost: true, isPublished: false }), true);
 

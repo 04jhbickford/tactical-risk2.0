@@ -9760,6 +9760,7 @@ html.mobile-shell .pp-battle-row,
 .combat-unit-icons.paired-icons .combat-unit-qty {
   font-size: 16px;
   min-width: 20px;
+  white-space: nowrap;
 }
 
 .combat-unit-stat {
@@ -10824,6 +10825,17 @@ html.mobile-shell .pp-battle-row,
   padding: 2px 6px;
   background: rgba(0,0,0,0.2);
   border-radius: 3px;
+}
+
+@media (max-width: 500px) {
+  .inline-dice-group {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+  .inline-dice-hits,
+  .hit-counter-label {
+    white-space: normal;
+  }
 }
 
 .inline-dice-hits.has-hits {
@@ -20618,45 +20630,21 @@ html.mobile-shell.tech-active .tech-popup {
   min-width: 0;
   max-width: 100%;
 }
-.dice-bar-pair {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.dice-face-list {
+  position: relative;
 }
-.dice-bar-expected {
-  display: block;
-  height: 100%;
-  background: #f2d38a;
+.dice-fair-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  /* 14px face number + 8px gap, then the fair fraction of the bar column.
+     The percent column is 3.6em plus the 8px gap before it. */
+  left: calc(22px + (100% - 30px - 3.6em) * var(--dice-fair, 0));
+  border-left: 1px dotted #f2d38a;
+  pointer-events: none;
+  z-index: 1;
 }
-.dice-face-count {
-  flex: 0 1 4.6em;
-  min-width: 0;
-  text-align: right;
-  color: #b9c0d4;
-  font-variant-numeric: tabular-nums;
-  font-size: 11px;
-}
-.dice-face-exp {
-  color: #f2d38a;
-}
-.dice-bar-legend,
-.dice-stats-fit {
-  margin: 6px 0 0;
-  color: #b9c0d4;
-  font-size: 12px;
-}
-.dice-swatch {
-  display: inline-block;
-  width: 10px;
-  height: 8px;
-  margin: 0 4px 0 0;
-  border-radius: 2px;
-  vertical-align: baseline;
-}
-.dice-swatch-obs { background: #7ea2e8; }
-.dice-swatch-exp { background: #f2d38a; margin-left: 8px; }
 .dice-stats-scope {
   display: flex;
   gap: 6px;
@@ -20680,11 +20668,12 @@ html.mobile-shell.tech-active .tech-popup {
   text-align: right;
   color: #b9c0d4;
 }
-.dice-bar-track {
+.dice-bar {
   position: relative;
   flex: 1 1 auto;
+  min-width: 0;
   height: 10px;
-  background: rgba(255, 255, 255, 0.06);
+  background: transparent;
   border-radius: 4px;
   overflow: hidden;
 }
@@ -20692,36 +20681,16 @@ html.mobile-shell.tech-active .tech-popup {
   display: block;
   height: 100%;
   background: #7ea2e8;
-}
-.dice-bar-fair {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: #f2d38a;
+  border-radius: 4px;
 }
 .dice-face-pct {
-  width: 42px;
-  flex: 0 0 42px;
+  width: 3.6em;
+  flex: 0 0 3.6em;
   text-align: right;
   color: #b9c0d4;
   font-variant-numeric: tabular-nums;
 }
-.dice-progress {
-  margin-top: 8px;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 4px;
-  overflow: hidden;
-}
-.dice-progress-fill {
-  display: block;
-  height: 100%;
-  background: #8fbc8f;
-}
-.dice-progress-label,
 .dice-stats-meta,
-.dice-stats-caveat,
 .dice-stats-empty {
   margin: 6px 0 0;
   color: #b9c0d4;

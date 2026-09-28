@@ -1,4 +1,4 @@
-// V2.81.57-unified.19 — tracker on and off must roll the same dice.
+// V2.81.57-unified.20.1 — tracker on and off must roll the same dice.
 // Land, naval, AA, bombard, sub first strike, rocket, and tech.
 // Cosmetic spinning dice are not recorded.
 // Run: node tools/test-dice-tracker-golden.mjs
@@ -419,7 +419,7 @@ console.log('=== old saves and menu ===');
   const loaded = makeGs();
   loaded.loadFromJSON(saved);
   check('old save loads', loaded.round === gs.round && loaded.players.length === 2);
-  check('stamp is unified.14', GAME_VERSION === 'V2.81.57-unified.20');
+  check('stamp is unified.14', GAME_VERSION === 'V2.81.57-unified.20.1');
   const menu = phoneMenuHomeActions();
   const logAt = menu.findIndex((row) => row.tab === 'log');
   const diceAt = menu.findIndex((row) => row.label === 'Dice stats' && row.tab === 'dice');
@@ -454,8 +454,8 @@ console.log('=== old saves and menu ===');
       longestStreak: 2,
     },
   });
-  check('all-time fair verdict', fairHtml.includes('Looks fair') && fairHtml.includes('all-time verdict counts'));
-  check('progress meter copy', fairHtml.includes('600 / 4,500 rolls to detect a 2-point skew'));
+  check('all-time fair verdict', fairHtml.includes('Looks fair') && fairHtml.includes('600 rolls'));
+  check('progress meter copy is gone', !fairHtml.includes('2-point skew') && !fairHtml.includes('dice-progress'));
   const playersHtml = renderDiceStatsFromModel({
     status: 'ready',
     signedIn: true,

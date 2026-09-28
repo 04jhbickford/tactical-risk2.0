@@ -52,20 +52,22 @@ export const LOBBY_UNLIST_LABEL = 'Unlist Game';
 export const LOBBY_MAIN_MENU_LABEL = 'Main Menu';
 export const LOBBY_LIST_LABEL = 'List in Open Games';
 
-// 9.21.26.13 — room chrome on both forks.
-// Unlist is a host write: isPublished false, so Open Games drops the row.
-// Main Menu is view-only for host and guest. The listed flag is not written.
+// Room chrome. The host sees exactly one listing control, from the live
+// isPublished flag: unlisted → List in Open Games, listed → Unlist Game.
+// A guest sees neither. Main Menu stays for everyone and does not write
+// the listed flag. Unlist never left the room; it only clears isPublished.
 export function resolveLobbyRoomChrome({
   isHost = false,
   isPublished = false,
 } = {}) {
   const host = !!isHost;
   const published = !!isPublished;
+  const listVisible = shouldShowListInOpenGames({ isHost: host, isPublished: published });
   return {
     unlist: {
       action: 'unlist',
       label: LOBBY_UNLIST_LABEL,
-      visible: host,
+      visible: host && published && !listVisible,
     },
     mainMenu: {
       action: 'main-menu',
@@ -75,8 +77,28 @@ export function resolveLobbyRoomChrome({
     list: {
       action: 'publish',
       label: LOBBY_LIST_LABEL,
-      visible: host && !published,
+      visible: listVisible,
     },
+  };
+}
+
+// One listing button, or none. Callers pass the snapshot's isPublished
+// (not a click-local flag) so another tab's list/unlist wins on the next paint.
+export function lobbyListingButtons({
+  isHost = false,
+  isPublished = false,
+} = {}) {
+  const chrome = resolveLobbyRoomChrome({ isHost, isPublished });
+  const buttons = [];
+  if (chrome.list.visible) {
+    buttons.push({ action: chrome.list.action, label: chrome.list.label });
+  } else if (chrome.unlist.visible) {
+    buttons.push({ action: chrome.unlist.action, label: chrome.unlist.label });
+  }
+  return {
+    buttons,
+    mainMenuLabel: chrome.mainMenu.label,
+    mainMenuVisible: chrome.mainMenu.visible,
   };
 }
 

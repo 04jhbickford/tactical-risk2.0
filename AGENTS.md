@@ -37,13 +37,25 @@ Current save schema is **11**:
 
 Bump the schema only when the persisted shape changes. Display version and schema version are different stamps.
 
-Current display stamp is `GAME_VERSION` in `src/version.js`: `V2.81.57-unified.20`. Read the file. After a later bump, the file wins over this sentence.
+Current display stamp is `GAME_VERSION` in `src/version.js`: `V2.81.57-unified.20.1`. Read the file. After a later bump, the file wins over this sentence.
 
 ## 3. Layout bars
 
 Desktop at **1024px and wider** must feel desktop-native. Map-dominant layout, side chrome, compact controls. Do not ship a phone sheet stretched to 1280. `style.css` already switches at `@media (min-width: 1024px)`. The desktop brief and D2 are the picture: side rails and a map that is the largest region, not a scaled phone UI.
 
 Mobile at **390px wide** must be solid: no overlap, no horizontal scroll, compact controls. Primary Confirm / Max / Resign stay fully on screen and clear the home indicator (METHOD: ≥44pt at 390 and 500). Check portrait 390 and a short landscape height. 500px is the second phone width in `doc/METHOD-SETTLECOAST.md`.
+
+## 3a. Charts and stat panels (house principles, 28 Sep 2026)
+
+These apply to every chart, stat panel and data readout in the game (Dice stats, turn summaries, anything new). They come from the owner's house visual language, which is the source of truth; if this section and a brief disagree, ask.
+- Highest signal-to-ink. One mark per value. A reference or expected value is a single dotted line.
+- No track backgrounds, no gridline clutter, no per-row ticks, no redundant labels.
+- A one-line verdict instead of paragraphs of stats. Plain words, no jargon. Phone first at 390px.
+- Worked example (Dice stats): one solid bar per face, one dotted "fair" line at the expected count, and one plain verdict line such as "Consistent with fair dice". No grey tracks behind the bars, no tick on every row, no paragraphs of chi-square text. Use palette tokens only.
+- Pre-ship checklist (fail-closed; one failure means do not ship):
+  1. Can each element be removed without losing meaning? If yes, remove it.
+  2. Is the takeaway readable in 3 seconds?
+  3. Does it work at 390px (and at 1024px and wider, per section 3)?
 
 ## 4. Turn notices to Discord
 
@@ -132,7 +144,7 @@ No cargo: hull only (`-1x Destroyer lost Red Sea - British Easy AI`). An allied 
 
 ## 5. LIVE stamp proof
 
-Every release bumps the display version and proves the same string everywhere it shows. Today that string is `V2.81.57-unified.20`. Set all of these together; do not leave one behind:
+Every release bumps the display version and proves the same string everywhere it shows. Today that string is `V2.81.57-unified.20.1`. Set all of these together; do not leave one behind:
 
 | Place | What |
 |---|---|

@@ -1,4 +1,4 @@
-// V2.81.57-unified.20 — Discord playtest: turn save, phase CTA, naval drag,
+// V2.81.57-unified.20.1 — Discord playtest: turn save, phase CTA, naval drag,
 // one landing prompt, AA combat-move, lobby lock, Kazakh stem, turn ping
 // after a confirmed push, remaining movement, return to base.
 // Run: node tools/test-unified-18-discord.mjs
@@ -60,8 +60,8 @@ const check = (label, cond, extra) => {
   } else console.log('ok  :', label);
 };
 
-console.log('=== V2.81.57-unified.20 discord playtest ===');
-check('GAME_VERSION is V2.81.57-unified.20', GAME_VERSION === 'V2.81.57-unified.20');
+console.log('=== V2.81.57-unified.20.1 discord playtest ===');
+check('GAME_VERSION is V2.81.57-unified.20.1', GAME_VERSION === 'V2.81.57-unified.20.1');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 const mainSrc = readFileSync(join(root, 'src/main.js'), 'utf8');
@@ -300,9 +300,12 @@ function verticalOverlaps(pts) {
   const txt = [...line.matchAll(/\((-?\d+),(-?\d+)\)/g)].map((m) => [Number(m[1]), Number(m[2])]);
   const data = JSON.parse(readFileSync(join(root, 'data/territories.json'), 'utf8'));
   const kazakh = data.find((row) => row.name === 'Kazakh S.S.R.');
+  // unified.18 cut the long stem (480 → 414). unified.20.1 cut the
+  // leftover out-and-back stub, so the ring is 411. The interior-edge
+  // check lives in tools/test-kazakh-outline.mjs.
   check('S10 Kazakh stem no longer doubles back through the territory',
-    txt.length === 414
-    && kazakh.polygons[0].length === 414
+    txt.length === 411
+    && kazakh.polygons[0].length === 411
     && verticalOverlaps(txt) === 0
     && verticalOverlaps(kazakh.polygons[0]) === 0
     && !data.some((row) => row.name === 'Afghanistan'));

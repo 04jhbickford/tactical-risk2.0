@@ -31,6 +31,7 @@ import {
 } from '../multiplayer/lastMatch.js';
 import {
   lobbyChromeStatusAfter,
+  lobbyListingButtons,
   resolveHostLobbyPrimaryCta,
   resolveLobbyRoomChrome,
   shouldShowListInOpenGames,
@@ -1001,6 +1002,24 @@ export class MultiplayerLobby {
     const currentPlayer = this.lobbyManager.getCurrentPlayer();
     const isHost = this.lobbyManager.isHost();
     const canStart = this.lobbyManager.canStart();
+    // Live snapshot only. A click and another tab both land here on the next paint.
+    const publishedNow = !!lobby.isPublished;
+    const roomChrome = resolveLobbyRoomChrome({
+      isHost,
+      isPublished: publishedNow,
+    });
+    const listing = lobbyListingButtons({
+      isHost,
+      isPublished: publishedNow,
+    });
+    const listAgrees = shouldShowListInOpenGames({
+      isHost,
+      isPublished: publishedNow,
+    }) === listing.buttons.some((b) => b.action === 'publish');
+    const listBtn = listAgrees
+      ? (listing.buttons.find((b) => b.action === 'publish') || null)
+      : null;
+    const unlistBtn = listing.buttons.find((b) => b.action === 'unlist') || null;
     const factions = this.setup?.risk?.factions || FACTIONS;
 
     // Get taken factions and colors
@@ -1124,19 +1143,12 @@ export class MultiplayerLobby {
             ? `<button class="mp-action-btn secondary" data-action="back-to-browse">← Back</button>`
             : ''
           }
-          ${(() => {
-            const roomChrome = resolveLobbyRoomChrome({
-              isHost,
-              isPublished: !!lobby.isPublished,
-            });
-            const unlistBtn = roomChrome.unlist.visible
-              ? `<button class="mp-action-btn danger-outline" data-action="unlist">${roomChrome.unlist.label}</button>`
-              : '';
-            const mainMenuBtn = roomChrome.mainMenu.visible
-              ? `<button class="mp-action-btn secondary" data-action="main-menu">${roomChrome.mainMenu.label}</button>`
-              : '';
-            return `${unlistBtn}${mainMenuBtn}`;
-          })()}
+          ${unlistBtn && !listBtn
+            ? `<button class="mp-action-btn danger-outline" data-action="unlist">${roomChrome.unlist.label}</button>`
+            : ''}
+          ${roomChrome.mainMenu.visible
+            ? `<button class="mp-action-btn secondary" data-action="main-menu">${roomChrome.mainMenu.label}</button>`
+            : ''}
           ${(() => {
             const isFull = lobby.players.length >= lobby.settings.maxPlayers;
             const allHaveFactions = lobby.players.every(p => p.factionId);
@@ -1154,9 +1166,9 @@ export class MultiplayerLobby {
                   ${hostCta.label}
                 </button>
                 ${hostCta.hint ? `<p class="mp-action-hint">${hostCta.hint}</p>` : ''}
-                ${shouldShowListInOpenGames({ isHost, isPublished: !!lobby.isPublished }) ? `
+                ${listBtn && !unlistBtn ? `
                   <button class="mp-action-btn secondary" data-action="publish">
-                    List in Open Games
+                    ${roomChrome.list.label}
                   </button>
                 ` : ''}
               `;
@@ -1296,18 +1308,13 @@ export class MultiplayerLobby {
       if (!outcome.allowed || outcome.navigate) return;
       this._unlisting = true;
       btn.disabled = true;
-      const originalText = btn.textContent;
       btn.textContent = 'Unlisting…';
       const result = await this.lobbyManager.unlistLobby();
       this._unlisting = false;
-      if (result.success) {
-        this.mode = 'lobby';
-        this._render();
-      } else {
-        btn.disabled = false;
-        btn.textContent = originalText;
-        alert(result.error || 'Could not unlist');
-      }
+      if (!result.success) alert(result.error || 'Could not unlist');
+      // Paint from the live snapshot, including a flip from another tab.
+      this.mode = 'lobby';
+      this._render();
     });
 
     // Main Menu leaves the room VIEW. Listed/unlisted is not written.
@@ -1381,18 +1388,12 @@ export class MultiplayerLobby {
       if (btn.disabled || this._publishing) return;
       this._publishing = true;
       btn.disabled = true;
-      const originalText = btn.textContent;
       btn.textContent = 'Listing…';
       const result = await this.lobbyManager.publishLobby();
       this._publishing = false;
-      if (result.success) {
-        this.mode = 'lobby';
-        this._render();
-      } else {
-        btn.disabled = false;
-        btn.textContent = originalText;
-        alert(result.error);
-      }
+      if (!result.success) alert(result.error);
+      this.mode = 'lobby';
+      this._render();
     });
 
     // Discord name: save while typing, and again on blur / Enter.
