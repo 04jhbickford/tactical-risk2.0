@@ -1,4 +1,4 @@
-// V2.81.57-unified.18 — lobby Discord name for hosts, remembered and prefilled.
+// V2.81.57-unified.19 — lobby Discord name for hosts, remembered and prefilled.
 // Run: node tools/test-lobby-discord-seat.mjs
 
 import { readFileSync } from 'fs';
@@ -62,13 +62,13 @@ function fakeInput(value, { start = null, end = null } = {}) {
 const hostUser = { id: 'rob', displayName: 'Robert007' };
 const guestUser = { id: 'bastion', displayName: 'Bastion' };
 
-console.log('=== V2.81.57-unified.18 stamp ===');
-check('GAME_VERSION is V2.81.57-unified.18', GAME_VERSION === 'V2.81.57-unified.18');
+console.log('=== V2.81.57-unified.19 stamp ===');
+check('GAME_VERSION is V2.81.57-unified.19', GAME_VERSION === 'V2.81.57-unified.19');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  check('index.html meta stamp', html.includes('content="V2.81.57-unified.18"'));
-  check('index.html lock stamp', html.includes("var LOCKED = 'V2.81.57-unified.18'"));
+  check('index.html meta stamp', html.includes('content="V2.81.57-unified.19"'));
+  check('index.html lock stamp', html.includes("var LOCKED = 'V2.81.57-unified.19'"));
 }
 
 console.log('=== Host seat renders the Discord field ===');

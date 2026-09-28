@@ -2,6 +2,24 @@
 
 ---
 
+## 9.28.26 — unified.19 dice stats
+
+Stamp `V2.81.57-unified.19`. Schema stays 11. Display stamp only; game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.19`).
+
+Dice stats stays observe-only. Rolls still come from `Math.random` inside `_rollDie`. The tracker records the face after it is chosen. Turning the tracker off does not change the sequence or the combat result.
+
+Signed-in players can open Dice stats from the main menu or the online hub without joining a game, and from the in-game menu as before. The in-game popover stays 360px wide beside the menu. A shared max-width on the panel was collapsing that popover to the menu button. All-time, This game, and each player show face counts against the fair share (1 in 6), the chi-square statistic, the p-value, and a plain sentence. Players can switch This game / All games. Humans and AI are separate. Names are display names. Guests see "Sign in to see dice stats". A signed-in read that Firestore rejects as permission-denied says "Dice logging is switched off until the game's database rules are published." An allowed read with no docs says "No rolls logged yet." The live ruleset (12d331e8, published 19 Sep) has no dice blocks, so `diceBatches` and `diceStats` are empty and every signed-in open hits that permission-denied line. Publishing the rules is still manual.
+
+`tools/recompute-dice-stats.mjs` can rebuild totals from `diceBatches` plus older combat logs. It is dry-run unless `--commit`, and it refuses to run under CI. `games/{id}/events` kind `combat` stores `payload.attackRolls` and `payload.defenseRolls`; kind `aa` stores `payload.rolls`. The admin path reads those with `collectionGroup('events')`, drops identical events within 5 seconds, and tags them `source: 'backfill-events'`. Those dice have no unit or to-hit number, so they count toward fairness and the attacker seat, and they do not produce a hit rate. The panel says so. Telemetry that is not already in the events stays `source: 'backfill'`. Neither source writes player docs. A game that already has `diceBatches` is left to those batches.
+
+Battle win rate versus odds is not in this build.
+
+The purchase row names units with `formatUnitName`, so a tactical bomber no longer shows the raw id. The rules sheet says a carrier carries 2 fighters, matching `units.json`, and the bomber note says strategic bombing raids are not yet available. Paired attack 4, carrier landing for tactical bombers, a game option, AI buys, starting setup, and raids are not in this build.
+
+Receipt: `node tools/test-dice-stats-v2.mjs`, `node tools/test-dice-stats-math.mjs`, `node tools/test-dice-tracker-golden.mjs`.
+
+---
+
 ## 9.28.26 — unified.18 Discord playtest
 
 Stamp `V2.81.57-unified.18`. Schema stays 11. Display stamp only; game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.18`).

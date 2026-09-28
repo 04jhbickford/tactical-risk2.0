@@ -3226,6 +3226,7 @@ export class PlayerPanel {
       const actualCost = hasIndustrialTech ? Math.max(1, def.cost - 1) : def.cost;
       const canAfford = remaining >= actualCost;
       const imageSrc = getUnitIconPath(unitType, player.id);
+      const unitLabel = formatUnitName(unitType);
       const costDisplay = hasIndustrialTech && def.cost > 1
         ? `<span class="pp-cost-discounted">$${actualCost}</span> <span class="pp-cost-original">$${def.cost}</span>`
         : `$${actualCost}`;
@@ -3233,8 +3234,8 @@ export class PlayerPanel {
       return `
         <div class="pp-buy-row ${qty > 0 ? 'has-qty' : ''}">
           <div class="pp-buy-info">
-            ${imageSrc ? `<img src="${imageSrc}" class="pp-buy-icon" alt="${unitType}">` : ''}
-            <span class="pp-buy-name">${unitType}</span>
+            ${imageSrc ? `<img src="${imageSrc}" class="pp-buy-icon" alt="${unitLabel}">` : ''}
+            <span class="pp-buy-name">${unitLabel}</span>
             <span class="pp-buy-cost">${costDisplay}</span>
           </div>
           <div class="pp-buy-controls">
@@ -3264,7 +3265,7 @@ export class PlayerPanel {
     // Cart summary and Buy button
     const totalUnits = pending.reduce((sum, p) => sum + p.quantity, 0);
     if (totalUnits > 0) {
-      const cartItems = pending.map(p => `${p.quantity}× ${p.type}`).join(', ');
+      const cartItems = pending.map(p => `${p.quantity}× ${formatUnitName(p.type)}`).join(', ');
       html += `
         <div class="pp-cart-summary">
           <div class="pp-cart-items">${cartItems}</div>

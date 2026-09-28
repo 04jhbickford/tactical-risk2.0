@@ -1,4 +1,4 @@
-// V2.81.57-unified.18 — tracker on and off must roll the same dice.
+// V2.81.57-unified.19 — tracker on and off must roll the same dice.
 // Land, naval, AA, bombard, sub first strike, rocket, and tech.
 // Cosmetic spinning dice are not recorded.
 // Run: node tools/test-dice-tracker-golden.mjs
@@ -66,7 +66,7 @@ const {
   setDiceWriter,
 } = await import('../src/stats/diceTracker.js');
 const { batchDocId } = await import('../src/stats/diceMath.js');
-const { DICE_STATS_EMPTY, renderDiceStatsFromModel } = await import('../src/ui/diceStatsPanel.js');
+const { DICE_STATS_SIGN_IN, renderDiceStatsFromModel } = await import('../src/ui/diceStatsPanel.js');
 
 let failures = 0;
 const check = (label, cond) => {
@@ -419,7 +419,7 @@ console.log('=== old saves and menu ===');
   const loaded = makeGs();
   loaded.loadFromJSON(saved);
   check('old save loads', loaded.round === gs.round && loaded.players.length === 2);
-  check('stamp is unified.14', GAME_VERSION === 'V2.81.57-unified.18');
+  check('stamp is unified.14', GAME_VERSION === 'V2.81.57-unified.19');
   const menu = phoneMenuHomeActions();
   const logAt = menu.findIndex((row) => row.tab === 'log');
   const diceAt = menu.findIndex((row) => row.label === 'Dice stats' && row.tab === 'dice');
@@ -442,7 +442,7 @@ console.log('=== old saves and menu ===');
   const rocketFn = between(rocketSrc, 'launchRocket(fromTerritory, targetTerritory) {', 'relocateAirFromCapturedLand(unitDefs');
   check('rocket damage rolls through _rollDie', rocketFn.includes("context: 'rocket'") && !rocketFn.includes('Math.floor(Math.random()'));
   const emptyHtml = renderDiceStatsFromModel({ status: 'disabled', signedIn: false, tab: 'players' });
-  check('panel empty state', emptyHtml.includes(DICE_STATS_EMPTY));
+  check('panel empty state', emptyHtml.includes(DICE_STATS_SIGN_IN));
   check('Players tab is hidden until signed in', !emptyHtml.includes('data-dice-tab="players"'));
   const fairHtml = renderDiceStatsFromModel({
     status: 'ready',

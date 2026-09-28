@@ -87,7 +87,7 @@ export class RulesPanel {
                 <tr><td>Armour (Tank)</td><td>6</td><td>3</td><td>3</td><td>2</td><td>Can blitz through friendly territory</td></tr>
                 <tr><td>Fighter</td><td>10</td><td>3</td><td>4</td><td>4</td><td>Air unit, can land on carriers</td></tr>
                 <tr><td>Tactical Bomber</td><td>11</td><td>3</td><td>3</td><td>4</td><td>Versatile air unit</td></tr>
-                <tr><td>Bomber</td><td>12</td><td>4</td><td>1</td><td>6</td><td>Strategic bombing, cannot capture</td></tr>
+                <tr><td>Bomber</td><td>12</td><td>4</td><td>1</td><td>6</td><td>Cannot capture. Strategic bombing raids are not yet available.</td></tr>
                 <tr><td>Submarine</td><td>6</td><td>2</td><td>1</td><td>2</td><td>First strike, can submerge</td></tr>
                 <tr><td>Destroyer</td><td>8</td><td>2</td><td>2</td><td>2</td><td>Blocks sub first strike</td></tr>
                 <tr><td>Cruiser</td><td>12</td><td>3</td><td>3</td><td>2</td><td>Shore bombardment</td></tr>
@@ -113,7 +113,7 @@ export class RulesPanel {
             <h3>Transport & Carrier Rules</h3>
             <ul>
               <li><strong>Transports:</strong> Can carry 2 infantry OR 1 infantry + 1 other land unit.</li>
-              <li><strong>Carriers:</strong> Can carry up to 2 fighters/tactical bombers.</li>
+              <li><strong>Carriers:</strong> Can carry up to 2 fighters.</li>
               <li><strong>Loading:</strong> Units can load during non-combat movement from adjacent coastal territories.</li>
               <li><strong>Unloading:</strong> Units can unload during combat movement for amphibious assault.</li>
             </ul>

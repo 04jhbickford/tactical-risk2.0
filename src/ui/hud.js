@@ -6,7 +6,7 @@ import { isMobileShell, formatMobilePhaseWord, formatMobilePlayerMeta, readableF
 import { syncBottomSurfaces } from './bottomSurface.js';
 import { resolveHudClarity, shouldShowHudTicker } from './hudClarity.js';
 import { confirmChoice } from './confirmChoice.js';
-import { ensureDiceStatsLoaded, renderDiceStatsMarkup, setDiceStatsTab } from './diceStatsPanel.js';
+import { bindDiceStatsControls, ensureDiceStatsLoaded, renderDiceStatsMarkup } from './diceStatsPanel.js';
 
 export class HUD {
   constructor() {
@@ -552,13 +552,7 @@ export class HUD {
       this._dismissDicePopover();
     });
 
-    this.el.querySelectorAll('[data-dice-tab]').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        setDiceStatsTab(btn.dataset.diceTab);
-        this._render();
-      });
-    });
+    bindDiceStatsControls(this.el, () => this._render());
 
     const dicePanel = this.el.querySelector('.dice-stats');
     dicePanel?.addEventListener('keydown', (e) => {

@@ -47,6 +47,8 @@ import {
   settingsEditError,
 } from '../gameOptions.js';
 import { bindGameOptions, readGameOptionsFrom, renderGameOptionsPanel } from './gameOptionsPanel.js';
+import { bindLobbyDice, lobbyDiceEntryMarkup, renderDiceStatsMarkup } from './diceStatsPanel.js';
+import { isMobileShell } from './mobileShell.js';
 import {
   parseDiscordSeatInput,
   readRememberedDiscordSeat,
@@ -120,6 +122,7 @@ export class MultiplayerLobby {
     this._draftOptions = normalizeGameOptions(null);
     this._optionsOpen = false;
     this._optionsSheet = false;
+    this._diceOpen = false;
     this._create();
   }
 
@@ -390,11 +393,16 @@ export class MultiplayerLobby {
 
     // Contextual tagline based on mode
     const tagline = this.mode === 'lobby' ? 'Game Lobby' : 'Online Multiplayer';
+    const phone = isMobileShell()
+      || (typeof window !== 'undefined' && window.matchMedia?.('(max-width: 640px)')?.matches);
+    const dicePanel = this.mode === 'menu' && this._diceOpen
+      ? renderDiceStatsMarkup({ placement: 'lobby' })
+      : '';
 
     this.el.innerHTML = `
-      <div class="lobby-container modern">
+      <div class="lobby-container modern${phone ? ' lobby-phone' : ''}">
         <div class="lobby-bg-pattern"></div>
-        <div class="lobby-content-wrapper">
+        <div class="lobby-content-wrapper${phone ? ' lobby-phone-wrap' : ''}">
           <div class="mp-lobby-container">
             <div class="lobby-brand mp-brand">
               <h1 class="lobby-logo">Tactical Risk</h1>
@@ -402,9 +410,11 @@ export class MultiplayerLobby {
               <span class="lobby-version-badge">${GAME_VERSION}</span>
             </div>
             ${content}
+            ${phone ? '' : dicePanel}
           </div>
         </div>
       </div>
+      ${phone ? dicePanel : ''}
     `;
 
     restoreLobbyScroll(this.el, savedScroll);
@@ -532,6 +542,7 @@ export class MultiplayerLobby {
         </button>
       </div>
 
+      ${lobbyDiceEntryMarkup({ phone: false })}
       <div class="mp-footer-actions">
         <button class="mp-secondary-btn" data-action="back">← Back</button>
         <button class="mp-secondary-btn danger" data-action="signout">Sign Out</button>
@@ -1193,6 +1204,12 @@ export class MultiplayerLobby {
 
     this.el.querySelector('[data-action="refresh-browse"]')?.addEventListener('click', () => {
       this._loadBrowseGames();
+    });
+
+    bindLobbyDice(this.el, {
+      isOpen: () => this._diceOpen,
+      setOpen: (open) => { this._diceOpen = !!open; },
+      render: () => this._render(),
     });
 
     this.el.querySelector('[data-action="back"]')?.addEventListener('click', () => {

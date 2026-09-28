@@ -12,6 +12,9 @@ export const SKEW_DETECT_ROLLS = 4500;
 export const VERDICT_FAIR = 'Looks fair';
 export const VERDICT_WATCH = 'Worth watching';
 export const VERDICT_UNUSUAL = 'Unusual';
+export const SENTENCE_FAIR = 'Consistent with fair dice';
+export const SENTENCE_WATCH = 'Slightly unusual — worth watching';
+export const SENTENCE_UNUSUAL = 'Unusual — unlikely with fair dice';
 
 const CONTEXTS = new Set(['combat', 'aa', 'bombard', 'sub', 'rocket', 'tech']);
 
@@ -125,18 +128,22 @@ function unitBucket(totals, unit, side) {
   return totals.units[key];
 }
 
+function blankSeat(id) {
+  return {
+    id,
+    name: null,
+    isAI: false,
+    faces: [0, 0, 0, 0, 0, 0],
+    atk: { dice: 0, hits: 0, sumP: 0, sumVar: 0 },
+    def: { dice: 0, hits: 0, sumP: 0, sumVar: 0 },
+  };
+}
+
 function seatBucket(totals, die) {
   const id = die.playerSeat || 'seat';
-  if (!totals.seats[id]) {
-    totals.seats[id] = {
-      id,
-      name: die.playerName || null,
-      isAI: !!die.isAI,
-      atk: { dice: 0, hits: 0, sumP: 0, sumVar: 0 },
-      def: { dice: 0, hits: 0, sumP: 0, sumVar: 0 },
-    };
-  }
+  if (!totals.seats[id]) totals.seats[id] = blankSeat(id);
   const seat = totals.seats[id];
+  if (!seat.faces) seat.faces = [0, 0, 0, 0, 0, 0];
   if (die.playerName) seat.name = die.playerName;
   if (die.isAI) seat.isAI = true;
   return seat;
@@ -182,6 +189,15 @@ export function applyDiceBatch(totals, dice, meta = {}) {
     faces.push(face);
     totals.n += 1;
     totals.faces[face - 1] += 1;
+    const seatId = meta.playerSeat || die.playerSeat;
+    if (seatId || meta.playerName || die.playerName) {
+      const seat = seatBucket(totals, {
+        playerSeat: seatId,
+        playerName: meta.playerName || die.playerName,
+        isAI: meta.isAI ?? die.isAI,
+      });
+      seat.faces[face - 1] += 1;
+    }
     const context = meta.context || die.context || 'combat';
     const side = meta.side || die.side || 'attacker';
     const model = dieHitModel(context, die.need, face);
@@ -205,12 +221,6 @@ export function applyDiceBatch(totals, dice, meta = {}) {
         block.sumP += model.p;
         block.sumVar += model.p * (1 - model.p);
       }
-    } else if (meta.playerSeat || die.playerSeat) {
-      seatBucket(totals, {
-        playerSeat: meta.playerSeat || die.playerSeat,
-        playerName: meta.playerName || die.playerName,
-        isAI: meta.isAI ?? die.isAI,
-      });
     }
   }
   const shape = sequenceShape(faces);
@@ -358,6 +368,16 @@ export function faceVerdict(p, n) {
   return VERDICT_WATCH;
 }
 
+// Same thresholds as faceVerdict. The short label stays for older checks.
+// This sentence is what the panel shows.
+export function faceVerdictSentence(p, n) {
+  const verdict = faceVerdict(p, n);
+  if (verdict === VERDICT_FAIR) return SENTENCE_FAIR;
+  if (verdict === VERDICT_UNUSUAL) return SENTENCE_UNUSUAL;
+  if (verdict === VERDICT_WATCH) return SENTENCE_WATCH;
+  return null;
+}
+
 export function hitRateZ({ hits = 0, dice = 0, sumP = 0, sumVar = 0 } = {}) {
   const n = Number(dice) || 0;
   if (n <= 0) return { z: null, observed: null, expected: null, margin: null };
@@ -431,6 +451,10 @@ export function flattenTotals(totals, { includeSeats = true, includeUnits = true
       };
       put('atk', seat.atk);
       put('def', seat.def);
+      const seatFaces = seat.faces || [];
+      for (let i = 0; i < FACE_COUNT; i++) {
+        if (seatFaces[i]) inc[`seat_${id}_face_${i + 1}`] = seatFaces[i];
+      }
       if (seat.isAI) flags[`seat_${id}_ai`] = true;
       if (names && seat.name) nameMap[`name_${id}`] = seat.name;
     }
@@ -455,7 +479,16 @@ export function totalsFromFlat(doc) {
     for (let b = 1; b <= 6; b++) totals.trans[a - 1][b - 1] = Number(doc[`trans_${a}_${b}`]) || 0;
   }
   const seats = {};
+  const seatOf = (id) => {
+    if (!seats[id]) seats[id] = blankSeat(id);
+    return seats[id];
+  };
   for (const [key, value] of Object.entries(doc)) {
+    const faceKey = /^seat_([A-Za-z0-9]+)_face_([1-6])$/.exec(key);
+    if (faceKey) {
+      seatOf(faceKey[1]).faces[Number(faceKey[2]) - 1] = Number(value) || 0;
+      continue;
+    }
     const unit = /^u_([A-Za-z0-9]+|unit)_(attacker|defender)_(dice|hits|sumP|sumVar)$/.exec(key);
     if (unit) {
       const id = `${unit[1]}|${unit[2]}`;
@@ -467,45 +500,19 @@ export function totalsFromFlat(doc) {
     }
     const seat = /^seat_([A-Za-z0-9]+)_(atk|def)_(dice|hits|sumP|sumVar)$/.exec(key);
     if (seat) {
-      if (!seats[seat[1]]) {
-        seats[seat[1]] = {
-          id: seat[1],
-          name: null,
-          isAI: false,
-          atk: { dice: 0, hits: 0, sumP: 0, sumVar: 0 },
-          def: { dice: 0, hits: 0, sumP: 0, sumVar: 0 },
-        };
-      }
-      const block = seat[2] === 'atk' ? seats[seat[1]].atk : seats[seat[1]].def;
+      const block = seat[2] === 'atk' ? seatOf(seat[1]).atk : seatOf(seat[1]).def;
       const field = seat[3] === 'sumP' ? 'sumP' : seat[3] === 'sumVar' ? 'sumVar' : seat[3];
       block[field] = Number(value) || 0;
       continue;
     }
     const ai = /^seat_([A-Za-z0-9]+)_ai$/.exec(key);
     if (ai) {
-      if (!seats[ai[1]]) {
-        seats[ai[1]] = {
-          id: ai[1],
-          name: null,
-          isAI: true,
-          atk: { dice: 0, hits: 0, sumP: 0, sumVar: 0 },
-          def: { dice: 0, hits: 0, sumP: 0, sumVar: 0 },
-        };
-      }
-      seats[ai[1]].isAI = true;
+      seatOf(ai[1]).isAI = true;
       continue;
     }
     const name = /^name_([A-Za-z0-9]+)$/.exec(key);
     if (name && typeof value === 'string') {
-      if (!seats[name[1]]) {
-        seats[name[1]] = {
-          id: name[1],
-          name: safeDisplayName(value),
-          isAI: false,
-          atk: { dice: 0, hits: 0, sumP: 0, sumVar: 0 },
-          def: { dice: 0, hits: 0, sumP: 0, sumVar: 0 },
-        };
-      } else seats[name[1]].name = safeDisplayName(value);
+      seatOf(name[1]).name = safeDisplayName(value);
     }
   }
   totals.seats = seats;
@@ -524,4 +531,86 @@ export function formatP(p) {
   if (p < 0.001) return '< 0.001';
   if (p > 0.999) return '> 0.999';
   return p.toFixed(3);
+}
+
+export function formatChi(chi2) {
+  const x = Number(chi2);
+  if (!Number.isFinite(x)) return '—';
+  if (x >= 1000) return formatInt(Math.round(x));
+  return x.toFixed(2);
+}
+
+export function sideHitBlock(totals, side) {
+  const out = { dice: 0, hits: 0, sumP: 0, sumVar: 0 };
+  const want = side === 'defender' ? 'defender' : 'attacker';
+  for (const bucket of Object.values(totals?.units || {})) {
+    if (bucket.side !== want || bucket.unit === 'tech') continue;
+    out.dice += Number(bucket.dice) || 0;
+    out.hits += Number(bucket.hits) || 0;
+    out.sumP += Number(bucket.sumP) || 0;
+    out.sumVar += Number(bucket.sumVar) || 0;
+  }
+  return out;
+}
+
+export function addHitBlock(dst, src) {
+  dst.dice += Number(src?.dice) || 0;
+  dst.hits += Number(src?.hits) || 0;
+  dst.sumP += Number(src?.sumP) || 0;
+  dst.sumVar += Number(src?.sumVar) || 0;
+  return dst;
+}
+
+function faceSum(faces) {
+  return (faces || []).reduce((sum, value) => sum + (Number(value) || 0), 0);
+}
+
+export function cardsFromGameSeats(doc) {
+  const totals = totalsFromFlat(doc);
+  return Object.values(totals.seats || {}).map((seat) => {
+    const faces = (seat.faces || [0, 0, 0, 0, 0, 0]).slice(0, FACE_COUNT);
+    while (faces.length < FACE_COUNT) faces.push(0);
+    return {
+      name: safeDisplayName(seat.name) || (seat.isAI ? 'AI' : 'Player'),
+      isAI: !!seat.isAI,
+      totals: { n: faceSum(faces), faces, longestStreak: 0 },
+      atk: seat.atk,
+      def: seat.def,
+    };
+  }).filter((card) => card.totals.n || card.atk.dice || card.def.dice);
+}
+
+export function humanCardFromPlayerDoc(doc) {
+  const totals = totalsFromFlat(doc);
+  return {
+    name: safeDisplayName(doc?.displayName) || 'Player',
+    isAI: false,
+    totals,
+    atk: sideHitBlock(totals, 'attacker'),
+    def: sideHitBlock(totals, 'defender'),
+  };
+}
+
+export function aggregateAiCards(gameDocs) {
+  const map = new Map();
+  for (const doc of gameDocs || []) {
+    for (const card of cardsFromGameSeats(doc)) {
+      if (!card.isAI) continue;
+      if (!map.has(card.name)) {
+        map.set(card.name, {
+          name: card.name,
+          isAI: true,
+          totals: { n: 0, faces: [0, 0, 0, 0, 0, 0], longestStreak: 0 },
+          atk: { dice: 0, hits: 0, sumP: 0, sumVar: 0 },
+          def: { dice: 0, hits: 0, sumP: 0, sumVar: 0 },
+        });
+      }
+      const acc = map.get(card.name);
+      for (let i = 0; i < FACE_COUNT; i++) acc.totals.faces[i] += card.totals.faces[i] || 0;
+      acc.totals.n += card.totals.n || 0;
+      addHitBlock(acc.atk, card.atk);
+      addHitBlock(acc.def, card.def);
+    }
+  }
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
