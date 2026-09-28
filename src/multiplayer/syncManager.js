@@ -21,9 +21,13 @@ import {
   confirmedSeatFromPlayer,
   evaluateAuthoritativePush,
   newSyncSessionId,
+  recoverStalePush,
+  shouldPreserveLocalTurn,
 } from './syncAuthority.js';
 import {
+  shouldReattachDeadSnapshot,
   shouldReplaceSnapshotListener,
+  shouldRereadRemoteOnWake,
   shouldResumeSnapshots,
 } from './presencePolicy.js';
 import { applyLiveHostHandoff } from './hostHandoff.js';
@@ -42,6 +46,7 @@ export class SyncManager {
     // first) and not hasAIAuthority() alone (that let the host write during
     // a human opponent's turn).
     this._confirmedSeat = null;
+    this._confirmedActionSeq = 0;
     this._awaitingResumeRead = false;
     this._resumeRead = null;
     this._lastResumeApplied = false;
@@ -72,6 +77,8 @@ export class SyncManager {
     this._snapshotLive = false;
     this._onLifecycleHide = () => this._flushOnHide();
     this._onLifecycleResume = (event) => this._resumeSnapshots(event);
+    this._reattachTimer = null;
+    this._watchTimer = null;
   }
 
   // Dimension C (version-upgrade robustness): every game doc records the
@@ -221,6 +228,7 @@ export class SyncManager {
     this.applyHostFromDoc(data);
 
     this._ensureGameSnapshot();
+    this._startSnapshotWatch();
     return true;
   }
 
@@ -263,6 +271,7 @@ export class SyncManager {
         console.log(`[Sync] After load - currentPlayer: ${this.gameState.currentPlayer?.name} (oderId: ${this.gameState.currentPlayer?.oderId})`);
 
         this._ensureGameSnapshot();
+        this._startSnapshotWatch();
         return true;
       }
 
@@ -281,6 +290,14 @@ export class SyncManager {
       this.unsubscribe = null;
     }
     this._snapshotLive = false;
+    if (this._reattachTimer) {
+      clearTimeout(this._reattachTimer);
+      this._reattachTimer = null;
+    }
+    if (this._watchTimer) {
+      clearInterval(this._watchTimer);
+      this._watchTimer = null;
+    }
     this._unbindLifecycleFlush();
   }
 
@@ -343,7 +360,7 @@ export class SyncManager {
         this._notifyListeners('turn_changed', this._turnSnapshotPayload(newData.currentPlayerId));
       }
     }, async (error) => {
-      console.error('SyncManager: Subscription error — will re-attach on resume', error);
+      console.error('SyncManager: Subscription error — will re-attach', error);
       this._snapshotLive = false;
       this.unsubscribe = null;
       const authResult = await this.authManager.handleFirebaseError(error);
@@ -352,24 +369,63 @@ export class SyncManager {
         return;
       }
       this._notifyListeners('error', error);
+      this._scheduleSnapshotReattach();
     });
+  }
+
+  _scheduleSnapshotReattach() {
+    const visibility = typeof document === 'undefined' || document.visibilityState !== 'hidden'
+      ? 'visible'
+      : 'hidden';
+    if (!shouldReattachDeadSnapshot({ listenerLive: false, visibility })) return;
+    if (this._reattachTimer) return;
+    this._reattachTimer = setTimeout(() => {
+      this._reattachTimer = null;
+      if (this._snapshotLive && typeof this.unsubscribe === 'function') return;
+      this._attachGameSnapshot();
+    }, 500);
+  }
+
+  _startSnapshotWatch() {
+    if (this._watchTimer || typeof window === 'undefined') return;
+    this._watchTimer = setInterval(() => {
+      const visibility = typeof document === 'undefined' || document.visibilityState !== 'hidden'
+        ? 'visible'
+        : 'hidden';
+      if (visibility === 'hidden') return;
+      const listenerLive = this._snapshotLive && typeof this.unsubscribe === 'function';
+      if (shouldReattachDeadSnapshot({ listenerLive, visibility })) {
+        this._attachGameSnapshot();
+      }
+      this._reloadRemoteState();
+    }, 12000);
   }
 
   _resumeSnapshots(event) {
     const persisted = !!(event && event.persisted);
+    const type = event?.type;
+    const wake = type === 'online' ? 'online'
+      : type === 'focus' ? 'focus'
+        : type === 'pageshow' ? 'pageshow'
+          : 'visibility-visible';
     const visible = typeof document === 'undefined'
       || document.visibilityState === 'visible'
-      || event?.type === 'pageshow';
+      || type === 'pageshow'
+      || type === 'online'
+      || type === 'focus';
     if (!visible) return;
-    if (!shouldResumeSnapshots({
-      event: event?.type === 'pageshow' ? 'pageshow' : 'visibility-visible',
-    })) {
-      return;
-    }
+    const resume = shouldResumeSnapshots({
+      event: type === 'pageshow' ? 'pageshow' : 'visibility-visible',
+    });
+    const reread = shouldRereadRemoteOnWake({ event: wake });
+    if (!resume && !reread) return;
     // "Still in CODE — you were away": re-read the live doc before any push.
     // A backgrounded host used to write its stale board the moment the tab woke.
     this._beginResumeRead();
-    this._ensureGameSnapshot({ persistedPageShow: persisted });
+    const listenerLive = this._snapshotLive && typeof this.unsubscribe === 'function';
+    if (!listenerLive || persisted) {
+      this._ensureGameSnapshot({ persistedPageShow: persisted });
+    }
   }
 
   // Block pushes until getDoc applies (or decides not to). Synchronous flag
@@ -409,6 +465,8 @@ export class SyncManager {
     // can notify and push the stale board.
     window.addEventListener('pageshow', this._onLifecycleResume, true);
     document.addEventListener('visibilitychange', this._onLifecycleResume, true);
+    window.addEventListener('online', this._onLifecycleResume);
+    window.addEventListener('focus', this._onLifecycleResume);
   }
 
   _unbindLifecycleFlush() {
@@ -417,6 +475,8 @@ export class SyncManager {
     document.removeEventListener('visibilitychange', this._onLifecycleHide);
     window.removeEventListener('pageshow', this._onLifecycleResume, true);
     document.removeEventListener('visibilitychange', this._onLifecycleResume, true);
+    window.removeEventListener('online', this._onLifecycleResume);
+    window.removeEventListener('focus', this._onLifecycleResume);
     this._lifecycleBound = false;
   }
 
@@ -460,7 +520,19 @@ export class SyncManager {
 
   _noteConfirmedSeat(player = this.gameState?.currentPlayer, index = this.gameState?.currentPlayerIndex) {
     const seat = confirmedSeatFromPlayer(player, index);
-    if (seat) this._confirmedSeat = seat;
+    if (seat) {
+      this._confirmedSeat = seat;
+      this._confirmedActionSeq = Number(this.gameState?.actionSeq) || 0;
+    }
+  }
+
+  hasUnsavedPhaseChanges() {
+    const live = Number(this.gameState?.actionSeq) || 0;
+    const confirmed = Number(this._confirmedActionSeq) || 0;
+    if (live > confirmed) return true;
+    if (this._pendingPush) return true;
+    if (this.isPushing) return true;
+    return this._pushQueue?.hasPendingWork?.() === true;
   }
 
   _shouldApplyRemote(newData) {
@@ -530,8 +602,20 @@ export class SyncManager {
   // in-flight pre-Done place write.
   async _doPush() {
     if (!this.db || !this.gameId) return false;
+    const liveBefore = this.gameState?.currentPlayer?.oderId ?? null;
+    const confirmedBefore = this._confirmedSeat?.userId ?? null;
+    const endingTurn = liveBefore != null
+      && confirmedBefore != null
+      && liveBefore !== confirmedBefore;
     // Resume re-read first. If it applied a newer doc, drop this push.
-    if (await this._pauseForResumeRead()) return false;
+    if (await this._pauseForResumeRead()) {
+      if (endingTurn) {
+        this._notifyListeners('turn_save_blocked', {
+          notice: 'Could not save your turn — the match has moved on.',
+        });
+      }
+      return false;
+    }
     if (!this.canPushLocalChange()) return false;
     return this._pushQueue.enqueue();
   }
@@ -553,20 +637,41 @@ export class SyncManager {
         if (outcome.status === 'stale') {
           const details = this._staleBlock || { localVersion: this.localVersion };
           this._staleBlock = null;
+          const recovery = recoverStalePush({
+            confirmedSeatId: this._confirmedSeat?.userId ?? null,
+            remoteSeatId: details.remoteSeat ?? null,
+            remoteVersion: details.remoteVersion,
+            localVersion: this.localVersion,
+          });
+          if (recovery.action === 'retry' && attempt < MAX_ATTEMPTS) {
+            this.localVersion = recovery.localVersion;
+            continue;
+          }
           this._notifyListeners('push_stale_blocked', details);
           this._notifyListeners('push_stale', { localVersion: this.localVersion });
           // The winning update's snapshot may have been skipped while isPushing
           // was set. Force the reload: a higher per-client seq must not refuse
           // the doc we just declined to overwrite.
           await this._reloadRemoteState({ force: true });
+          if (recovery.notice) {
+            this._notifyListeners('turn_save_blocked', { notice: recovery.notice });
+          }
           return false;
         }
 
         // status === 'ok'
+        const prevConfirmedId = this._confirmedSeat?.userId ?? null;
         this.localVersion = outcome.version;
         if (outcome.writtenSeat) this._confirmedSeat = outcome.writtenSeat;
+        this._confirmedActionSeq = Number(this.gameState?.actionSeq) || 0;
         if (outcome.currentPlayerId !== this._lastCurrentPlayerId) {
           this._updateActivePlayer(outcome.currentPlayerId);
+        }
+        if (prevConfirmedId !== (outcome.currentPlayerId ?? null)) {
+          this._notifyListeners('seat_push_confirmed', {
+            previousSeatId: prevConfirmedId,
+            currentPlayerId: outcome.currentPlayerId ?? null,
+          });
         }
         return true;
       } catch (error) {
@@ -680,6 +785,17 @@ export class SyncManager {
       const data = snapshot.data();
       this.applyHostFromDoc(data);
       const remoteVersion = data.stateVersion || 0;
+      const liveSeatId = this.gameState?.currentPlayer?.oderId ?? null;
+      const confirmedSeatId = this._confirmedSeat?.userId ?? null;
+      if (shouldPreserveLocalTurn({
+        confirmedSeatId,
+        liveSeatId,
+        remoteSeatId: data.currentPlayerId ?? null,
+        force,
+      })) {
+        this.localVersion = Math.max(this.localVersion, remoteVersion);
+        return false;
+      }
       const apply = shouldApplyRemoteGameState({
         remoteVersion,
         localVersion: this.localVersion,

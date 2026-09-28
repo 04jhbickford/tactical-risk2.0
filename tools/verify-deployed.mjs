@@ -9,7 +9,7 @@ import { readFileSync } from 'fs';
 
 const VERSION_FILE = 'src/version.js';
 
-const siteUrl = (process.argv[2] || 'https://tactical-risk.web.app').replace(/\/$/, '');
+const siteUrl = (process.argv[2] || 'https://tactical-risk20.vercel.app').replace(/\/$/, '');
 
 function extractVersion(source) {
   const m = source.match(/GAME_VERSION\s*=\s*['"]([^'"]+)['"]/);

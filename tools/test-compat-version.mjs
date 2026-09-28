@@ -1,4 +1,4 @@
-// V2.81.57-unified.17 — mixed-version refresh banner.
+// V2.81.57-unified.18 — mixed-version refresh banner.
 // F1: unified.14.1's own compareGameVersions, loaded from 6d0796f1, sees a
 // .17-written game doc as newer and fires version_outdated.
 // F2: this build orders the full unified release, and a draft refusal
@@ -53,8 +53,8 @@ const Probe = new Function('compareGameVersions', 'GAME_VERSION', `
   };
 `)(oldVersion.compareGameVersions, oldVersion.GAME_VERSION);
 
-console.log('=== V2.81.57-unified.17 compat version ===');
-check('display stamp stays V2.81.57-unified.17', GAME_VERSION === 'V2.81.57-unified.17');
+console.log('=== V2.81.57-unified.18 compat version ===');
+check('display stamp stays V2.81.57-unified.18', GAME_VERSION === 'V2.81.57-unified.18');
 check('F1 loaded .14.1 GAME_VERSION', oldVersion.GAME_VERSION === 'V2.81.57-unified.14.1');
 check('F1 .14.1 comparator is the major.minor parser',
   oldVersionSrc.includes('/^V?(\\d+)\\.(\\d+)/')
@@ -70,7 +70,7 @@ const written = {
   },
   protectedGameOptions: { techAcquisition: 'keep', territorySetup: 'draft' },
 };
-check('F1 compat stamp is V2.82-unified.17', written.clientVersion === 'V2.82-unified.17');
+check('F1 compat stamp is V2.82-unified.18', written.clientVersion === 'V2.82-unified.18');
 check('compat keeps a unified.N.M patch and omits a zero patch',
   compatClientVersion('V2.81.57-unified.16.1') === 'V2.82-unified.16.1'
   && compatClientVersion('V2.81.57-unified.16') === 'V2.82-unified.16');
@@ -84,28 +84,28 @@ probe._checkRemoteVersion(written);
 check('F1 .14.1 refresh banner fires on a .17 doc',
   probe.events.length === 1
   && probe.events[0].event === 'version_outdated'
-  && probe.events[0].data.remoteVersion === 'V2.82-unified.17'
+  && probe.events[0].data.remoteVersion === 'V2.82-unified.18'
   && probe.events[0].data.localVersion === oldVersion.GAME_VERSION);
 
 const quiet = new Probe();
 quiet._checkRemoteVersion({ clientVersion: GAME_VERSION, state: written.state });
 check('F1 display stamp alone does not fire the .14.1 banner', quiet.events.length === 0);
 
-check('F2 unified.18 prompts a unified.17 tab',
-  compareGameVersions(compatClientVersion('V2.81.57-unified.18'), GAME_VERSION) > 0);
-check('F2 unified.17.1 prompts a unified.17 tab',
-  compareGameVersions('V2.82-unified.17.1', GAME_VERSION) > 0);
-check('F2 a V2.82-unified.16.1 doc does not prompt a unified.17 tab',
+check('F2 unified.19 prompts a unified.18 tab',
+  compareGameVersions(compatClientVersion('V2.81.57-unified.19'), GAME_VERSION) > 0);
+check('F2 unified.18.1 prompts a unified.18 tab',
+  compareGameVersions('V2.82-unified.18.1', GAME_VERSION) > 0);
+check('F2 a V2.82-unified.16.1 doc does not prompt a unified.18 tab',
   compareGameVersions('V2.82-unified.16.1', GAME_VERSION) < 0);
-check('F2 a V2.82-unified.16 doc does not prompt a unified.17 tab',
+check('F2 a V2.82-unified.16 doc does not prompt a unified.18 tab',
   compareGameVersions('V2.82-unified.16', GAME_VERSION) < 0);
 
 const prevDir = mkdtempSync(join(tmpdir(), 'tr-unified-16-1-'));
 writeFileSync(join(prevDir, 'version.js'), gitShow(`${UNIFIED_16_1}:src/version.js`));
 const prevVersion = await import(pathToFileURL(join(prevDir, 'version.js')));
 check('F2 loaded unified.16.1 GAME_VERSION', prevVersion.GAME_VERSION === 'V2.81.57-unified.16.1');
-check('F2 a V2.82-unified.17 doc prompts a stale unified.16.1 tab',
-  prevVersion.compareGameVersions('V2.82-unified.17', prevVersion.GAME_VERSION) > 0);
+check('F2 a V2.82-unified.18 doc prompts a stale unified.16.1 tab',
+  prevVersion.compareGameVersions('V2.82-unified.18', prevVersion.GAME_VERSION) > 0);
 
 check('F2 our own compat write does not prompt',
   compareGameVersions(written.clientVersion, GAME_VERSION) === 0);
@@ -116,7 +116,7 @@ check('F2 numeric versions still order by major.minor',
 check('F2 draft refusal shows the refresh banner',
   versionRefreshReason('draft_client_blocked', { minClientVersion: DRAFT_MIN_CLIENT }) === DRAFT_MIN_CLIENT);
 check('F2 version_outdated still shows the refresh banner',
-  versionRefreshReason('version_outdated', { remoteVersion: 'V2.82-unified.18' }) === 'V2.82-unified.18');
+  versionRefreshReason('version_outdated', { remoteVersion: 'V2.82-unified.19' }) === 'V2.82-unified.19');
 check('F2 other events do not show the banner', versionRefreshReason('state_updated', {}) === '');
 
 const syncNow = readFileSync(join(root, 'src/multiplayer/syncManager.js'), 'utf8');

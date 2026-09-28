@@ -170,7 +170,9 @@ export class MovementUI {
 
   _canUnitMove(unitType) {
     const def = this.unitDefs?.[unitType];
-    return def && def.movement > 0 && !def.isBuilding;
+    if (!def || def.movement <= 0 || def.isBuilding) return false;
+    if (unitType === 'aaGun' && this.gameState?.turnPhase === 'combat_move') return false;
+    return true;
   }
 
   // Check if a unit has remaining movement this turn
@@ -1552,11 +1554,10 @@ export class MovementUI {
       const picked = maxMoveSelection(movableUnits.filter((u) => !u.id));
       this.selectedUnits = { ...this.selectedUnits, ...picked };
 
-      // Also select all ships with cargo (transports and carriers)
-      const shipsWithCargo = this._getShipsWithCargo(this.selectedFrom.name, player.id);
-      for (const ship of shipsWithCargo) {
-        if (ship.id && this._hasRemainingMovement(ship)) {
-          this.selectedShipIds.add(ship.id);
+      // Empty carriers move with select-all, not only hulls that already have cargo.
+      for (const unit of movableUnits) {
+        if (unit.id && this._hasRemainingMovement(unit)) {
+          this.selectedShipIds.add(unit.id);
         }
       }
 

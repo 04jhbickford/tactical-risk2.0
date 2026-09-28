@@ -195,3 +195,42 @@ export function combatMoveReachableDests(gameState, fromName, picked = {}, unitD
 export function landOnlySeaAttackIllegal(profile, destIsWater) {
   return !!(profile?.landOnly && destIsWater);
 }
+
+// Select-all / drag. A carrier id moves the hull and whatever is aboard.
+// Aircraft and cargo keys for that hull are not also sent as loose units.
+export function decomposeMoveSelection(selected = {}) {
+  const units = [];
+  const shipIds = [];
+  const cargoUnloads = [];
+  const entries = Object.entries(selected || {});
+  for (const [key, qty] of entries) {
+    if (!(Number(qty) > 0)) continue;
+    if (String(key).startsWith('ship:')) shipIds.push(String(key).slice('ship:'.length));
+  }
+  const riding = new Set(shipIds);
+  for (const [key, qty] of entries) {
+    const count = Number(qty) || 0;
+    if (count <= 0) continue;
+    const name = String(key);
+    if (name.startsWith('ship:')) continue;
+    if (name.startsWith('cargo:')) {
+      const parts = name.split(':');
+      if (parts.length >= 3 && !riding.has(parts[1])) {
+        cargoUnloads.push({
+          transportId: parts[1],
+          unitType: parts[2],
+          quantity: count,
+        });
+      }
+      continue;
+    }
+    if (name.startsWith('aircraft:')) {
+      const carrierId = name.split(':')[1];
+      if (riding.has(carrierId)) continue;
+      units.push({ type: airSelectionType(name), quantity: count });
+      continue;
+    }
+    units.push({ type: name, quantity: count });
+  }
+  return { units, shipIds, cargoUnloads };
+}

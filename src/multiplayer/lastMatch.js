@@ -333,9 +333,15 @@ export function resolveHostReconnectCopy({
   const who = hostName || 'Host';
   const code = gameCode || 'this match';
   if (hostPresence === 'idle') {
-    return `${who} is away — stay in ${code}. They can rejoin; the game is still here.`;
+    return `${who} is away — you are still in ${code}. They can rejoin; the match is saved.`;
   }
-  return `${who} is reconnecting — you are still in ${code}. Do not leave.`;
+  return `${who} is reconnecting — you are still in ${code}. The match is saved.`;
+}
+
+// Leave warning only while this phase has edits that have not been confirmed.
+export function unsavedPhaseLeaveWarning({ hasUnsavedPhaseChanges = false } = {}) {
+  if (!hasUnsavedPhaseChanges) return '';
+  return 'You have unsaved changes this phase. Stay until they save.';
 }
 
 export function shouldShowHostReconnect({ hostPresence } = {}) {

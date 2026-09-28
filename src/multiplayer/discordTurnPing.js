@@ -928,11 +928,13 @@ export function bindDiscordTurnPing(gameState, {
   post = null,
   storage = null,
   onResult = null,
+  deferUntilPushConfirmed = false,
 } = {}) {
   if (!gameState || typeof gameState.subscribe !== 'function') {
     return () => {};
   }
   let lastSeat = seatKeyOf(gameState);
+  let pending = null;
   // Per-seat cursor: event index when that seat's previous turn ended.
   // Seeded at bind so a mid-game join does not replay earlier history.
   const bindCursor = turnEventCount(gameState);
@@ -944,7 +946,22 @@ export function bindDiscordTurnPing(gameState, {
   const playersAtBind = Array.isArray(gameState.players) ? gameState.players : [];
   for (const player of playersAtBind) rememberSeat(player, bindCursor);
   rememberSeat(gameState.currentPlayer, bindCursor);
-  return gameState.subscribe(() => {
+
+  const report = (value) => {
+    try { onResult?.(value); } catch { /* diagnostics only */ }
+    return value;
+  };
+  const dispatch = (job) => {
+    const result = maybePostDiscordTurnPing(job);
+    if (result && typeof result.then === 'function') {
+      result.then(report).catch(() => report({ ok: false, reason: 'soft-fail' }));
+    } else {
+      report(result);
+    }
+    return result;
+  };
+
+  const unsub = gameState.subscribe(() => {
     try {
       const nextSeat = seatKeyOf(gameState);
       if (!nextSeat || nextSeat === lastSeat) return;
@@ -955,7 +972,10 @@ export function bindDiscordTurnPing(gameState, {
       if (!seatCursors.has(nextSeat)) seatCursors.set(nextSeat, bindCursor);
       const priorEvents = turnEventsSince(gameState, seatCursors.get(nextSeat));
       if (!hadPrev) return;
-      if (isApplyingRemote()) return;
+      if (isApplyingRemote()) {
+        pending = null;
+        return;
+      }
       const player = gameState.currentPlayer;
       const uxMode = getUxMode();
       const players = Array.isArray(gameState.players) ? gameState.players : [];
@@ -964,7 +984,7 @@ export function bindDiscordTurnPing(gameState, {
         recipientId: nextSeat,
         players,
       });
-      const result = maybePostDiscordTurnPing({
+      const job = {
         player,
         gameId: getGameId() || '',
         turnIndex: turnIndexOf({
@@ -984,18 +1004,28 @@ export function bindDiscordTurnPing(gameState, {
         uxMode,
         storage,
         post,
-      });
-      const report = (value) => {
-        try { onResult?.(value); } catch { /* diagnostics only */ }
-        return value;
       };
-      if (result && typeof result.then === 'function') {
-        result.then(report).catch(() => report({ ok: false, reason: 'soft-fail' }));
-      } else {
-        report(result);
+      if (deferUntilPushConfirmed) {
+        pending = { seat: nextSeat, job };
+        return;
       }
+      dispatch(job);
     } catch {
       /* never block the game */
     }
   });
+
+  const unbind = () => {
+    try { unsub(); } catch { /* already gone */ }
+  };
+  unbind.confirmPushedSeat = (seat) => {
+    if (!pending || pending.seat !== seat) return { ok: false, reason: 'no-pending' };
+    const job = pending.job;
+    pending = null;
+    return dispatch(job);
+  };
+  unbind.discardPendingPing = () => {
+    pending = null;
+  };
+  return unbind;
 }

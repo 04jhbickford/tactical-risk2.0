@@ -1,28 +1,32 @@
 # Tactical Risk — project instructions
 
 Browser-based WWII grand-strategy game (vanilla ES modules, no bundler).
-Multiplayer via Firebase (Auth + Firestore); hosting via Firebase Hosting.
+Multiplayer uses Firebase Auth and Firestore. Live hosting is the Vercel
+project `tactical-risk2.0` at `https://tactical-risk20.vercel.app`.
+Production deploys when a reviewer merges to `main`. Agents never merge
+and never deploy.
 Entry point: `index.html` → `src/main.js`. Game rules/state: `src/state/gameState.js`.
 Multiplayer sync: `src/multiplayer/` (syncManager, lobbyManager, multiplayerGuard, surrender).
 Bug log: `BUGS.md` (add every playtest round there).
 
 ## Deployment workflow — MANDATORY
 
-The live site is Firebase Hosting serving the RAW working directory (`public: "."`).
+The live site is Vercel Production for `tactical-risk2.0`
+(`https://tactical-risk20.vercel.app`). Firebase stays Auth and Firestore.
 Git and the deploy are only connected by discipline. The V2.46 incident: fixes sat
 uncommitted in a `.claude/worktrees/*` worktree whose branch pointer matched main,
 so every "is it merged?" check passed while live users ran the broken build for weeks.
 
-Rules (enforced by `tools/predeploy-check.mjs`, wired into `firebase.json` predeploy):
+Rules:
 
-1. **Never end a session with code changes uncommitted.** Commit on `main`
-   (never detached HEAD), push, and deploy in the same session the changes land.
-2. **Deploy = `firebase deploy` from the repo root on a clean `main`.**
-   The predeploy hook blocks detached HEAD, non-main branches, uncommitted
-   tracked changes, and uncommitted changes stranded in `.claude/worktrees/*`.
-   Do not use `ALLOW_DIRTY_DEPLOY=1` except in a genuine emergency.
-3. **After every deploy run** `node tools/verify-deployed.mjs` — it compares the
-   live site's `GAME_VERSION` against the local checkout and fails on mismatch.
+1. **Never end a session with code changes uncommitted.** Commit on the
+   feature branch (never detached HEAD) and push. A reviewer merges to `main`.
+   Agents never merge and never deploy.
+2. **Production deploy is Vercel’s deploy from a merge to `main`.**
+   Do not `firebase deploy` the live site. Do not use `ALLOW_DIRTY_DEPLOY=1`.
+3. **After a Production deploy run** `node tools/verify-deployed.mjs` — it
+   fetches live `src/version.js` (default `https://tactical-risk20.vercel.app`,
+   or pass the origin) and fails unless live `GAME_VERSION` matches the local file.
 4. **Bump `GAME_VERSION`** in `src/version.js` for every deployed change so
    playtesters can confirm which build they're on.
 5. **Worktree hygiene:** before assuming a past fix landed, check

@@ -18,6 +18,7 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
 }
 
 import { Camera, MAP_WIDTH } from './map/camera.js';
+import { decomposeMoveSelection } from './state/combatMoveEligibility.js';
 import { MapRenderer } from './map/mapRenderer.js';
 import { TerritoryRenderer } from './map/territoryRenderer.js';
 import { TerritoryMap } from './map/territoryMap.js';
@@ -154,7 +155,7 @@ import {
   shouldReconnectToGame,
 } from './multiplayer/presencePolicy.js';
 import { maybePostTurnNotice } from './multiplayer/turnNotice.js';
-import { bindDiscordTurnPing } from './multiplayer/discordTurnPing.js';
+import { bindDiscordTurnPing, seatKeyOf } from './multiplayer/discordTurnPing.js';
 import {
   resumeAuthEvent,
   shouldRefreshTokenOnResume,
@@ -177,6 +178,8 @@ import {
   resolvePlayOnlineDestination,
   readResumeCodeFromSearch,
   planResumeCodeFromUrl,
+  resolveHostReconnectCopy,
+  unsavedPhaseLeaveWarning,
 } from './multiplayer/lastMatch.js';
 import { AuthScreen } from './ui/authScreen.js';
 import { MultiplayerLobby } from './ui/multiplayerLobby.js';
@@ -960,11 +963,7 @@ async function init() {
         purchasePopup.hide();
         techUI.hide();
 
-        // If entering combat phase, show combat UI
-        if (gameState.turnPhase === TURN_PHASES.COMBAT && combatUI.hasCombats()) {
-          combatUI.showNextCombat();
-        }
-        // Cancel any movement selection when phase changes
+        // Combat phase waits on the battle list. The player picks the order.
         movementUI.cancel();
         break;
     }
@@ -1462,6 +1461,15 @@ async function init() {
       }
       // Retries exhausted: local state has been snapped back to the server's
       // last confirmed truth, so the client can't proceed on un-persisted state.
+      if (event === 'seat_push_confirmed') {
+        unbindDiscordTurnPing?.confirmPushedSeat?.(seatKeyOf(gameState));
+      }
+      if (event === 'push_stale_blocked' || event === 'push_exhausted' || event === 'turn_save_blocked') {
+        unbindDiscordTurnPing?.discardPendingPing?.();
+      }
+      if (event === 'turn_save_blocked' && data?.notice) {
+        showNotification(data.notice, 6000);
+      }
       if (event === 'push_exhausted') {
         playerPanel.setWaitingForSync(resolveWaitingLockAfterExhaust());
         const now = Date.now();
@@ -1617,7 +1625,11 @@ async function init() {
           } else if (!wasOffline && isOffline) {
             const hostGone = hostPlayer && oderId === hostPlayer.oderId;
             showNotification(hostGone
-              ? `${info.displayName || 'Host'} is reconnecting — you are still in ${currentGameCode || 'the match'}. Do not leave.`
+              ? resolveHostReconnectCopy({
+                hostPresence: 'offline',
+                hostName: info.displayName || 'Host',
+                gameCode: currentGameCode,
+              })
               : `${info.displayName || 'A player'} went offline`);
           }
         }
@@ -1668,6 +1680,7 @@ async function init() {
       getUxMode: () => 'classic',
       getOrigin: () => (typeof location !== 'undefined' ? `${location.origin}${location.pathname}` : ''),
       isApplyingRemote: () => !!syncManager?.isLoading?.(),
+      deferUntilPushConfirmed: !!syncManager,
       onResult: (result) => {
         emitGameEvent('ui', {
           payload: {
@@ -1679,9 +1692,24 @@ async function init() {
     });
   };
 
+  let unsavedLeaveGuardBound = false;
+  const bindUnsavedPhaseLeaveGuard = () => {
+    if (unsavedLeaveGuardBound || typeof window === 'undefined') return;
+    unsavedLeaveGuardBound = true;
+    window.addEventListener('beforeunload', (event) => {
+      const warning = unsavedPhaseLeaveWarning({
+        hasUnsavedPhaseChanges: syncManager?.hasUnsavedPhaseChanges?.() === true,
+      });
+      if (!warning) return;
+      event.preventDefault();
+      event.returnValue = warning;
+    });
+  };
+
   const wireUpGameComponents = () => {
     lastTurnNoticeSeatId = gameState.currentPlayer?.oderId || gameState.currentPlayer?.id || null;
     attachDiscordTurnPing();
+    bindUnsavedPhaseLeaveGuard();
     // Check if there are AI players
     const hasAIPlayers = gameState.players?.some(p => p.isAI);
 
@@ -1764,11 +1792,7 @@ async function init() {
       purchasePopup.hide();
       techUI.hide();
 
-      // If entering combat phase, show combat UI
-      if (gameState.turnPhase === TURN_PHASES.COMBAT && combatUI.hasCombats()) {
-        combatUI.showNextCombat();
-      }
-      // Cancel any movement selection when phase changes
+      // Combat phase waits on the battle list. The player picks the order.
       movementUI.cancel();
     });
     hud.setOnRulesToggle(() => {
@@ -2822,21 +2846,32 @@ async function init() {
         playerPanel.movePendingDest = hit.name;
 
         // Confirm the move
-        const unitsToMove = Object.entries(playerPanel.moveSelectedUnits || {})
-          .filter(([type, qty]) => Number(qty) > 0 && unitDefs[type])
-          .map(([type, quantity]) => ({ type, quantity: Number(quantity) }));
-        const result = gameState.moveUnits(
+        const picked = decomposeMoveSelection(playerPanel.moveSelectedUnits || {});
+        const amphibious = !!dragSourceTerritory.isWater && !hit.isWater
+          && (picked.shipIds.length > 0 || picked.cargoUnloads.length > 0);
+        if (amphibious && playerPanel.onAction) {
+          playerPanel.onAction('execute-move', {
+            from: dragSourceTerritory.name,
+            to: hit.name,
+            units: picked.units,
+            shipIds: picked.shipIds,
+            cargoUnloads: picked.cargoUnloads,
+            isAmphibiousUnload: true,
+          });
+        }
+        const result = amphibious ? { success: false } : gameState.moveUnits(
           dragSourceTerritory.name,
           hit.name,
-          unitsToMove,
+          picked.units,
           unitDefs,
+          { shipIds: picked.shipIds },
         );
 
         if (result.success) {
           actionLog.logMove(
             dragSourceTerritory.name,
             hit.name,
-            unitsToMove,
+            picked.units,
             gameState.currentPlayer,
           );
           // Illegal drops never reach here — the stack stays on the source.

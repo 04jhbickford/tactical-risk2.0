@@ -1,4 +1,4 @@
-// V2.81.57-unified.17 — lobby options: host-only edits, summary, card chip.
+// V2.81.57-unified.18 — lobby options: host-only edits, summary, card chip.
 // Run: node tools/test-game-options-lobby.mjs
 
 import { readFileSync } from 'fs';
@@ -22,8 +22,8 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-console.log('=== V2.81.57-unified.17 game option lobby ===');
-check('GAME_VERSION is V2.81.57-unified.17', GAME_VERSION === 'V2.81.57-unified.17');
+console.log('=== V2.81.57-unified.18 game option lobby ===');
+check('GAME_VERSION is V2.81.57-unified.18', GAME_VERSION === 'V2.81.57-unified.18');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 check('joiner cannot edit', settingsEditError({ isHost: false }) === 'Only host can update settings');
@@ -45,7 +45,15 @@ check('explicit land bridges off sticks', normalizeGameOptions({ landBridges: fa
 
 const joiner = renderGameOptionsPanel({ unitsPerRound: 8 }, { editable: false });
 check('joiner sees Set by host', joiner.includes('Set by host'));
-check('joiner controls are disabled', joiner.includes('disabled'));
+check('joiner options are read-only text',
+  joiner.includes('class="go-readonly"')
+  && joiner.includes('>8<')
+  && joiner.includes('View')
+  && !joiner.includes('Customize')
+  && !joiner.includes('go-reset')
+  && !joiner.includes('Reset to standard')
+  && !joiner.includes('<select')
+  && !joiner.includes('disabled'));
 check('joiner phone row is still there', joiner.includes('Game options') && joiner.includes('Custom'));
 
 const host = renderGameOptionsPanel(null, { editable: true });

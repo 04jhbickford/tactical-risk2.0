@@ -2,6 +2,20 @@
 
 ---
 
+## 9.28.26 — unified.18 Discord playtest
+
+Stamp `V2.81.57-unified.18`. Schema stays 11. Display stamp only; game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.18`).
+
+Rob and Bastion, `#tactical-risk`, 27 Sep: an open desktop tab did not advance until refresh, and a finished turn was announced before it was saved. The host-reconnect line told the other player not to leave. Combat opened the first battle by itself. Develop Tech still said Confirm Attack. Select-all naval drag left empty carriers behind. Retreat asked where to land the same planes twice. The casualty picker drew a second battleship in the wrong colour. AA guns could join a combat move. A non-host could reset custom lobby rules. India still swallows the old Afghanistan polygon (left as-is: that territory was merged on purpose). A stem ran through Kazakh S.S.R. Turn pings missed some seats. After combat, planes needed a multi-select landing and a Return to base that only uses a legal origin. Fighter cards showed total movement.
+
+The turn ping now waits until the seat-changing push confirms. A stale push retries while the server still has our seat, and a visible tab reattaches a dead snapshot listener. The leave warning is only for unsaved edits in the current phase. Combat waits on the battle list. The phase button follows the phase. Carriers, including empty ones, stay in the drag set and their aircraft ride the hull. One landing prompt per retreat. One battleship icon, two ways to spend hits. AA guns move in non-combat only. Joiners see the options as read-only text. The Kazakh stem (points 190–255) is gone. Movement badges show remaining over total.
+
+Afghanistan stays merged into India. Restoring it would add a territory and change adjacency.
+
+Receipt: `node tools/test-unified-18-discord.mjs`.
+
+---
+
 ## 9.26.26 — unified.17 Rob's battle bugs
 
 Stamp `V2.81.57-unified.17`. Schema stays 11. Display stamp only; game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.17`). T1 (stale host overwrite) shipped in unified.16.1 (a670f4a4) and this build includes it.
