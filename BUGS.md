@@ -14,6 +14,8 @@ Signed-in players can open Dice stats from the main menu or the online hub witho
 
 Battle win rate versus odds is not in this build.
 
+The purchase row names units with `formatUnitName`, so a tactical bomber no longer shows the raw id. The rules sheet says a carrier carries 2 fighters, matching `units.json`, and the bomber note says strategic bombing raids are not yet available. Paired attack 4, carrier landing for tactical bombers, a game option, AI buys, starting setup, and raids are not in this build.
+
 Receipt: `node tools/test-dice-stats-v2.mjs`, `node tools/test-dice-stats-math.mjs`, `node tools/test-dice-tracker-golden.mjs`.
 
 ---
