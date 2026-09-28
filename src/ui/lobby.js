@@ -11,6 +11,7 @@ import { isMobileShell } from './mobileShell.js';
 import { captureLobbyScroll, restoreLobbyScroll } from './lobbyScroll.js';
 import { describe, draftModeSource, normalizeGameOptions } from '../gameOptions.js';
 import { bindGameOptions, renderGameOptionsPanel } from './gameOptionsPanel.js';
+import { bindLobbyDice, lobbyDiceEntryMarkup, renderDiceStatsMarkup } from './diceStatsPanel.js';
 export { GAME_VERSION };
 
 // Native <select> option taps land on the card under the popup.
@@ -81,6 +82,7 @@ export class Lobby {
     this._ignoreCardToggleUntil = 0;
     this._ignoreCardTogglePlayer = null;
     this._docClickBound = false;
+    this._diceOpen = false;
     this._create();
   }
 
@@ -108,7 +110,8 @@ export class Lobby {
       focused.blur();
     }
     let content = '';
-    const phone = isMobileShell();
+    const phone = isMobileShell()
+      || (typeof window !== 'undefined' && window.matchMedia?.('(max-width: 640px)')?.matches);
 
     switch (this.mode) {
       case 'main':
@@ -124,13 +127,18 @@ export class Lobby {
         content = phone ? this._renderMobileMainMenu() : this._renderMainMenu();
     }
 
+    const dicePanel = this.mode === 'main' && this._diceOpen
+      ? renderDiceStatsMarkup({ placement: 'lobby' })
+      : '';
     this.el.innerHTML = `
       <div class="lobby-container modern${phone ? ' lobby-phone' : ''}">
         <div class="lobby-bg-pattern"></div>
         <div class="lobby-content-wrapper${phone ? ' lobby-phone-wrap' : ''}">
           ${content}
+          ${phone ? '' : dicePanel}
         </div>
       </div>
+      ${phone ? dicePanel : ''}
     `;
 
     restoreLobbyScroll(this.el, savedScroll);
@@ -197,6 +205,7 @@ export class Lobby {
             <span class="saved-count">${savedGames.length}</span>
           </button>
         ` : ''}
+        ${lobbyDiceEntryMarkup({ phone: true })}
       </div>
     `;
   }
@@ -379,6 +388,7 @@ export class Lobby {
             <span class="saved-count">${savedGames.length}</span>
           </button>
         ` : ''}
+        ${lobbyDiceEntryMarkup({ phone: false })}
       </div>
     `;
   }
@@ -597,6 +607,12 @@ export class Lobby {
     this.el.querySelector('[data-action="my-games"]')?.addEventListener('click', () => {
       this.mode = 'my-games';
       this._render();
+    });
+
+    bindLobbyDice(this.el, {
+      isOpen: () => this._diceOpen,
+      setOpen: (open) => { this._diceOpen = !!open; },
+      render: () => this._render(),
     });
 
     // Back button

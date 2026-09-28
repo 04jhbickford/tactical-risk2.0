@@ -2,6 +2,22 @@
 
 ---
 
+## 9.28.26 — unified.19 dice stats
+
+Stamp `V2.81.57-unified.19`. Schema stays 11. Display stamp only; game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.19`).
+
+Dice stats stays observe-only. Rolls still come from `Math.random` inside `_rollDie`. The tracker records the face after it is chosen. Turning the tracker off does not change the sequence or the combat result.
+
+Signed-in players can open Dice stats from the main menu or the online hub without joining a game, and from the in-game menu as before. All-time, This game, and each player show face counts against the fair share (1 in 6), the chi-square statistic, the p-value, and a plain sentence. Players can switch This game / All games. Humans and AI are separate. Names are display names. Guests on the menu see "Sign in to see dice stats". A signed-in read that is not published yet still says "Stats will appear once enabled".
+
+`tools/recompute-dice-stats.mjs` can rebuild totals from `diceBatches` plus older combat logs. It is dry-run unless `--commit`, and it refuses to run under CI. Pre-tracker logs do store faces (`state.combatTelemetry`, and `games/{id}/events` kind `combat` or `aa`). Those lists are capped at 24 and have no per-die owner, so they are tagged `source: 'backfill'` and are not copied onto player docs. A game that already has `diceBatches` is left to those batches.
+
+Battle win rate versus odds is not in this build.
+
+Receipt: `node tools/test-dice-stats-v2.mjs`, `node tools/test-dice-stats-math.mjs`, `node tools/test-dice-tracker-golden.mjs`.
+
+---
+
 ## 9.28.26 — unified.18 Discord playtest
 
 Stamp `V2.81.57-unified.18`. Schema stays 11. Display stamp only; game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.18`).
