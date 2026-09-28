@@ -168,3 +168,10 @@ Never commit webhook URLs, tokens, or keys. They live in the hosting environment
 - `DISCORD_BOT_TOKEN` and `DISCORD_GUILD_ID` — server only, for exact member lookup.
 
 `api/discord-turn-ping.js` must not log or echo the webhook. The client must not read it, store it, or fall back to a URL in git, a brief, a PR, or a comment. A missing env returns `{ ok: false, reason: 'unconfigured' }` and stays that way until a human sets the env.
+
+## Cursor Cloud specific instructions
+
+- Install with `npm ci` from the repo root. Node 20 or newer. The browser loads Firebase from the gstatic CDN; `npm ci` still installs the locked `firebase` package.
+- There is no bundler and no `npm start` or `npm test`. Serve the repo root over HTTP so ES modules load. The environment start command listens on port 8080 (`python3 -m http.server 8080 --bind 0.0.0.0`). Open `http://127.0.0.1:8080/`.
+- Rule tests are individual scripts: `node tools/test-<name>.mjs`. `tools/rules-dice.emulator.mjs` needs the Firestore emulator and is not part of that loop.
+- Local Play (two factions, Start Game, Confirm a capital) does not need Firebase or Discord secrets. Online play and turn pings use hosting env vars that must not be committed.
