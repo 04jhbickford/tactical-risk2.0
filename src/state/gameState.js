@@ -59,10 +59,13 @@ import {
   canPlaceAirOnCarrierInSeaZone,
   countCarrierAir,
   individualizeCarrier,
+  isLandingCarrier,
   loadOneAirOntoCarrier,
   takeAirFromCarriers,
   unloadOneAirFromCarrier,
 } from './carrierPlacement.js';
+import { destroyIllegalAir, previewNcmAirDestruction as previewNcmAir, ncmAirWarningCopy } from './ncmAirCheck.js';
+import { consumePairedAttack, countPairing, tacticalBombersEnabled } from './tacticalPairing.js';
 import { countAirHits, sideCanFirstStrike, sideHasDestroyer, unitIsFirstStrikeTarget } from './combatUnits.js';
 import {
   factoryProductionLimit,
@@ -960,7 +963,7 @@ export class GameState {
     const currentT = this.territoryByName[territory];
     if (currentT?.isWater) {
       const seaUnits = this.units[territory] || [];
-      const carriers = seaUnits.filter(u => u.type === 'carrier' && u.owner === player.id);
+      const carriers = seaUnits.filter(u => isLandingCarrier(this, u, player.id));
       const carrierDef = unitDefs.carrier;
 
       if (carrierDef && carriers.length > 0) {
@@ -986,7 +989,7 @@ export class GameState {
       if (destT?.isWater) {
         // Carriers: check if there's a friendly carrier with capacity
         const seaUnits = this.units[destName] || [];
-        const carriers = seaUnits.filter(u => u.type === 'carrier' && u.owner === player.id);
+        const carriers = seaUnits.filter(u => isLandingCarrier(this, u, player.id));
         const carrierDef = unitDefs.carrier;
 
         if (carrierDef && carriers.length > 0) {
@@ -1045,7 +1048,7 @@ export class GameState {
     }
     if (arrived?.isWater) {
       const here = this.units[toTerritory] || [];
-      const carriersHere = here.filter(u => u.type === 'carrier' && u.owner === player.id);
+      const carriersHere = here.filter(u => isLandingCarrier(this, u, player.id));
       const carrierDef = unitDefs.carrier;
       if (carrierDef?.canCarry?.includes(unitType) && carriersHere.some((carrier) => {
         const aboard = carrier.aircraft || [];
@@ -1062,7 +1065,7 @@ export class GameState {
 
       if (destT?.isWater) {
         const seaUnits = this.units[destName] || [];
-        const carriers = seaUnits.filter(u => u.type === 'carrier' && u.owner === player.id);
+        const carriers = seaUnits.filter(u => isLandingCarrier(this, u, player.id));
         if (carriers.length > 0) {
           const carrierDef = unitDefs.carrier;
           if (carrierDef?.canCarry?.includes(unitType)) {
@@ -2363,6 +2366,7 @@ export class GameState {
 
     const unitDef = unitDefs[unitType];
     if (!unitDef) return false;
+    if (unitType === 'tacticalBomber' && !tacticalBombersEnabled(this.gameOptions)) return false;
 
     const cost = unitDef.cost;
     if (this.playerState[player.id].ipcs < cost) return false;
@@ -2566,6 +2570,7 @@ export class GameState {
       console.warn(`nextPhase() ignored: game phase is '${this.phase}', not playing`);
       return;
     }
+    this.lastNcmAirCrashes = [];
 
     let currentIndex = TURN_PHASE_ORDER.indexOf(this.turnPhase);
     const leavingPhase = this.turnPhase;
@@ -2581,6 +2586,14 @@ export class GameState {
     const landLooseAirIfLeavingAirPhase = () => {
       if (leavingPhase !== TURN_PHASES.COMBAT && leavingPhase !== TURN_PHASES.NON_COMBAT_MOVE) return;
       const defs = this._unitDefs || this.unitDefs || {};
+      // NCM end: destroy aircraft that are not already on a legal spot.
+      // Do not also run the combat-exit rescue, which would move or crash
+      // the same aircraft before this check and either hide them from the
+      // warning or destroy them twice.
+      if (leavingPhase === TURN_PHASES.NON_COMBAT_MOVE) {
+        this._destroyNcmAirWithoutLanding(defs);
+        return;
+      }
       this.relocateAirFromCapturedLand(defs);
       this.resolveLooseAirOverWater(defs);
     };
@@ -2665,6 +2678,7 @@ export class GameState {
 
     const unitDef = unitDefs[unitType];
     if (!unitDef) return false;
+    if (unitType === 'tacticalBomber' && !tacticalBombersEnabled(this.gameOptions)) return false;
 
     const totalCost = unitDef.cost * quantity;
     if (this.playerState[player.id].ipcs < totalCost) return false;
@@ -2899,7 +2913,7 @@ export class GameState {
       // Check if landing on water (needs carrier OR attacking enemy naval units)
       if (toT?.isWater) {
         const seaUnits = this.units[toTerritory] || [];
-        const carriers = seaUnits.filter(u => u.type === 'carrier' && u.owner === player.id);
+        const carriers = seaUnits.filter(u => isLandingCarrier(this, u, player.id));
         const carrierDef = unitDefs.carrier;
 
         // Check if there are enemy naval units to attack (combat move)
@@ -3109,7 +3123,7 @@ export class GameState {
 
         // First try individual carriers (already have IDs)
         const individualCarriers = toUnits.filter(u =>
-          u.type === 'carrier' && u.owner === player.id && u.id
+          isLandingCarrier(this, u, player.id) && (u.id || u.owner !== player.id)
         );
 
         for (const carrier of individualCarriers) {
@@ -4075,8 +4089,10 @@ export class GameState {
 
   _restowCarrierAir(units, unitDefs) {
     const capacity = unitDefs?.carrier?.aircraftCapacity || 2;
+    const allowed = unitDefs?.carrier?.canCarry;
     for (const air of units || []) {
       if (!air?.fromCarrier || (Number(air.quantity) || 0) <= 0) continue;
+      if (Array.isArray(allowed) && !allowed.includes(air.type)) continue;
       let left = Number(air.quantity) || 0;
       const carriers = units.filter((unit) => (
         unit.type === 'carrier'
@@ -4429,6 +4445,12 @@ export class GameState {
   _rollCombatWithRolls(units, type, unitDefs, contextLabel = 'combat') {
     let hits = 0;
     const rolls = [];
+    // Pairing only changes the to-hit of a tactical bomber. No extra die,
+    // and a stack with no tactical bomber (or the option off) uses def.attack
+    // exactly as before.
+    let pairedLeft = type === 'attack'
+      ? countPairing(units, { enabled: tacticalBombersEnabled(this.gameOptions) }).paired
+      : 0;
 
     for (const unit of units) {
       const def = unitDefs[unit.type];
@@ -4437,15 +4459,21 @@ export class GameState {
       const hitValue = type === 'attack' ? def.attack : def.defense;
 
       for (let i = 0; i < unit.quantity; i++) {
+        let need = hitValue;
+        if (type === 'attack') {
+          const paired = consumePairedAttack(unit.type, hitValue, pairedLeft);
+          need = paired.attack;
+          pairedLeft = paired.pairedLeft;
+        }
         const roll = this._rollDie({
           context: contextLabel,
           side: type === 'attack' ? 'attacker' : 'defender',
           unit: unit.type,
-          need: hitValue,
+          need,
           playerSeat: unit.owner,
         });
-        rolls.push({ unit: unit.type, roll, hit: roll <= hitValue });
-        if (roll <= hitValue) hits++;
+        rolls.push({ unit: unit.type, roll, hit: roll <= need });
+        if (roll <= need) hits++;
       }
     }
     return { hits, rolls };
@@ -5926,7 +5954,9 @@ export class GameState {
     if (!player) return { success: false, error: 'No current player' };
 
     const seaUnits = this.units[seaZone] || [];
-    const carriers = seaUnits.filter(u => u.type === 'carrier' && u.owner === player.id);
+    const ownCarriers = seaUnits.filter(u => u.type === 'carrier' && u.owner === player.id);
+    const alliedCarriers = seaUnits.filter(u => isLandingCarrier(this, u, player.id) && u.owner !== player.id);
+    const carriers = [...ownCarriers, ...alliedCarriers];
     if (carrierIndex >= carriers.length) {
       return { success: false, error: 'Invalid carrier' };
     }
@@ -5989,7 +6019,9 @@ export class GameState {
     if (!player) return { success: false, error: 'No current player' };
 
     const seaUnits = this.units[seaZone] || [];
-    const carriers = seaUnits.filter(u => u.type === 'carrier' && u.owner === player.id);
+    const ownCarriers = seaUnits.filter(u => u.type === 'carrier' && u.owner === player.id);
+    const alliedCarriers = seaUnits.filter(u => isLandingCarrier(this, u, player.id) && u.owner !== player.id);
+    const carriers = [...ownCarriers, ...alliedCarriers];
     if (carrierIndex >= carriers.length) {
       return { success: false, error: 'Invalid carrier' };
     }
@@ -6183,6 +6215,35 @@ export class GameState {
       targetOwner,
       message
     };
+  }
+
+  // NCM end only. Combat exit still rescues or crashes via the two
+  // methods below; this does not run then, so a crash is not logged twice.
+  _destroyNcmAirWithoutLanding(unitDefs = this._unitDefs || this.unitDefs || {}) {
+    const player = this.currentPlayer;
+    this.lastNcmAirCrashes = [];
+    if (!player) return [];
+    const destroyed = destroyIllegalAir(this, unitDefs, player.id);
+    this.lastNcmAirCrashes = destroyed;
+    if (!destroyed.length) return destroyed;
+    const copy = ncmAirWarningCopy(destroyed);
+    this.turnEvents = this.turnEvents || [];
+    this.turnEvents.push({
+      type: 'air_destroyed',
+      playerId: player.id,
+      timestamp: Date.now(),
+      message: copy.title,
+      lines: copy.lines,
+    });
+    if (typeof this.onNcmAirDestroyed === 'function') {
+      try { this.onNcmAirDestroyed(destroyed, copy); } catch { /* log must not block the phase */ }
+    }
+    this._notify();
+    return destroyed;
+  }
+
+  previewNcmAirDestruction(unitDefs = this._unitDefs || this.unitDefs || {}) {
+    return previewNcmAir(this, unitDefs);
   }
 
   // Air that survived on land taken this turn must leave before the phase

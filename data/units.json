@@ -97,7 +97,7 @@
     "movement": 2,
     "isSea": true,
     "aircraftCapacity": 2,
-    "canCarry": ["fighter"],
+    "canCarry": ["fighter", "tacticalBomber"],
     "image": "Carrier.png"
   },
   "factory": {

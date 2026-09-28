@@ -535,6 +535,8 @@ export class AIController {
     for (const { unitType, maxCount } of priorities) {
       const def = this.unitDefs[unitType];
       if (!def || def.cost > remaining) continue;
+      // R5: the AI does not buy tactical bombers. Off also hides the unit.
+      if (unitType === 'tacticalBomber') continue;
 
       // Buy units up to max count
       let count = Math.min(maxCount, Math.floor(remaining / def.cost));

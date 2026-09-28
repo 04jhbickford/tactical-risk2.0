@@ -41,6 +41,9 @@ export class ActionLog {
 
     this.gameState = gameState;
     this.entries = [];
+    if (gameState) {
+      gameState.onNcmAirDestroyed = (rows, copy) => this.logAirDestroyed(rows, copy);
+    }
     // Note: Visual rendering is handled by PlayerPanel
   }
 
@@ -233,6 +236,17 @@ export class ActionLog {
       message: `${player.name} moved ${unitStr} from ${from} to ${to}`,
       from, to, units,
       color: player.color
+    });
+  }
+
+  logAirDestroyed(rows, copy) {
+    const title = copy?.title
+      || `${(rows || []).reduce((sum, row) => sum + (Number(row?.quantity) || 0), 0)} aircraft will be destroyed for lack of a landing site`;
+    const lines = copy?.lines || (rows || []).map((row) => `${row.quantity}x ${row.type} in ${row.territory}`);
+    this.log('air-destroyed', {
+      message: lines.length ? `${title}: ${lines.join('; ')}` : title,
+      rows,
+      lines,
     });
   }
 

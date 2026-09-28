@@ -5,6 +5,7 @@ import { GAME_PHASES, TURN_PHASES, TURN_PHASE_NAMES, TECHNOLOGIES, shouldShowTec
 import { renderCombatBattleList } from './battleOrder.js';
 import { adjacentMobilizeSeas } from './mobilizeDeployAll.js';
 import { DIRECT_TECH_IPC_COST } from '../gameOptions.js';
+import { tacticalBombersEnabled } from '../state/tacticalPairing.js';
 import { getUnitIconPath } from '../utils/unitIcons.js';
 import { formatUnitName } from '../utils/unitNames.js';
 import { possessivePhrase } from '../utils/possessive.js';
@@ -3160,6 +3161,7 @@ export class PlayerPanel {
 
     const purchasableUnits = Object.entries(this.unitDefs || {})
       .filter(([type, def]) => {
+        if (type === 'tacticalBomber' && !tacticalBombersEnabled(this.gameState?.gameOptions)) return false;
         // AA guns can now be purchased
         if ((def.isLand || def.isAir || def.isBuilding) && hasFactories) return true;
         if (def.isSea && hasSeaZones) return true;

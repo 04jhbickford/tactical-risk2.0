@@ -74,6 +74,8 @@ function paintGameStamp() {
 paintGameStamp();
 import { ContinentPanel } from './ui/continentPanel.js';
 import { GameState, GAME_PHASES, TURN_PHASES, shouldShowPurchase } from './state/gameState.js';
+import { ncmAirWarningCopy, shouldPromptNcmAirWarning } from './state/ncmAirCheck.js';
+import { confirmNcmAirWarning } from './ui/ncmAirWarning.js';
 import { syncPushPhaseLabel } from './state/placementPass.js';
 import { VictoryScreen } from './ui/victoryScreen.js';
 import { AIController } from './ai/aiController.js';
@@ -933,6 +935,20 @@ async function init() {
           && (gameState.combatQueue?.length || 0) > 0) {
           camera.dirty = true;
           break;
+        }
+        if (gameState.turnPhase === TURN_PHASES.NON_COMBAT_MOVE) {
+          const stranded = gameState.previewNcmAirDestruction?.(unitDefs) || [];
+          const strandedCount = stranded.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
+          if (shouldPromptNcmAirWarning({
+            isAI: gameState.currentPlayer?.isAI === true,
+            count: strandedCount,
+          })) {
+            const proceed = await confirmNcmAirWarning(ncmAirWarningCopy(stranded));
+            if (!proceed) {
+              camera.dirty = true;
+              break;
+            }
+          }
         }
         const prevPlayer = gameState.currentPlayer;
         const prevRound = gameState.round;

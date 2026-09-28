@@ -15,6 +15,10 @@ export const DEFAULT_GAME_OPTIONS = Object.freeze({
   territorySetup: 'random',
   // Dice tokens are spent on the roll, hit or miss. Today's research.
   techAcquisition: 'dice',
+  // Tactical bombers are part of the standard game. Old saves omit the
+  // field and load as on. Off hides them from purchase, the rules, and
+  // the attack-4 pairing.
+  tacticalBombers: true,
 });
 
 export const STARTING_IPC_VALUES = Object.freeze([40, 60, 80, 100, 120, 150]);
@@ -83,6 +87,7 @@ export function normalizeGameOptions(raw, legacy = {}) {
       : (old.teams !== undefined ? old.teams : old.teamsEnabled));
   const bridgesRaw = src.landBridges !== undefined ? src.landBridges : old.landBridges;
   const multiRaw = src.multipleTech !== undefined ? src.multipleTech : old.multipleTech;
+  const tacRaw = src.tacticalBombers !== undefined ? src.tacticalBombers : old.tacticalBombers;
   return {
     startingIPCs: pickNumber(
       src.startingIPCs ?? old.startingIPCs,
@@ -114,6 +119,8 @@ export function normalizeGameOptions(raw, legacy = {}) {
       TECH_ACQUISITION_VALUES,
       DEFAULT_GAME_OPTIONS.techAcquisition,
     ),
+    // Default ON. Only an explicit false removes tactical bombers.
+    tacticalBombers: tacRaw === false ? false : true,
   };
 }
 
@@ -127,7 +134,8 @@ export function isStandardRules(raw, legacy) {
     && o.multipleTech === DEFAULT_GAME_OPTIONS.multipleTech
     && o.landBridges === DEFAULT_GAME_OPTIONS.landBridges
     && o.territorySetup === DEFAULT_GAME_OPTIONS.territorySetup
-    && o.techAcquisition === DEFAULT_GAME_OPTIONS.techAcquisition;
+    && o.techAcquisition === DEFAULT_GAME_OPTIONS.techAcquisition
+    && o.tacticalBombers === DEFAULT_GAME_OPTIONS.tacticalBombers;
 }
 
 /** Live summary. Standard rules, or "Custom: Heavy army, 8 per round, no land bridges". */
@@ -149,6 +157,7 @@ export function describe(raw, legacy) {
   if (o.territorySetup === 'draft') parts.push('Draft territories');
   if (o.techAcquisition === 'keep') parts.push('keep tech tokens');
   if (o.techAcquisition === 'buy') parts.push(`buy tech (${DIRECT_TECH_IPC_COST})`);
+  if (!o.tacticalBombers) parts.push('no tactical bombers');
   if (parts.length === 0) return 'Standard rules';
   return `Custom: ${parts.join(', ')}`;
 }
@@ -187,7 +196,11 @@ export function optionsFromSettings(settings) {
 // Doc-level copy. A unified.14.1 push rewrites `state` and omits
 // territorySetup / techAcquisition. It does not delete sibling fields, so
 // this copy survives and load restores the keys the live options lost.
-export const PROTECTED_OPTION_KEYS = Object.freeze(['territorySetup', 'techAcquisition']);
+export const PROTECTED_OPTION_KEYS = Object.freeze([
+  'territorySetup',
+  'techAcquisition',
+  'tacticalBombers',
+]);
 
 export function protectedGameOptions(raw) {
   return normalizeGameOptions(raw);
@@ -259,6 +272,7 @@ export function optionRows(raw, legacy) {
     ['Multiple tech breakthroughs', o.multipleTech ? 'On' : 'Off'],
     ['Tech', techAcquisitionLabel(o.techAcquisition)],
     ['Land bridges', o.landBridges ? 'On' : 'Off'],
+    ['Tactical bombers', o.tacticalBombers ? 'On' : 'Off'],
   ];
 }
 

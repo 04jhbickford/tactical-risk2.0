@@ -9699,6 +9699,19 @@ html.mobile-shell .pp-battle-row,
   text-align: center;
 }
 
+.combat-type-name.is-paired {
+  text-transform: none;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.combat-unit-type:has(.is-paired) {
+  width: auto;
+  min-width: 150px;
+  overflow: visible;
+}
+
 .combat-unit-icons {
   display: flex;
   align-items: center;
@@ -19754,6 +19767,7 @@ html.mobile-shell .player-panel--expanded.player-panel--mobilize .pp-inline-mobi
     font-size: 13px;
     font-weight: 600;
     text-align: right;
+    overflow-wrap: anywhere;
   }
 
   html.mobile-shell .phone-combat-next {
@@ -20423,6 +20437,21 @@ html.mobile-shell.tech-active .tech-popup {
   margin: 0 0 14px;
   font-size: 14px;
   line-height: 1.45;
+}
+
+.tr-confirm-list {
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+  max-height: 40vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.tr-confirm-list li {
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .tr-confirm-actions {
