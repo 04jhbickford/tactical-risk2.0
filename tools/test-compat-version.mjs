@@ -1,4 +1,4 @@
-// V2.81.57-unified.20 — mixed-version refresh banner.
+// V2.81.57-unified.20.1 — mixed-version refresh banner.
 // F1: unified.14.1's own compareGameVersions, loaded from 6d0796f1, sees a
 // .17-written game doc as newer and fires version_outdated.
 // F2: this build orders the full unified release, and a draft refusal
@@ -53,8 +53,8 @@ const Probe = new Function('compareGameVersions', 'GAME_VERSION', `
   };
 `)(oldVersion.compareGameVersions, oldVersion.GAME_VERSION);
 
-console.log('=== V2.81.57-unified.20 compat version ===');
-check('display stamp stays V2.81.57-unified.20', GAME_VERSION === 'V2.81.57-unified.20');
+console.log('=== V2.81.57-unified.20.1 compat version ===');
+check('display stamp stays V2.81.57-unified.20.1', GAME_VERSION === 'V2.81.57-unified.20.1');
 check('F1 loaded .14.1 GAME_VERSION', oldVersion.GAME_VERSION === 'V2.81.57-unified.14.1');
 check('F1 .14.1 comparator is the major.minor parser',
   oldVersionSrc.includes('/^V?(\\d+)\\.(\\d+)/')
@@ -70,7 +70,7 @@ const written = {
   },
   protectedGameOptions: { techAcquisition: 'keep', territorySetup: 'draft' },
 };
-check('F1 compat stamp is V2.82-unified.20', written.clientVersion === 'V2.82-unified.20');
+check('F1 compat stamp is V2.82-unified.20.1', written.clientVersion === 'V2.82-unified.20.1');
 check('compat keeps a unified.N.M patch and omits a zero patch',
   compatClientVersion('V2.81.57-unified.16.1') === 'V2.82-unified.16.1'
   && compatClientVersion('V2.81.57-unified.16') === 'V2.82-unified.16');
@@ -84,30 +84,32 @@ probe._checkRemoteVersion(written);
 check('F1 .14.1 refresh banner fires on a .17 doc',
   probe.events.length === 1
   && probe.events[0].event === 'version_outdated'
-  && probe.events[0].data.remoteVersion === 'V2.82-unified.20'
+  && probe.events[0].data.remoteVersion === 'V2.82-unified.20.1'
   && probe.events[0].data.localVersion === oldVersion.GAME_VERSION);
 
 const quiet = new Probe();
 quiet._checkRemoteVersion({ clientVersion: GAME_VERSION, state: written.state });
 check('F1 display stamp alone does not fire the .14.1 banner', quiet.events.length === 0);
 
-check('F2 unified.21 prompts a unified.20 tab',
+check('F2 unified.21 prompts a unified.20.1 tab',
   compareGameVersions(compatClientVersion('V2.81.57-unified.21'), GAME_VERSION) > 0);
-check('F2 unified.20.1 prompts a unified.20 tab',
-  compareGameVersions('V2.82-unified.20.1', GAME_VERSION) > 0);
-check('F2 a V2.82-unified.19 doc does not prompt a unified.20 tab',
-  compareGameVersions('V2.82-unified.19', GAME_VERSION) < 0);
-check('F2 a V2.82-unified.16.1 doc does not prompt a unified.20 tab',
+check('F2 unified.20.2 prompts a unified.20.1 tab',
+  compareGameVersions('V2.82-unified.20.2', GAME_VERSION) > 0);
+check('F2 a V2.82-unified.20 doc does not prompt a unified.20.1 tab',
+  compareGameVersions('V2.82-unified.20', GAME_VERSION) < 0);
+check('F2 a V2.82-unified.18 doc does not prompt a unified.20.1 tab',
+  compareGameVersions('V2.82-unified.18', GAME_VERSION) < 0);
+check('F2 a V2.82-unified.16.1 doc does not prompt a unified.20.1 tab',
   compareGameVersions('V2.82-unified.16.1', GAME_VERSION) < 0);
-check('F2 a V2.82-unified.16 doc does not prompt a unified.20 tab',
+check('F2 a V2.82-unified.16 doc does not prompt a unified.20.1 tab',
   compareGameVersions('V2.82-unified.16', GAME_VERSION) < 0);
 
 const prevDir = mkdtempSync(join(tmpdir(), 'tr-unified-16-1-'));
 writeFileSync(join(prevDir, 'version.js'), gitShow(`${UNIFIED_16_1}:src/version.js`));
 const prevVersion = await import(pathToFileURL(join(prevDir, 'version.js')));
 check('F2 loaded unified.16.1 GAME_VERSION', prevVersion.GAME_VERSION === 'V2.81.57-unified.16.1');
-check('F2 a V2.82-unified.20 doc prompts a stale unified.16.1 tab',
-  prevVersion.compareGameVersions('V2.82-unified.20', prevVersion.GAME_VERSION) > 0);
+check('F2 a V2.82-unified.20.1 doc prompts a stale unified.16.1 tab',
+  prevVersion.compareGameVersions('V2.82-unified.20.1', prevVersion.GAME_VERSION) > 0);
 
 check('F2 our own compat write does not prompt',
   compareGameVersions(written.clientVersion, GAME_VERSION) === 0);
