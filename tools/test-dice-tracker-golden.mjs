@@ -66,7 +66,7 @@ const {
   setDiceWriter,
 } = await import('../src/stats/diceTracker.js');
 const { batchDocId } = await import('../src/stats/diceMath.js');
-const { DICE_STATS_EMPTY, renderDiceStatsFromModel } = await import('../src/ui/diceStatsPanel.js');
+const { DICE_STATS_SIGN_IN, renderDiceStatsFromModel } = await import('../src/ui/diceStatsPanel.js');
 
 let failures = 0;
 const check = (label, cond) => {
@@ -442,7 +442,7 @@ console.log('=== old saves and menu ===');
   const rocketFn = between(rocketSrc, 'launchRocket(fromTerritory, targetTerritory) {', 'relocateAirFromCapturedLand(unitDefs');
   check('rocket damage rolls through _rollDie', rocketFn.includes("context: 'rocket'") && !rocketFn.includes('Math.floor(Math.random()'));
   const emptyHtml = renderDiceStatsFromModel({ status: 'disabled', signedIn: false, tab: 'players' });
-  check('panel empty state', emptyHtml.includes(DICE_STATS_EMPTY));
+  check('panel empty state', emptyHtml.includes(DICE_STATS_SIGN_IN));
   check('Players tab is hidden until signed in', !emptyHtml.includes('data-dice-tab="players"'));
   const fairHtml = renderDiceStatsFromModel({
     status: 'ready',

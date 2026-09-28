@@ -10,16 +10,17 @@
 // Do not add firebase-admin to this repo's package.json. Install it beside
 // the checkout if it is not already on NODE_PATH. Publishing rules is manual.
 //
-// Historical faces: game docs persist state.combatTelemetry (last 40 rounds)
-// with attackRolls, defenseRolls, and AA rolls. Each list is integer faces
-// capped at 24. games/{id}/events kind combat|aa copies that payload and is
-// admin-read. Those logs do not store {unit, need, face}. This script turns
-// them into virtual batches tagged source:'backfill' when diceBatches do not
-// already cover that game. Unit and need are filled only when the face count
-// equals the force quantity (data/units.json). Otherwise the faces count
-// toward fairness only. There is no per-die owner, so backfill does not
-// create player_* docs. A second run reads the same inputs and writes the
-// same absolute totals.
+// Historical faces: game docs persist state.combatTelemetry (last 40 rounds,
+// each list capped at 24). games/{id}/events kind combat|aa is the fuller
+// log: payload.attackRolls, payload.defenseRolls, and payload.rolls are
+// integer faces. The admin path reads them with collectionGroup('events').
+// Identical events within 5s count once. Those rows are source:
+// 'backfill-events'. They have no per-die unit or need, so they do not
+// produce a hit rate. Attack faces land on the attacker seat (playerId).
+// Defense and AA faces land on the global and game totals only.
+// Telemetry that is not already covered by an event is source:'backfill'.
+// Neither source writes player_* docs. A game that already has diceBatches
+// is left to those batches. A second run writes the same absolute totals.
 
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -35,12 +36,15 @@ import {
 
 const units = JSON.parse(readFileSync(new URL('../data/units.json', import.meta.url), 'utf8'));
 
+export const EVENT_DEDUPE_MS = 5000;
+
 export const HISTORICAL_DICE_NOTE = [
   'Pre-tracker dice are not in diceBatches.',
-  'state.combatTelemetry and games/{id}/events (kind combat or aa) store face lists, capped at 24, without per-die unit, need, or owner.',
-  'Faces are included as source:backfill only for games with no diceBatches.',
-  'Unit and need are recovered when the face count matches the force size. Otherwise faces count toward fairness only.',
-  'Backfill does not write player docs.',
+  'games/{id}/events kind combat stores payload.attackRolls and payload.defenseRolls. Kind aa stores payload.rolls.',
+  'The admin run reads them with collectionGroup(\'events\'). Identical events within 5s count once and are tagged source:backfill-events.',
+  'Those dice have no per-die unit or need, so hit rate vs expected is not available. Attack faces are added to the attacker seat. Defense and AA faces are added to the global and game totals.',
+  'state.combatTelemetry is still included as source:backfill when that battle is not already in the events.',
+  'Neither source writes player docs. Games that already have diceBatches are skipped.',
 ].join(' ');
 
 export function recordsFromExport(parsed) {
@@ -62,6 +66,8 @@ export function rebuildDiceStats(records) {
   const players = new Map();
   const playerNames = new Map();
   const backfillByGame = new Map();
+  const eventDiceByGame = new Map();
+  let eventDiceGlobal = 0;
 
   for (const rec of ordered) {
     if (!rec || !Array.isArray(rec.dice)) continue;
@@ -77,10 +83,14 @@ export function rebuildDiceStats(records) {
     const gameId = rec.gameId || 'solo';
     if (!games.has(gameId)) games.set(gameId, emptyTotals());
     applyDiceBatch(games.get(gameId), rec.dice, rec);
-    if (rec.source === 'backfill') {
+    if (rec.source === 'backfill' || rec.source === 'backfill-events') {
       backfillByGame.set(gameId, (backfillByGame.get(gameId) || 0) + rec.dice.length);
     }
-    if (!rec.isAI && rec.writerUid && rec.source !== 'backfill') {
+    if (rec.source === 'backfill-events') {
+      eventDiceGlobal += rec.dice.length;
+      eventDiceByGame.set(gameId, (eventDiceByGame.get(gameId) || 0) + rec.dice.length);
+    }
+    if (!rec.isAI && rec.writerUid && rec.source !== 'backfill' && rec.source !== 'backfill-events') {
       if (!players.has(rec.writerUid)) players.set(rec.writerUid, emptyTotals());
       applyDiceBatch(players.get(rec.writerUid), rec.dice, rec);
       const name = safeDisplayName(rec.playerName);
@@ -96,10 +106,12 @@ export function rebuildDiceStats(records) {
     backfillDice: [...backfillByGame.values()].reduce((sum, n) => sum + n, 0),
   };
   out.global.longestStreak = global.longestStreak;
+  if (eventDiceGlobal) out.global.backfillEventDice = eventDiceGlobal;
   for (const [gameId, totals] of games) {
     const flat = flattenTotals(totals, { includeSeats: true });
     flat.longestStreak = totals.longestStreak;
     if (backfillByGame.get(gameId)) flat.backfillDice = backfillByGame.get(gameId);
+    if (eventDiceByGame.get(gameId)) flat.backfillEventDice = eventDiceByGame.get(gameId);
     out.games[gameId] = flat;
   }
   for (const [uid, totals] of players) {
@@ -158,7 +170,10 @@ export function faceSignature(entry) {
   ].join('|');
 }
 
-function pushSlice(records, { gameId, round, kind, side, context, dice, seq }) {
+function pushSlice(records, {
+  gameId, round, kind, side, context, dice, seq,
+  source = 'backfill', playerSeat = '', playerName = '', isAI = false,
+}) {
   if (!dice.length) return seq;
   const next = seq + 1;
   records.push({
@@ -166,11 +181,12 @@ function pushSlice(records, { gameId, round, kind, side, context, dice, seq }) {
     gameId,
     round: Number(round) || 0,
     seq: next,
-    source: 'backfill',
+    source,
     context,
     side,
-    playerSeat: '',
-    isAI: false,
+    playerSeat: playerSeat || '',
+    playerName: playerName || '',
+    isAI: !!isAI,
     writerUid: '',
     dice,
   });
@@ -217,6 +233,123 @@ export function telemetryEntryToRecords(entry, { gameId, seq = 0 } = {}) {
   return { records, seq: cursor, zipped, faceOnly };
 }
 
+export function eventTimeMs(event) {
+  const ts = event?.ts ?? event?.payload?.ts;
+  if (ts == null || ts === '') return null;
+  if (typeof ts === 'number' && Number.isFinite(ts)) return ts;
+  if (typeof ts?.toMillis === 'function') return ts.toMillis();
+  if (typeof ts?.seconds === 'number') return ts.seconds * 1000 + Math.floor((ts.nanoseconds || 0) / 1e6);
+  const parsed = Date.parse(ts);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function gameIdFromEventPath(path) {
+  const parts = String(path || '').split('/').filter(Boolean);
+  const idx = parts.indexOf('games');
+  if (idx >= 0 && parts[idx + 1] && parts[idx + 2] === 'events') return parts[idx + 1];
+  return '';
+}
+
+function eventPayload(event) {
+  return event?.payload || {};
+}
+
+function eventEntry(event) {
+  const payload = eventPayload(event);
+  return {
+    kind: event?.kind,
+    round: event?.turn ?? event?.round ?? payload.round,
+    territory: event?.territory || payload.territory || '',
+    playerId: event?.playerId || payload.playerId || '',
+    attackRolls: payload.attackRolls,
+    defenseRolls: payload.defenseRolls,
+    rolls: payload.rolls,
+  };
+}
+
+function eventIdentity(event) {
+  const entry = eventEntry(event);
+  return [
+    event?.gameId || '',
+    event?.kind || '',
+    entry.territory,
+    entry.playerId,
+    faceSignature(entry),
+  ].join('|');
+}
+
+function nameLooksLikeAI(name) {
+  return /\bAI$/.test(String(name || ''));
+}
+
+export function dedupeBackfillEvents(events, windowMs = EVENT_DEDUPE_MS) {
+  const rows = (events || []).filter((event) => event && (event.kind === 'combat' || event.kind === 'aa'));
+  const sorted = rows.slice().sort((a, b) => {
+    const ta = eventTimeMs(a);
+    const tb = eventTimeMs(b);
+    if (ta == null && tb == null) return 0;
+    if (ta == null) return 1;
+    if (tb == null) return -1;
+    return ta - tb;
+  });
+  const last = new Map();
+  const kept = [];
+  let dropped = 0;
+  for (const event of sorted) {
+    const key = eventIdentity(event);
+    const ts = eventTimeMs(event);
+    const prev = last.get(key);
+    const close = prev && (prev.ts == null || ts == null || Math.abs(ts - prev.ts) <= windowMs);
+    if (close) {
+      dropped += 1;
+      continue;
+    }
+    last.set(key, { ts });
+    kept.push(event);
+  }
+  return { events: kept, dropped };
+}
+
+export function eventToBackfillRecords(event, { seq = 0 } = {}) {
+  const records = [];
+  const gameId = event?.gameId;
+  if (!event || !gameId) return { records, seq, dice: 0 };
+  const entry = eventEntry(event);
+  const kind = entry.kind === 'aa' ? 'aa' : 'combat';
+  const round = entry.round ?? 0;
+  const seat = entry.playerId || '';
+  const name = safeDisplayName(event.playerName || eventPayload(event).playerName) || '';
+  const isAI = nameLooksLikeAI(name);
+  let cursor = seq;
+  let dice = 0;
+
+  const add = (side, context, faces, seated) => {
+    if (!faces.length) return;
+    cursor = pushSlice(records, {
+      gameId,
+      round,
+      kind,
+      side,
+      context,
+      seq: cursor,
+      source: 'backfill-events',
+      playerSeat: seated ? seat : '',
+      playerName: seated ? name : '',
+      isAI: seated ? isAI : false,
+      dice: diceFromFaces(faces, side),
+    });
+    dice += faces.length;
+  };
+
+  if (kind === 'aa') {
+    add('defender', 'aa', faceList(entry.rolls), false);
+  } else {
+    add('attacker', 'combat', faceList(entry.attackRolls), true);
+    add('defender', 'combat', faceList(entry.defenseRolls), false);
+  }
+  return { records, seq: cursor, dice };
+}
+
 function entryHasFaces(entry) {
   return faceList(entry?.attackRolls).length
     || faceList(entry?.defenseRolls).length
@@ -227,16 +360,42 @@ export function collectBackfillRecords({ batches = [], games = [], events = [] }
   const tracked = new Set((batches || []).map((row) => row?.gameId).filter(Boolean));
   const records = [];
   const seen = new Set();
+  const deduped = dedupeBackfillEvents(events);
   const report = {
     gamesSeen: 0,
     gamesWithFaces: 0,
     gamesSkippedTracked: 0,
     gamesWithoutFaces: 0,
+    eventsRead: (events || []).length,
+    eventsKept: deduped.events.length,
+    eventsDeduped: deduped.dropped,
     eventsUsed: 0,
+    eventsSkippedTracked: 0,
+    eventDice: 0,
     zippedDice: 0,
     faceOnlyDice: 0,
     note: HISTORICAL_DICE_NOTE,
   };
+  const gamesTouched = new Set();
+
+  for (const event of deduped.events) {
+    const gameId = event.gameId;
+    if (!gameId) continue;
+    if (tracked.has(gameId)) {
+      report.eventsSkippedTracked += 1;
+      continue;
+    }
+    const entry = eventEntry(event);
+    if (!entryHasFaces(entry)) continue;
+    const sig = `${gameId}|${faceSignature(entry)}`;
+    if (seen.has(sig)) continue;
+    seen.add(sig);
+    const built = eventToBackfillRecords(event, { seq: records.length });
+    records.push(...built.records);
+    report.eventsUsed += 1;
+    report.eventDice += built.dice;
+    gamesTouched.add(gameId);
+  }
 
   const take = (entry, gameId) => {
     if (!entryHasFaces(entry)) return false;
@@ -260,28 +419,9 @@ export function collectBackfillRecords({ batches = [], games = [], events = [] }
     }
     const state = game.state || game;
     const telemetry = Array.isArray(state?.combatTelemetry) ? state.combatTelemetry : [];
-    let faces = 0;
+    let faces = gamesTouched.has(gameId) ? 1 : 0;
     for (const entry of telemetry) {
       if (take(entry, gameId)) faces += 1;
-    }
-    for (const event of events || []) {
-      if (event?.gameId !== gameId) continue;
-      if (event.kind !== 'combat' && event.kind !== 'aa') continue;
-      const payload = event.payload || {};
-      const entry = {
-        kind: event.kind,
-        round: event.turn ?? event.round ?? payload.round,
-        territory: event.territory || payload.territory || null,
-        attackRolls: payload.attackRolls,
-        defenseRolls: payload.defenseRolls,
-        rolls: payload.rolls,
-        attackForce: payload.forcesBefore?.attack,
-        defenseForce: payload.forcesBefore?.defense,
-      };
-      if (take(entry, gameId)) {
-        faces += 1;
-        report.eventsUsed += 1;
-      }
     }
     if (faces) report.gamesWithFaces += 1;
     else report.gamesWithoutFaces += 1;
@@ -295,6 +435,7 @@ export function statDocFromFlat(flat, extra = {}) {
   Object.assign(data, flat?.names || {}, flat?.flags || {});
   if (flat?.displayName) data.displayName = flat.displayName;
   if (flat?.backfillDice) data.backfillDice = flat.backfillDice;
+  if (flat?.backfillEventDice) data.backfillEventDice = flat.backfillEventDice;
   if (extra.displayName) data.displayName = extra.displayName;
   return data;
 }
@@ -401,19 +542,31 @@ async function runFirestore(commit) {
     return out;
   }
 
+  async function readEventGroup(database) {
+    const out = [];
+    let last = null;
+    for (;;) {
+      let query = database.collectionGroup('events').orderBy('__name__').limit(400);
+      if (last) query = query.startAfter(last);
+      const snap = await query.get();
+      if (snap.empty) break;
+      snap.forEach((doc) => {
+        const data = doc.data() || {};
+        if (data.kind !== 'combat' && data.kind !== 'aa') return;
+        const gameId = gameIdFromEventPath(doc.ref?.path) || doc.ref?.parent?.parent?.id || '';
+        if (!gameId) return;
+        out.push({ id: doc.id, gameId, ...data });
+      });
+      last = snap.docs[snap.docs.length - 1];
+      if (snap.size < 400) break;
+    }
+    return out;
+  }
+
   const batches = await readCollection('diceBatches');
   const stats = await readCollection('diceStats');
   const games = await readCollection('games');
-  const events = [];
-  for (const game of games) {
-    const state = game.state || {};
-    const telemetry = Array.isArray(state.combatTelemetry) ? state.combatTelemetry : [];
-    const hasTelemetryFaces = telemetry.some(entryHasFaces);
-    if (hasTelemetryFaces) continue;
-    const ev = await db.collection('games').doc(game.id).collection('events')
-      .where('kind', 'in', ['combat', 'aa']).get();
-    ev.forEach((doc) => events.push({ id: doc.id, gameId: game.id, ...doc.data() }));
-  }
+  const events = await readEventGroup(db);
 
   const backfill = collectBackfillRecords({ batches, games, events });
   console.log(HISTORICAL_DICE_NOTE);

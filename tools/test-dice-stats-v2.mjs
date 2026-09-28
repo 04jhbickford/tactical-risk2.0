@@ -13,14 +13,19 @@ import {
   faceVerdictSentence,
 } from '../src/stats/diceMath.js';
 import {
-  DICE_STATS_EMPTY,
+  DICE_STATS_BACKFILL_CAVEAT,
+  DICE_STATS_NONE,
+  DICE_STATS_RULES,
   DICE_STATS_SIGN_IN,
   lobbyDiceEntryMarkup,
+  noteDiceReadFailure,
   renderDiceStatsFromModel,
 } from '../src/ui/diceStatsPanel.js';
 import {
   collectBackfillRecords,
+  dedupeBackfillEvents,
   diffRebuiltStats,
+  gameIdFromEventPath,
   rebuildDiceStats,
   statDocFromFlat,
 } from './recompute-dice-stats.mjs';
@@ -123,8 +128,11 @@ console.log('=== lobby ===');
   const guest = renderDiceStatsFromModel({ status: 'disabled', signedIn: false, placement: 'lobby', tab: 'all' });
   check('guest lobby sign-in line', guest.includes(DICE_STATS_SIGN_IN));
   check('guest lobby has no player tab', !guest.includes('data-dice-tab="players"'));
-  const unpublished = renderDiceStatsFromModel({ status: 'disabled', signedIn: true, placement: 'lobby', tab: 'all' });
-  check('signed-in unpublished keeps the enabled line', unpublished.includes(DICE_STATS_EMPTY));
+  const unpublished = renderDiceStatsFromModel({ status: 'denied', signedIn: true, placement: 'lobby', tab: 'all' });
+  check('signed-in permission-denied names the rules', unpublished.includes('Dice logging is switched off')
+    && unpublished.includes('database rules are published')
+    && !unpublished.includes(DICE_STATS_NONE)
+    && !unpublished.includes(DICE_STATS_SIGN_IN));
   const signed = renderDiceStatsFromModel({
     status: 'ready', signedIn: true, placement: 'lobby', tab: 'all', globalDoc: even,
   });
@@ -143,8 +151,23 @@ console.log('=== lobby ===');
   const hub = readFileSync(join(root, 'src/ui/multiplayerLobby.js'), 'utf8');
   check('home menu renders the entry', home.includes('lobbyDiceEntryMarkup'));
   check('online hub renders the entry', hub.includes('lobbyDiceEntryMarkup'));
-  const inGame = renderDiceStatsFromModel({ status: 'disabled', signedIn: false, tab: 'players' });
-  check('in-game guest keeps the enabled line', inGame.includes(DICE_STATS_EMPTY) && !inGame.includes(DICE_STATS_SIGN_IN));
+  const inGame = renderDiceStatsFromModel({ status: 'denied', signedIn: false, tab: 'players' });
+  check('in-game guest keeps the sign-in line', inGame.includes(DICE_STATS_SIGN_IN) && !inGame.includes('Dice logging is switched off'));
+  const allowedEmpty = renderDiceStatsFromModel({ status: 'ready', signedIn: true, tab: 'all', globalDoc: null });
+  check('allowed empty says no rolls', allowedEmpty.includes(DICE_STATS_NONE)
+    && !allowedEmpty.includes('Dice logging is switched off')
+    && !allowedEmpty.includes(DICE_STATS_SIGN_IN));
+  const logs = [];
+  const origDebug = console.debug;
+  console.debug = (...args) => { logs.push(args); };
+  let readStatus = '';
+  try {
+    readStatus = noteDiceReadFailure({ code: 'permission-denied' });
+  } finally {
+    console.debug = origDebug;
+  }
+  check('permission-denied logs one reason', readStatus === 'denied' && logs.length === 1
+    && logs[0][0] === '[dice] read skipped' && logs[0][1] === 'permission-denied');
 }
 
 console.log('=== backfill ===');
@@ -225,7 +248,11 @@ console.log('=== backfill ===');
       payload: { attackRolls: [2, 2], forcesBefore: { attack: [{ type: 'artillery', quantity: 2 }] } },
     }],
   });
-  check('events supply faces when telemetry has none', bare.report.eventsUsed === 1 && bare.records[0].dice[0].unit === 'artillery');
+  check('events supply faces when telemetry has none', bare.report.eventsUsed === 1
+    && bare.records[0].source === 'backfill-events'
+    && bare.records[0].dice[0].unit === ''
+    && bare.records[0].dice[0].need == null
+    && bare.records[0].dice[0].face === 2);
   const overlap = collectBackfillRecords({
     batches: [],
     games: [oldGame],
@@ -241,7 +268,10 @@ console.log('=== backfill ===');
       },
     }],
   });
-  check('the same event is not added twice', overlap.records.length === filled.records.length && overlap.report.eventsUsed === 0);
+  const overlapDice = overlap.records.reduce((sum, row) => sum + row.dice.length, 0);
+  check('the same event is not added twice', overlap.report.eventsUsed === 1 && overlapDice === 5
+    && overlap.records.filter((row) => row.context === 'combat').every((row) => row.source === 'backfill-events')
+    && overlap.records.filter((row) => row.source === 'backfill' && row.context === 'aa').length === 1);
 
   const quiet = collectBackfillRecords({
     batches: [],
@@ -257,6 +287,76 @@ console.log('=== backfill ===');
   };
   check('a second rebuild diffs clean', diffRebuiltStats(current, once).length === 0);
   check('display name is kept and email is not a stat', once.players.uid1.displayName === 'Robert');
+
+  const combat = (ts, faces) => ({
+    id: `e-${ts}`,
+    gameId: 'ONLINE',
+    kind: 'combat',
+    ts,
+    turn: 3,
+    territory: 'France',
+    playerId: 'germans',
+    playerName: 'German Easy AI',
+    writerUid: 'writer-1',
+    payload: { attackRolls: faces, defenseRolls: [6] },
+  });
+  const near = dedupeBackfillEvents([combat(1_000, [1, 2]), combat(4_000, [1, 2])]);
+  check('identical events within 5s collapse', near.events.length === 1 && near.dropped === 1);
+  const apart = dedupeBackfillEvents([combat(1_000, [1, 2]), combat(8_000, [1, 2])]);
+  check('identical events outside 5s both count', apart.events.length === 2 && apart.dropped === 0);
+  check('event path yields the game id', gameIdFromEventPath('games/HENV42/events/abc') === 'HENV42');
+
+  const logged = collectBackfillRecords({
+    batches: [],
+    games: [],
+    events: [combat(1_000, [1, 2]), combat(3_000, [1, 2]), {
+      gameId: 'ONLINE',
+      kind: 'aa',
+      ts: 2_000,
+      turn: 3,
+      territory: 'France',
+      playerId: 'germans',
+      playerName: 'German Easy AI',
+      payload: { rolls: [4] },
+    }],
+  });
+  check('event backfill is tagged and has no unit or need', logged.report.eventsUsed === 2
+    && logged.report.eventsDeduped === 1
+    && logged.records.every((row) => row.source === 'backfill-events')
+    && logged.records.every((row) => row.dice.every((die) => die.unit === '' && die.need == null)));
+  const eventAttack = logged.records.find((row) => row.side === 'attacker');
+  check('attack faces use the attacker seat', eventAttack.playerSeat === 'germans' && eventAttack.playerName === 'German Easy AI' && eventAttack.isAI);
+  const eventDefense = logged.records.find((row) => row.side === 'defender' && row.context === 'combat');
+  check('defense faces are not seated', eventDefense.playerSeat === '' && eventDefense.dice[0].face === 6);
+  const rebuiltEvents = rebuildDiceStats(logged.records);
+  const rebuiltEventsAgain = rebuildDiceStats([...logged.records, ...logged.records]);
+  check('event backfill rebuild is idempotent', rebuiltEvents.global.inc.n === 4
+    && rebuiltEvents.global.backfillEventDice === 4
+    && JSON.stringify(rebuiltEvents) === JSON.stringify(rebuiltEventsAgain));
+  check('event backfill skips player docs', Object.keys(rebuiltEvents.players).length === 0);
+  const online = statDocFromFlat(rebuiltEvents.games.ONLINE);
+  check('attacker seat totals keep faces without a hit rate', online.seat_germans_face_1 === 1
+    && online.seat_germans_face_2 === 1
+    && online.seat_germans_ai === true
+    && online.name_germans === 'German Easy AI'
+    && !online.seat_germans_atk_dice
+    && online.face_6 === 1
+    && !online.seat_germans_face_6
+    && online.backfillEventDice === 4);
+  const caveatHtml = renderDiceStatsFromModel({
+    status: 'ready',
+    signedIn: true,
+    tab: 'all',
+    globalDoc: statDocFromFlat(rebuiltEvents.global),
+  });
+  check('panel caveat says backfilled dice have no hit rate', caveatHtml.includes(DICE_STATS_BACKFILL_CAVEAT));
+  const plainHtml = renderDiceStatsFromModel({
+    status: 'ready',
+    signedIn: true,
+    tab: 'all',
+    globalDoc: { n: 6, face_1: 1, face_2: 1, face_3: 1, face_4: 1, face_5: 1, face_6: 1 },
+  });
+  check('fresh totals omit the backfill caveat', !plainHtml.includes(DICE_STATS_BACKFILL_CAVEAT));
 }
 
 console.log('=== rules untouched ===');

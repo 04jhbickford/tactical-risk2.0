@@ -1,6 +1,7 @@
 // Dice stats panel. Reads diceStats/* for signed-in viewers.
-// Guests and permission-denied reads show the empty line.
-// Lobby guests see the sign-in line. No public page and no Discord post.
+// Guests see the sign-in line. A permission-denied read says the rules
+// are unpublished. An allowed read with no docs says no rolls are logged.
+// No public page and no Discord post.
 // The tracker stays observe-only: this module only reads.
 
 import { getDiceSession } from '../stats/diceTracker.js';
@@ -24,6 +25,9 @@ import {
 const CAVEAT = 'With many breakdowns, about 1 in 20 look \'worth watching\' by chance; the all-time verdict counts.';
 export const DICE_STATS_EMPTY = 'Stats will appear once enabled';
 export const DICE_STATS_SIGN_IN = 'Sign in to see dice stats';
+export const DICE_STATS_RULES = "Dice logging is switched off until the game's database rules are published.";
+export const DICE_STATS_NONE = 'No rolls logged yet.';
+export const DICE_STATS_BACKFILL_CAVEAT = 'Dice logged from older battles have no unit or to-hit number, so attack and defense rates are not available for those rolls.';
 
 let tab = 'all';
 let playerScope = 'game';
@@ -83,6 +87,20 @@ function expectedLabel(value) {
   return n.toFixed(1);
 }
 
+export function isDicePermissionDenied(err) {
+  const code = String(err?.code || '');
+  const message = String(err?.message || err || '');
+  return code === 'permission-denied' || message.includes('permission-denied');
+}
+
+// One debug line. The second argument is the reason.
+export function noteDiceReadFailure(err) {
+  const denied = isDicePermissionDenied(err);
+  const reason = denied ? 'permission-denied' : String(err?.code || err?.message || 'unknown');
+  try { console.debug('[dice] read skipped', reason); } catch { /* ignore */ }
+  return denied ? 'denied' : 'disabled';
+}
+
 export function lobbyDiceEntryMarkup({ phone = false } = {}) {
   const cls = phone
     ? 'lobby-phone-saved lobby-dice-entry'
@@ -134,21 +152,31 @@ export function renderDiceStatsFromModel({
     body = renderFaces(globalDoc, { meter: true });
   }
 
-  if (!signedIn && lobby) {
+  const hasRolls = (doc) => !!(doc && (Number(doc.n) || totalsFromFlat(doc).n));
+  const playersEmpty = useScope === 'all'
+    ? !(playerDocs || []).length && !aggregateAiCards(gameDocs).length
+    : !hasRolls(gameDoc);
+  const empty = useTab === 'players'
+    ? playersEmpty
+    : useTab === 'game'
+      ? !hasRolls(gameDoc)
+      : !hasRolls(globalDoc);
+  if (!signedIn) {
     body = `<p class="dice-stats-empty">${DICE_STATS_SIGN_IN}</p>`;
-  } else if (status === 'disabled' || status === 'idle' || status === 'loading') {
-    const doc = useTab === 'game' ? gameDoc : useTab === 'players' ? gameDoc : globalDoc;
-    const empty = !doc || !(Number(doc.n) || totalsFromFlat(doc).n);
-    const playersEmpty = useScope === 'all'
-      ? !(playerDocs || []).length && !aggregateAiCards(gameDocs).length
-      : empty;
-    if (useTab !== 'players' && empty) {
-      body = `<p class="dice-stats-empty">${DICE_STATS_EMPTY}</p>`;
-    }
-    if (useTab === 'players' && (!signedIn || playersEmpty)) {
-      body = `<p class="dice-stats-empty">${DICE_STATS_EMPTY}</p>`;
-    }
+  } else if (status === 'denied') {
+    body = `<p class="dice-stats-empty">${esc(DICE_STATS_RULES)}</p>`;
+  } else if (empty && status === 'ready') {
+    body = `<p class="dice-stats-empty">${DICE_STATS_NONE}</p>`;
+  } else if (empty) {
+    body = '';
   }
+
+  const caveatDocs = useTab === 'game' || (useTab === 'players' && useScope !== 'all')
+    ? [gameDoc]
+    : [globalDoc, ...(gameDocs || [])];
+  const caveat = caveatDocs.some((doc) => Number(doc?.backfillEventDice) > 0)
+    ? `${CAVEAT} ${DICE_STATS_BACKFILL_CAVEAT}`
+    : CAVEAT;
 
   const rootClass = placement === 'popover'
     ? 'dice-stats-popover'
@@ -163,7 +191,7 @@ export function renderDiceStatsFromModel({
       <div class="dice-stats-head"><span>Dice stats</span>${close}</div>
       <div class="dice-stats-tabs" role="tablist">${tabHtml}</div>
       <div class="dice-stats-body">${body}</div>
-      <p class="dice-stats-caveat">${esc(CAVEAT)}</p>
+      <p class="dice-stats-caveat">${esc(caveat)}</p>
     </div>`;
 }
 
@@ -203,7 +231,7 @@ function renderFaceChart(totals) {
 function renderFaces(doc, { meter }) {
   const totals = totalsFromFlat(doc);
   const chart = renderFaceChart(totals);
-  if (!chart) return `<p class="dice-stats-empty">${DICE_STATS_EMPTY}</p>`;
+  if (!chart) return '';
   const meterPct = Math.max(0, Math.min(100, (totals.n / SKEW_DETECT_ROLLS) * 100));
   const meterHtml = meter ? `
     <div class="dice-progress" role="meter" aria-valuemin="0" aria-valuemax="${SKEW_DETECT_ROLLS}" aria-valuenow="${totals.n}">
@@ -228,9 +256,7 @@ function renderPlayerCard(card) {
 }
 
 function renderPlayerGroups(humans, ais) {
-  if (!humans.length && !ais.length) {
-    return `<p class="dice-stats-empty">${DICE_STATS_EMPTY}</p>`;
-  }
+  if (!humans.length && !ais.length) return '';
   const group = (label, cards) => {
     const rows = cards.length
       ? cards.map(renderPlayerCard).join('')
@@ -241,7 +267,7 @@ function renderPlayerGroups(humans, ais) {
 }
 
 function renderPlayers({ signedIn, scope, gameDoc, playerDocs, gameDocs, lobby }) {
-  if (!signedIn) return `<p class="dice-stats-empty">${DICE_STATS_EMPTY}</p>`;
+  if (!signedIn) return '';
   const switchHtml = lobby ? '' : `
     <div class="dice-stats-scope" role="group" aria-label="Player scope">
       <button type="button" class="dice-stats-tab${scope === 'game' ? ' is-on' : ''}" data-dice-scope="game" aria-pressed="${scope === 'game' ? 'true' : 'false'}">This game</button>
@@ -336,7 +362,6 @@ export function ensureDiceStatsLoaded(onDone) {
   }).catch((err) => {
     if (token !== loadToken) return;
     view = { status: 'disabled', global: null, game: null, playerDocs: [], gameDocs: [] };
-    try { console.debug('[dice] read skipped', err?.code || err?.message || err); } catch { /* ignore */ }
     if (typeof onDone === 'function') onDone();
   });
 }
@@ -370,7 +395,12 @@ async function loadDiceStats(session) {
       gameDocs,
     };
   } catch (err) {
-    try { console.debug('[dice] read skipped', err?.code || err?.message || err); } catch { /* ignore */ }
-    return { status: 'disabled', global: null, game: null, playerDocs: [], gameDocs: [] };
+    return {
+      status: noteDiceReadFailure(err),
+      global: null,
+      game: null,
+      playerDocs: [],
+      gameDocs: [],
+    };
   }
 }
