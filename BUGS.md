@@ -2,6 +2,18 @@
 
 ---
 
+## 9.29.26 — unified.27 desktop stays on the main menu
+
+Stamp `V2.81.57-unified.27`. Schema stays 11. A `V2.82-unified.26` doc is older than this tab and does not prompt. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.27`).
+
+Rob, 12:31pm PT 29 Sep: after sign-in, a remembered started game auto-opened the map. Desktop players have several games, so a match should start only when they choose it. Viewport width >= 1024 no longer auto-resumes `lastMatch.gameId` on boot or on cold Play Online. 820 and 390 still do. My Games, an Open Games row, and Join by Code are unchanged. `lastMatch` is not cleared when auto-resume is skipped.
+
+Slow load and slow pan/zoom on .26 were measured. The hot path is in barred map files, so it is left unfixed. See the PR.
+
+Kazakh outline: Rob confirmed the line is gone. Not a bug. Untouched.
+
+---
+
 ## 9.29.26 — unified.26 Pacific phone uses the Classic sheet
 
 Stamp `V2.81.57-unified.26`. Schema stays 11. A `V2.82-unified.25` doc is older than this tab and does not prompt. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.26`).

@@ -13,6 +13,9 @@ const { GAME_VERSION, SCHEMA_VERSION } =
   await import(pathToFileURL(join(root, 'src/version.js')));
 const {
   shouldAutoResumeLastMatch,
+  isDesktopMenuWidth,
+  resolvePlayOnlineDestination,
+  resolveOpenGamesRowEntry,
   shouldLeaveLobbyView,
   shouldNavigateToHome,
   shouldHonorLobbyBack,
@@ -36,8 +39,8 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-console.log('=== V2.81.57-unified.26 lobby nav ===');
-check('GAME_VERSION is V2.81.57-unified.26', GAME_VERSION === 'V2.81.57-unified.26');
+console.log('=== V2.81.57-unified.27 lobby nav ===');
+check('GAME_VERSION is V2.81.57-unified.27', GAME_VERSION === 'V2.81.57-unified.27');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== 9.20.26.08 explicit Back ===');
@@ -111,6 +114,57 @@ check('Play Online can still restore a waiting room',
     resumed: false,
     lastMatch: { lobbyCode: '6V9ZXK' },
   }) === 'lobby');
+
+console.log('=== desktop menu, phone still resumes ===');
+const started = { gameId: 'game_live', lobbyCode: 'CEVX6F' };
+check('desktop width 1280 and 1024 do not auto-resume a gameId',
+  shouldAutoResumeLastMatch({ signedIn: true, lastMatch: started, width: 1280 }) === false
+  && shouldAutoResumeLastMatch({ signedIn: true, lastMatch: started, width: 1024 }) === false
+  && isDesktopMenuWidth(1280) === true
+  && isDesktopMenuWidth(1024) === true);
+check('820 and 390 still auto-resume a gameId',
+  shouldAutoResumeLastMatch({ signedIn: true, lastMatch: started, width: 820 }) === true
+  && shouldAutoResumeLastMatch({ signedIn: true, lastMatch: started, width: 390 }) === true
+  && isDesktopMenuWidth(820) === false
+  && isDesktopMenuWidth(390) === false);
+check('omitted width still auto-resumes a gameId',
+  shouldAutoResumeLastMatch({ signedIn: true, lastMatch: started }) === true);
+check('signed-out and explicitExit still do not auto-resume',
+  shouldAutoResumeLastMatch({ signedIn: false, lastMatch: started, width: 1280 }) === false
+  && shouldAutoResumeLastMatch({ signedIn: false, lastMatch: started, width: 390 }) === false
+  && shouldAutoResumeLastMatch({
+    signedIn: true, lastMatch: started, explicitExit: true, width: 1280,
+  }) === false
+  && shouldAutoResumeLastMatch({
+    signedIn: true, lastMatch: started, explicitExit: true, width: 390,
+  }) === false);
+check('desktop cold Play Online stays on the menu',
+  resolvePlayOnlineDestination({
+    explicitMainMenu: false, signedIn: true, lastMatch: started, width: 1280,
+  }).screen === 'menu'
+  && resolvePlayOnlineDestination({
+    explicitMainMenu: false, signedIn: true, lastMatch: started, width: 1280,
+  }).autoEnterMap === false
+  && resolvePlayOnlineDestination({
+    explicitMainMenu: false, signedIn: true, lastMatch: { lobbyCode: '6V9ZXK' }, width: 1024,
+  }).screen === 'menu'
+  && resolvePlayOnlineDestination({
+    explicitMainMenu: false, signedIn: true, lastMatch: { lobbyCode: '6V9ZXK' }, width: 1024,
+  }).autoEnterLobby === false);
+check('phone and tablet cold Play Online still resume',
+  resolvePlayOnlineDestination({
+    explicitMainMenu: false, signedIn: true, lastMatch: started, width: 390,
+  }).screen === 'resume-map'
+  && resolvePlayOnlineDestination({
+    explicitMainMenu: false, signedIn: true, lastMatch: { lobbyCode: '6V9ZXK' }, width: 820,
+  }).autoEnterLobby === true);
+check('Open Games row click still resolves to rejoin-map',
+  resolveOpenGamesRowEntry({
+    kind: 'game', status: 'active', stateVersion: 4, hasState: true,
+  }).action === 'rejoin-map'
+  && resolveOpenGamesRowEntry({
+    kind: 'game', status: 'active', stateVersion: 4, hasState: true,
+  }).screen === 'map');
 
 console.log('=== Bastion list-in-open-games first click ===');
 check('host unpublished sees List',

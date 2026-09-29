@@ -183,6 +183,7 @@ import {
   resolveLobbyCodeFromGameDoc,
   shouldLeaveGameView,
   shouldAutoResumeLastMatch,
+  isDesktopMenuWidth,
   shouldHoldLoaderForLastMatchResume,
   resolveResumeFailureView,
   shouldNavigateToHome,
@@ -2478,13 +2479,21 @@ async function init() {
     if (authManager.isLoggedIn()) {
       if (authScreen) authScreen.hide();
       const last = readLastMatch();
+      const playWidth = typeof window !== 'undefined' ? window.innerWidth : undefined;
       const dest = resolvePlayOnlineDestination({
         explicitMainMenu,
         signedIn: true,
         lastMatch: last,
+        width: playWidth,
       });
-      // Main Menu → Play Online stays on the hub. Open Games is the list.
-      if (explicitMainMenu && dest.screen === 'menu' && !dest.autoEnterMap && !dest.autoEnterLobby) {
+      // Main Menu → Play Online stays on the hub. Desktop cold Play Online
+      // does too: a remembered game is not an entry. Open Games is the list.
+      if (
+        dest.screen === 'menu'
+        && !dest.autoEnterMap
+        && !dest.autoEnterLobby
+        && (explicitMainMenu || isDesktopMenuWidth(playWidth))
+      ) {
         explicitMainMenu = false;
         ensureMultiplayerLobby();
         multiplayerLobby._holdHub = true;
@@ -2495,7 +2504,7 @@ async function init() {
         multiplayerLobby.show();
         return;
       }
-      if (shouldAutoResumeLastMatch({ signedIn: true, lastMatch: last })) {
+      if (shouldAutoResumeLastMatch({ signedIn: true, lastMatch: last, width: playWidth })) {
         const restored = await resumeLastMatch({ interactive: true });
         if (restored) return;
       }
@@ -2647,12 +2656,21 @@ async function init() {
     rememberLastMatch(urlPlan.lastMatch);
   }
   const bootLast = urlPlan.action === 'block-other' ? lastAtBoot : readLastMatch();
-  const bootResume = urlPlan.action === 'block-other'
-    ? !!(lastAtBoot?.gameId || lastAtBoot?.lobbyCode)
-    : (
-      shouldAutoResumeLastMatch({ signedIn: true, lastMatch: bootLast })
-      || urlPlan.action === 'resume'
-    );
+  const bootWidth = typeof window !== 'undefined' ? window.innerWidth : undefined;
+  // Desktop skips a remembered gameId. A ?code= link still joins that match.
+  // Phone/tablet block-other still reopens the match this browser is in.
+  const bootResume = shouldAutoResumeLastMatch({
+    signedIn: true,
+    lastMatch: bootLast,
+    width: bootWidth,
+  }) || (
+    urlPlan.action === 'resume'
+    || (
+      urlPlan.action === 'block-other'
+      && !isDesktopMenuWidth(bootWidth)
+      && !!(lastAtBoot?.gameId || lastAtBoot?.lobbyCode)
+    )
+  );
   if (bootResume) {
     lobby.hide();
     reportStartupStatus('Rejoining match…', 70);
