@@ -1,4 +1,4 @@
-// V2.81.57-unified.21 — tactical bomber labels, pairing copy, carrier text.
+// V2.81.57-unified.22 — tactical bomber labels, pairing copy, carrier text.
 // Run: node tools/test-tactical-bomber-copy.mjs
 
 import { readFileSync } from 'fs';

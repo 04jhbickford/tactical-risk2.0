@@ -718,8 +718,13 @@ export class CombatUI {
   }
 
   _rollD6(context = 'combat') {
+    const ctx = (context && typeof context === 'object') ? { ...context } : { context };
+    if (this.currentTerritory) {
+      ctx.territory = ctx.territory || this.currentTerritory;
+      ctx.battleRound = ctx.battleRound ?? (this.combatState?.combatRound || 1);
+    }
     if (typeof this.gameState?._rollDie === 'function') {
-      return this.gameState._rollDie(context);
+      return this.gameState._rollDie(ctx);
     }
     return Math.floor(Math.random() * 6) + 1;
   }

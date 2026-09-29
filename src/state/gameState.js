@@ -27,6 +27,16 @@ import {
 import { airCombatMoveMayOccupy, landOnlySeaAttackIllegal, moveSelectionProfile, seaZoneHasEnemyForAirAttack } from './combatMoveEligibility.js';
 import { cascadeUndoIndexes } from './moveUndo.js';
 import { emitGameEvent, summarizeUnits } from '../multiplayer/gameEventLog.js';
+import { notePhaseSnapshot } from '../multiplayer/phaseSnapshot.js';
+import {
+  absorbLedgerIds,
+  diffUnitIndex,
+  ensureLedgerIds,
+  resetLedgerIdSeq,
+  syncLedgerIdSeq,
+  indexBoard,
+  ipcMapFromState,
+} from './unitLedger.js';
 import { omitUndefinedDeep, persistableUnit } from './persistState.js';
 import { flushDiceBuffer, observeRolledDie } from '../stats/diceTracker.js';
 import {
@@ -521,6 +531,7 @@ export class GameState {
 
   // Initialize game based on mode
   initGame(mode, selectedPlayers, options = {}) {
+    resetLedgerIdSeq(0);
     this.gameMode = mode;
     this.alliancesEnabled = options.alliancesEnabled || (mode === 'classic');
     this.teamsEnabled = options.teamsEnabled || false;
@@ -540,6 +551,45 @@ export class GameState {
     }
 
     this._notify();
+    this._resetLedgerBaseline();
+  }
+
+  _resetLedgerBaseline() {
+    ensureLedgerIds(this.units);
+    this._ledgerUnits = indexBoard(this);
+    this._ledgerIpc = ipcMapFromState(this);
+    this._ledgerReady = true;
+  }
+
+  // ipcBefore is the map captured before this action's own IPC change.
+  // Retreat passes includeDestroyed false so an aircraft that disappears
+  // without a destroy line stays visible to the audit.
+  _emitLedger(kind, fields = {}, { includeDestroyed = true } = {}) {
+    try {
+      if (!this._ledgerReady) this._resetLedgerBaseline();
+      ensureLedgerIds(this.units);
+      const ipcAfter = ipcMapFromState(this);
+      const ipcBefore = fields.ipcBefore || this._ledgerIpc || ipcAfter;
+      const now = indexBoard(this);
+      const diff = diffUnitIndex(this._ledgerUnits || [], now);
+      this._ledgerUnits = now;
+      this._ledgerIpc = ipcAfter;
+      emitGameEvent(kind, {
+        gameState: this,
+        territory: fields.territory ?? null,
+        playerId: fields.playerId,
+        payload: fields.payload || {},
+        ledger: {
+          ipcBefore,
+          ipcAfter,
+          unitsCreated: diff.created,
+          unitsDestroyed: includeDestroyed ? diff.destroyed : [],
+          unitsMoved: diff.moved,
+        },
+      });
+    } catch (err) {
+      try { console.warn('[ledger]', err?.message || err); } catch { /* ignore */ }
+    }
   }
 
   // Check if two players are allies (same team or same alliance)
@@ -1857,8 +1907,14 @@ export class GameState {
     }
 
     // If it was a purchased unit, refund IPCs
+    const ipcBefore = ipcMapFromState(this);
     if (lastPlacement.purchased && lastPlacement.cost) {
       this.playerState[player.id].ipcs += lastPlacement.cost;
+      this._emitLedger('purchase', {
+        playerId: player.id,
+        ipcBefore,
+        payload: { action: 'undoPlacement', ipcDelta: lastPlacement.cost },
+      });
     } else {
       // If it was from starting units, restore to pool
       const unitsToPlace = this.getUnitsToPlace(player.id);
@@ -1928,6 +1984,7 @@ export class GameState {
       this.phase = GAME_PHASES.PLAYING;
       this.turnPhase = TURN_PHASES.DEVELOP_TECH;
       this._initFriendlyTerritoriesAtTurnStart();
+      notePhaseSnapshot(this);
     } else {
       // Advance to the next player who still has units to place, skipping fully-deployed
       // and surrendered players. Without this a fully-deployed player must manually click
@@ -1989,6 +2046,7 @@ export class GameState {
     }
 
     // Deduct IPCs
+    const ipcBefore = ipcMapFromState(this);
     this.playerState[player.id].ipcs -= cost;
 
     // Add to pending purchases - track territory if specified (store actual cost paid)
@@ -2002,8 +2060,10 @@ export class GameState {
     }
 
     this._notify();
-    emitGameEvent('purchase', {
-      gameState: this,
+    this._emitLedger('purchase', {
+      territory: territory || null,
+      playerId: player.id,
+      ipcBefore,
       payload: {
         unitType,
         quantity: 1,
@@ -2028,7 +2088,9 @@ export class GameState {
     }
 
     // Refund IPCs (use stored cost which includes any tech discounts)
-    this.playerState[player.id].ipcs += existing.cost || unitDef.cost;
+    const ipcBefore = ipcMapFromState(this);
+    const refund = existing.cost || unitDef.cost;
+    this.playerState[player.id].ipcs += refund;
 
     // Remove from pending
     existing.quantity--;
@@ -2038,6 +2100,11 @@ export class GameState {
     }
 
     this._notify();
+    this._emitLedger('purchase', {
+      playerId: player.id,
+      ipcBefore,
+      payload: { action: 'undoPurchase', unitType, ipcDelta: refund },
+    });
     return { success: true };
   }
 
@@ -2066,6 +2133,7 @@ export class GameState {
     const player = this.currentPlayer;
     if (!player) return;
 
+    const ipcBefore = ipcMapFromState(this);
     for (const purchase of this.pendingPurchases) {
       if (purchase.owner === player.id) {
         const unitDef = unitDefs[purchase.type];
@@ -2077,6 +2145,11 @@ export class GameState {
 
     this.pendingPurchases = this.pendingPurchases.filter(p => p.owner !== player.id);
     this._notify();
+    this._emitLedger('purchase', {
+      playerId: player.id,
+      ipcBefore,
+      payload: { action: 'clearPurchases' },
+    });
   }
 
   // Mobilize a single pending unit to a territory (MOBILIZE phase)
@@ -2404,12 +2477,13 @@ export class GameState {
     if (spend <= 0) return { success: false, error: 'Not enough IPCs' };
     const cost = repairCost(spend);
     const ipcsBefore = Math.max(0, Math.floor(Number(this.getIPCs(player.id)) || 0));
+    const ipcBefore = ipcMapFromState(this);
     this.playerState[player.id].ipcs -= cost;
     const ipcsAfter = Math.max(0, Math.floor(Number(this.getIPCs(player.id)) || 0));
-    emitGameEvent('purchase', {
-      gameState: this,
+    this._emitLedger('purchase', {
       territory: territoryName,
       playerId: player.id,
+      ipcBefore,
       payload: {
         territory: territoryName,
         repairSpend: cost,
@@ -2449,6 +2523,7 @@ export class GameState {
   resolveStrategicRaid(territory, _unitDefs = {}, { rolls } = {}) {
     const player = this.currentPlayer;
     if (!player) return { resolved: false, error: 'No current player' };
+    this._diceBattle = { territory, battleRound: 1 };
     const queue = Array.isArray(rolls) ? rolls.slice() : null;
     const take = (kind) => {
       if (queue) return Number(queue.shift()) || 0;
@@ -2514,10 +2589,11 @@ export class GameState {
       victimIpcsBefore,
       victimIpcsAfter,
     };
-    emitGameEvent('combat', {
-      gameState: this,
+    this._diceBattle = null;
+    this._emitLedger('combat', {
       territory,
       playerId: player.id,
+      ipcBefore: ipcMapFromState(this),
       payload: raidLedger,
     });
     this.logCombat({
@@ -2613,6 +2689,7 @@ export class GameState {
       if (territoryName !== capital) return false;
     }
 
+    const ipcBefore = ipcMapFromState(this);
     this.playerState[player.id].ipcs -= cost;
 
     const units = this.units[territoryName] || [];
@@ -2634,6 +2711,12 @@ export class GameState {
     });
 
     this._notify();
+    this._emitLedger('purchase', {
+      territory: territoryName,
+      playerId: player.id,
+      ipcBefore,
+      payload: { action: 'placePurchase', unitType, territory: territoryName, ipcDelta: -cost },
+    });
     return true;
   }
 
@@ -2644,6 +2727,7 @@ export class GameState {
       this.phase = GAME_PHASES.PLAYING;
       // Initialize friendly territories for first turn
       this._initFriendlyTerritoriesAtTurnStart();
+      notePhaseSnapshot(this);
     }
     this._notify();
   }
@@ -2737,6 +2821,7 @@ export class GameState {
       gameState: this,
       payload: { action: 'turnStart', round: this.round },
     });
+    notePhaseSnapshot(this);
   }
 
   // Helper: populate friendly territories at turn start (for air landing validation)
@@ -2887,6 +2972,7 @@ export class GameState {
       gameState: this,
       payload: { action: 'nextPhase', turnPhase: this.turnPhase },
     });
+    notePhaseSnapshot(this);
   }
 
   // Get current turn phase name
@@ -2908,6 +2994,7 @@ export class GameState {
     const totalCost = unitDef.cost * quantity;
     if (this.playerState[player.id].ipcs < totalCost) return false;
 
+    const ipcBefore = ipcMapFromState(this);
     this.playerState[player.id].ipcs -= totalCost;
 
     // Add to pending purchases — owner is required so getPendingPurchases
@@ -2920,8 +3007,9 @@ export class GameState {
     }
 
     this._notify();
-    emitGameEvent('purchase', {
-      gameState: this,
+    this._emitLedger('purchase', {
+      playerId: player.id,
+      ipcBefore,
       payload: {
         unitType,
         quantity,
@@ -3632,9 +3720,9 @@ export class GameState {
 
     this._notify();
     const isAttack = isCombatMove && (isEnemy || hostileSea) && !captured;
-    emitGameEvent(isAttack ? 'attack' : 'move', {
-      gameState: this,
+    this._emitLedger(isAttack ? 'attack' : 'move', {
       territory: toTerritory,
+      playerId: player.id,
       payload: {
         from: fromTerritory,
         to: toTerritory,
@@ -4252,14 +4340,14 @@ export class GameState {
     this.units[destination] = destUnits;
 
     this._notify();
-    emitGameEvent('retreat', {
-      gameState: this,
+    this._emitLedger('retreat', {
       territory: combatTerritory,
+      playerId: player.id,
       payload: {
         destination,
         units: summarizeUnits(loggedUnits),
       },
-    });
+    }, { includeDestroyed: false });
     return { success: true };
   }
 
@@ -4594,6 +4682,11 @@ export class GameState {
       this.combatQueue = this.combatQueue.filter((name) => name !== territory);
       if (this._combatRoundsTracker) delete this._combatRoundsTracker[territory];
       this._notify();
+      this._emitLedger('combat', {
+        territory,
+        playerId: player.id,
+        payload: { action: 'resolveCombat', winner: 'submerged' },
+      });
       return {
         resolved: true,
         winner: 'submerged',
@@ -4621,6 +4714,11 @@ export class GameState {
       // Remove from combat queue
       this.combatQueue = this.combatQueue.filter(t => t !== territory);
       this._notify();
+      this._emitLedger('combat', {
+        territory,
+        playerId: player.id,
+        payload: { action: 'resolveCombat', winner: attackers.length > 0 ? 'attacker' : 'defender' },
+      });
       return {
         resolved: true,
         winner: attackers.length > 0 ? 'attacker' : 'defender',
@@ -4653,6 +4751,7 @@ export class GameState {
     // Track combat rounds
     if (!this._combatRoundsTracker) this._combatRoundsTracker = {};
     this._combatRoundsTracker[territory] = (this._combatRoundsTracker[territory] || 0) + 1;
+    this._diceBattle = { territory, battleRound: this._combatRoundsTracker[territory] };
 
     // Submarine surprise strike once per battle, on round 1, matching the
     // combat screen. The gate is the same: active subs, no enemy destroyer,
@@ -4879,6 +4978,12 @@ export class GameState {
 
     this._notify();
     flushDiceBuffer(this);
+    this._diceBattle = null;
+    this._emitLedger('combat', {
+      territory,
+      playerId: player.id,
+      payload: { action: 'resolveCombat', winner: result.winner || null },
+    });
     return result;
   }
 
@@ -5278,6 +5383,11 @@ export class GameState {
     // Clean up destroyed units
     this.units[territory] = units.filter(u => u.quantity > 0);
     this._notify();
+    this._emitLedger('combat', {
+      territory,
+      playerId: player.id,
+      payload: { action: 'casualties' },
+    });
     return { success: true };
   }
 
@@ -5310,6 +5420,10 @@ export class GameState {
 
     // Remove player's purchases from pending
     this.pendingPurchases = this.pendingPurchases.filter(p => p.owner !== player.id);
+    this._emitLedger('ui', {
+      playerId: player.id,
+      payload: { action: 'mobilize' },
+    });
   }
 
   // Collect income from territories
@@ -5349,9 +5463,11 @@ export class GameState {
       }
     }
 
+    const ipcBefore = ipcMapFromState(this);
     this.playerState[player.id].ipcs += income;
-    emitGameEvent('ui', {
-      gameState: this,
+    this._emitLedger('ui', {
+      playerId: player.id,
+      ipcBefore,
       payload: { action: 'collectIncome', ipcDelta: income },
     });
   }
@@ -5396,9 +5512,16 @@ export class GameState {
           const key = `${unit.type}_${unit.owner}`;
           const existing = grouped.get(key);
           if (existing) {
+            absorbLedgerIds(existing, unit);
             existing.quantity += unit.quantity;
           } else {
-            grouped.set(key, { type: unit.type, owner: unit.owner, quantity: unit.quantity });
+            grouped.set(key, {
+              type: unit.type,
+              owner: unit.owner,
+              quantity: unit.quantity,
+              ledgerId: unit.ledgerId,
+              alsoIds: Array.isArray(unit.alsoIds) ? unit.alsoIds.slice() : [],
+            });
           }
         }
       }
@@ -5430,9 +5553,23 @@ export class GameState {
     const loserState = this.playerState[loser.id];
 
     if (captorState && loserState) {
-      captorState.ipcs += loserState.ipcs;
+      const ipcBefore = ipcMapFromState(this);
+      const stolen = Math.max(0, Math.floor(Number(loserState.ipcs) || 0));
+      captorState.ipcs += stolen;
       loserState.ipcs = 0;
       loserState.capitalCaptured = true;
+      this._emitLedger('ui', {
+        territory,
+        playerId: newOwner,
+        ipcBefore,
+        payload: {
+          action: 'plunder',
+          territory,
+          fromPlayer: loser.id,
+          toPlayer: newOwner,
+          ipcDelta: stolen,
+        },
+      });
     }
 
     // Check victory conditions
@@ -5868,6 +6005,7 @@ export class GameState {
     const cost = count * 5;
     if (pState.ipcs < cost) return false;
 
+    const ipcBefore = ipcMapFromState(this);
     pState.ipcs -= cost;
 
     if (!this.playerTechs[playerId]) {
@@ -5876,6 +6014,11 @@ export class GameState {
     this.playerTechs[playerId].techTokens += count;
 
     this._notify();
+    this._emitLedger('purchase', {
+      playerId,
+      ipcBefore,
+      payload: { action: 'techDice', count, ipcDelta: -cost },
+    });
     return true;
   }
 
@@ -5926,11 +6069,17 @@ export class GameState {
     }
     const unlocked = this.playerTechs[playerId].unlockedTechs || [];
     if (unlocked.includes(techId)) return false;
+    const ipcBefore = ipcMapFromState(this);
     pState.ipcs -= DIRECT_TECH_IPC_COST;
     if (!this.unlockTech(playerId, techId)) {
       pState.ipcs += DIRECT_TECH_IPC_COST;
       return false;
     }
+    this._emitLedger('purchase', {
+      playerId,
+      ipcBefore,
+      payload: { action: 'buyTech', techId, ipcDelta: -DIRECT_TECH_IPC_COST },
+    });
     return true;
   }
 
@@ -6077,10 +6226,16 @@ export class GameState {
     const value = RISK_CARD_VALUES[Math.min(tradeNum, RISK_CARD_VALUES.length - 1)];
 
     // Increment trade count and award IPCs
+    const ipcBefore = ipcMapFromState(this);
     this.cardTradeCount[playerId] = tradeNum + 1;
     this.playerState[playerId].ipcs += value;
 
     this._notify();
+    this._emitLedger('ui', {
+      playerId,
+      ipcBefore,
+      payload: { action: 'cards', ipcDelta: value, cards: set },
+    });
     return { success: true, ipcs: value };
   }
 
@@ -6120,10 +6275,16 @@ export class GameState {
     const value = RISK_CARD_VALUES[Math.min(tradeNum, RISK_CARD_VALUES.length - 1)];
 
     // Increment trade count and award IPCs
+    const ipcBefore = ipcMapFromState(this);
     this.cardTradeCount[playerId] = tradeNum + 1;
     this.playerState[playerId].ipcs += value;
 
     this._notify();
+    this._emitLedger('ui', {
+      playerId,
+      ipcBefore,
+      payload: { action: 'cards', ipcDelta: value, cards: cardSet },
+    });
     return { success: true, ipcs: value };
   }
 
@@ -6790,6 +6951,7 @@ export class GameState {
     const actualDamage = Math.min(damage, targetIPCs);
 
     // Apply damage
+    const ipcBefore = ipcMapFromState(this);
     this.playerState[targetOwner].ipcs -= actualDamage;
 
     // Mark AA gun as used
@@ -6800,6 +6962,12 @@ export class GameState {
 
     this._notify();
     flushDiceBuffer(this);
+    this._emitLedger('ui', {
+      territory: targetTerritory,
+      playerId: player.id,
+      ipcBefore,
+      payload: { action: 'rocket', target: targetTerritory, ipcDelta: -actualDamage },
+    });
 
     return {
       success: true,
@@ -6833,6 +7001,10 @@ export class GameState {
       try { this.onNcmAirDestroyed(destroyed, copy); } catch { /* log must not block the phase */ }
     }
     this._notify();
+    this._emitLedger('combat', {
+      playerId: player.id,
+      payload: { action: 'ncmAirDestroyed' },
+    });
     return destroyed;
   }
 
@@ -7378,6 +7550,9 @@ export class GameState {
       : 0;
     this.conqueredThisTurn = {};
     this.capturedThisTurn = new Set(data.capturedThisTurn || []);
+    this._ledgerReady = false;
+    syncLedgerIdSeq(this.units);
+    this._resetLedgerBaseline();
 
     this._notify();
   }

@@ -1230,6 +1230,9 @@ export class AIController {
   }
 
   _refundPending(playerId, unitType) {
+    const ipcBefore = this.gameState._ledgerIpc
+      ? { ...this.gameState._ledgerIpc }
+      : null;
     const rows = (this.gameState.pendingPurchases || []).filter((row) => row.owner === playerId && row.type === unitType);
     for (const row of rows) {
       const refund = (Number(row.cost) || 0) * (Number(row.quantity) || 0);
@@ -1239,6 +1242,11 @@ export class AIController {
     }
     this.gameState.pendingPurchases = (this.gameState.pendingPurchases || [])
       .filter((row) => !(row.owner === playerId && row.type === unitType));
+    this.gameState._emitLedger?.('purchase', {
+      playerId,
+      ipcBefore,
+      payload: { action: 'refundPending', unitType },
+    });
   }
 
   // ============================================

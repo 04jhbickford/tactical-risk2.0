@@ -145,6 +145,50 @@ export function normalizeKind(kind) {
   return EVENT_KIND_SET.has(raw) ? raw : 'ui';
 }
 
+const LEDGER_ROW_CAP = 400;
+
+function ledgerMap(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const out = {};
+  for (const key of Object.keys(value).slice(0, 16)) {
+    const n = Math.floor(Number(value[key]));
+    if (Number.isFinite(n)) out[String(key).slice(0, 40)] = n;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+function ledgerRows(value) {
+  if (!Array.isArray(value) || !value.length) return null;
+  return value.slice(0, LEDGER_ROW_CAP).map((row) => {
+    const item = {
+      id: row?.id ? String(row.id).slice(0, 80) : null,
+      type: row?.type ? String(row.type).slice(0, 40) : null,
+      owner: row?.owner ? String(row.owner).slice(0, 40) : null,
+      quantity: Math.max(0, Math.floor(Number(row?.quantity) || 0)),
+    };
+    if (row?.territory) item.territory = String(row.territory).slice(0, 80);
+    if (row?.from) item.from = String(row.from).slice(0, 80);
+    if (row?.to) item.to = String(row.to).slice(0, 80);
+    return item;
+  });
+}
+
+export function ledgerFields(ledger) {
+  if (!ledger || typeof ledger !== 'object') return {};
+  const out = {};
+  const ipcBefore = ledgerMap(ledger.ipcBefore);
+  const ipcAfter = ledgerMap(ledger.ipcAfter);
+  const unitsCreated = ledgerRows(ledger.unitsCreated);
+  const unitsDestroyed = ledgerRows(ledger.unitsDestroyed);
+  const unitsMoved = ledgerRows(ledger.unitsMoved);
+  if (ipcBefore) out.ipcBefore = ipcBefore;
+  if (ipcAfter) out.ipcAfter = ipcAfter;
+  if (unitsCreated) out.unitsCreated = unitsCreated;
+  if (unitsDestroyed) out.unitsDestroyed = unitsDestroyed;
+  if (unitsMoved) out.unitsMoved = unitsMoved;
+  return out;
+}
+
 export function buildGameEvent({
   gameState = null,
   kind = 'ui',
@@ -155,6 +199,7 @@ export function buildGameEvent({
   writerUid = null,
   lobbyCode = null,
   ts = null,
+  ledger = null,
 } = {}) {
   const player = gameState?.currentPlayer || null;
   return {
@@ -167,6 +212,7 @@ export function buildGameEvent({
     kind: normalizeKind(kind),
     territory: territory || null,
     payload: sanitizePayload(payload) || {},
+    ...ledgerFields(ledger),
     writerUid: writerUid || null,
     clientVersion: GAME_VERSION,
     eventSchema: EVENT_SCHEMA,
@@ -310,6 +356,7 @@ export class GameEventLog {
         writerUid: fields.writerUid || this._writerUid(),
         lobbyCode: fields.lobbyCode || this.lobbyCode,
         ts: fields.ts,
+        ledger: fields.ledger || null,
       });
       this.buffer.push(event);
       if (this.buffer.length > MEMORY_CAP) this.buffer = this.buffer.slice(-MEMORY_CAP);

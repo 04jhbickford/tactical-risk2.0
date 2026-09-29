@@ -37,6 +37,7 @@ import {
   nextStagedCount,
 } from './mobileShell.js';
 import { renderDiceStatsMarkup } from './diceStatsPanel.js';
+import { renderBattleDiceMarkup } from './battleDicePanel.js';
 import { knownUnitsToPlace } from '../state/placementPass.js';
 import {
   applyPlaceQueueDelta,
@@ -1481,6 +1482,7 @@ export class PlayerPanel {
     if (tab === 'territory') return this._renderTerritoryTab(player);
     if (tab === 'log') return this._renderLogTab();
     if (tab === 'dice') return renderDiceStatsMarkup({ placement: 'sheet' });
+    if (tab === 'battles') return renderBattleDiceMarkup({ placement: 'sheet' });
     return '';
   }
 

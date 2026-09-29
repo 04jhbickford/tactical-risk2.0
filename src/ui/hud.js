@@ -7,6 +7,7 @@ import { syncBottomSurfaces } from './bottomSurface.js';
 import { resolveHudClarity, shouldShowHudTicker } from './hudClarity.js';
 import { confirmChoice } from './confirmChoice.js';
 import { bindDiceStatsControls, ensureDiceStatsLoaded, renderDiceStatsMarkup } from './diceStatsPanel.js';
+import { loadBattleDice, renderBattleDiceMarkup } from './battleDicePanel.js';
 
 export class HUD {
   constructor() {
@@ -20,6 +21,7 @@ export class HUD {
     this.mapToolsOpen = false;
     this.menuTab = null;
     this.diceStatsOpen = false;
+    this.battleDiceOpen = false;
     this.menuTabProvider = null;
     this.onMenuOpen = null;
     this.el = document.getElementById('hud');
@@ -51,6 +53,7 @@ export class HUD {
       this.menuOpen = false;
       this.menuTab = null;
       this.diceStatsOpen = false;
+      this.battleDiceOpen = false;
       this.el.querySelector('.dice-stats-popover')?.remove();
       this._updateMenuState();
     });
@@ -58,10 +61,11 @@ export class HUD {
     // Escape closes Dice stats even after a later HUD render moves focus.
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
-      if (!this.diceStatsOpen && this.menuTab !== 'dice') return;
+      if (!this.diceStatsOpen && this.menuTab !== 'dice' && !this.battleDiceOpen && this.menuTab !== 'battles') return;
       e.preventDefault();
       this.diceStatsOpen = false;
-      if (this.menuTab === 'dice') this.menuTab = null;
+      this.battleDiceOpen = false;
+      if (this.menuTab === 'dice' || this.menuTab === 'battles') this.menuTab = null;
       this._render();
     });
 
@@ -97,7 +101,9 @@ export class HUD {
 
   _dismissDicePopover() {
     this.diceStatsOpen = false;
+    this.battleDiceOpen = false;
     this.el?.querySelector('.dice-stats-popover')?.remove();
+    this.el?.querySelector('.battle-dice-popover')?.remove();
   }
 
   setAIStatus(message) {
@@ -178,6 +184,10 @@ export class HUD {
             <span class="hud-menu-item-icon">⚀</span>
             <span>Dice stats</span>
           </button>
+          <button class="hud-menu-item" data-action="battle-dice">
+            <span class="hud-menu-item-icon">⚔</span>
+            <span>Past battles</span>
+          </button>
           <button class="hud-menu-item" data-action="rules">
             <span class="hud-menu-item-icon">📖</span>
             <span>Game Rules</span>
@@ -192,6 +202,7 @@ export class HUD {
           </button>
         </div>
         ${this.diceStatsOpen ? renderDiceStatsMarkup({ placement: 'popover' }) : ''}
+        ${this.battleDiceOpen ? renderBattleDiceMarkup({ placement: 'popover' }) : ''}
       </div>
     `;
 
@@ -333,6 +344,7 @@ export class HUD {
       : this.menuTab === 'territory' ? 'Territory'
       : this.menuTab === 'log' ? 'Log'
       : this.menuTab === 'dice' ? 'Dice stats'
+      : this.menuTab === 'battles' ? 'Past battles'
       : '';
 
     this.el.innerHTML = `
@@ -519,7 +531,15 @@ export class HUD {
         this.menuOpen = true;
         this.menuTab = btn.dataset.tab;
         if (btn.dataset.tab === 'dice') this._focusDice = true;
+        if (btn.dataset.tab === 'battles') this._focusBattles = true;
         this._render();
+        if (btn.dataset.tab === 'battles') {
+          loadBattleDice().then(() => {
+            if (this.menuTab !== 'battles') return;
+            this._focusBattles = true;
+            this._render();
+          });
+        }
         if (btn.dataset.tab === 'dice') {
           ensureDiceStatsLoaded(() => {
             if (this.menuTab !== 'dice') return;
@@ -528,6 +548,31 @@ export class HUD {
           });
         }
       });
+    });
+
+    this.el.querySelector('[data-action="battle-dice"]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.menuOpen = true;
+      this.diceStatsOpen = false;
+      this.battleDiceOpen = !this.battleDiceOpen;
+      if (this.battleDiceOpen) this._focusBattles = true;
+      this._updateMenuState();
+      this._render();
+      if (this.battleDiceOpen) {
+        loadBattleDice().then(() => {
+          if (!this.battleDiceOpen) return;
+          this._focusBattles = true;
+          this._render();
+        });
+      }
+    });
+
+    this.el.querySelector('[data-action="close-battle-dice"]')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.battleDiceOpen = false;
+      if (this.menuTab === 'battles') this.menuTab = null;
+      this._render();
     });
 
     this.el.querySelector('[data-action="dice-stats"]')?.addEventListener('click', (e) => {
@@ -565,6 +610,11 @@ export class HUD {
     if (this._focusDice && dicePanel) {
       this._focusDice = false;
       dicePanel.focus();
+    }
+    const battlePanel = this.el.querySelector('.battle-dice');
+    if (this._focusBattles && battlePanel) {
+      this._focusBattles = false;
+      battlePanel.focus();
     }
 
     // The phone sheet row is the second [data-action="phase-tips"].

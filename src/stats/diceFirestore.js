@@ -57,6 +57,8 @@ export async function commitDicePayload(payload, session) {
       side: group.side,
       playerSeat: group.playerSeat || '',
       isAI: !!group.isAI,
+      territory: group.territory || null,
+      battleRound: group.battleRound || null,
       writerUid: uid,
       clientVersion: payload.clientVersion || GAME_VERSION,
       ts: Date.now(),
