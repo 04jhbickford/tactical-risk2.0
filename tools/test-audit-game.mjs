@@ -1,4 +1,4 @@
-// V2.81.57-unified.26 — offline audit fixture.
+// V2.81.57-unified.27 — offline audit fixture.
 // Reference case shaped like game 6XQ7CN: stored IPCs do not match the ledger.
 // Run: node tools/test-audit-game.mjs
 
@@ -34,9 +34,9 @@ function board({ round, phase, ipcs, units }) {
   };
 }
 
-console.log('=== V2.81.57-unified.26 audit fixture ===');
+console.log('=== V2.81.57-unified.27 audit fixture ===');
 check('schema stays 11', SCHEMA_VERSION === 11);
-check('display stamp is unified.26', GAME_VERSION === 'V2.81.57-unified.26');
+check('display stamp is unified.26', GAME_VERSION === 'V2.81.57-unified.27');
 
 const opening = await buildPhaseSnapshot(board({
   round: 4,

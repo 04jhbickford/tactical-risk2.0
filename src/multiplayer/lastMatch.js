@@ -382,13 +382,35 @@ export function shouldOpenMyGames(action) {
 // Reload of a signed-in tab must open a STARTED match, not home (B38).
 // A waiting lobby (lobbyCode only) is not a started map — refresh/reopen
 // returns Main Menu (9.20.26.09). Play Online can still re-enter the room.
+// Desktop (width >= 1024) does not auto-open that match. Several games
+// stay listed; the player enters one from Open Games. 820 and 390 keep
+// B38. Omit width (and desktop) and a gameId still resumes, so older
+// callers stay on today's rule.
+export const DESKTOP_MENU_MIN_WIDTH = 1024;
+
+export function isDesktopMenuWidth(width) {
+  const n = Number(width);
+  return Number.isFinite(n) && n >= DESKTOP_MENU_MIN_WIDTH;
+}
+
+// An explicit desktop boolean wins. A finite width is desktop at >= 1024.
+// Omitted width and omitted desktop keep the B38 resume.
+function desktopSkipsAutoResume({ width, desktop } = {}) {
+  if (typeof desktop === 'boolean') return desktop;
+  if (width == null || width === '') return false;
+  return isDesktopMenuWidth(width);
+}
+
 export function shouldAutoResumeLastMatch({
   signedIn = false,
   lastMatch = null,
   explicitExit = false,
+  width,
+  desktop,
 } = {}) {
   if (explicitExit) return false;
   if (!signedIn) return false;
+  if (desktopSkipsAutoResume({ width, desktop })) return false;
   return !!lastMatch?.gameId;
 }
 
@@ -494,11 +516,13 @@ export function resolvePlayOnlineDestination({
   explicitMainMenu = false,
   signedIn = false,
   lastMatch = null,
+  width,
+  desktop,
 } = {}) {
-  if (explicitMainMenu) {
+  if (explicitMainMenu || desktopSkipsAutoResume({ width, desktop })) {
     return { screen: 'menu', autoEnterMap: false, autoEnterLobby: false };
   }
-  if (shouldAutoResumeLastMatch({ signedIn, lastMatch })) {
+  if (shouldAutoResumeLastMatch({ signedIn, lastMatch, width, desktop })) {
     return { screen: 'resume-map', autoEnterMap: true, autoEnterLobby: false };
   }
   const view = resolveResumeFailureView({ resumed: false, lastMatch });

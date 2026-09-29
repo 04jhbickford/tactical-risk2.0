@@ -1,4 +1,4 @@
-// V2.81.57-unified.26 — Discord playtest: turn save, phase CTA, naval drag,
+// V2.81.57-unified.27 — Discord playtest: turn save, phase CTA, naval drag,
 // one landing prompt, AA combat-move, lobby lock, Kazakh stem, turn ping
 // after a confirmed push, remaining movement, return to base.
 // Run: node tools/test-unified-18-discord.mjs
@@ -60,8 +60,8 @@ const check = (label, cond, extra) => {
   } else console.log('ok  :', label);
 };
 
-console.log('=== V2.81.57-unified.26 discord playtest ===');
-check('GAME_VERSION is V2.81.57-unified.26', GAME_VERSION === 'V2.81.57-unified.26');
+console.log('=== V2.81.57-unified.27 discord playtest ===');
+check('GAME_VERSION is V2.81.57-unified.27', GAME_VERSION === 'V2.81.57-unified.27');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 const mainSrc = readFileSync(join(root, 'src/main.js'), 'utf8');
