@@ -2,6 +2,12 @@
 
 ---
 
+## 9.29.26 — unified.31 restores the in-game panel
+
+Stamp `V2.81.57-unified.31`. Schema stays 11. A `V2.82-unified.30` doc is older than this tab and does not prompt. A `V2.82-unified.32` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.31`).
+
+9.29.26 unified.31 restores the in-game Actions / Players / Territory / Log panel to the pre-.29 layout because the action buttons were broken. The last working panel is `9a33af38` (unified.28). The `.29` `player-panel--capital-clear` overlay and the `.30` fixed-height float (`top: 84px`, 420px cap) are gone. Speed fix, New Local Game, confirm line, and top bar stay.
+
 ## 9.29.26 — unified.30 in-game menu
 
 Stamp `V2.81.57-unified.30`. Schema stays 11. A `V2.82-unified.29` doc is older than this tab and does not prompt. A `V2.82-unified.31` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.30`).

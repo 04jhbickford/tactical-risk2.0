@@ -1,4 +1,4 @@
-// V2.81.57-unified.30 — AI capitals prefer two steps of space.
+// V2.81.57-unified.31 — AI capitals prefer two steps of space.
 // Humans are unchanged. Fallback is today's pick on the full owned list.
 // Run: node tools/test-ai-capital-spacing.mjs
 
