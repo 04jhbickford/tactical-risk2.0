@@ -34,6 +34,39 @@ function dropEmptyStacks(units) {
   return (units || []).filter((unit) => (Number(unit?.quantity) || 0) > 0);
 }
 
+// Loose fighters and tactical bombers in a sea zone fill friendly carrier
+// room in that zone. A bomber never does. Returns how many of each loose
+// stack do not fit.
+function looseAirOverage(gameState, stacks, playerId, unitDefs) {
+  let room = 0;
+  for (const unit of stacks || []) {
+    if (unit?.type !== 'carrier' || !isLandingCarrier(gameState, unit, playerId)) continue;
+    const hulls = unit.id ? 1 : Math.max(1, Number(unit.quantity) || 1);
+    const cap = carrierCapacity(unitDefs) * hulls;
+    let aboard = 0;
+    for (const craft of unit.aircraft || []) {
+      if (!carrierAllowsAirType(unitDefs, craft?.type)) continue;
+      aboard += Math.max(0, Number(craft?.quantity) || 1);
+    }
+    room += Math.max(0, cap - aboard);
+  }
+  const over = [];
+  for (const unit of stacks || []) {
+    if (unit?.type === 'carrier') continue;
+    if (unit?.owner !== playerId || !isAirUnitType(unit.type, unitDefs)) continue;
+    const qty = Math.max(0, Number(unit.quantity) || 0);
+    if (qty <= 0) continue;
+    if (!carrierAllowsAirType(unitDefs, unit.type)) {
+      over.push({ unit, drop: qty });
+      continue;
+    }
+    const keep = Math.min(qty, room);
+    room -= keep;
+    if (qty > keep) over.push({ unit, drop: qty - keep });
+  }
+  return over;
+}
+
 // Read-only. `aboard` marks aircraft stored on a carrier.
 export function listIllegalAir(gameState, unitDefs = {}, playerId) {
   const rows = [];
@@ -66,9 +99,9 @@ export function listIllegalAir(gameState, unitDefs = {}, playerId) {
           }
           continue;
         }
-        if (unit?.owner === playerId && isAirUnitType(unit.type, unitDefs)) {
-          note(rows, name, unit.type, unit.quantity, playerId);
-        }
+      }
+      for (const row of looseAirOverage(gameState, stacks, playerId, unitDefs)) {
+        note(rows, name, row.unit.type, row.drop, playerId);
       }
       continue;
     }
@@ -118,10 +151,10 @@ export function destroyIllegalAir(gameState, unitDefs = {}, playerId) {
           unit.aircraft = next;
           continue;
         }
-        if (unit?.owner === playerId && isAirUnitType(unit.type, unitDefs)) {
-          note(removed, name, unit.type, unit.quantity, playerId);
-          unit.quantity = 0;
-        }
+      }
+      for (const row of looseAirOverage(gameState, list, playerId, unitDefs)) {
+        note(removed, name, row.unit.type, row.drop, playerId);
+        row.unit.quantity = Math.max(0, (Number(row.unit.quantity) || 0) - row.drop);
       }
       gameState.units[name] = dropEmptyStacks(list);
       continue;

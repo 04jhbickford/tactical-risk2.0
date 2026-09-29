@@ -85,6 +85,7 @@ import {
   assignLandingToIndexes,
   returnToBaseAssignments,
 } from '../state/airLanding.js';
+import { NO_LEGAL_AIR_LANDING_NOTE } from '../state/combatUnits.js';
 import {
   airCombatMoveMayOccupy,
   airSelectionType,
@@ -4684,7 +4685,10 @@ export class PlayerPanel {
           <span class="pp-air-landing-counter${remaining === 0 ? ' remaining-done' : ''}">${remaining} / ${needAssign} UNITS REMAINING</span>
         </div>
         <div class="pp-air-landing-from">From: <strong>${combatTerritory}</strong></div>
-        <div class="pp-air-landing-hint">Select one or more planes, then Land at or Return to base</div>
+        <div class="pp-air-landing-hint">Select one or more planes, then Land at or Return to base. Fighters and tactical bombers may use a friendly carrier. Bombers land on friendly land only.</div>
+        ${isRetreating && airUnitsToLand.some((unit) => !unit.landingOptions || unit.landingOptions.length === 0)
+          ? `<div class="pp-air-landing-hint">${NO_LEGAL_AIR_LANDING_NOTE}</div>`
+          : ''}
 
         <div class="pp-air-landing-grid">`;
 
@@ -4717,7 +4721,7 @@ export class PlayerPanel {
           <div class="pp-air-card-stats" title="${badge.title}">${badge.label}</div>
           <div class="pp-air-card-status">
             ${hasNoOptions
-              ? '<span class="status-crashed">CRASH</span>'
+              ? `<span class="status-crashed">${isRetreating ? 'No legal landing' : 'CRASH'}</span>`
               : selectedLanding
                 ? `<span class="status-landed">${selectedLanding}</span>`
                 : isPicked

@@ -67,7 +67,19 @@ import {
 } from './carrierPlacement.js';
 import { destroyIllegalAir, previewNcmAirDestruction as previewNcmAir, ncmAirWarningCopy } from './ncmAirCheck.js';
 import { consumePairedAttack, countPairing, tacticalBombersEnabled } from './tacticalPairing.js';
-import { applyCasualtySelection, countAirHits, sideCanFirstStrike, sideHasDestroyer, unitIsFirstStrikeTarget, unitsForGeneralCombat } from './combatUnits.js';
+import {
+  applyCasualtySelection,
+  airVersusSubStalemate,
+  countAirHits,
+  countSubHits,
+  enemyCanHitTransports,
+  sideCanFirstStrike,
+  sideHasDestroyer,
+  sideIsOnlyTransports,
+  unitIsFirstStrikeTarget,
+  unitsForGeneralCombat,
+  unitsSubsMayRoll,
+} from './combatUnits.js';
 import {
   factoryProductionLimit,
   factoryProductionUsed,
@@ -962,7 +974,8 @@ export class GameState {
     // getReachableTerritoriesForAir excludes the starting territory, but air units CAN land
     // on a carrier in the same sea zone they just attacked in
     const currentT = this.territoryByName[territory];
-    if (currentT?.isWater) {
+    const bomber = unitType === 'bomber';
+    if (currentT?.isWater && !bomber) {
       const seaUnits = this.units[territory] || [];
       const carriers = seaUnits.filter(u => isLandingCarrier(this, u, player.id));
       const carrierDef = unitDefs.carrier;
@@ -987,7 +1000,7 @@ export class GameState {
       // Skip if not friendly at turn start (unless it's a carrier which moves with the fleet)
       const destT = this.territoryByName[destName];
 
-      if (destT?.isWater) {
+      if (destT?.isWater && !bomber) {
         // Carriers: check if there's a friendly carrier with capacity
         const seaUnits = this.units[destName] || [];
         const carriers = seaUnits.filter(u => isLandingCarrier(this, u, player.id));
@@ -3805,6 +3818,32 @@ export class GameState {
     return Array.from(destinations);
   }
 
+  // Put fighters or tactical bombers onto a friendly carrier already at
+  // the retreat sea zone. A bomber is not a carrier type. Returns how
+  // many were embarked. The rest stay off the sea zone.
+  _embarkRetreatingAir(destination, unit) {
+    const unitDefs = this._unitDefs || this.unitDefs || {};
+    const carrierDef = unitDefs.carrier || {};
+    const allowed = new Set(carrierDef.canCarry || ['fighter', 'tacticalBomber']);
+    if (!allowed.has(unit?.type) || unit.type === 'bomber') return 0;
+    let left = Math.max(0, Number(unit.quantity) || 0);
+    const owner = unit.owner || this.currentPlayer?.id;
+    for (const carrier of this.units[destination] || []) {
+      if (left <= 0) break;
+      if (!isLandingCarrier(this, carrier, owner)) continue;
+      const hulls = carrier.id ? 1 : Math.max(1, Number(carrier.quantity) || 1);
+      const cap = (Number(carrierDef.aircraftCapacity) || 2) * hulls;
+      carrier.aircraft = Array.isArray(carrier.aircraft) ? carrier.aircraft : [];
+      const room = Math.max(0, cap - carrier.aircraft.length);
+      const take = Math.min(room, left);
+      for (let i = 0; i < take; i++) {
+        carrier.aircraft.push({ type: unit.type, owner });
+      }
+      left -= take;
+    }
+    return (Number(unit.quantity) || 0) - left;
+  }
+
   // Retreat ALL units from combat to a SINGLE destination (A&A rule)
   retreatToTerritory(combatTerritory, destination) {
     const player = this.currentPlayer;
@@ -3856,6 +3895,9 @@ export class GameState {
     };
 
     const airToPark = [];
+    const destIsWater = !!this.territoryByName?.[destination]?.isWater;
+    const carrierDef = unitDefs.carrier || {};
+    const carrierTypes = new Set(carrierDef.canCarry || ['fighter', 'tacticalBomber']);
     for (const unit of unitsToRetreat) {
       if (isAirUnitType(unit.type, unitDefs)) continue;
       deliver(unit);
@@ -3866,13 +3908,31 @@ export class GameState {
       if (!isAirUnitType(unit.type, unitDefs)) continue;
       const qty = Number(unit.quantity) || 0;
       if (qty <= 0) continue;
-      let legal = false;
+      let legalLand = false;
+      let legalCarrier = false;
       try {
         const options = this.getAirLandingOptions(combatTerritory, unit.type, unitDefs) || [];
-        legal = options.some((opt) => opt?.territory === destination);
-      } catch { legal = false; }
-      if (legal) deliver(unit);
-      else {
+        const match = options.find((opt) => opt?.territory === destination);
+        legalLand = !!match && !match.isCarrier && !destIsWater;
+        legalCarrier = !!match?.isCarrier && destIsWater && carrierTypes.has(unit.type) && unit.type !== 'bomber';
+      } catch { legalLand = false; legalCarrier = false; }
+      if (legalLand) {
+        deliver(unit);
+      } else if (legalCarrier) {
+        const embarked = this._embarkRetreatingAir(destination, unit);
+        const left = qty - embarked;
+        if (left > 0) {
+          airToPark.push({
+            id: unit.id || `${unit.type}_retreat`,
+            type: unit.type,
+            quantity: left,
+            owner: unit.owner || player.id,
+            parked: true,
+          });
+        }
+      } else {
+        // No friendly land, and no carrier for this air type. Park it.
+        // Do not put it in the sea zone and do not delete it.
         airToPark.push({
           id: unit.id || `${unit.type}_retreat`,
           type: unit.type,
@@ -4171,6 +4231,26 @@ export class GameState {
     }
   }
 
+  // A side of only transports is removed when the other side can hit them.
+  // No dice. A transport sitting with a submarine is not this case.
+  _scrapUndefendedTransports(attackers, defenders, unitDefs) {
+    const scrap = (list) => {
+      for (const unit of list || []) {
+        if (unit?.type !== 'transport') continue;
+        const qty = Number(unit.quantity) || 0;
+        if (qty <= 0) continue;
+        unit.quantity = 0;
+        this._noteSunkCargo(unit);
+      }
+    };
+    if (sideIsOnlyTransports(defenders) && enemyCanHitTransports(attackers, unitDefs, 'attack')) {
+      scrap(defenders);
+    }
+    if (sideIsOnlyTransports(attackers) && enemyCanHitTransports(defenders, unitDefs, 'defense')) {
+      scrap(attackers);
+    }
+  }
+
   // Resolve combat in a territory (dice combat with naval rules)
   resolveCombat(territory, unitDefs) {
     const units = this.units[territory] || [];
@@ -4181,9 +4261,14 @@ export class GameState {
     const isNavalBattle = t?.isWater;
     if (isNavalBattle) this._launchCarrierAircraft(units);
 
-    const attackers = units.filter(u => u.owner === player.id && (Number(u.quantity) || 0) > 0);
+    let attackers = units.filter(u => u.owner === player.id && (Number(u.quantity) || 0) > 0);
     // All enemy units in territory (for rolling dice - AA guns still roll at aircraft)
-    const allDefenders = units.filter(u => u.owner !== player.id && !this.areAllies(player.id, u.owner) && (Number(u.quantity) || 0) > 0);
+    let allDefenders = units.filter(u => u.owner !== player.id && !this.areAllies(player.id, u.owner) && (Number(u.quantity) || 0) > 0);
+    if (isNavalBattle) {
+      this._scrapUndefendedTransports(attackers, allDefenders, unitDefs);
+      attackers = attackers.filter((u) => (Number(u.quantity) || 0) > 0);
+      allDefenders = allDefenders.filter((u) => (Number(u.quantity) || 0) > 0);
+    }
     // Combat defenders - units that can actually stop an attack (exclude factories and 0/0 units)
     const combatDefenders = allDefenders.filter(u => {
       // Factories are captured, not combat units
@@ -4194,7 +4279,25 @@ export class GameState {
       return true;
     });
 
+    if (isNavalBattle && airVersusSubStalemate(attackers, allDefenders, unitDefs)) {
+      this.units[territory] = units.filter((u) => (Number(u.quantity) || 0) > 0 || u.type === 'factory');
+      this.combatQueue = this.combatQueue.filter((name) => name !== territory);
+      if (this._combatRoundsTracker) delete this._combatRoundsTracker[territory];
+      this._notify();
+      return {
+        resolved: true,
+        winner: 'submerged',
+        submerged: true,
+        attackHits: 0,
+        defenseHits: 0,
+        attackersRemaining: attackers.reduce((sum, u) => sum + (Number(u.quantity) || 0), 0),
+        defendersRemaining: allDefenders.reduce((sum, u) => sum + (Number(u.quantity) || 0), 0),
+      };
+    }
+
     if (attackers.length === 0 || combatDefenders.length === 0) {
+      this.units[territory] = units.filter((u) => (Number(u.quantity) || 0) > 0 || u.type === 'factory');
+      this._pendingCarriedLosses = [];
       // Shared land-hold capture (9.20.26.02). Air-only / attacker wipe
       // leave the original owner — same gate as combatUI + Experimental.
       const capture = attackers.length > 0
@@ -4304,12 +4407,12 @@ export class GameState {
     // Roll dice for combat (allDefenders includes AA guns which can fire at aircraft).
     // Subs that just struck are omitted; everyone else still rolls.
     const { hits: attackHits, rolls: attackRolls } = this._rollCombatWithRolls(
-      unitsForGeneralCombat(attackers, attackerSubsStruck),
+      unitsSubsMayRoll(unitsForGeneralCombat(attackers, attackerSubsStruck), allDefenders, unitDefs),
       'attack',
       unitDefs,
     );
     const { hits: defenseHits, rolls: defenseRolls } = this._rollCombatWithRolls(
-      unitsForGeneralCombat(allDefenders, defenderSubsStruck),
+      unitsSubsMayRoll(unitsForGeneralCombat(allDefenders, defenderSubsStruck), attackers, unitDefs),
       'defense',
       unitDefs,
     );
@@ -4323,10 +4426,12 @@ export class GameState {
     const defenderSpotsSubs = sideHasDestroyer(allDefenders);
     const attackerCasualties = this._applyCasualtiesWithDamage(allDefenders, totalAttackHits, unitDefs, isNavalBattle, {
       airHits: countAirHits(attackRolls, unitDefs),
+      subHits: countSubHits(attackRolls),
       canAirHitSubs: attackerSpotsSubs,
     });
     const defenderCasualties = this._applyCasualtiesWithDamage(attackers, defenseHits, unitDefs, isNavalBattle, {
       airHits: countAirHits(defenseRolls, unitDefs),
+      subHits: countSubHits(defenseRolls),
       canAirHitSubs: defenderSpotsSubs,
     });
 
@@ -4342,7 +4447,16 @@ export class GameState {
     // Check if combat is over
     // Note: Factories are captured (not destroyed) and AA guns have 0 combat value
     // Only count units that can actually fight as "remaining"
-    const remainingAttackers = this.units[territory].filter(u => u.owner === player.id);
+    if (isNavalBattle) {
+      const seaAttackers = this.units[territory].filter((u) => u.owner === player.id && (Number(u.quantity) || 0) > 0);
+      const seaDefenders = this.units[territory].filter((u) => (
+        u.owner !== player.id && !this.areAllies(player.id, u.owner) && (Number(u.quantity) || 0) > 0
+      ));
+      this._scrapUndefendedTransports(seaAttackers, seaDefenders, unitDefs);
+      this.units[territory] = this.units[territory].filter((u) => (Number(u.quantity) || 0) > 0 || u.type === 'factory');
+    }
+
+    const remainingAttackers = this.units[territory].filter(u => u.owner === player.id && (Number(u.quantity) || 0) > 0);
     const remainingDefenders = this.units[territory].filter(u => {
       if (u.owner === player.id || this.areAllies(player.id, u.owner)) return false;
       // Factories are captured, not combat units - don't count them as defenders
@@ -4368,7 +4482,14 @@ export class GameState {
       defendersRemaining: remainingDefenders.reduce((sum, u) => sum + u.quantity, 0),
     };
 
-    if (remainingDefenders.length === 0) {
+    if (isNavalBattle && airVersusSubStalemate(remainingAttackers, remainingDefenders, unitDefs)) {
+      // Subs stay in the zone. Aircraft stay. The battle does not roll again.
+      result.resolved = true;
+      result.winner = 'submerged';
+      result.submerged = true;
+      this.combatQueue = this.combatQueue.filter((name) => name !== territory);
+      if (this._combatRoundsTracker) delete this._combatRoundsTracker[territory];
+    } else if (remainingDefenders.length === 0) {
       // Attacker wins. Combat event first, then the capture, matching combatUI.
       this._flushCombatLossLedger(territory, 'attacker');
       if (isNavalBattle) {
@@ -4668,17 +4789,37 @@ export class GameState {
     const casualties = [];
     let otherLeft = Math.max(0, Number(hits) || 0);
     let airLeft = 0;
+    let subLeft = 0;
     // Air hits are spent on non-subs first so a surface hit still follows
     // today's cheapest / battleship order. Subs refuse those air hits.
     if (profile?.canAirHitSubs === false) {
       airLeft = Math.min(Math.max(0, Number(profile?.airHits) || 0), otherLeft);
       otherLeft -= airLeft;
     }
-    const hitsLeft = () => airLeft + otherLeft;
+    // Sub hits are part of the same total. They can only land on sea units.
+    subLeft = Math.min(Math.max(0, Number(profile?.subHits) || 0), otherLeft);
+    otherLeft -= subLeft;
+    const hitsLeft = () => airLeft + otherLeft + subLeft;
     const takeHit = (unit) => {
+      const air = !!(unit && unitDefs?.[unit.type]?.isAir);
+      if (air) {
+        if (airLeft > 0) {
+          airLeft -= 1;
+          return true;
+        }
+        if (otherLeft > 0) {
+          otherLeft -= 1;
+          return true;
+        }
+        return false;
+      }
       if (unit?.type === 'submarine') {
         if (otherLeft <= 0) return false;
         otherLeft -= 1;
+        return true;
+      }
+      if (subLeft > 0) {
+        subLeft -= 1;
         return true;
       }
       if (airLeft > 0) {

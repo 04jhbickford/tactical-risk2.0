@@ -94,12 +94,12 @@ export class RulesPanel {
                 <tr><td>Fighter</td><td>10</td><td>3</td><td>4</td><td>4</td><td>Air unit, can land on carriers</td></tr>
                 <tr data-rules-tactical hidden><td>Tactical Bomber</td><td>11</td><td>3</td><td>3</td><td>4</td><td>Attacks at 4 when paired with a fighter or tank in the same battle. Can land on a carrier.</td></tr>
                 <tr><td>Bomber</td><td>12</td><td>4</td><td>1</td><td>6</td><td>Cannot capture. Strategic bombing raids are not yet available.</td></tr>
-                <tr><td>Submarine</td><td>6</td><td>2</td><td>1</td><td>2</td><td>Surprise strike replaces that round's roll. Can submerge</td></tr>
-                <tr><td>Destroyer</td><td>8</td><td>2</td><td>2</td><td>2</td><td>Blocks sub first strike</td></tr>
+                <tr><td>Submarine</td><td>6</td><td>2</td><td>1</td><td>2</td><td>Cannot hit aircraft. Surprise strike replaces that round's roll. Submerges against aircraft</td></tr>
+                <tr><td>Destroyer</td><td>8</td><td>2</td><td>2</td><td>2</td><td>Blocks sub surprise strike. Aircraft hit subs only while a destroyer is in the battle</td></tr>
                 <tr><td>Cruiser</td><td>12</td><td>3</td><td>3</td><td>2</td><td>Shore bombardment</td></tr>
                 <tr><td>Carrier</td><td>14</td><td>1</td><td>2</td><td>2</td><td data-rules-carrier-table>Carries 2 fighters</td></tr>
                 <tr><td>Battleship</td><td>20</td><td>4</td><td>4</td><td>2</td><td>2 HP, shore bombardment</td></tr>
-                <tr><td>Transport</td><td>7</td><td>0</td><td>0</td><td>2</td><td>Carries 2 infantry or 1 infantry + 1 other</td></tr>
+                <tr><td>Transport</td><td>7</td><td>0</td><td>0</td><td>2</td><td>Carries 2 infantry or 1 infantry + 1 other. Destroyed automatically when it is the only unit and the enemy can hit it</td></tr>
               </tbody>
             </table>
           </section>
@@ -110,15 +110,17 @@ export class RulesPanel {
               <li><strong>Attacking:</strong> Roll dice equal to unit's attack value. Each die showing that number or less = hit.</li>
               <li><strong>Defending:</strong> Roll dice equal to unit's defense value. Same rules for hits.</li>
               <li><strong>Casualties:</strong> Attacker chooses defender casualties, defender chooses attacker casualties.</li>
-              <li><strong>Air Units:</strong> Cannot capture territory. After combat, must return to friendly territory or carrier.</li>
-              <li><strong>Retreat:</strong> Attacker can retreat all units to an adjacent friendly territory.</li>
+              <li><strong>Submarines:</strong> Cannot hit aircraft. Aircraft cannot hit a submarine unless that side has a destroyer in the battle. If one side has only aircraft and the other has only submarines, the submarines submerge and the battle ends.</li>
+              <li><strong>Transports:</strong> If a side's only units are transports and the enemy can hit them, the transports are destroyed with no dice.</li>
+              <li><strong>Air Units:</strong> Cannot capture territory. Fighters and tactical bombers land on friendly land or a friendly carrier with room. Bombers land on friendly land only and never at sea.</li>
+              <li><strong>Retreat:</strong> Ships and land units retreat to a territory they came from. Retreating aircraft land on friendly land within range, or on a friendly carrier for fighters and tactical bombers. If no legal landing exists, the aircraft stays for the end of non-combat movement.</li>
             </ul>
           </section>
 
           <section class="rules-section" id="rules-transport" data-rules-section="transport">
             <h3>Transport & Carrier Rules</h3>
             <ul>
-              <li><strong>Transports:</strong> Can carry 2 infantry OR 1 infantry + 1 other land unit.</li>
+              <li><strong>Transports:</strong> Can carry 2 infantry OR 1 infantry + 1 other land unit. Undefended transports are destroyed when an enemy unit can hit them.</li>
               <li><strong>Carriers:</strong> <span data-rules-carrier-bullet>Can carry up to 2 fighters.</span></li>
               <li><strong>Loading:</strong> Units can load during non-combat movement from adjacent coastal territories.</li>
               <li><strong>Unloading:</strong> Units can unload during combat movement for amphibious assault.</li>

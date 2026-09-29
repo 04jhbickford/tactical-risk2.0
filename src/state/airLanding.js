@@ -553,6 +553,8 @@ export function assignLandingToIndexes(units, indexes, destination, selections =
 }
 
 // Origin is assigned only when that territory is already a legal landing.
+// Friendly land is legal. A carrier sea zone is legal for a fighter or
+// tactical bomber. A bomber is never sent back to a sea zone.
 export function returnToBaseAssignments(units, originsByType, selections = {}) {
   const next = { ...(selections || {}) };
   const unresolved = [];
@@ -560,8 +562,10 @@ export function returnToBaseAssignments(units, originsByType, selections = {}) {
     const key = landingKeyFor(unit, index);
     if (next[key]) return;
     const origin = originsByType?.[unit.type]?.origin || '';
-    const legal = !!origin && (unit.landingOptions || []).some((opt) => opt.territory === origin);
-    if (legal) next[key] = origin;
+    const option = (unit.landingOptions || []).find((opt) => opt?.territory === origin);
+    const carrierOk = !!option?.isCarrier && unit?.type !== 'bomber';
+    const landOk = !!option && !option.isCarrier;
+    if (origin && (landOk || carrierOk)) next[key] = origin;
     else unresolved.push(key);
   });
   return { selections: next, unresolved };

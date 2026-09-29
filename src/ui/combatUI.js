@@ -18,7 +18,12 @@ import {
   sideHasDestroyer,
   countAirHits,
   unitsForGeneralCombat,
+  unitsSubsMayRoll,
+  airVersusSubStalemate,
+  sideIsOnlyTransports,
+  enemyCanHitTransports,
   AIR_CANNOT_HIT_SUBS_HINT,
+  NO_LEGAL_AIR_LANDING_NOTE,
 } from '../state/combatUnits.js';
 import { dequeueResolvedCombatHeads, applyTerritoryCapture } from '../state/combatFinalize.js';
 import { persistableUnit } from '../state/persistState.js';
@@ -523,6 +528,63 @@ export class CombatUI {
       this.combatState.phase = 'resolved';
       this.combatState.winner = 'defender';
     }
+    this._applyOpeningSeaRules();
+  }
+
+  // Subs facing only aircraft leave the fight and stay in the zone.
+  // The battle does not roll again.
+  _openAirSubStalemate() {
+    if (!this.combatState || !this._currentTerritoryIsWater()) return false;
+    const { attackers, defenders } = this.combatState;
+    if (!airVersusSubStalemate(attackers, defenders, this.unitDefs)) return false;
+    this.combatState.phase = 'resolved';
+    this.combatState.winner = 'submerged';
+    this.combatState.submerged = true;
+    const territory = this.currentTerritory;
+    if (territory && this.gameState) {
+      this.gameState.combatQueue = (this.gameState.combatQueue || []).filter((name) => name !== territory);
+    }
+    return true;
+  }
+
+  // Transports with no escort are removed when the enemy can hit them.
+  _scrapUndefendedTransports() {
+    if (!this.combatState || !this._currentTerritoryIsWater()) return false;
+    const { attackers, defenders, totalAttackerLosses, totalDefenderLosses } = this.combatState;
+    let changed = false;
+    if (sideIsOnlyTransports(defenders) && enemyCanHitTransports(attackers, this.unitDefs, 'attack')) {
+      for (const transport of defenders.filter((unit) => unit.type === 'transport')) {
+        this._addTypedLoss(totalDefenderLosses, transport.owner, 'transport', transport.quantity);
+        transport.quantity = 0;
+        this._recordHullCargo(transport, totalDefenderLosses, this._extraLossMap());
+      }
+      this.combatState.defenders = [];
+      changed = true;
+    }
+    if (sideIsOnlyTransports(attackers) && enemyCanHitTransports(defenders, this.unitDefs, 'defense')) {
+      for (const transport of attackers.filter((unit) => unit.type === 'transport')) {
+        totalAttackerLosses.transport = (totalAttackerLosses.transport || 0) + (Number(transport.quantity) || 0);
+        transport.quantity = 0;
+        this._recordHullCargo(transport, totalAttackerLosses, this._extraLossMap());
+      }
+      this.combatState.attackers = [];
+      changed = true;
+    }
+    if (!changed) return false;
+    this._syncCombatStateToGame();
+    if (this.combatState.defenders.length === 0 && this.combatState.attackers.length > 0) {
+      this.combatState.winner = 'attacker';
+      this._checkAirLanding();
+    } else if (this.combatState.attackers.length === 0) {
+      this.combatState.winner = 'defender';
+      this.combatState.phase = 'resolved';
+    }
+    return true;
+  }
+
+  _applyOpeningSeaRules() {
+    if (this._scrapUndefendedTransports()) return true;
+    return this._openAirSubStalemate();
   }
 
   _calculateBombardment() {
@@ -1083,6 +1145,10 @@ export class CombatUI {
   }
 
   _rollDice() {
+    if (this.combatState?.phase === 'resolved' || this.combatState?.winner === 'submerged') {
+      return { attackHits: 0, defenseHits: 0 };
+    }
+    if (this._openAirSubStalemate()) return { attackHits: 0, defenseHits: 0 };
     const { attackers, defenders } = this.combatState;
     this.combatState.attackerPicksTouched = false;
     this.combatState.defenderPicksTouched = false;
@@ -1095,14 +1161,14 @@ export class CombatUI {
     // Later rounds (combatRound > 1) roll those subs in this step.
     const openingStrike = !!this.combatState.submarineFirstStrikeFired
       && (this.combatState.combatRound || 1) === 1;
-    const attackPool = unitsForGeneralCombat(
+    const attackPool = unitsSubsMayRoll(unitsForGeneralCombat(
       attackers,
       openingStrike && !!this.combatState.attackerSubsHaveFirstStrike,
-    );
-    const defensePool = unitsForGeneralCombat(
+    ), defenders, this.unitDefs);
+    const defensePool = unitsSubsMayRoll(unitsForGeneralCombat(
       defenders,
       openingStrike && !!this.combatState.defenderSubsHaveFirstStrike,
-    );
+    ), attackers, this.unitDefs);
 
     // Roll for attackers
     const attackRolls = [];
@@ -1309,11 +1375,13 @@ export class CombatUI {
     if (casualtySide === 'attacker') {
       return {
         airHits: state.defenderAirHits || 0,
+        subHits: state.defenderSubHits || 0,
         canAirHitSubs: !!state.defenderHasDestroyer,
       };
     }
     return {
       airHits: state.attackerAirHits || 0,
+      subHits: state.attackerSubHits || 0,
       canAirHitSubs: !!state.attackerHasDestroyer,
     };
   }
@@ -1333,13 +1401,22 @@ export class CombatUI {
   _assignableCasualtyHits(units, pendingHits, profile) {
     const pending = Math.max(0, pendingHits || 0);
     const max = this._getMaxAbsorbableCasualties(units);
-    if (!profile || profile.canAirHitSubs || !(profile.airHits > 0)) {
-      return Math.min(pending, max);
+    const subHits = Math.min(Math.max(0, profile?.subHits || 0), pending);
+    const seaMax = this._getMaxAbsorbableCasualties((units || []).filter((unit) => {
+      const def = this.unitDefs?.[unit.type];
+      return def && def.isSea && !def.isAir;
+    }));
+    const subPlaced = Math.min(subHits, seaMax);
+    const rest = pending - subHits;
+    let restPlaced = Math.min(rest, Math.max(0, max - subPlaced));
+    if (profile && profile.canAirHitSubs === false && profile.airHits > 0) {
+      const nonSubMax = this._getMaxAbsorbableCasualties((units || []).filter((unit) => unit.type !== 'submarine'));
+      const airHits = Math.min(Math.max(0, profile.airHits), rest);
+      const nonAir = rest - airHits;
+      const subRoom = Math.max(0, max - nonSubMax);
+      restPlaced = Math.min(rest, nonSubMax + Math.min(subRoom, nonAir));
     }
-    const nonSubMax = this._getMaxAbsorbableCasualties((units || []).filter((u) => u.type !== 'submarine'));
-    const nonAirHits = Math.max(0, pending - profile.airHits);
-    const subRoom = Math.max(0, max - nonSubMax);
-    return Math.min(pending, nonSubMax + Math.min(subRoom, nonAirHits));
+    return Math.min(pending, subPlaced + restPlaced);
   }
 
   _effectiveCasualtyCount(casualtySide) {
@@ -1560,6 +1637,18 @@ export class CombatUI {
     destroyPredamaged();
     destroyJustDamaged();
 
+    // A transport is a valid target once nothing else can take the hit.
+    // An air hit against a submarine and a transport lands on the transport.
+    if (remaining > 0) {
+      const transports = units.filter((unit) => unit.type === 'transport' && unit.quantity > 0);
+      for (const unit of transports) {
+        if (remaining <= 0) break;
+        const take = Math.min(unit.quantity, remaining);
+        selected.transport = (selected.transport || 0) + take;
+        remaining -= take;
+      }
+    }
+
     return selected;
   }
 
@@ -1616,8 +1705,12 @@ export class CombatUI {
       const carrierInBattle = destination === this.currentTerritory && (option?.isCarrier || loadedHere);
 
       if (airUnit.landingOptions.length === 0) {
-        crashes[airUnit.type] = (crashes[airUnit.type] || 0) + airUnit.quantity;
-        console.log(`${airUnit.type} crashed - no valid landing location`);
+        if (this.combatState.isRetreating) {
+          // Already parked for the end-of-NCM check. Do not delete it.
+        } else {
+          crashes[airUnit.type] = (crashes[airUnit.type] || 0) + airUnit.quantity;
+          console.log(`${airUnit.type} crashed - no valid landing location`);
+        }
       } else if (destination && destination !== this.currentTerritory) {
         // Board apply already moved these. Still drop them from attackers
         // so _finalizeCombat cannot write them back onto the battle hex.
@@ -1850,13 +1943,12 @@ export class CombatUI {
     this.combatState.attackers = attackers.filter(u => (Number(u.quantity) || 0) > 0);
     this.combatState.defenders = defenders.filter(u => (Number(u.quantity) || 0) > 0);
 
-    // A&A Anniversary Rule: Transports are defenseless
-    // Check if all non-transport units are destroyed - transports are then auto-destroyed
+    // Transports with no escort are removed when the enemy can still hit them.
     const attackerCombatUnits = this.combatState.attackers.filter(u => u.type !== 'transport');
     const defenderCombatUnits = this.combatState.defenders.filter(u => u.type !== 'transport');
 
-    // Auto-destroy transports if no combat units remain
-    if (attackerCombatUnits.length === 0 && this.combatState.attackers.length > 0) {
+    if (attackerCombatUnits.length === 0 && this.combatState.attackers.length > 0
+      && enemyCanHitTransports(this.combatState.defenders, this.unitDefs, 'defense')) {
       // Attacker only has transports left - they are destroyed
       for (const transport of this.combatState.attackers.filter(u => u.type === 'transport')) {
         totalAttackerLosses['transport'] = (totalAttackerLosses['transport'] || 0) + transport.quantity;
@@ -1865,7 +1957,8 @@ export class CombatUI {
       }
       this.combatState.attackers = [];
     }
-    if (defenderCombatUnits.length === 0 && this.combatState.defenders.length > 0) {
+    if (defenderCombatUnits.length === 0 && this.combatState.defenders.length > 0
+      && enemyCanHitTransports(this.combatState.attackers, this.unitDefs, 'attack')) {
       // Defender only has transports left - they are destroyed
       for (const transport of this.combatState.defenders.filter(u => u.type === 'transport')) {
         this._addTypedLoss(totalDefenderLosses, transport.owner, 'transport', transport.quantity);
@@ -1890,6 +1983,8 @@ export class CombatUI {
     } else if (this.combatState.attackers.length === 0) {
       this.combatState.winner = 'defender';
       this._checkAirLanding();
+    } else if (this._openAirSubStalemate()) {
+      this._syncCombatStateToGame();
     } else {
       // Continue combat
       this.combatState.phase = 'ready';
@@ -2238,6 +2333,7 @@ export class CombatUI {
     this.gameState?.pauseNotifications?.();
     try {
       while (this.combatState.phase !== 'resolved' && this.combatState.phase !== 'airLanding') {
+        if (this._openAirSubStalemate()) break;
         if (this._failCloseIfAttackerWiped({ persist: true })) break;
         if (this.combatState.phase === 'bombardment') {
           this._fireBombardment();
@@ -2549,7 +2645,7 @@ export class CombatUI {
             <span class="air-landing-title">${isRetreating ? 'Retreat - ' : ''}Air Unit Landing Required</span>
           </div>
           <div class="air-landing-desc">
-            ${isRetreating ? 'Your forces are retreating. ' : ''}Air units must land in a territory that was <strong>friendly at the start of your turn</strong>.
+            ${isRetreating ? 'Your forces are retreating. ' : ''}Air units must land on friendly land within range. Fighters and tactical bombers may land on a friendly carrier. Bombers never land at sea.
             Newly captured territories are NOT valid landing locations.
           </div>
       `;
@@ -2596,8 +2692,8 @@ export class CombatUI {
               </select>
             ` : `
               <div class="air-landing-crash">
-                <span class="crash-icon">💥</span>
-                <span class="crash-text">No valid landing - Unit will CRASH!</span>
+                <span class="crash-icon">${isRetreating ? '✈' : '💥'}</span>
+                <span class="crash-text">${isRetreating ? NO_LEGAL_AIR_LANDING_NOTE : 'No valid landing - Unit will CRASH!'}</span>
               </div>
             `}
           </div>
@@ -3197,7 +3293,7 @@ export class CombatUI {
                 </option>`
               ).join('')}
             </select>
-          ` : `<div class="air-landing-crash"><span class="crash-text">No valid landing — unit will crash</span></div>`}
+          ` : `<div class="air-landing-crash"><span class="crash-text">${isRetreating ? NO_LEGAL_AIR_LANDING_NOTE : 'No valid landing — unit will crash'}</span></div>`}
         </div>`;
     }
     html += `</div>`;
@@ -3809,8 +3905,9 @@ export class CombatUI {
     let max = 0;
     for (const unit of units) {
       if (unit.quantity <= 0) continue;
-      // Skip transports and factories (can't be casualties)
-      if (unit.type === 'transport' || unit.type === 'factory') continue;
+      // Factories are captured. Transports can take a hit when they are
+      // the only legal target; an undefended transport is removed with no dice.
+      if (unit.type === 'factory') continue;
 
       if (unit.type === 'battleship') {
         // Battleships can take 2 hits each (1 damage + 1 destroy)
@@ -4208,6 +4305,15 @@ export class CombatUI {
     const current = selectedCasualties[unitType] || 0;
     const newValue = Math.max(0, Math.min(maxSelectable, current + delta));
     if (unitType === 'submarine' && newValue > this._maxLegalSubSelections(side)) return;
+    if (this.unitDefs?.[unitType]?.isAir && newValue > current) {
+      const profile = this._airVsSubProfile(side);
+      const subBudget = Math.min(Math.max(0, profile.subHits || 0), pendingCasualties);
+      const airCap = Math.max(0, pendingCasualties - subBudget);
+      const airNow = Object.entries(selectedCasualties).reduce((sum, [type, count]) => (
+        sum + (this.unitDefs?.[type]?.isAir ? (Number(count) || 0) : 0)
+      ), 0);
+      if (airNow - current + newValue > airCap) return;
+    }
 
     // Check we don't exceed required casualties (using max absorbable)
     const effectivePending = this._effectiveCasualtyCount(side);

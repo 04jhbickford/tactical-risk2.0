@@ -185,3 +185,90 @@ export function countAirHits(rolls, unitDefs = {}) {
 }
 
 export const AIR_CANNOT_HIT_SUBS_HINT = "Aircraft can't hit subs without a destroyer";
+
+export const NO_LEGAL_AIR_LANDING_NOTE = 'No legal landing. It stays for the end of non-combat movement.';
+
+export function unitIsAir(unit, unitDefs = {}) {
+  return !!(unit && unitDefs?.[unit.type]?.isAir);
+}
+
+function livingStacks(units) {
+  return (units || []).filter((unit) => (
+    unit && unit.type !== 'factory' && (Number(unit.quantity) || 0) > 0
+  ));
+}
+
+// Every living unit other than an AA gun is an aircraft.
+export function sideIsOnlyAir(units, unitDefs = {}) {
+  const living = livingStacks(units).filter((unit) => unit.type !== 'aaGun');
+  return living.length > 0 && living.every((unit) => unitIsAir(unit, unitDefs));
+}
+
+// Combat units ignore transports and other 0/0 pieces. AA guns are not a fleet.
+export function sideCombatIsOnlySubs(units, unitDefs = {}) {
+  const combat = livingStacks(units).filter((unit) => {
+    if (unit.type === 'transport' || unit.type === 'aaGun') return false;
+    const def = unitDefs?.[unit.type];
+    if (def && def.attack === 0 && def.defense === 0) return false;
+    return true;
+  });
+  return combat.length > 0 && combat.every((unit) => unit.type === 'submarine');
+}
+
+function sideHasNonSubTarget(units, unitDefs = {}) {
+  return livingStacks(units).some((unit) => (
+    unit.type !== 'submarine'
+    && unit.type !== 'aaGun'
+    && !unitIsAir(unit, unitDefs)
+  ));
+}
+
+// Aircraft cannot hurt the subs, and the subs cannot hurt the aircraft.
+// A transport is not a combat unit, but aircraft can hit it, so it is not this case.
+export function airVersusSubStalemate(attackers, defenders, unitDefs = {}) {
+  const attackAir = sideIsOnlyAir(attackers, unitDefs);
+  const defenseAir = sideIsOnlyAir(defenders, unitDefs);
+  const attackSubs = sideCombatIsOnlySubs(attackers, unitDefs);
+  const defenseSubs = sideCombatIsOnlySubs(defenders, unitDefs);
+  if (attackAir && defenseSubs && !sideHasNonSubTarget(defenders, unitDefs)) return true;
+  if (defenseAir && attackSubs && !sideHasNonSubTarget(attackers, unitDefs)) return true;
+  return false;
+}
+
+export function sideIsOnlyTransports(units) {
+  const living = livingStacks(units).filter((unit) => unit.type !== 'aaGun');
+  return living.length > 0 && living.every((unit) => unit.type === 'transport');
+}
+
+export function enemyCanHitTransports(units, unitDefs = {}, side = 'attack') {
+  return (units || []).some((unit) => {
+    if (!unit || (Number(unit.quantity) || 0) <= 0) return false;
+    if (unit.type === 'transport' || unit.type === 'factory') return false;
+    const def = unitDefs?.[unit.type];
+    if (!def) return false;
+    const value = side === 'defense' ? Number(def.defense) : Number(def.attack);
+    return value > 0;
+  });
+}
+
+// A submarine does not roll when it has no sea unit to hit.
+export function unitsSubsMayRoll(units, enemies, unitDefs = {}) {
+  const legal = (enemies || []).some((unit) => unitIsFirstStrikeTarget(unit, unitDefs));
+  if (legal) return units || [];
+  return (units || []).filter((unit) => unit?.type !== 'submarine');
+}
+
+export function countSubHits(rolls) {
+  return (rolls || []).reduce((count, roll) => {
+    if (!roll?.hit) return count;
+    const type = roll.unit || roll.unitType;
+    return count + (type === 'submarine' ? 1 : 0);
+  }, 0);
+}
+
+// Fighters and tactical bombers may use a carrier. A bomber never lands at sea.
+export function airMayUseLandingOption(unitType, option) {
+  if (!option?.territory) return false;
+  if (!option.isCarrier) return true;
+  return unitType === 'fighter' || unitType === 'tacticalBomber';
+}

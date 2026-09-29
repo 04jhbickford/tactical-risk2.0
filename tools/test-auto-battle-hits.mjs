@@ -62,6 +62,7 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const { GAME_VERSION, SCHEMA_VERSION } = await import(pathToFileURL(join(root, 'src/version.js')));
 const { GameState, GAME_PHASES, TURN_PHASES } = await import(pathToFileURL(join(root, 'src/state/gameState.js')));
 const { CombatUI } = await import(pathToFileURL(join(root, 'src/ui/combatUI.js')));
+const { unitIsFirstStrikeTarget } = await import(pathToFileURL(join(root, 'src/state/combatUnits.js')));
 const unitDefs = JSON.parse(readFileSync(join(root, 'data/units.json'), 'utf8'));
 
 let failures = 0;
@@ -391,12 +392,21 @@ function playAiBattleLive(setup, seed) {
     };
     const rng = mulberry32((seed * 1000) + guard);
     const steps = armDiceLive(gs, rng, setup.territory);
+    const attackerId = gs.currentPlayer.id;
+    const seaTarget = { attacker: false, defender: false };
+    for (const unit of gs.units[setup.territory] || []) {
+      if ((Number(unit?.quantity) || 0) <= 0) continue;
+      if (!unitIsFirstStrikeTarget(unit, unitDefs)) continue;
+      if (unit.owner === attackerId) seaTarget.defender = true;
+      else if (!gs.areAllies(attackerId, unit.owner)) seaTarget.attacker = true;
+    }
     result = gs.resolveCombat(setup.territory, unitDefs);
     roundsPlayed += 1;
     for (const side of ['attacker', 'defender']) {
       const strike = subDice(steps, 'sub', side);
       const general = subDice(steps, 'combat', side);
-      if (strike + general !== subsAtStart[side] || (strike > 0 && general > 0)) {
+      const expected = seaTarget[side] ? subsAtStart[side] : 0;
+      if (strike + general !== expected || (strike > 0 && general > 0)) {
         return {
           ok: false,
           why: 'sub-not-one-roll',
@@ -407,6 +417,7 @@ function playAiBattleLive(setup, seed) {
           strike,
           general,
           living: subsAtStart[side],
+          expected,
         };
       }
     }

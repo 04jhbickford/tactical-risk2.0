@@ -2,6 +2,22 @@
 
 ---
 
+## 9.28.26 — unified.20.2 sub and air rules, retreat landings
+
+Stamp stays `V2.81.57-unified.20.2`. Schema stays 11. `firestore.rules` is unchanged.
+
+James (via Arc) adopted standard A&A for submarines. Rob, `#tactical-risk` `1554282241021050951`, 28 Sep 5:02pm PT, game `6XQ7CN` (`games/game_1790636577736_myn2r5rf8`), live unified.20.1. East US Sea Zone, 5:01pm PT. Robert007 (Japanese) had 1 fighter. The German AI had 1 sub and 1 transport. Round 1 the fighter rolled 2 against 3 and hit. The sub rolled 4 and missed. The transport needs 0. Round 2 still listed the sub and the transport, so the hit had been applied to nothing. Round 2 the sub rolled 1 against 1 and the fighter was lost.
+
+A submarine cannot hit an air unit. An air unit cannot hit a submarine unless that side has a destroyer in the battle, and an air hit is not dropped while a transport or other legal target is still there. If one side is only air and the other side's only combat units are subs, the subs submerge and the battle ends. If a side's only units are transports and the enemy can hit them, the transports are removed with no dice. `GameState.resolveCombat` and the human casualty picker both follow that, on attack and defense.
+
+The same game's 4:49pm retreat had sent a bomber to West Spain Sea Zone. James: return to base for a retreating air unit is friendly land within range. A fighter or tactical bomber may instead use a friendly carrier with room. A bomber never lands at sea. Nothing is sent to a sea zone or deleted. If no legal landing exists, the retreat UI says so and the aircraft stays for the end-of-NCM check. The same quantity-0 retreat happened in `6FSGBV` (turn 5, Ukraine to Russia, 27 Sep 1:15pm PT, a unified.17 client). A land retreat to friendly land keeps the bomber and the fighter.
+
+Rob, 5:04pm PT: the other fighter also disappeared, then he resigned. Before the 5:01pm battle Japan had 2 fighters loose in East Canada Sea Zone with `carrier_2` and `carrier_3`, each `aircraft: []`. He refreshed from a unified.19 client to unified.20.1 at 5:00:55pm. Loading that save does not delete the loose fighters. The end-of-NCM check did: it flagged every loose air stack in a sea zone and ignored carrier room. It now counts capacity on friendly carriers in that zone. Fighters and tactical bombers that fit are kept. A bomber still does not use that room. The .19 client had also logged a move of 2 fighters into East US Sea Zone at 4:53:22pm that the saved state never applied; this build does not invent that move.
+
+Receipt: `node tools/test-sub-air-rules.mjs`, `node tools/test-air-vs-sub.mjs`.
+
+---
+
 ## 9.28.26 — unified.20.2 casualties, retreat air, combat log
 
 Stamp stays `V2.81.57-unified.20.2`. Schema stays 11. `firestore.rules` is unchanged.

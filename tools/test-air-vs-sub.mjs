@@ -165,9 +165,10 @@ const atkSub = unit('submarine', G);
   check('AI round 1 sub hit sinks the destroyer', first.used === 3 && living(gs, 'destroyer') === 0 && living(gs, 'submarine') === 1 && living(gs, 'fighter') === 1, {
     used: first.used, destroyer: living(gs, 'destroyer'), sub: living(gs, 'submarine'),
   });
+  check('the air-versus-sub fight ends in that same resolve', first.result?.resolved === true && first.result?.submerged === true);
   const second = continueScripted(gs, [1, 6]);
-  check('AI round 2 air cannot hit the sub', second.used === 2 && living(gs, 'submarine') === 1 && living(gs, 'fighter') === 1, {
-    used: second.used, sub: living(gs, 'submarine'),
+  check('a later resolve does not roll or sink the fighter or the sub', second.used === 0 && living(gs, 'submarine') === 1 && living(gs, 'fighter') === 1, {
+    used: second.used, sub: living(gs, 'submarine'), fighter: living(gs, 'fighter'),
   });
 }
 
@@ -178,7 +179,8 @@ const atkSub = unit('submarine', G);
     used: first.used, sub: living(gs, 'submarine'), destroyer: living(gs, 'destroyer'), cruiser: living(gs, 'cruiser'),
   });
   const second = continueScripted(gs, [1, 6, 6]);
-  check('AI next round air hits the cruiser and misses the sub', second.used === 3 && living(gs, 'submarine') === 1 && living(gs, 'cruiser') === 0, {
+  // The only enemy left is the fighter, so the sub does not roll. The air hit lands on the cruiser.
+  check('AI next round air hits the cruiser and the sub does not roll', second.used === 2 && living(gs, 'submarine') === 1 && living(gs, 'cruiser') === 0, {
     used: second.used, sub: living(gs, 'submarine'), cruiser: living(gs, 'cruiser'),
   });
 }
@@ -221,22 +223,20 @@ function hintShown(ui) {
 {
   documentElement.classList.remove('mobile-shell');
   const { ui } = openCombat([fighter], [sub]);
-  assignRolledCasualties(ui, [1, 6]);
-  check('default assignment leaves the lone sub', !ui.combatState.selectedDefenderCasualties.submarine);
-  check('desktop casualty hint names the destroyer rule', hintShown(ui));
-  check('confirm is available when the air hit is lost', !ui.el.innerHTML.includes('data-action="confirm-casualties" disabled'));
+  check('opening air versus a lone sub ends the battle', ui.combatState.phase === 'resolved' && ui.combatState.winner === 'submerged');
+  check('opening air versus a lone sub keeps both units', living(ui.gameState, 'submarine') === 1 && living(ui.gameState, 'fighter') === 1);
   ui._adjustCasualty('defender', 'submarine', 1);
-  check('manual plus cannot put the air hit on the sub', !ui.combatState.selectedDefenderCasualties.submarine);
-  const before = living(ui.gameState, 'submarine');
-  ui._applyCasualties();
-  check('auto-resolve apply does not sink the sub', living(ui.gameState, 'submarine') === before && before === 1);
+  check('manual plus cannot put a hit on the sub after the fight has ended', !ui.combatState.selectedDefenderCasualties.submarine);
 }
 
 {
   documentElement.classList.add('mobile-shell');
   const { ui } = openCombat([fighter], [sub]);
-  assignRolledCasualties(ui, [1, 6]);
-  check('phone casualty hint names the destroyer rule', hintShown(ui) && ui.el.innerHTML.includes('phone-combat-sheet'), ui.el.innerHTML.slice(0, 400));
+  ui._render();
+  check('phone air-versus-sub battle does not ask for a sub casualty',
+    ui.combatState.phase === 'resolved'
+    && living(ui.gameState, 'submarine') === 1
+    && living(ui.gameState, 'fighter') === 1);
   documentElement.classList.remove('mobile-shell');
 }
 
@@ -261,11 +261,9 @@ function hintShown(ui) {
 
 {
   const { ui } = openCombat([atkSub], [defFighter]);
-  assignRolledCasualties(ui, [6, 1]);
-  check('defending air is not assigned to the attacking sub', !ui.combatState.selectedAttackerCasualties.submarine);
-  check('defense-side wasted air shows the hint', hintShown(ui));
-  ui._applyCasualties();
-  check('defending air does not sink the sub', living(ui.gameState, 'submarine') === 1);
+  check('defending air versus a lone sub ends the battle', ui.combatState.phase === 'resolved' && ui.combatState.winner === 'submerged');
+  check('defending air does not sink the sub and the sub does not sink the fighter',
+    living(ui.gameState, 'submarine') === 1 && living(ui.gameState, 'fighter') === 1);
 }
 
 {
@@ -281,13 +279,11 @@ function hintShown(ui) {
   assignRolledCasualties(ui, [6, 6, 1]);
   check('round 1 selects the destroyer for the sub hit', ui.combatState.selectedAttackerCasualties.destroyer === 1);
   ui._applyCasualties();
-  assignRolledCasualties(ui, [1, 6]);
-  check('round 2 default leaves the sub after the destroyer is gone', !ui.combatState.selectedDefenderCasualties.submarine);
-  check('round 2 hint shows once the destroyer is gone', hintShown(ui));
-  ui._adjustCasualty('defender', 'submarine', 1);
-  check('round 2 manual plus still rejects the sub', !ui.combatState.selectedDefenderCasualties.submarine);
-  ui._applyCasualties();
-  check('round 2 apply keeps the sub', living(ui.gameState, 'submarine') === 1 && living(ui.gameState, 'fighter') === 1);
+  check('after the destroyer dies the air-versus-sub fight ends',
+    ui.combatState.phase === 'resolved'
+    && ui.combatState.winner === 'submerged'
+    && living(ui.gameState, 'submarine') === 1
+    && living(ui.gameState, 'fighter') === 1);
 }
 
 {
@@ -313,8 +309,12 @@ function hintShown(ui) {
   globalThis.setTimeout = (fn) => { fn(); return 0; };
   await ui._autoBattle();
   globalThis.setTimeout = prevTimeout;
-  check('auto battle applied the air-vs-sub round', applied === 1 && living(ui.gameState, 'submarine') === 1, {
-    applied, sub: living(ui.gameState, 'submarine'),
+  check('auto battle ends air versus sub without sinking either',
+    applied === 0
+    && living(ui.gameState, 'submarine') === 1
+    && living(ui.gameState, 'fighter') === 1
+    && ui.combatState.phase === 'resolved', {
+    applied, sub: living(ui.gameState, 'submarine'), fighter: living(ui.gameState, 'fighter'), phase: ui.combatState.phase,
   });
 }
 
