@@ -93,8 +93,8 @@ function openSea(units) {
   const sub = (gs.units[zone] || []).find((unit) => unit.type === 'submarine');
   const transport = (gs.units[zone] || []).find((unit) => unit.type === 'transport');
   check('air versus a sub and a transport submerges', ui.combatState.winner === 'submerged' && ui.combatState.phase === 'resolved');
-  check('that sub keeps its owner and the transport stays',
-    sub?.owner === 'Americans' && sub?.id === 'sub_sea' && transport?.quantity === 1, { sub, transport });
+  check('that sub keeps its owner and the transport is destroyed',
+    sub?.owner === 'Americans' && sub?.id === 'sub_sea' && !(transport && (transport.quantity || 0) > 0), { sub, transport });
 }
 
 {

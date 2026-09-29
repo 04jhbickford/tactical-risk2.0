@@ -21,8 +21,7 @@ import {
   unitsSubsMayRoll,
   airVersusSubStalemate,
   sideHasNonTransportUnit,
-  sideIsOnlyTransports,
-  enemyCanHitTransports,
+  transportsLackAShield,
   AIR_CANNOT_HIT_SUBS_HINT,
   NO_LEGAL_AIR_LANDING_NOTE,
 } from '../state/combatUnits.js';
@@ -549,44 +548,47 @@ export class CombatUI {
     return true;
   }
 
-  // Transports with no escort are removed when the enemy can hit them.
+  // Transports with no hittable escort are removed when the enemy can hit them.
+  // A submarine aircraft cannot hit does not escort them. The sub stays.
   _scrapUndefendedTransports() {
     if (!this.combatState || !this._currentTerritoryIsWater()) return false;
     const { attackers, defenders, totalAttackerLosses, totalDefenderLosses } = this.combatState;
     let changed = false;
-    if (sideIsOnlyTransports(defenders) && enemyCanHitTransports(attackers, this.unitDefs, 'attack')) {
-      for (const transport of defenders.filter((unit) => unit.type === 'transport')) {
-        this._addTypedLoss(totalDefenderLosses, transport.owner, 'transport', transport.quantity);
+    const scrap = (list, losses, byOwner) => {
+      for (const transport of (list || []).filter((unit) => unit.type === 'transport' && (Number(unit.quantity) || 0) > 0)) {
+        if (byOwner) this._addTypedLoss(losses, transport.owner, 'transport', transport.quantity);
+        else losses.transport = (losses.transport || 0) + (Number(transport.quantity) || 0);
         transport.quantity = 0;
-        this._recordHullCargo(transport, totalDefenderLosses, this._extraLossMap());
+        this._recordHullCargo(transport, losses, this._extraLossMap());
+        changed = true;
       }
-      this.combatState.defenders = [];
-      changed = true;
+    };
+    if (transportsLackAShield(defenders, attackers, this.unitDefs, 'attack')) {
+      scrap(defenders, totalDefenderLosses, true);
     }
-    if (sideIsOnlyTransports(attackers) && enemyCanHitTransports(defenders, this.unitDefs, 'defense')) {
-      for (const transport of attackers.filter((unit) => unit.type === 'transport')) {
-        totalAttackerLosses.transport = (totalAttackerLosses.transport || 0) + (Number(transport.quantity) || 0);
-        transport.quantity = 0;
-        this._recordHullCargo(transport, totalAttackerLosses, this._extraLossMap());
-      }
-      this.combatState.attackers = [];
-      changed = true;
+    if (transportsLackAShield(attackers, defenders, this.unitDefs, 'defense')) {
+      scrap(attackers, totalAttackerLosses, false);
     }
     if (!changed) return false;
-    this._syncCombatStateToGame();
-    if (this.combatState.defenders.length === 0 && this.combatState.attackers.length > 0) {
-      this.combatState.winner = 'attacker';
-      this._checkAirLanding();
-    } else if (this.combatState.attackers.length === 0) {
-      this.combatState.winner = 'defender';
-      this.combatState.phase = 'resolved';
-    }
+    this.combatState.attackers = (attackers || []).filter((unit) => (Number(unit.quantity) || 0) > 0);
+    this.combatState.defenders = (defenders || []).filter((unit) => (Number(unit.quantity) || 0) > 0);
     return true;
   }
 
   _applyOpeningSeaRules() {
-    if (this._scrapUndefendedTransports()) return true;
-    return this._openAirSubStalemate();
+    const scrapped = this._scrapUndefendedTransports();
+    if (scrapped) this._syncCombatStateToGame();
+    if (this._openAirSubStalemate()) return true;
+    if (!scrapped) return false;
+    const { attackers, defenders } = this.combatState;
+    if ((defenders || []).length === 0 && (attackers || []).length > 0) {
+      this.combatState.winner = 'attacker';
+      this._checkAirLanding();
+    } else if ((attackers || []).length === 0) {
+      this.combatState.winner = 'defender';
+      this.combatState.phase = 'resolved';
+    }
+    return true;
   }
 
   _calculateBombardment() {
@@ -1639,9 +1641,8 @@ export class CombatUI {
     destroyPredamaged();
     destroyJustDamaged();
 
-    // A transport is a valid target once nothing else can take the hit.
-    // An air hit against a submarine and a transport lands on the transport.
-    if (remaining > 0) {
+    // A transport is a valid target once no hittable escort can take the hit.
+    if (remaining > 0 && !this._sideShieldsTransports(units)) {
       const transports = units.filter((unit) => unit.type === 'transport' && unit.quantity > 0);
       for (const unit of transports) {
         if (remaining <= 0) break;
@@ -1897,16 +1898,32 @@ export class CombatUI {
     }
   }
 
-  // A transport pick is illegal while any other unit on that side is alive.
-  // Drop it and spend those hits on a combat unit, the same way an illegal
-  // sub pick is clamped before Confirm.
+  _casualtyContext(units) {
+    const state = this.combatState || {};
+    const attackers = state.attackers || [];
+    const defenders = state.defenders || [];
+    const owner = (units || []).find((unit) => unit?.owner)?.owner;
+    const attackerOwner = attackers.find((unit) => unit?.owner)?.owner;
+    if (owner && attackerOwner && owner === attackerOwner) {
+      return { enemies: defenders, enemyRoll: 'defense', unitDefs: this.unitDefs };
+    }
+    return { enemies: attackers, enemyRoll: 'attack', unitDefs: this.unitDefs };
+  }
+
+  _sideShieldsTransports(units) {
+    const ctx = this._casualtyContext(units);
+    return sideHasNonTransportUnit(units, ctx.enemies, ctx.unitDefs, ctx.enemyRoll);
+  }
+
+  // A transport pick is illegal while a hittable non-transport is still alive.
+  // Drop it and spend those hits on a combat unit.
   _clampIllegalTransportCasualties() {
     for (const side of ['attacker', 'defender']) {
       const units = side === 'attacker' ? this.combatState.attackers : this.combatState.defenders;
       const selected = side === 'attacker'
         ? this.combatState.selectedAttackerCasualties
         : this.combatState.selectedDefenderCasualties;
-      if (!selected?.transport || !sideHasNonTransportUnit(units)) continue;
+      if (!selected?.transport || !this._sideShieldsTransports(units)) continue;
       const dropped = Number(selected.transport) || 0;
       delete selected.transport;
       if (dropped <= 0) continue;
@@ -1933,7 +1950,11 @@ export class CombatUI {
 
     // Apply attacker casualties across every stack of the type, including
     // an explicit transport pick. Damage stays on the battleship hull.
-    const attackerApplied = applyCasualtySelection(attackers, selectedAttackerCasualties);
+    const attackerApplied = applyCasualtySelection(
+      attackers,
+      selectedAttackerCasualties,
+      this._casualtyContext(attackers),
+    );
     for (const hit of attackerApplied.applied) {
       totalAttackerLosses[hit.type] = (totalAttackerLosses[hit.type] || 0) + hit.taken;
     }
@@ -1941,7 +1962,11 @@ export class CombatUI {
       this._recordHullCargo(unit, totalAttackerLosses, this._extraLossMap());
     }
 
-    const defenderApplied = applyCasualtySelection(defenders, selectedDefenderCasualties);
+    const defenderApplied = applyCasualtySelection(
+      defenders,
+      selectedDefenderCasualties,
+      this._casualtyContext(defenders),
+    );
     for (const hit of defenderApplied.applied) {
       this._addTypedLoss(totalDefenderLosses, hit.unit?.owner, hit.type, hit.taken);
     }
@@ -1974,30 +1999,9 @@ export class CombatUI {
     this.combatState.attackers = attackers.filter(u => (Number(u.quantity) || 0) > 0);
     this.combatState.defenders = defenders.filter(u => (Number(u.quantity) || 0) > 0);
 
-    // Transports with no escort are removed when the enemy can still hit them.
-    const attackerCombatUnits = this.combatState.attackers.filter(u => u.type !== 'transport');
-    const defenderCombatUnits = this.combatState.defenders.filter(u => u.type !== 'transport');
-
-    if (attackerCombatUnits.length === 0 && this.combatState.attackers.length > 0
-      && enemyCanHitTransports(this.combatState.defenders, this.unitDefs, 'defense')) {
-      // Attacker only has transports left - they are destroyed
-      for (const transport of this.combatState.attackers.filter(u => u.type === 'transport')) {
-        totalAttackerLosses['transport'] = (totalAttackerLosses['transport'] || 0) + transport.quantity;
-        transport.quantity = 0;
-        this._recordHullCargo(transport, totalAttackerLosses, this._extraLossMap());
-      }
-      this.combatState.attackers = [];
-    }
-    if (defenderCombatUnits.length === 0 && this.combatState.defenders.length > 0
-      && enemyCanHitTransports(this.combatState.attackers, this.unitDefs, 'attack')) {
-      // Defender only has transports left - they are destroyed
-      for (const transport of this.combatState.defenders.filter(u => u.type === 'transport')) {
-        this._addTypedLoss(totalDefenderLosses, transport.owner, 'transport', transport.quantity);
-        transport.quantity = 0;
-        this._recordHullCargo(transport, totalDefenderLosses, this._extraLossMap());
-      }
-      this.combatState.defenders = [];
-    }
+    // Unshielded transports, including a sub aircraft cannot hit, are removed
+    // with no further dice. A hittable escort still protects them.
+    this._scrapUndefendedTransports();
 
     this.combatState.lastCasualtyReport = {
       attacker: livingForcePicture(this.combatState.attackers),
@@ -3954,7 +3958,7 @@ export class CombatUI {
       // Factories are captured. A transport is not a casualty while any
       // other unit is alive. An undefended transport is removed with no dice.
       if (unit.type === 'factory') continue;
-      if (unit.type === 'transport' && sideHasNonTransportUnit(units)) continue;
+      if (unit.type === 'transport' && this._sideShieldsTransports(units)) continue;
 
       if (unit.type === 'battleship') {
         // Battleships can take 2 hits each (1 damage + 1 destroy)
@@ -3975,7 +3979,9 @@ export class CombatUI {
     // other unit on that side is still in the battle. Stacks of one type share
     // one row; the count is the sum, which is what apply spends.
     let html = '';
-    const concealTransports = sideHasNonTransportUnit(units);
+    const concealTransports = typeof this._sideShieldsTransports === 'function'
+      ? this._sideShieldsTransports(units)
+      : sideHasNonTransportUnit(units);
     const living = (units || []).filter((u) => (
       (Number(u.quantity) || 0) > 0
       && u.type !== 'factory'
@@ -4343,9 +4349,7 @@ export class CombatUI {
 
     const stacks = stacksOf(unitType);
     if (!stacks.length) return;
-    if (unitType === 'transport' && sideHasNonTransportUnit(
-      side === 'attacker' ? this.combatState.attackers : this.combatState.defenders,
-    )) return;
+    if (unitType === 'transport' && this._sideShieldsTransports(units)) return;
 
     // For battleship destruction, account for damage selections across stacks.
     let maxSelectable = stacks.reduce((sum, unit) => sum + (Number(unit.quantity) || 0), 0);

@@ -86,21 +86,71 @@ export function livingForcePicture(units) {
 // One carrier id is one hull: a hit removes that hull (and its aircraft
 // only when the hull's quantity reaches 0). A sibling hull is left alone.
 // battleship_damage marks undamaged hulls and does not remove them.
-// A transport is not a casualty while any other unit on that side is alive.
-// The count is ignored in that case. When only transports are left, an
-// explicit pick can still remove them; the battle also scraps them with no dice.
-export function sideHasNonTransportUnit(units) {
-  return (units || []).some((unit) => (
-    !!unit
-    && unit.type !== 'transport'
-    && unit.type !== 'factory'
-    && (Number(unit.quantity) || 0) > 0
+// A non-transport shields the transports only when the enemy can legally hit it.
+// With no enemy list, any living non-transport still counts as a shield.
+// A submarine facing only aircraft, and no enemy destroyer, is not a shield.
+export function enemyCouldHitUnit(unit, enemies, unitDefs = {}, enemyRoll = 'attack') {
+  if (!unit || (Number(unit.quantity) || 0) <= 0) return false;
+  if (unit.type === 'transport' || unit.type === 'factory') return false;
+  const living = (enemies || []).filter((enemy) => (
+    enemy && enemy.type !== 'factory' && (Number(enemy.quantity) || 0) > 0
   ));
+  if (!living.length) return false;
+  const power = (enemy) => {
+    const def = unitDefs?.[enemy.type];
+    if (!def) return 0;
+    const value = enemyRoll === 'defense' ? Number(def.defense) : Number(def.attack);
+    return Number.isFinite(value) ? value : 0;
+  };
+  if (unit.type === 'submarine') {
+    const spots = living.some((enemy) => enemy.type === 'destroyer');
+    return living.some((enemy) => {
+      if (enemy.type === 'transport' || enemy.type === 'submarine') return false;
+      if (unitIsAir(enemy, unitDefs)) return spots && power(enemy) > 0;
+      return power(enemy) > 0;
+    });
+  }
+  if (unitIsAir(unit, unitDefs)) {
+    return living.some((enemy) => {
+      if (enemy.type === 'submarine' || enemy.type === 'transport') return false;
+      return power(enemy) > 0;
+    });
+  }
+  return living.some((enemy) => {
+    if (enemy.type === 'transport') return false;
+    if (enemy.type === 'submarine') return true;
+    return power(enemy) > 0;
+  });
 }
 
-export function applyCasualtySelection(units, selected = {}) {
+export function sideHasNonTransportUnit(units, enemies, unitDefs, enemyRoll = 'attack') {
+  return (units || []).some((unit) => {
+    if (!unit || unit.type === 'transport' || unit.type === 'factory') return false;
+    if ((Number(unit.quantity) || 0) <= 0) return false;
+    if (enemies == null) return true;
+    return enemyCouldHitUnit(unit, enemies, unitDefs || {}, enemyRoll);
+  });
+}
+
+// Transports are undefended when nothing on their side can be hit and the
+// enemy can still hit the transports. Rule (d) removes them with no dice.
+export function transportsLackAShield(units, enemies, unitDefs = {}, enemyRoll = 'attack') {
+  const hasTransport = (units || []).some((unit) => (
+    unit?.type === 'transport' && (Number(unit.quantity) || 0) > 0
+  ));
+  if (!hasTransport) return false;
+  if (!enemyCanHitTransports(enemies, unitDefs, enemyRoll)) return false;
+  return !sideHasNonTransportUnit(units, enemies, unitDefs, enemyRoll);
+}
+
+export function applyCasualtySelection(units, selected = {}, context = null) {
   const list = Array.isArray(units) ? units : [];
-  const ignoreTransport = sideHasNonTransportUnit(list);
+  const ignoreTransport = sideHasNonTransportUnit(
+    list,
+    context?.enemies,
+    context?.unitDefs,
+    context?.enemyRoll || 'attack',
+  );
   const applied = [];
   const sunk = [];
 
@@ -232,18 +282,17 @@ export function sideCombatIsOnlySubs(units, unitDefs = {}) {
 }
 
 function sideHasNonSubTarget(units, unitDefs = {}) {
-  // A transport is not a casualty while a submarine is still in the battle,
-  // so it does not keep an air-versus-sub fight going.
+  // A transport aircraft can hit is not an air-versus-sub stalemate.
+  // An unhittable submarine does not protect that transport; scrap it first.
   return livingStacks(units).some((unit) => (
     unit.type !== 'submarine'
     && unit.type !== 'aaGun'
-    && unit.type !== 'transport'
     && !unitIsAir(unit, unitDefs)
   ));
 }
 
 // Aircraft cannot hurt the subs, and the subs cannot hurt the aircraft.
-// A transport is not a combat unit, but aircraft can hit it, so it is not this case.
+// A transport the aircraft can hit is not this case.
 export function airVersusSubStalemate(attackers, defenders, unitDefs = {}) {
   const attackAir = sideIsOnlyAir(attackers, unitDefs);
   const defenseAir = sideIsOnlyAir(defenders, unitDefs);

@@ -73,10 +73,10 @@ import {
   airVersusSubStalemate,
   countAirHits,
   countSubHits,
-  enemyCanHitTransports,
   sideCanFirstStrike,
   sideHasDestroyer,
-  sideIsOnlyTransports,
+  sideHasNonTransportUnit,
+  transportsLackAShield,
   unitIsFirstStrikeTarget,
   unitsForGeneralCombat,
   unitsSubsMayRoll,
@@ -4530,8 +4530,8 @@ export class GameState {
     }
   }
 
-  // A side of only transports is removed when the other side can hit them.
-  // No dice. A transport sitting with a submarine is not this case.
+  // Transports with no hittable escort are removed when the other side can
+  // hit them. No dice. A submarine aircraft cannot hit does not escort them.
   _scrapUndefendedTransports(attackers, defenders, unitDefs) {
     const scrap = (list) => {
       for (const unit of list || []) {
@@ -4542,12 +4542,8 @@ export class GameState {
         this._noteSunkCargo(unit);
       }
     };
-    if (sideIsOnlyTransports(defenders) && enemyCanHitTransports(attackers, unitDefs, 'attack')) {
-      scrap(defenders);
-    }
-    if (sideIsOnlyTransports(attackers) && enemyCanHitTransports(defenders, unitDefs, 'defense')) {
-      scrap(attackers);
-    }
+    if (transportsLackAShield(defenders, attackers, unitDefs, 'attack')) scrap(defenders);
+    if (transportsLackAShield(attackers, defenders, unitDefs, 'defense')) scrap(attackers);
   }
 
   // Resolve combat in a territory (dice combat with naval rules)
@@ -4676,7 +4672,10 @@ export class GameState {
         attackerSubsStruck = strike.rolls.length > 0;
         surpriseAttackHits = strike.hits;
         const targets = allDefenders.filter((u) => unitIsFirstStrikeTarget(u, unitDefs));
-        surpriseDefenderLosses = this._applyCasualtiesWithDamage(targets, strike.hits, unitDefs, isNavalBattle);
+        surpriseDefenderLosses = this._applyCasualtiesWithDamage(targets, strike.hits, unitDefs, isNavalBattle, {
+          enemies: attackers,
+          enemyRoll: 'attack',
+        });
       }
       if (sideCanFirstStrike(defenderSubs, attackers, attackerHasDestroyer, unitDefs)) {
         const strike = this._rollCombatWithRolls(defenderSubs, 'defense', unitDefs, 'sub');
@@ -4684,7 +4683,10 @@ export class GameState {
         defenderSubsStruck = strike.rolls.length > 0;
         surpriseDefenseHits = strike.hits;
         const targets = attackers.filter((u) => unitIsFirstStrikeTarget(u, unitDefs));
-        surpriseAttackerLosses = this._applyCasualtiesWithDamage(targets, strike.hits, unitDefs, isNavalBattle);
+        surpriseAttackerLosses = this._applyCasualtiesWithDamage(targets, strike.hits, unitDefs, isNavalBattle, {
+          enemies: allDefenders,
+          enemyRoll: 'defense',
+        });
       }
     }
     if (firstStrikeAttackDice > 0 || firstStrikeDefenseDice > 0) {
@@ -4729,14 +4731,21 @@ export class GameState {
       airHits: countAirHits(attackRolls, unitDefs),
       subHits: countSubHits(attackRolls),
       canAirHitSubs: attackerSpotsSubs,
+      enemies: attackers,
+      enemyRoll: 'attack',
     });
     const defenderCasualties = this._applyCasualtiesWithDamage(attackers, defenseHits, unitDefs, isNavalBattle, {
       airHits: countAirHits(defenseRolls, unitDefs),
       subHits: countSubHits(defenseRolls),
       canAirHitSubs: defenderSpotsSubs,
+      enemies: allDefenders,
+      enemyRoll: 'defense',
     });
 
     if (isNavalBattle) this._dropDefenderAirWithoutCarrier(units, player.id, unitDefs);
+    // An escort that died this round no longer shields transports. Remove them
+    // before the loss ledger so the hull and its cargo are both recorded.
+    if (isNavalBattle) this._scrapUndefendedTransports(attackers, allDefenders, unitDefs);
 
     // Clean up destroyed units (quantity <= 0)
     // IMPORTANT: Preserve factories - they are captured, never destroyed
@@ -4744,18 +4753,6 @@ export class GameState {
     this._noteCombatRoundLosses(territory, beforeCounts);
     this._addCarriedLossesToLedger(territory);
     if (isNavalBattle) this._restowCarrierAir(this.units[territory], unitDefs);
-
-    // Check if combat is over
-    // Note: Factories are captured (not destroyed) and AA guns have 0 combat value
-    // Only count units that can actually fight as "remaining"
-    if (isNavalBattle) {
-      const seaAttackers = this.units[territory].filter((u) => u.owner === player.id && (Number(u.quantity) || 0) > 0);
-      const seaDefenders = this.units[territory].filter((u) => (
-        u.owner !== player.id && !this.areAllies(player.id, u.owner) && (Number(u.quantity) || 0) > 0
-      ));
-      this._scrapUndefendedTransports(seaAttackers, seaDefenders, unitDefs);
-      this.units[territory] = this.units[territory].filter((u) => (Number(u.quantity) || 0) > 0 || u.type === 'factory');
-    }
 
     const remainingAttackers = this.units[territory].filter(u => (
       u.owner === player.id && !isRaidMission(u) && (Number(u.quantity) || 0) > 0
@@ -5090,6 +5087,12 @@ export class GameState {
 
   _applyCasualtiesWithDamage(units, hits, unitDefs, isNavalBattle, profile) {
     const casualties = [];
+    const shieldTransports = sideHasNonTransportUnit(
+      units,
+      profile?.enemies,
+      unitDefs,
+      profile?.enemyRoll || 'attack',
+    );
     let otherLeft = Math.max(0, Number(hits) || 0);
     let airLeft = 0;
     let subLeft = 0;
@@ -5173,6 +5176,8 @@ export class GameState {
       const def = unitDefs[u.type];
       // Skip factories - they are captured, not destroyed
       if (u.type === 'factory') return false;
+      // A hittable escort still shields transports for this whole round.
+      if (u.type === 'transport' && shieldTransports) return false;
       // Skip multi-hit ships that are only damaged (not destroyed)
       return !(def?.hp > 1 && u.damaged && !u.destroyed);
     }).sort((a, b) => {

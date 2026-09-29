@@ -115,8 +115,8 @@ const atkTransport = { type: 'transport', quantity: 1, owner: 'Germans' };
     ui.combatState.phase === 'resolved'
     && ui.combatState.winner === 'submerged'
     && !ui.combatState.defenderSubsHaveFirstStrike);
-  check('the transport stays while the sub is still there',
-    (gs.units[zone] || []).some((unit) => unit.type === 'transport' && unit.quantity === 1)
+  check('the transport is destroyed and the sub stays',
+    !(gs.units[zone] || []).some((unit) => unit.type === 'transport' && (unit.quantity || 0) > 0)
     && (gs.units[zone] || []).some((unit) => unit.type === 'submarine' && unit.quantity === 1));
   const before = (ui.gameState._rollLog || []).length;
   ui._rollSubmarineFirstStrike();

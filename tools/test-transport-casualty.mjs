@@ -138,7 +138,7 @@ console.log('=== defender transport is refused the same way ===');
 console.log('=== rules panel ===');
 {
   const rules = readFileSync(join(root, 'src/ui/rulesPanel.js'), 'utf8');
-  check('the transport line names the casualty ban', rules.includes('Not a casualty while any other unit is in the battle'));
+  check('the transport line names the casualty ban', rules.includes('Not a casualty while a unit the enemy can hit is still in the battle'));
   check('lone transports are still automatic', rules.includes('Destroyed automatically when it is the only unit and the enemy can hit it'));
 }
 

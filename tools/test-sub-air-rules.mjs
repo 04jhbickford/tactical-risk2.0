@@ -142,13 +142,13 @@ console.log('=== East US: fighter vs sub + transport ===');
   const gs = makeState();
   // Reported dice: fighter 2 vs 3 hits, sub 4 misses, then a later 1 that must not kill the fighter.
   const first = resolveScripted(gs, EAST, [fighter(), sub(), transport()], [2, 4, 6, 1]);
-  check('the battle ends without spending the hit on the transport', first.result?.resolved === true && first.used === 0, {
+  check('the battle ends with no dice', first.result?.resolved === true && first.used === 0, {
     used: first.used, result: first.result,
   });
-  check('the transport stays while the sub is still in the battle', qty(gs, EAST, 'transport') === 1 && qty(gs, EAST, 'fighter') === 1, {
+  check('the transport is destroyed and the fighter survives', qty(gs, EAST, 'transport') === 0 && qty(gs, EAST, 'fighter') === 1, {
     transport: qty(gs, EAST, 'transport'), fighter: qty(gs, EAST, 'fighter'),
   });
-  check('the sub stays and the battle is submerged', qty(gs, EAST, 'submarine') === 1 && first.result?.submerged === true && first.result?.winner === 'submerged');
+  check('the sub submerges', qty(gs, EAST, 'submarine') === 1 && first.result?.submerged === true && first.result?.winner === 'submerged');
   let later = 0;
   gs._rollDie = () => { later += 1; return 1; };
   const second = gs.resolveCombat(EAST, unitDefs);
@@ -186,16 +186,46 @@ console.log('=== undefended transports are removed with no dice ===');
   check('the fighter wins the transport fight', first.result?.winner === 'attacker' && first.result?.resolved === true);
 }
 
-console.log('=== human opening: air versus sub and transport submerges ===');
+console.log('=== human opening: air versus sub and transport ===');
 {
   const gs = makeState();
   const ui = openCombat(gs, EAST, [fighter()], [sub(), transport()]);
-  check('the transport is not a casualty while the sub is there',
+  check('the transport is destroyed and the sub submerges',
     ui.combatState?.phase === 'resolved'
     && ui.combatState?.winner === 'submerged'
-    && qty(gs, EAST, 'transport') === 1
+    && qty(gs, EAST, 'transport') === 0
     && qty(gs, EAST, 'submarine') === 1
     && qty(gs, EAST, 'fighter') === 1);
+}
+
+console.log('=== fighter + destroyer vs sub + transport is normal combat ===');
+{
+  const gs = makeState();
+  const ui = openCombat(gs, EAST, [fighter(), destroyer()], [sub(), transport()]);
+  check('the battle stays open', ui.combatState?.phase !== 'resolved' && ui.combatState?.winner !== 'submerged', ui.combatState?.phase);
+  check('the transport is still in the battle', qty(gs, EAST, 'transport') === 1 && qty(gs, EAST, 'submarine') === 1);
+  ui.combatState.pendingAttackerCasualties = 0;
+  ui.combatState.pendingDefenderCasualties = 1;
+  ui.combatState.selectedAttackerCasualties = {};
+  ui.combatState.selectedDefenderCasualties = {};
+  ui.combatState.phase = 'selectCasualties';
+  ui._autoSelectCasualties();
+  check('the default hit is not the transport', !ui.combatState.selectedDefenderCasualties.transport, ui.combatState.selectedDefenderCasualties);
+  const desktop = ui._renderCasualtyUnits(ui.combatState.defenders, {}, 'defender');
+  check('the picker hides the transport while the sub can be hit', !desktop.includes('data-unit="transport"'));
+  ui._adjustCasualty('defender', 'transport', 1);
+  check('the transport pick is refused while the sub is alive', !ui.combatState.selectedDefenderCasualties.transport);
+  ui.combatState.selectedDefenderCasualties = {};
+  ui._adjustCasualty('defender', 'submarine', 1);
+  check('the sub can be hit', ui.combatState.selectedDefenderCasualties.submarine === 1, ui.combatState.selectedDefenderCasualties);
+  const battle = makeState();
+  const rolled = resolveScripted(battle, EAST, [fighter(), destroyer(), sub(), transport()], [6, 6, 6, 6]);
+  check('normal combat rolls dice and keeps both ships',
+    rolled.used > 0
+    && rolled.result?.resolved === false
+    && qty(battle, EAST, 'transport') === 1
+    && qty(battle, EAST, 'submarine') === 1,
+    { used: rolled.used, result: rolled.result, transport: qty(battle, EAST, 'transport'), sub: qty(battle, EAST, 'submarine') });
 }
 
 {
