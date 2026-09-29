@@ -10,6 +10,7 @@
 // turnEvents only. Untagged fallback when no snowflake matches.
 // Probe and test payloads never post.
 
+import { getActiveMap } from '../map/mapRegistry.js';
 import { formatUnitName } from '../utils/unitNames.js';
 
 export const DISCORD_TURN_CHANNEL_ID = '1551283474303025292';
@@ -67,22 +68,9 @@ const UNIT_LINE_ORDER = [
   'factory',
 ];
 
-const POWER_WORDS = {
-  germans: { name: 'Germany', adj: 'German' },
-  germany: { name: 'Germany', adj: 'German' },
-  german: { name: 'Germany', adj: 'German' },
-  british: { name: 'UK', adj: 'British' },
-  uk: { name: 'UK', adj: 'British' },
-  russians: { name: 'Russia', adj: 'Russian' },
-  russia: { name: 'Russia', adj: 'Russian' },
-  russian: { name: 'Russia', adj: 'Russian' },
-  japanese: { name: 'Japan', adj: 'Japanese' },
-  japan: { name: 'Japan', adj: 'Japanese' },
-  americans: { name: 'US', adj: 'American' },
-  american: { name: 'US', adj: 'American' },
-  us: { name: 'US', adj: 'American' },
-  usa: { name: 'US', adj: 'American' },
-};
+function nationTable() {
+  return getActiveMap()?.nationNames || {};
+}
 
 const NO_UNITS_LINE = '-No units lost';
 const NO_TERRITORIES_LINE = '-No territories lost';
@@ -262,14 +250,14 @@ function eventInvolves(ev, actor) {
 export function powerWord(raw) {
   const text = cleanBit(raw);
   if (!text) return '';
-  const hit = POWER_WORDS[text.toLowerCase()];
+  const hit = nationTable()[text.toLowerCase()];
   return hit ? hit.name : text;
 }
 
 function powerAdj(factionId) {
   const text = cleanBit(factionId);
   if (!text) return '';
-  return POWER_WORDS[text.toLowerCase()]?.adj || '';
+  return nationTable()[text.toLowerCase()]?.adj || '';
 }
 
 function difficultyWord(raw) {
@@ -288,8 +276,8 @@ function isBlankSideName(name, factionId) {
   const text = cleanBit(name);
   if (!text || UNNAMED_POWER.has(text.toLowerCase())) return true;
   if (factionId && text === cleanBit(factionId)) return true;
-  const named = POWER_WORDS[text.toLowerCase()];
-  const faction = POWER_WORDS[cleanBit(factionId).toLowerCase()];
+  const named = nationTable()[text.toLowerCase()];
+  const faction = nationTable()[cleanBit(factionId).toLowerCase()];
   if (named && faction && named.name === faction.name) return true;
   return false;
 }
@@ -370,7 +358,7 @@ export function formatPingHeader({ displayName = '', power = '', phase = '' } = 
   const pow = powerWord(power);
   let name = cleanBit(displayName);
   if (!name || (pow && name.toLowerCase() === pow.toLowerCase())) name = '';
-  else if (POWER_WORDS[name.toLowerCase()] && powerWord(name) === pow) name = '';
+  else if (nationTable()[name.toLowerCase()] && powerWord(name) === pow) name = '';
   const tail = [pow, phaseWithSuffix(phase)].filter(Boolean).join(' ');
   if (name && tail) return `${name} - ${tail}`;
   return name || tail || 'seat';

@@ -14,6 +14,7 @@ import {
   phoneOptionsLabel,
   techAcquisitionLabel,
 } from '../gameOptions.js';
+import { CLASSIC_MAP_ID, getMap, listPickerMaps } from '../map/mapRegistry.js';
 
 function esc(value) {
   return String(value ?? '')
@@ -69,7 +70,18 @@ function shownValue(editable, controlHtml, text) {
   return `<span class="go-readonly">${esc(text)}</span>`;
 }
 
-function rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMode, seatedCount }) {
+function mapSelectHtml(mapId, editable) {
+  const choices = listPickerMaps();
+  const selected = getMap(mapId)?.id || CLASSIC_MAP_ID;
+  const options = choices.map((map) => {
+    const disabled = map.playable ? '' : ' disabled';
+    const label = map.playable ? map.name : `${map.name} (not in this build)`;
+    return `<option value="${esc(map.id)}" ${selected === map.id ? 'selected' : ''}${disabled}>${esc(label)}</option>`;
+  }).join('');
+  return `<select class="go-control modern-select" data-go="mapId" id="go-mapId" aria-label="Map" ${editable ? '' : 'disabled'}>${options}</select>`;
+}
+
+function rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMode, seatedCount, mapId }) {
   const o = normalizeGameOptions(options);
   const draft = draftMode || draftModeSource(null);
   const maxChoices = maxPlayerChoices(seatedCount);
@@ -116,6 +128,10 @@ function rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMod
     </div>
     <div class="go-group">
       <h3 class="go-group-label">Map</h3>
+      <div class="go-row" title="Which board this game uses">
+        <span class="go-label">Map</span>
+        ${shownValue(editable, mapSelectHtml(mapId, editable), getMap(mapId)?.name || 'Classic')}
+      </div>
       <div class="go-row" title="Cross-water land connections such as Alaska to Soviet Far East">
         <span class="go-label">Land bridges</span>
         ${shownValue(editable, toggleHtml('landBridges', o.landBridges, { editable }), o.landBridges ? 'On' : 'Off')}
@@ -156,6 +172,7 @@ export function renderGameOptionsPanel(raw, {
   teamsToggleClass = 'lobby-phone-teams-toggle',
   draftMode = null,
   seatedCount = 0,
+  mapId = CLASSIC_MAP_ID,
 } = {}) {
   const options = normalizeGameOptions(raw);
   const summary = describe(options);
@@ -178,7 +195,7 @@ export function renderGameOptionsPanel(raw, {
       ${editable ? '' : '<p class="go-host-note">Set by host</p>'}
       <div class="go-anchor">
         <div class="go-body">
-          ${rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMode, seatedCount })}
+          ${rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMode, seatedCount, mapId })}
         </div>
       </div>
       <div class="go-sheet" ${sheet ? '' : 'hidden'}>
@@ -245,7 +262,12 @@ function paintSummary(panel, options) {
   });
 }
 
-export function bindGameOptions(root, { onChange, onToggle } = {}) {
+export function readMapIdFrom(root) {
+  const select = root?.querySelector?.('[data-go="mapId"]');
+  return select?.value || CLASSIC_MAP_ID;
+}
+
+export function bindGameOptions(root, { onChange, onToggle, onMapChange } = {}) {
   const panel = root?.querySelector?.('[data-game-options]');
   if (!panel || panel.dataset.bound === '1') return;
   panel.dataset.bound = '1';
@@ -324,6 +346,11 @@ export function bindGameOptions(root, { onChange, onToggle } = {}) {
       if (max) max.value = String(next.maxPlayers);
       if (territories) territories.value = next.territorySetup;
       if (tech) tech.value = next.techAcquisition;
+      const mapSelect = panel.querySelector('[data-go="mapId"]');
+      if (mapSelect) {
+        mapSelect.value = CLASSIC_MAP_ID;
+        if (typeof onMapChange === 'function') onMapChange(CLASSIC_MAP_ID);
+      }
       for (const name of ['multipleTech', 'landBridges', 'teams', 'tacticalBombers']) {
         const el = panel.querySelector(`[data-go="${name}"]`);
         if (!el) continue;
@@ -368,6 +395,10 @@ export function bindGameOptions(root, { onChange, onToggle } = {}) {
     select.addEventListener('change', (e) => {
       e.stopPropagation();
       if (!editable) return;
+      if (select.dataset.go === 'mapId') {
+        if (typeof onMapChange === 'function') onMapChange(select.value);
+        return;
+      }
       emit(readGameOptionsFrom(panel));
     });
     select.addEventListener('click', (e) => e.stopPropagation());

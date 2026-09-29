@@ -12,6 +12,7 @@ import {
 import { getFirebaseDb } from './firebase.js';
 import { getAuthManager } from './auth.js';
 import { GAME_VERSION, compareGameVersions, compatClientVersion } from '../version.js';
+import { CLASSIC_MAP_ID, loadMapDecision, mapIdFromDoc, resolveMapId, UNKNOWN_MAP_MESSAGE } from '../map/mapRegistry.js';
 import { protectedGameOptions, restoreProtectedGameOptions } from '../gameOptions.js';
 import { DRAFT_MIN_CLIENT, draftOpenRefusal } from '../state/territoryDraft.js';
 import { createPushQueue } from './pushCoalesce.js';
@@ -89,6 +90,19 @@ export class SyncManager {
   // stamp never triggers the banner (compareGameVersions fails safe).
   _loadRemoteState(state, docData) {
     if (!state || !this.gameState) return false;
+    const named = mapIdFromDoc(docData, state);
+    const map = named.ok ? loadMapDecision(named.mapId) : named;
+    if (!map.ok) {
+      this._mapRefusal = map.code === 'unknown_map'
+        ? (map.message || UNKNOWN_MAP_MESSAGE)
+        : (map.message || 'That map is not in this build.');
+      console.warn(`[Sync] Refusing mapId ${map.raw || named.raw} (${map.code})`);
+      this._notifyListeners(map.code === 'unknown_map' ? 'unknown_map' : 'map_unplayable', {
+        message: this._mapRefusal,
+        mapId: map.raw || named.raw,
+      });
+      return false;
+    }
     const next = restoreProtectedGameOptions(state, docData?.protectedGameOptions);
     const refusal = draftOpenRefusal(next, GAME_VERSION);
     if (refusal) {
@@ -110,6 +124,7 @@ export class SyncManager {
   _compatDocFields(state) {
     return {
       clientVersion: compatClientVersion(GAME_VERSION),
+      mapId: resolveMapId(state?.mapId).mapId || CLASSIC_MAP_ID,
       protectedGameOptions: protectedGameOptions(state?.gameOptions),
       ...this._draftDocFields(state),
     };

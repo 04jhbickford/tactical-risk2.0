@@ -1,4 +1,4 @@
-// V2.81.57-unified.22 — a stale client must not overwrite the live online game.
+// V2.81.57-unified.23 — a stale client must not overwrite the live online game.
 // Fake in-memory Firestore transaction, real GameState, real guard functions.
 // Run: node tools/test-sync-stale-clobber.mjs
 

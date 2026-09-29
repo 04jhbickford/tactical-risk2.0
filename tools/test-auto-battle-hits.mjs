@@ -73,7 +73,7 @@ const check = (label, cond, extra) => {
   } else console.log('ok  :', label);
 };
 
-check('stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.22');
+check('stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.23');
 check('schema stays 11', SCHEMA_VERSION === 11);
 
 function mulberry32(seed) {

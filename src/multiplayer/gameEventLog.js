@@ -3,6 +3,7 @@
 // No static Firebase import — Node tests and solo play stay offline.
 
 import { GAME_VERSION } from '../version.js';
+import { CLASSIC_MAP_ID, resolveMapId } from '../map/mapRegistry.js';
 
 export const EVENT_SCHEMA = 1;
 export const EVENT_KINDS = Object.freeze([
@@ -215,6 +216,7 @@ export function buildGameEvent({
     ...ledgerFields(ledger),
     writerUid: writerUid || null,
     clientVersion: GAME_VERSION,
+    mapId: resolveMapId(gameState?.mapId).mapId || CLASSIC_MAP_ID,
     eventSchema: EVENT_SCHEMA,
     lobbyCode: lobbyCode || null,
   };

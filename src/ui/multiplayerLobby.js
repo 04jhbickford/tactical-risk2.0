@@ -47,7 +47,8 @@ import {
   rulesChip,
   settingsEditError,
 } from '../gameOptions.js';
-import { bindGameOptions, readGameOptionsFrom, renderGameOptionsPanel } from './gameOptionsPanel.js';
+import { bindGameOptions, readGameOptionsFrom, readMapIdFrom, renderGameOptionsPanel } from './gameOptionsPanel.js';
+import { CLASSIC_MAP_ID, UNKNOWN_MAP_MESSAGE } from '../map/mapRegistry.js';
 import { bindLobbyDice, lobbyDiceEntryMarkup, renderDiceStatsMarkup } from './diceStatsPanel.js';
 import { isMobileShell } from './mobileShell.js';
 import {
@@ -121,6 +122,7 @@ export class MultiplayerLobby {
       commit: (raw) => this._commitDiscordSeat(raw),
     });
     this._draftOptions = normalizeGameOptions(null);
+    this._draftMapId = CLASSIC_MAP_ID;
     this._optionsOpen = false;
     this._optionsSheet = false;
     this._diceOpen = false;
@@ -634,6 +636,7 @@ export class MultiplayerLobby {
           open: this._optionsOpen,
           sheet: this._optionsSheet,
           draftMode: draftModeSource(this.setup),
+          mapId: this._draftMapId,
         })}
         <p class="game-rules-preview go-live-mirror">${describe(this._draftOptions)}</p>
         <label class="mp-checkbox-option standalone">
@@ -810,7 +813,7 @@ export class MultiplayerLobby {
             if (!result.success) {
               this._openGamesList = true;
               this._browsingAway = true;
-              alert(result.error);
+              if (!this._noteMapRefusal(result)) alert(result.error);
               this._render();
               return;
             }
@@ -866,7 +869,7 @@ export class MultiplayerLobby {
           if (!code) return;
           const joined = await this.lobbyManager.joinLobby(code, null);
           if (!joined.success) {
-            alert(joined.error);
+            if (!this._noteMapRefusal(joined)) alert(joined.error);
             return;
           }
           this._openGamesList = false;
@@ -1134,6 +1137,7 @@ export class MultiplayerLobby {
             sheet: this._optionsSheet,
             draftMode: draftModeSource(this.setup),
             seatedCount,
+            mapId: lobby.settings?.mapId || CLASSIC_MAP_ID,
           })}
           <p class="game-rules-preview go-live-mirror">${describe(optionsFromSettings(lobby.settings))}</p>
         </div>
@@ -1453,7 +1457,31 @@ export class MultiplayerLobby {
         this._optionsOpen = open;
         this._optionsSheet = sheet;
       },
+      onMapChange: (mapId) => this._commitMapId(mapId),
     });
+  }
+
+  _noteMapRefusal(result) {
+    if (result?.code !== 'unknown_map') return false;
+    try {
+      document.dispatchEvent(new CustomEvent('tr-map-refusal', {
+        detail: { message: result.error || UNKNOWN_MAP_MESSAGE },
+      }));
+    } catch {
+      // ignore
+    }
+    return true;
+  }
+
+  async _commitMapId(mapId) {
+    const next = mapId || CLASSIC_MAP_ID;
+    if (this.mode === 'create') {
+      this._draftMapId = next;
+      return;
+    }
+    const isHost = this.lobbyManager.isHost();
+    if (settingsEditError({ isHost })) return;
+    await this.lobbyManager.updateSettings({ mapId: next });
   }
 
   async _commitGameOptions(next) {
@@ -1557,6 +1585,7 @@ export class MultiplayerLobby {
     const name = form.querySelector('#create-name').value;
     const drafted = readGameOptionsFrom(form);
     this._draftOptions = drafted;
+    this._draftMapId = readMapIdFrom(form) || this._draftMapId || CLASSIC_MAP_ID;
     const maxPlayers = drafted.maxPlayers;
     const startingIPCs = drafted.startingIPCs;
     const isPrivate = form.querySelector('#create-private').checked;
@@ -1573,9 +1602,11 @@ export class MultiplayerLobby {
         password: password || null,
         teamsEnabled: drafted.teams,
         gameOptions: drafted,
+        mapId: this._draftMapId,
       });
 
       if (!result.success) {
+        this._noteMapRefusal(result);
         const errorEl = form.querySelector('#create-error');
         if (errorEl) {
           errorEl.textContent = result.error;
@@ -1604,6 +1635,7 @@ export class MultiplayerLobby {
     const result = await this.lobbyManager.joinLobby(code, password || null);
 
     if (!result.success) {
+      this._noteMapRefusal(result);
       const errorEl = form.querySelector('#join-error');
       if (errorEl) {
         errorEl.textContent = result.error;
@@ -1658,7 +1690,7 @@ export class MultiplayerLobby {
             const code = item.dataset.code;
             const result = await this.lobbyManager.joinLobby(code, null);
             if (!result.success) {
-              alert(result.error);
+              if (!this._noteMapRefusal(result)) alert(result.error);
             } else if (result.isGame) {
               // Code matched a started game - rejoin it directly
               this.hide();

@@ -1,4 +1,4 @@
-// V2.81.57-unified.22 — tactical bombers, carrier landing, end-of-NCM air check.
+// V2.81.57-unified.23 — tactical bombers, carrier landing, end-of-NCM air check.
 // Run: node tools/test-tactical-bombers.mjs
 
 import { readFileSync } from 'fs';
@@ -113,7 +113,7 @@ function attackRoll(gs, units) {
 }
 
 console.log('=== stamps ===');
-check('GAME_VERSION is V2.81.57-unified.22', GAME_VERSION === 'V2.81.57-unified.22');
+check('GAME_VERSION is V2.81.57-unified.23', GAME_VERSION === 'V2.81.57-unified.23');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== pairing ===');
