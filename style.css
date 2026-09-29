@@ -21170,11 +21170,18 @@ html.mobile-shell .go-panel.is-sheet .go-body {
   touch-action: pan-y;
 }
 
-/* Pacific setup: the sticky Start footer is taller than the 84px sheet
-   margin, so Done sat under Start. Classic keeps 84px. */
+/* Pacific setup: the sticky Start footer is about 104px. A 120px card
+   margin left the short phone (375×812) clipping Land bridges under Done.
+   108px clears that footer; the card fills the rest of the screen. Classic
+   keeps 84px. The 8px Done gap is collapsed only here so the last visible
+   control sits fully above Done. */
 html.mobile-shell.map-pacific .go-sheet-card {
-  margin-bottom: calc(120px + env(safe-area-inset-bottom, 0px));
-  max-height: calc(100dvh - 132px - env(safe-area-inset-bottom, 0px));
+  margin-bottom: calc(108px + env(safe-area-inset-bottom, 0px));
+  max-height: calc(100dvh - 108px - env(safe-area-inset-bottom, 0px));
+  padding-bottom: 0;
+}
+html.mobile-shell.map-pacific .go-done {
+  margin-top: 0;
 }
 
 html.mobile-shell.map-pacific .phone-menu-list,
