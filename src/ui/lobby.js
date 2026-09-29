@@ -11,7 +11,7 @@ import { isMobileShell } from './mobileShell.js';
 import { captureLobbyScroll, restoreLobbyScroll } from './lobbyScroll.js';
 import { describe, draftModeSource, normalizeGameOptions } from '../gameOptions.js';
 import { bindGameOptions, renderGameOptionsPanel } from './gameOptionsPanel.js';
-import { CLASSIC_MAP_ID } from '../map/mapRegistry.js';
+import { CLASSIC_MAP_ID, markMapChrome } from '../map/mapRegistry.js';
 import { getBoard } from '../map/boardCatalog.js';
 import { bindLobbyDice, lobbyDiceEntryMarkup, renderDiceStatsMarkup } from './diceStatsPanel.js';
 export { GAME_VERSION };
@@ -151,6 +151,7 @@ export class Lobby {
       ${phone ? dicePanel : ''}
     `;
 
+    markMapChrome(this.mapId);
     restoreLobbyScroll(this.el, savedScroll);
     this._bindEvents();
     if (typeof requestAnimationFrame === 'function') {

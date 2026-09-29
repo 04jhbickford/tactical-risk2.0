@@ -1,4 +1,4 @@
-// V2.81.57-unified.25 — Pacific board, historical setup, victory cities.
+// V2.81.57-unified.26 — Pacific board, historical setup, victory cities.
 // Run: node tools/test-pacific.mjs
 
 import { execFileSync } from 'node:child_process';
@@ -240,7 +240,7 @@ console.log('=== classic save and mapId ===');
   const dice = buildFlushPayload(pacific, []);
   check('a dice batch carries mapId pacific', dice.mapId === 'pacific');
 
-  const snapshot = await buildPhaseSnapshot(pacific, { seq: 1, ts: 1, clientVersion: 'V2.81.57-unified.25' });
+  const snapshot = await buildPhaseSnapshot(pacific, { seq: 1, ts: 1, clientVersion: 'V2.81.57-unified.26' });
   check('a phase snapshot carries mapId pacific', snapshot.mapId === 'pacific' && snapshot.checksum);
   const dir = mkdtempSync(join(tmpdir(), 'pacific-audit-'));
   const fixture = join(dir, 'pacific.json');

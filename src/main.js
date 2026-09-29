@@ -25,6 +25,7 @@ import {
   getMap,
   loadMapDecision,
   mapIdFromDoc,
+  markMapChrome,
   resolveMapId,
   UNKNOWN_MAP_MESSAGE,
 } from './map/mapRegistry.js';
@@ -103,6 +104,7 @@ import {
   initMobileShell,
   onMobileShellChange,
   isMobileShell,
+  syncPacificPhoneSheetInset,
   applyPhoneCameraFit,
   collectPhoneLegalTerritoryNames,
   isPhoneLegalSetupSeaDest,
@@ -355,6 +357,8 @@ async function init() {
       mapRenderer.load(getActiveMap());
       minimap.reloadForActiveMap();
     }
+    markMapChrome(id);
+    syncPacificPhoneSheetInset();
     return id;
   }
 
@@ -426,6 +430,11 @@ async function init() {
   // Player panel (replaces territory-focused sidebar)
   const playerPanel = new PlayerPanel();
   playerPanel.setUnitDefs(unitDefs);
+  const phoneSheetEl = document.getElementById('sidebar');
+  if (phoneSheetEl && typeof ResizeObserver !== 'undefined') {
+    const phoneSheetObserver = new ResizeObserver(() => syncPacificPhoneSheetInset());
+    phoneSheetObserver.observe(phoneSheetEl);
+  }
   const hidePhoneTooltips = (reason) => {
     if (!shouldHidePhoneTooltipOn({ mobile: isMobileShell(), reason })) return;
     tooltip.hide();
@@ -450,6 +459,7 @@ async function init() {
     camera.usePhoneMinZoom = !!active;
     hud._render();
     playerPanel._render();
+    syncPacificPhoneSheetInset();
     if (active) fitPhoneCamera();
     else {
       hidePhoneTooltips('resize-leave-phone');

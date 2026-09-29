@@ -13,6 +13,7 @@ import { formatUnitName } from '../utils/unitNames.js';
 import { possessivePhrase } from '../utils/possessive.js';
 import {
   isMobileShell,
+  syncPacificPhoneSheetInset,
   pickMobilePrimaryButtons,
   shouldPeekPhoneTray,
   shouldShowPhoneChromeTabs,
@@ -1920,6 +1921,7 @@ export class PlayerPanel {
 
     const restored = this.contentEl.querySelector('.pp-unit-list');
     if (restored) restored.scrollTop = this._unitListScrollTop || 0;
+    syncPacificPhoneSheetInset();
   }
 
   _renderBottomActions(phase, turnPhase, player, isLocalPlayerTurn = true, isOwnSeat = isLocalPlayerTurn) {

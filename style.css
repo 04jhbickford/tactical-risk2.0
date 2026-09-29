@@ -18679,7 +18679,10 @@ html.mobile-shell .player-panel--expanded.player-panel--mobilize .pp-inline-mobi
     padding: 0 10px;
   }
 
-  /* Zoom / Fit always on BR above CTA (Experimental #three-zoom). Minimap stays off. */
+  /* Zoom / Fit always on BR above CTA (Experimental #three-zoom). Minimap stays off.
+     Classic keeps the 88px offset (capital peek is short). Pacific sheets are
+     taller, so the same offset sits inside the tray and the dead peek passes
+     taps through to +/−/Fit. --tr-sheet-h is the live tray height. */
   #zoom-controls {
     display: flex;
     right: max(10px, env(safe-area-inset-right, 0px));
@@ -18689,6 +18692,10 @@ html.mobile-shell .player-panel--expanded.player-panel--mobilize .pp-inline-mobi
     gap: 8px;
     z-index: 28;
     pointer-events: auto;
+  }
+
+  html.mobile-shell.map-pacific #zoom-controls {
+    bottom: calc(var(--tr-sheet-h, 112px) + 8px);
   }
 
   #minimap {
@@ -21161,6 +21168,29 @@ html.mobile-shell .go-panel.is-sheet .go-body {
   display: flex;
   overflow-y: auto;
   touch-action: pan-y;
+}
+
+/* Pacific setup: the sticky Start footer is about 104px. A 120px card
+   margin left the short phone (375×812) clipping Land bridges under Done.
+   108px clears that footer; the card fills the rest of the screen. Classic
+   keeps 84px. The 8px Done gap is collapsed only here so the last visible
+   control sits fully above Done. */
+html.mobile-shell.map-pacific .go-sheet-card {
+  margin-bottom: calc(108px + env(safe-area-inset-bottom, 0px));
+  max-height: calc(100dvh - 108px - env(safe-area-inset-bottom, 0px));
+  padding-bottom: 0;
+}
+html.mobile-shell.map-pacific .go-done {
+  margin-top: 0;
+}
+
+html.mobile-shell.map-pacific .phone-menu-list,
+html.mobile-shell.map-pacific .phone-menu-panel,
+html.mobile-shell.map-pacific .go-body,
+html.mobile-shell.map-pacific .lobby-phone-factions,
+html.mobile-shell.map-pacific .phone-tray-body {
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Past battles. One row per battle, dice wrap, no sideways scroll. */

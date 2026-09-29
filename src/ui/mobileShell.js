@@ -10,7 +10,7 @@
 // No rules / combat / schema changes.
 
 import { GAME_PHASES, TURN_PHASES, TURN_PHASE_ORDER, TURN_PHASE_NAMES } from '../state/gameState.js';
-import { MAP_WIDTH, MAP_HEIGHT } from '../map/camera.js';
+import { MAP_WIDTH, MAP_HEIGHT, SCROLL_WRAP_X } from '../map/camera.js';
 import { getActiveMap } from '../map/mapRegistry.js';
 
 export const MOBILE_SHELL_MAX_WIDTH = 640;
@@ -59,6 +59,29 @@ export function applyMobileShellClass(viewportWidth, root = (typeof document !==
 export function setShellFlag(name, on, root = (typeof document !== 'undefined' ? document.documentElement : null)) {
   if (!root || !name) return;
   root.classList.toggle(name, !!on);
+}
+
+// Pacific phone sheets are taller than the Classic capital peek, so the
+// shared 88px zoom offset lands inside the tray. Classic does not read
+// this variable. The Pacific rule is html.mobile-shell.map-pacific.
+export function syncPacificPhoneSheetInset(root = (typeof document !== 'undefined' ? document.documentElement : null)) {
+  if (!root?.style) return;
+  if (!root.classList.contains('mobile-shell') || !root.classList.contains('map-pacific')) {
+    root.style.removeProperty('--tr-sheet-h');
+    return;
+  }
+  const side = typeof document !== 'undefined' ? document.getElementById('sidebar') : null;
+  if (!side) {
+    root.style.removeProperty('--tr-sheet-h');
+    return;
+  }
+  const box = side.getBoundingClientRect();
+  const style = getComputedStyle(side);
+  if (style.display === 'none' || style.visibility === 'hidden' || box.height < 1) {
+    root.style.removeProperty('--tr-sheet-h');
+    return;
+  }
+  root.style.setProperty('--tr-sheet-h', `${Math.ceil(box.height)}px`);
 }
 
 // Handoff must hide HUD / panel / zoom / chips — not sit on top of them.
@@ -566,7 +589,11 @@ export function unwrapFitPoints(points, seedX) {
 // When owned land spans the world, still return a regional window around
 // the seed (dest/capital) so Fit is not a Pacific wrap poster.
 export function phoneProblemBounds(points, seedX) {
-  const unwrapped = unwrapFitPoints(points, seedX);
+  // Classic wraps, so Alaska and Europe share one window. Pacific does not:
+  // shifting x by a map width frames empty ocean and the finger fights the clamp.
+  const unwrapped = SCROLL_WRAP_X
+    ? unwrapFitPoints(points, seedX)
+    : (Array.isArray(points) ? points : []).filter(p => p && Number.isFinite(p.x) && Number.isFinite(p.y));
   const tight = boundsFromPoints(unwrapped);
   if (tight) return tight;
   if (!unwrapped.length) return null;
