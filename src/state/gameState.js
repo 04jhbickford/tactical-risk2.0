@@ -1616,7 +1616,14 @@ export class GameState {
   }
 
   _startingUnitPool() {
-    return scaleStartingUnits(RISK_STARTING_UNITS, this.gameOptions?.startingArmy);
+    const pool = scaleStartingUnits(RISK_STARTING_UNITS, this.gameOptions?.startingArmy);
+    // Default off matches RISK_STARTING_UNITS. On adds one to the tray only.
+    // Do not put tacticalBomber back on the default defs (V2.81.36).
+    if (this.gameOptions?.tacticalBombers !== true) return pool;
+    return {
+      land: pool.land.concat([{ type: 'tacticalBomber', quantity: 1 }]),
+      naval: pool.naval,
+    };
   }
 
   _buildStartingDeployPool({ factoryAlreadyPlaced = false } = {}) {

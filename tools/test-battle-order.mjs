@@ -1,4 +1,4 @@
-// V2.81.57-unified.24 — the human player can pick which queued battle opens.
+// V2.81.57-unified.25 — the human player can pick which queued battle opens.
 // Run: node tools/test-battle-order.mjs
 
 import { readFileSync } from 'fs';

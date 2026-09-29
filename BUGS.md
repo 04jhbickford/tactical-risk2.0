@@ -2,6 +2,22 @@
 
 ---
 
+## 9.29.26 — unified.25 tactical bombers for the AI and the setup tray
+
+Stamp `V2.81.57-unified.25`. Schema stays 11. A `V2.82-unified.24` doc is older than this tab and does not prompt. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.25`).
+
+The host option "Tactical bombers" stays default off. With it off, AI purchases and the `Math.random` sequence in that path match unified.24, and starting trays match `RISK_STARTING_UNITS`. The unit is still not in that default list (V2.81.36).
+
+With it on, the AI buys at most one tactical bomber in a purchase, and only when it already has a fighter or a tank to pair with (on the board, on a carrier, or loaded on a transport), or when this same purchase just bought one. The buy sits next to that fighter or tank in the existing priority list. An island capital with no partner does not buy one. It spends only IPCs it still has.
+
+With it on, each seated power gets one tactical bomber in the setup tray for Random deal and Territory draft, on Classic and on Pacific. Nothing is pre-placed. Light and heavy armies still add one, not a scaled count. A power that is not in the game, including Neutral, gets none. The tray can be placed on owned land the same way as the other starting aircraft. A save mid-setup reloads with that bomber still placeable, and finishing placement empties the tray and advances to Develop Tech.
+
+Left out, because there is no placement tray and this build does not add a setup phase: Pacific 1940 (historical placements stay as they are; off still turns those bombers into fighters) and the retired Classic 1942 init (`initGame('classic')`, which the live lobby does not start).
+
+`node tools/test-tacbomber-ai-buy.mjs` and `node tools/test-tacbomber-setup.mjs` passed. The full `tools/test-*.mjs` suite passed except the known `tools/test-lobby-nav.mjs` failure `boot auto-resume is gameId-only`. Stamp checks that match `index.html` with escaped dots were bumped with the other stamp assertions. AI runs with the option on, delays removed in the runner only: Classic random seed 2, three easy games to round 11, steps 331, 318, and 326, no stalls, no errors, tactical bombers bought 1, 1, and 3. Pacific 1940 unseeded, three easy games to round 11, no stalls, no errors. A confirmation run bought 33, 33, and 31 (steps 229, 225, 221). An earlier unseeded run bought 34, 33, and 33 (steps 233, 230, 229). A Classic setup stall on occupied seas, and a combat that never leaves the queue, also happen with the option off.
+
+---
+
 ## 9.29.26 — unified.24 Pacific 1940
 
 Stamp `V2.81.57-unified.24`. Schema stays 11. A `V2.82-unified.23` doc is older than this tab and does not prompt. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.24`).
