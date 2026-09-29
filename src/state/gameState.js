@@ -16,6 +16,7 @@ import {
   clearPendingLandingDestinations,
   hasLegalAirLandingFrom,
   looseAirOverWater,
+  isAirUnitType,
   markPendingAirLandingsApplied,
   preferAirLandingOption,
   takeAirUnitsFromTerritory,
@@ -26,7 +27,7 @@ import {
 import { airCombatMoveMayOccupy, landOnlySeaAttackIllegal, moveSelectionProfile, seaZoneHasEnemyForAirAttack } from './combatMoveEligibility.js';
 import { cascadeUndoIndexes } from './moveUndo.js';
 import { emitGameEvent, summarizeUnits } from '../multiplayer/gameEventLog.js';
-import { omitUndefinedDeep } from './persistState.js';
+import { omitUndefinedDeep, persistableUnit } from './persistState.js';
 import { flushDiceBuffer, observeRolledDie } from '../stats/diceTracker.js';
 import {
   DIRECT_TECH_IPC_COST,
@@ -66,7 +67,7 @@ import {
 } from './carrierPlacement.js';
 import { destroyIllegalAir, previewNcmAirDestruction as previewNcmAir, ncmAirWarningCopy } from './ncmAirCheck.js';
 import { consumePairedAttack, countPairing, tacticalBombersEnabled } from './tacticalPairing.js';
-import { countAirHits, sideCanFirstStrike, sideHasDestroyer, unitIsFirstStrikeTarget, unitsForGeneralCombat } from './combatUnits.js';
+import { applyCasualtySelection, countAirHits, sideCanFirstStrike, sideHasDestroyer, unitIsFirstStrikeTarget, unitsForGeneralCombat } from './combatUnits.js';
 import {
   factoryProductionLimit,
   factoryProductionUsed,
@@ -3816,36 +3817,76 @@ export class GameState {
 
     const combatUnits = this.units[combatTerritory] || [];
     const destUnits = this.units[destination] || [];
+    const unitDefs = this._unitDefs || this.unitDefs || {};
 
-    // Move all player's land/sea units to the destination
-    // (Air units are handled separately via air landing)
+    // Move the player's ships and land units. Air goes to the retreat
+    // choice only when that hex is a legal landing; otherwise it is parked
+    // in pendingAirLandings and taken off the sea zone. It is not deleted.
     const unitsToRetreat = combatUnits.filter(u =>
-      u.owner === player.id && u.type !== 'factory'
+      u.owner === player.id && u.type !== 'factory' && (Number(u.quantity) || 0) > 0
     );
+    const loggedUnits = unitsToRetreat.map((unit) => ({
+      type: unit.type,
+      quantity: Number(unit.quantity) || 0,
+      owner: unit.owner || player.id,
+    }));
 
-    for (const unit of unitsToRetreat) {
-      const unitDef = this.territoryByName[destination]?.isWater
-        ? { isSea: true } // Simplified check
-        : { isLand: true };
-
-      // Move unit to destination
-      const destUnit = destUnits.find(u => u.type === unit.type && u.owner === player.id);
-      if (destUnit) {
-        destUnit.quantity += unit.quantity;
-      } else {
-        destUnits.push({
-          type: unit.type,
-          quantity: unit.quantity,
-          owner: player.id,
-        });
+    const deliver = (unit) => {
+      const copy = persistableUnit(unit);
+      if (!copy || (Number(copy.quantity) || 0) <= 0) return;
+      copy.owner = unit.owner || player.id;
+      if (copy.id) {
+        const same = destUnits.find((row) => row.id === copy.id);
+        if (same) same.quantity = (Number(same.quantity) || 0) + copy.quantity;
+        else destUnits.push(copy);
+        return;
       }
+      const destUnit = destUnits.find((row) => (
+        row.type === copy.type && row.owner === copy.owner && !row.id
+      ));
+      if (destUnit) {
+        destUnit.quantity = (Number(destUnit.quantity) || 0) + copy.quantity;
+        if (copy.damaged) {
+          destUnit.damaged = true;
+          destUnit.damagedCount = (Number(destUnit.damagedCount) || 0) + (Number(copy.damagedCount) || 0);
+        }
+      } else {
+        destUnits.push(copy);
+      }
+    };
 
-      // Remove from combat territory
+    const airToPark = [];
+    for (const unit of unitsToRetreat) {
+      if (isAirUnitType(unit.type, unitDefs)) continue;
+      deliver(unit);
       unit.quantity = 0;
     }
+    this.units[destination] = destUnits;
+    for (const unit of unitsToRetreat) {
+      if (!isAirUnitType(unit.type, unitDefs)) continue;
+      const qty = Number(unit.quantity) || 0;
+      if (qty <= 0) continue;
+      let legal = false;
+      try {
+        const options = this.getAirLandingOptions(combatTerritory, unit.type, unitDefs) || [];
+        legal = options.some((opt) => opt?.territory === destination);
+      } catch { legal = false; }
+      if (legal) deliver(unit);
+      else {
+        airToPark.push({
+          id: unit.id || `${unit.type}_retreat`,
+          type: unit.type,
+          quantity: qty,
+          owner: unit.owner || player.id,
+          parked: true,
+        });
+      }
+      unit.quantity = 0;
+    }
+    if (airToPark.length) this.addPendingAirLandings(combatTerritory, airToPark);
 
     // Clean up empty units
-    this.units[combatTerritory] = combatUnits.filter(u => u.quantity > 0);
+    this.units[combatTerritory] = combatUnits.filter(u => (Number(u.quantity) || 0) > 0);
     this.units[destination] = destUnits;
 
     this._notify();
@@ -3854,7 +3895,7 @@ export class GameState {
       territory: combatTerritory,
       payload: {
         destination,
-        units: summarizeUnits(unitsToRetreat),
+        units: summarizeUnits(loggedUnits),
       },
     });
     return { success: true };
@@ -4211,26 +4252,54 @@ export class GameState {
     const defenderHasDestroyer = allDefenders.some((u) => u.type === 'destroyer' && (Number(u.quantity) || 0) > 0);
     const attackerSubs = attackers.filter((u) => u.type === 'submarine');
     const defenderSubs = allDefenders.filter((u) => u.type === 'submarine');
+    const forceSnap = (list) => (list || [])
+      .filter((u) => (Number(u?.quantity) || 0) > 0)
+      .map((u) => ({ type: u.type, quantity: Number(u.quantity) || 0 }));
     let firstStrikeAttackDice = 0;
     let firstStrikeDefenseDice = 0;
     let attackerSubsStruck = false;
     let defenderSubsStruck = false;
+    let surpriseAttackHits = 0;
+    let surpriseDefenseHits = 0;
+    let surpriseAttackerLosses = [];
+    let surpriseDefenderLosses = [];
+    const preStrikeAttack = forceSnap(attackers);
+    const preStrikeDefense = forceSnap(allDefenders);
     if (this._combatRoundsTracker[territory] === 1) {
       if (sideCanFirstStrike(attackerSubs, allDefenders, defenderHasDestroyer, unitDefs)) {
         const strike = this._rollCombatWithRolls(attackerSubs, 'attack', unitDefs, 'sub');
         firstStrikeAttackDice = strike.rolls.length;
         attackerSubsStruck = strike.rolls.length > 0;
+        surpriseAttackHits = strike.hits;
         const targets = allDefenders.filter((u) => unitIsFirstStrikeTarget(u, unitDefs));
-        this._applyCasualtiesWithDamage(targets, strike.hits, unitDefs, isNavalBattle);
+        surpriseDefenderLosses = this._applyCasualtiesWithDamage(targets, strike.hits, unitDefs, isNavalBattle);
       }
       if (sideCanFirstStrike(defenderSubs, attackers, attackerHasDestroyer, unitDefs)) {
         const strike = this._rollCombatWithRolls(defenderSubs, 'defense', unitDefs, 'sub');
         firstStrikeDefenseDice = strike.rolls.length;
         defenderSubsStruck = strike.rolls.length > 0;
+        surpriseDefenseHits = strike.hits;
         const targets = attackers.filter((u) => unitIsFirstStrikeTarget(u, unitDefs));
-        this._applyCasualtiesWithDamage(targets, strike.hits, unitDefs, isNavalBattle);
+        surpriseAttackerLosses = this._applyCasualtiesWithDamage(targets, strike.hits, unitDefs, isNavalBattle);
       }
     }
+    if (firstStrikeAttackDice > 0 || firstStrikeDefenseDice > 0) {
+      this.recordCombatTelemetry({
+        kind: 'combat',
+        step: 'surprise',
+        territory,
+        roundIndex: this._combatRoundsTracker[territory],
+        hits: { attack: surpriseAttackHits, defense: surpriseDefenseHits },
+        attackForce: preStrikeAttack,
+        defenseForce: preStrikeDefense,
+        casualties: {
+          attacker: surpriseAttackerLosses,
+          defender: surpriseDefenderLosses,
+        },
+      });
+    }
+    const preRollAttack = forceSnap(attackers);
+    const preRollDefense = forceSnap(allDefenders);
 
     // Roll dice for combat (allDefenders includes AA guns which can fire at aircraft).
     // Subs that just struck are omitted; everyone else still rolls.
@@ -4358,12 +4427,18 @@ export class GameState {
 
     this.recordCombatTelemetry({
       kind: 'combat',
+      step: 'round',
       territory,
+      roundIndex: this._combatRoundsTracker[territory],
       hits: { attack: totalAttackHits, defense: defenseHits },
       attackRolls: attackRolls.map((r) => r.roll),
       defenseRolls: defenseRolls.map((r) => r.roll),
-      attackForce: attackers,
-      defenseForce: combatDefenders,
+      attackForce: preRollAttack,
+      defenseForce: preRollDefense,
+      casualties: {
+        attacker: defenderCasualties,
+        defender: attackerCasualties,
+      },
       survivors: remainingAttackers,
       wiped: remainingAttackers.length === 0,
     });
@@ -4417,7 +4492,28 @@ export class GameState {
       type: u?.type || 'unit',
       quantity: Number(u?.quantity) || 0,
     })) : []);
-    this.combatTelemetry.push({
+    const capCasualties = (value) => {
+      if (!value) return [];
+      if (Array.isArray(value)) {
+        const grouped = new Map();
+        for (const row of value) {
+          if (!row?.type) continue;
+          const damaged = !!(row.damaged && !row.destroyed);
+          const key = `${row.type}:${damaged ? 'damaged' : 'lost'}`;
+          const prev = grouped.get(key) || { type: row.type, quantity: 0, damaged };
+          prev.quantity += Number(row.quantity) || 1;
+          grouped.set(key, prev);
+        }
+        return [...grouped.values()].slice(0, 16).map((row) => (
+          row.damaged ? { type: row.type, quantity: row.quantity, damaged: true } : { type: row.type, quantity: row.quantity }
+        ));
+      }
+      return Object.entries(value).slice(0, 16).map(([type, quantity]) => ({
+        type,
+        quantity: Number(quantity) || 0,
+      })).filter((row) => row.quantity > 0);
+    };
+    const stored = {
       t: Date.now(),
       round: this.round,
       kind: entry.kind || 'combat',
@@ -4430,7 +4526,16 @@ export class GameState {
       defenseForce: capForce(entry.defenseForce),
       survivors: capForce(entry.survivors),
       wiped: !!entry.wiped,
-    });
+    };
+    if (entry.step) stored.step = entry.step;
+    if (entry.roundIndex != null) stored.roundIndex = entry.roundIndex;
+    if (entry.casualties) {
+      stored.casualties = {
+        attacker: capCasualties(entry.casualties.attacker),
+        defender: capCasualties(entry.casualties.defender),
+      };
+    }
+    this.combatTelemetry.push(stored);
     if (this.combatTelemetry.length > 40) {
       this.combatTelemetry = this.combatTelemetry.slice(-40);
     }
@@ -4450,6 +4555,14 @@ export class GameState {
         forcesAfter: { attack: capForce(entry.survivors) },
         wiped: !!entry.wiped,
         via: 'combatTelemetry',
+        ...(entry.step ? { step: entry.step } : {}),
+        ...(entry.roundIndex != null ? { roundIndex: entry.roundIndex } : {}),
+        ...(entry.casualties ? {
+          casualties: {
+            attacker: capCasualties(entry.casualties.attacker),
+            defender: capCasualties(entry.casualties.defender),
+          },
+        } : {}),
       },
     });
   }
@@ -4689,19 +4802,16 @@ export class GameState {
       ? units.filter(u => u.owner === player.id)
       : units.filter(u => u.owner !== player.id);
 
+    const selected = {};
     for (const casualty of casualties) {
-      const unit = targetUnits.find(u => u.type === casualty.type && u.quantity > 0);
-      if (unit) {
-        if (casualty.damage) {
-          // Damage a multi-hit ship
-          unit.damaged = true;
-          unit.damagedCount = (unit.damagedCount || 0) + 1;
-        } else {
-          // Destroy unit
-          unit.quantity--;
-        }
+      if (!casualty?.type && !casualty?.damage) continue;
+      if (casualty.damage) {
+        selected.battleship_damage = (selected.battleship_damage || 0) + 1;
+      } else if (casualty.type) {
+        selected[casualty.type] = (selected[casualty.type] || 0) + 1;
       }
     }
+    applyCasualtySelection(targetUnits, selected);
 
     // Clean up destroyed units
     this.units[territory] = units.filter(u => u.quantity > 0);
@@ -6328,14 +6438,16 @@ export class GameState {
     return { moved, crashed };
   }
 
-  // Fighters/bombers cannot end combat or NCM over open water.
-  // Land on the nearest legal territory, else a friendly carrier, else crash.
+  // Fighters/bombers cannot end combat over open water.
+  // Land on the nearest legal territory, else a friendly carrier.
+  // With no legal spot, park them in pendingAirLandings. Do not delete them.
   resolveLooseAirOverWater(unitDefs = this._unitDefs || this.unitDefs || {}) {
     const player = this.currentPlayer;
-    if (!player) return { landed: 0, crashed: 0 };
+    if (!player) return { landed: 0, crashed: 0, parked: 0 };
     const loose = looseAirOverWater(this.units, this.territoryByName, player.id, unitDefs);
     let landed = 0;
     let crashed = 0;
+    let parked = 0;
     for (const group of loose) {
       let left = group.quantity;
       let guard = 0;
@@ -6346,6 +6458,8 @@ export class GameState {
         const choice = preferAirLandingOption(options);
         const sameHex = choice?.territory === group.territory;
         if (!choice?.territory || (sameHex && !choice.isCarrier)) {
+          // No legal landing. Park the aircraft for the end-of-NCM check.
+          // Do not delete them on the way out of combat.
           const origin = this.units[group.territory] || [];
           const taken = takeAirUnitsFromTerritory(origin, {
             type: group.type,
@@ -6353,7 +6467,15 @@ export class GameState {
             quantity: left,
           });
           this.units[group.territory] = origin;
-          crashed += taken;
+          if (taken > 0) {
+            parked += taken;
+            this.addPendingAirLandings(group.territory, [{
+              id: `${group.type}_return_${guard}`,
+              type: group.type,
+              quantity: taken,
+              parked: true,
+            }]);
+          }
           left = 0;
           break;
         }
@@ -6380,7 +6502,15 @@ export class GameState {
             quantity: 1,
           });
           this.units[group.territory] = origin;
-          crashed += taken;
+          if (taken > 0) {
+            parked += taken;
+            this.addPendingAirLandings(group.territory, [{
+              id: `${group.type}_return_${guard}`,
+              type: group.type,
+              quantity: taken,
+              parked: true,
+            }]);
+          }
           left -= taken;
           continue;
         }
@@ -6388,8 +6518,8 @@ export class GameState {
         left -= moved;
       }
     }
-    if (landed > 0 || crashed > 0) this._notify();
-    return { landed, crashed };
+    if (landed > 0 || crashed > 0 || parked > 0) this._notify();
+    return { landed, crashed, parked };
   }
 
   // === PENDING AIR LANDINGS ===
@@ -6406,6 +6536,7 @@ export class GameState {
         quantity: unit.quantity || 1,
         destination: unit.destination || null,
         applied: !!unit.applied,
+        parked: !!unit.parked,
       });
     }
   }

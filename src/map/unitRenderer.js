@@ -590,17 +590,6 @@ export class UnitRenderer {
       ctx.stroke();
     }
 
-    // Draw damage indicator for battleships
-    if (damaged > 0 && unitType === 'battleship') {
-      ctx.strokeStyle = 'rgba(255,50,0,0.8)';
-      ctx.lineWidth = 2;
-      // Draw diagonal line through icon to indicate damage
-      ctx.beginPath();
-      ctx.moveTo(x - bgSize / 3, y - bgSize / 3);
-      ctx.lineTo(x + bgSize / 3, y + bgSize / 3);
-      ctx.stroke();
-    }
-
     // Draw unit image
     if (img && img.complete && img.naturalWidth > 0) {
       // Tint the image with the player color slightly
@@ -609,6 +598,16 @@ export class UnitRenderer {
     } else {
       // Fallback: draw simple shape
       this._drawFallbackIcon(ctx, x, y, size * 0.4, unitType);
+    }
+
+    // Damage slash sits on top of the icon so the picture does not cover it.
+    if (damaged > 0 && unitType === 'battleship') {
+      ctx.strokeStyle = 'rgba(255,50,0,0.95)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x - bgSize / 3, y - bgSize / 3);
+      ctx.lineTo(x + bgSize / 3, y + bgSize / 3);
+      ctx.stroke();
     }
 
     ctx.restore();

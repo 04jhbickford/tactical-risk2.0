@@ -51,6 +51,102 @@ export function summarizeCombatForce(units) {
   return [...byType.entries()].map(([type, quantity]) => ({ type, quantity }));
 }
 
+// Same totals as the combat list and the saved board. A damaged battleship
+// keeps damagedCount so the report, the next round, and the map agree.
+export function livingForcePicture(units) {
+  const byType = new Map();
+  for (const u of units || []) {
+    const n = Math.max(0, Number(u?.quantity) || 0);
+    if (n <= 0 || !u?.type) continue;
+    let row = byType.get(u.type);
+    if (!row) {
+      row = { type: u.type, quantity: 0, damagedCount: 0 };
+      byType.set(u.type, row);
+    }
+    row.quantity += n;
+    if (u.type === 'battleship') {
+      const marked = u.damaged ? n : 0;
+      const counted = Math.min(n, Math.max(0, Number(u.damagedCount) || marked));
+      row.damagedCount += counted;
+    }
+  }
+  return [...byType.values()]
+    .map((row) => {
+      const out = { type: row.type, quantity: row.quantity };
+      if (row.type === 'battleship' && row.damagedCount > 0) out.damagedCount = row.damagedCount;
+      return out;
+    })
+    .sort((a, b) => a.type.localeCompare(b.type));
+}
+
+// Spend a type-keyed casualty pick across every stack of that type.
+// One carrier id is one hull: a hit removes that hull (and its aircraft
+// only when the hull's quantity reaches 0). A sibling hull is left alone.
+// battleship_damage marks undamaged hulls and does not remove them.
+// An explicit transport count is removed; the default picker still skips them.
+export function applyCasualtySelection(units, selected = {}) {
+  const list = Array.isArray(units) ? units : [];
+  const applied = [];
+  const sunk = [];
+
+  let damageLeft = Math.max(0, Number(selected.battleship_damage) || 0);
+  if (damageLeft > 0) {
+    for (const unit of list) {
+      if (damageLeft <= 0) break;
+      if (unit?.type !== 'battleship') continue;
+      const qty = Math.max(0, Number(unit.quantity) || 0);
+      if (qty <= 0) continue;
+      const already = Math.min(qty, Math.max(0, Number(unit.damagedCount) || 0));
+      const room = qty - already;
+      const take = Math.min(room, damageLeft);
+      if (take <= 0) continue;
+      unit.damagedCount = already + take;
+      unit.damaged = unit.damagedCount > 0;
+      damageLeft -= take;
+    }
+  }
+
+  let sinkLeft = Math.max(0, Number(selected.battleship) || 0);
+  if (sinkLeft > 0) {
+    const ships = list.filter((u) => u?.type === 'battleship' && (Number(u.quantity) || 0) > 0);
+    const order = [...ships].sort((a, b) => (Number(b.damagedCount) || 0) - (Number(a.damagedCount) || 0));
+    for (const unit of order) {
+      if (sinkLeft <= 0) break;
+      const qty = Math.max(0, Number(unit.quantity) || 0);
+      const dmg = Math.min(qty, Math.max(0, Number(unit.damagedCount) || 0));
+      const fromDamaged = Math.min(dmg, sinkLeft);
+      const fromFresh = Math.min(Math.max(0, qty - fromDamaged), sinkLeft - fromDamaged);
+      const take = fromDamaged + fromFresh;
+      if (take <= 0) continue;
+      unit.quantity = qty - take;
+      unit.damagedCount = Math.max(0, dmg - fromDamaged);
+      unit.damaged = unit.quantity > 0 && unit.damagedCount > 0;
+      sinkLeft -= take;
+      applied.push({ unit, type: 'battleship', taken: take });
+      if (unit.quantity <= 0) sunk.push(unit);
+    }
+  }
+
+  for (const [type, raw] of Object.entries(selected || {})) {
+    if (type === 'battleship' || type === 'battleship_damage' || type === 'factory') continue;
+    let left = Math.max(0, Number(raw) || 0);
+    if (left <= 0) continue;
+    for (const unit of list) {
+      if (left <= 0) break;
+      if (unit?.type !== type) continue;
+      const qty = Math.max(0, Number(unit.quantity) || 0);
+      if (qty <= 0) continue;
+      const take = Math.min(qty, left);
+      unit.quantity = qty - take;
+      left -= take;
+      applied.push({ unit, type, taken: take });
+      if (unit.quantity <= 0) sunk.push(unit);
+    }
+  }
+
+  return { applied, sunk };
+}
+
 // Submarine first strike uses the same filter as casualty assignment:
 // a sub cannot hit a sub or an aircraft. AA guns and ships can be hit.
 export function unitIsFirstStrikeTarget(unit, unitDefs = {}) {

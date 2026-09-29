@@ -2,6 +2,20 @@
 
 ---
 
+## 9.28.26 — unified.20.2 casualties, retreat air, combat log
+
+Stamp stays `V2.81.57-unified.20.2`. Schema stays 11. `firestore.rules` is unchanged.
+
+Bastion, `#tactical-risk` `1554278718275584142`, 28 Sep 4:48pm PT, game `6XQ7CN` (`games/game_1790636577736_myn2r5rf8`), live unified.19. East Canada Sea Zone, round 1, 4:43pm PT. Bastion (Americans) attacked Robert007 (Japanese). The dice were right (9 attack dice, 6 hits; 12 defense dice, 7 hits, and the transport rolled at need 0). The casualty report, the round-2 force list, and the saved board were three different Japanese fleets. Bastion edited his picks and took the transport; the saved state still had that transport in West Spain Sea Zone. Confirm now spends the edited pick across every stack of that type, including an id'd carrier or transport. A second auto-pick does not replace an edit. The "Left" line, the next-round list, and `gameState.units` are the same totals. A damaged battleship keeps `damaged` / `damagedCount`, shows an orange damage mark in the combat list, and keeps the slash on the map icon.
+
+Bastion, `#tactical-risk` `1554280132850749502`, 28 Sep 4:54pm PT. The same battle's retreat at 4:49pm PT logged the transport, battleship, and bomber to West Spain Sea Zone with quantity 0. The ships arrived. The bomber was gone, and there was no `pendingAirLandings` entry. The retreat log now records the real quantities. A bomber that cannot legally land on the retreat sea zone is parked in `pendingAirLandings` and is not deleted. Leaving combat with no legal landing does the same.
+
+Combat telemetry on the AI path was writing `forcesBefore` after casualties, and one entry per battle. Each round now logs the pre-roll forces, a surprise strike is its own entry, and the applied casualties for both sides are on the entry. Those fields are additive. The rules file did not need a change.
+
+Receipt: `node tools/test-casualty-apply.mjs`.
+
+---
+
 ## 9.28.26 — unified.20.2 submarines fire once per round
 
 Stamp `V2.81.57-unified.20.2`. Schema stays 11. Display stamp only; game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.20.2`). `firestore.rules` is unchanged.
