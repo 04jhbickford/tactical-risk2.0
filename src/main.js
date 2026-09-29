@@ -196,6 +196,11 @@ import {
   installClientErrorHooks,
   unbindGameEventLog,
 } from './multiplayer/gameEventLog.js';
+import {
+  bindPhaseSnapshots,
+  createFirestoreSnapshotWriter,
+  unbindPhaseSnapshots,
+} from './multiplayer/phaseSnapshot.js';
 
 // DEBUG: Set to true to log sea zone click coordinates for positioning
 const DEBUG_SEA_ZONE_CLICKS = false;
@@ -1183,6 +1188,13 @@ async function init() {
       writer: createFirestoreEventWriter({ getDb: getFirebaseDb }),
     });
     bindGameEventLog(gameEventLog);
+    unbindPhaseSnapshots();
+    bindPhaseSnapshots({
+      gameId,
+      getWriterUid: () => authManager.getUserId?.() || authManager.getUser?.()?.id || null,
+      write: createFirestoreSnapshotWriter({ getDb: getFirebaseDb }),
+      onError: (message) => showNotification(message, 8000),
+    });
     attachDiagnosticsConsole(gameEventLog);
     gameEventLog.log('ui', {
       payload: { action: 'sessionStart', gameId, lobbyCode: currentGameCode },
@@ -1856,6 +1868,7 @@ async function init() {
         syncManager = null;
       }
       unbindGameEventLog();
+      unbindPhaseSnapshots();
       if (multiplayerLobby) {
         multiplayerLobby.hide();
       }

@@ -21139,3 +21139,106 @@ html.mobile-shell .go-panel.is-sheet .go-body {
   overflow-y: auto;
   touch-action: pan-y;
 }
+
+/* Past battles. One row per battle, dice wrap, no sideways scroll. */
+.battle-dice {
+  box-sizing: border-box;
+  min-width: 0;
+  overflow-x: hidden;
+  color: #e8e6df;
+  background: rgba(16, 18, 24, 0.96);
+  border: 1px solid rgba(242, 211, 138, 0.35);
+  border-radius: 10px;
+}
+.battle-dice-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 188px;
+  width: 360px;
+  max-width: calc(100vw - 24px);
+  max-height: min(70vh, 520px);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+}
+.battle-dice-sheet {
+  width: 100%;
+  max-width: 100%;
+}
+.battle-dice-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  font-weight: 700;
+}
+.battle-dice-close,
+.battle-dice-row {
+  min-height: 44px;
+  min-width: 44px;
+  box-sizing: border-box;
+}
+.battle-dice-close {
+  border: 0;
+  background: transparent;
+  color: #f2d38a;
+  font: inherit;
+  padding: 0 12px;
+  cursor: pointer;
+}
+.battle-dice-body {
+  overflow-x: hidden;
+  overflow-y: auto;
+  max-width: 100%;
+  padding: 0 10px 10px;
+}
+.battle-dice-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: 100%;
+}
+.battle-dice-item {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  max-width: 100%;
+}
+.battle-dice-row {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.battle-dice-place {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.battle-dice-round,
+.battle-dice-side,
+.battle-dice-faces,
+.battle-dice-empty {
+  color: #b9c0d4;
+  overflow-wrap: anywhere;
+}
+.battle-dice-side,
+.battle-dice-faces,
+.battle-dice-empty {
+  margin: 0 0 6px;
+  max-width: 100%;
+}
+.battle-dice-who {
+  color: #f2d38a;
+  font-weight: 700;
+}
+.battle-dice-faces {
+  font-variant-numeric: tabular-nums;
+}

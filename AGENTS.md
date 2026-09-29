@@ -37,7 +37,7 @@ Current save schema is **11**:
 
 Bump the schema only when the persisted shape changes. Display version and schema version are different stamps.
 
-Current display stamp is `GAME_VERSION` in `src/version.js`: `V2.81.57-unified.21`. Read the file. After a later bump, the file wins over this sentence.
+Current display stamp is `GAME_VERSION` in `src/version.js`: `V2.81.57-unified.22`. Read the file. After a later bump, the file wins over this sentence.
 
 ## 3. Layout bars
 
@@ -144,7 +144,7 @@ No cargo: hull only (`-1x Destroyer lost Red Sea - British Easy AI`). An allied 
 
 ## 5. LIVE stamp proof
 
-Every release bumps the display version and proves the same string everywhere it shows. Today that string is `V2.81.57-unified.21`. Set all of these together; do not leave one behind:
+Every release bumps the display version and proves the same string everywhere it shows. Today that string is `V2.81.57-unified.22`. Set all of these together; do not leave one behind:
 
 | Place | What |
 |---|---|

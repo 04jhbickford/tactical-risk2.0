@@ -2,6 +2,16 @@
 
 ---
 
+## 9.29.26 — unified.22 phase snapshots, ledgers, audit, past battles
+
+Stamp `V2.81.57-unified.22`. Schema stays 11. A `V2.82-unified.21` doc is older than this tab and does not prompt. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.22`).
+
+Each phase writes an append-only checkpoint at `games/{id}/snapshots/{turn}-{phase}-{seq}` with units, player state, IPCs, a sha256 checksum, and the display client version. A failed write retries, then shows "Could not save the phase snapshot." Purchase, income, capture plunder, raids, repair, and cards record `ipcBefore` and `ipcAfter` per player. Unit creates, destroys, and moves on those events carry ledger ids. `node tools/audit-game.mjs <gameId>` replays the ledger against the checkpoints and reports IPC mismatches, unit-count drift, and vanished units. Past battles is a read-only list of territory, round, and attacker and defender dice.
+
+`firestore.rules` allows members to create snapshots and denies update and delete. Rules are not deployed from this branch.
+
+---
+
 ## 9.29.26 — unified.21 strategic bombing raids, rebased on unified.20.2
 
 Stamp `V2.81.57-unified.21`. Schema stays 11. Display stamp only; game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.21`). Old saves omit `factoryDamage` and load as 0. A non-empty damage map and `raidQueue` ride the existing schema-11 snapshot, including online sync. A `V2.82-unified.20.2` doc is older than this tab.

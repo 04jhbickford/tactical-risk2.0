@@ -1,4 +1,4 @@
-// V2.81.57-unified.21 — strategic bombing raids.
+// V2.81.57-unified.22 — strategic bombing raids.
 // AA, damage cap, placement limit, repair, the bomber-only prompt,
 // save round-trip, and the online snapshot of factory damage.
 // Run: node tools/test-strategic-bombing.mjs
@@ -49,8 +49,8 @@ const unitDefs = {
 };
 
 console.log('=== stamp ===');
-check('display stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.21');
-check('compat stamp is V2.82-unified.21', compatClientVersion() === 'V2.82-unified.21');
+check('display stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.22');
+check('compat stamp is V2.82-unified.22', compatClientVersion() === 'V2.82-unified.22');
 check('schema stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== pure dice and cap ===');

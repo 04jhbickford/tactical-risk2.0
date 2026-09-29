@@ -97,6 +97,14 @@ export function normalizeRollContext(input, face, gameState) {
   const seat = playerSeat || gameState?.currentPlayer?.id || '';
   const player = (gameState?.players || []).find((p) => p && (p.id === seat || p.oderId === seat)) || null;
   const faceN = Number(face);
+  const battle = gameState?._diceBattle || {};
+  const territory = (input && typeof input === 'object' && input.territory)
+    || battle.territory
+    || null;
+  const battleRoundRaw = (input && typeof input === 'object' && input.battleRound != null)
+    ? input.battleRound
+    : battle.battleRound;
+  const battleRound = Number(battleRoundRaw);
   return {
     context,
     side,
@@ -106,6 +114,8 @@ export function normalizeRollContext(input, face, gameState) {
     playerSeat: seat ? String(seat) : '',
     isAI: !!(player?.isAI),
     playerName: safeDisplayName(player?.name),
+    territory: territory ? String(territory).slice(0, 80) : null,
+    battleRound: Number.isFinite(battleRound) && battleRound > 0 ? battleRound : null,
   };
 }
 
@@ -252,7 +262,9 @@ export function groupDiceForBatches(dice) {
     const side = die.side || 'attacker';
     const playerSeat = die.playerSeat || '';
     const isAI = !!die.isAI;
-    const key = `${context}|${side}|${playerSeat}|${isAI ? 1 : 0}`;
+    const territory = die.territory || '';
+    const battleRound = Number(die.battleRound) || 0;
+    const key = `${context}|${side}|${playerSeat}|${isAI ? 1 : 0}|${territory}|${battleRound}`;
     const last = groups[groups.length - 1];
     if (!last || last.key !== key) {
       groups.push({
@@ -262,6 +274,8 @@ export function groupDiceForBatches(dice) {
         playerSeat,
         isAI,
         playerName: die.playerName || null,
+        territory: territory || null,
+        battleRound: battleRound || null,
         dice: [],
       });
     }

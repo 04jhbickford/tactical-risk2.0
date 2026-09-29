@@ -165,6 +165,8 @@ export function buildFlushPayload(gameState, dice, session = getDiceSession()) {
       playerSeat: group.playerSeat,
       isAI: group.isAI,
       playerName: group.playerName,
+      territory: group.territory || null,
+      battleRound: group.battleRound || null,
       dice: group.dice,
     })),
     deltas: {
