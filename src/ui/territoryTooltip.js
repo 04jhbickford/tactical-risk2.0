@@ -477,8 +477,14 @@ export class TerritoryTooltip {
       const units = this.gameState.getUnitsAt(t.name);
       const hasFactory = units.some(u => u.type === 'factory');
       if (hasFactory) {
-        const capacity = this.gameState.getFactoryCapacity(t.name);
-        indicators.push(`<span class="tt-indicator factory">🏭 Factory (${capacity} units/turn)</span>`);
+        const damage = this.gameState.getFactoryDamage?.(t.name) || 0;
+        if (damage > 0) {
+          const placeable = this.gameState.getFactoryPlacementLimit?.(t.name) ?? 0;
+          indicators.push(`<span class="tt-indicator factory" data-factory-damage="${damage}">🏭 Factory · ${damage} damage, can place ${placeable}</span>`);
+        } else {
+          const capacity = this.gameState.getFactoryCapacity(t.name);
+          indicators.push(`<span class="tt-indicator factory" data-factory-damage="0">🏭 Factory (${capacity} units/turn)</span>`);
+        }
       }
       const hasAA = units.some(u => u.type === 'aaGun');
       if (hasAA) {

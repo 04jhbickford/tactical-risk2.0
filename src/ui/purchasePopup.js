@@ -3,6 +3,7 @@
 
 import { getUnitIconPath } from '../utils/unitIcons.js';
 import { shouldShowPurchase } from '../state/gameState.js';
+import { damagedFactoryRows, renderFactoryRepairHtml } from '../state/strategicBombing.js';
 import { setShellFlag } from './mobileShell.js';
 import { syncBottomSurfaces } from './bottomSurface.js';
 
@@ -313,6 +314,7 @@ export class PurchasePopup {
       <div class="pp-instructions-small">
         Units will be placed during Mobilize phase
       </div>
+      ${renderFactoryRepairHtml(damagedFactoryRows(this.gameState, player.id), { ipcs: remaining })}
 
       <div class="pp-units">
     `;
@@ -443,6 +445,16 @@ export class PurchasePopup {
       if (this.onPurchaseComplete) {
         this.onPurchaseComplete();
       }
+    });
+
+    this.el.querySelectorAll('[data-action="repair-factory"]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const territory = btn.dataset.territory;
+        const points = parseInt(btn.dataset.points, 10) || 1;
+        if (!territory) return;
+        this.gameState.repairFactoryDamage?.(territory, points);
+        this._render();
+      });
     });
   }
 

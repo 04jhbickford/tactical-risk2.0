@@ -76,6 +76,7 @@ import { ContinentPanel } from './ui/continentPanel.js';
 import { GameState, GAME_PHASES, TURN_PHASES, shouldShowPurchase } from './state/gameState.js';
 import { ncmAirWarningCopy, shouldPromptNcmAirWarning } from './state/ncmAirCheck.js';
 import { confirmNcmAirWarning } from './ui/ncmAirWarning.js';
+import { moveUnitsWithRaidPrompt, presentStrategicRaid } from './ui/raidPrompt.js';
 import { syncPushPhaseLabel } from './state/placementPass.js';
 import { VictoryScreen } from './ui/victoryScreen.js';
 import { AIController } from './ai/aiController.js';
@@ -623,6 +624,14 @@ async function init() {
         }
         break;
 
+      case 'repair-factory':
+        if (!shouldShowPurchase(gameState.phase, gameState.turnPhase)) break;
+        if (data.territory) {
+          gameState.repairFactoryDamage(data.territory, data.points || 1);
+          camera.dirty = true;
+        }
+        break;
+
       case 'buy-unit':
         // Inline purchase - add or remove unit from pending purchases
         if (!shouldShowPurchase(gameState.phase, gameState.turnPhase)) break;
@@ -744,10 +753,23 @@ async function init() {
         break;
 
       case 'open-combat':
+        purchasePopup.hide();
+        techUI.hide();
+        if (gameState.raidQueue?.length) {
+          const territory = gameState.raidQueue[0];
+          await presentStrategicRaid({
+            territory,
+            onRoll: () => {
+              const result = gameState.resolveStrategicRaid(territory, unitDefs);
+              camera.dirty = true;
+              return result;
+            },
+          });
+          playerPanel.flushRender?.();
+          if (syncManager) await syncManager.pushStateNow();
+          break;
+        }
         if (combatUI.hasCombats()) {
-          // Close other modals first
-          purchasePopup.hide();
-          techUI.hide();
           combatUI.showNextCombat();
         }
         break;
@@ -850,7 +872,9 @@ async function init() {
               moveOptions.shipIds = data.shipIds;
             }
             const unitsToMove = data.units || [];
-            const result = gameState.moveUnits(data.from, data.to, unitsToMove, unitDefs, moveOptions);
+            const result = await moveUnitsWithRaidPrompt(
+              gameState, data.from, data.to, unitsToMove, unitDefs, moveOptions,
+            );
             if (result.success) {
               actionLog.logMove(data.from, data.to, unitsToMove, gameState.currentPlayer);
               camera.dirty = true;
@@ -2842,7 +2866,7 @@ async function init() {
     }
   });
 
-  canvas.addEventListener('mouseup', (e) => {
+  canvas.addEventListener('mouseup', async (e) => {
     const wasDrag = camera.onMouseUp();
     canvas.classList.remove('panning');
     canvas.classList.remove('dragging-units');
@@ -2875,7 +2899,8 @@ async function init() {
             isAmphibiousUnload: true,
           });
         }
-        const result = amphibious ? { success: false } : gameState.moveUnits(
+        const result = amphibious ? { success: false } : await moveUnitsWithRaidPrompt(
+          gameState,
           dragSourceTerritory.name,
           hit.name,
           picked.units,

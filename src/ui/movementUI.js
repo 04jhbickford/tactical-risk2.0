@@ -5,6 +5,7 @@ import { getUnitIconPath } from '../utils/unitIcons.js';
 import { airCombatMoveMayOccupy, combatMoveReachableDests, maxMoveSelection, seaZoneHasEnemyForAirAttack } from '../state/combatMoveEligibility.js';
 import { hasLegalAirLandingFrom, wasFriendlyAtTurnStart } from '../state/airLanding.js';
 import { isLandingCarrier } from '../state/carrierPlacement.js';
+import { moveUnitsWithRaidPrompt } from './raidPrompt.js';
 
 export class MovementUI {
   constructor() {
@@ -664,7 +665,7 @@ export class MovementUI {
     return this.selectedFrom;
   }
 
-  _showMoveConfirm(destination) {
+  async _showMoveConfirm(destination) {
     // Execute the move
     const unitsToMove = Object.entries(this.selectedUnits)
       .filter(([_, qty]) => qty > 0)
@@ -688,7 +689,8 @@ export class MovementUI {
       return;
     }
 
-    const result = this.gameState.moveUnits(
+    const result = await moveUnitsWithRaidPrompt(
+      this.gameState,
       this.selectedFrom.name,
       destination.name,
       unitsToMove,

@@ -60,7 +60,10 @@ export class UnitRenderer {
 
   render(ctx, zoom) {
     const mobile = isMobileShell();
-    if (shouldHideUnitsAtZoom(zoom, { mobile })) return;
+    if (shouldHideUnitsAtZoom(zoom, { mobile })) {
+      this._drawFactoryDamageBadges(ctx, zoom, mobile);
+      return;
+    }
 
     const iconSize = phoneUnitIconSize(zoom, { mobile });
     const spacingX = iconSize + 4;
@@ -105,6 +108,57 @@ export class UnitRenderer {
         this._renderUnitGrid(ctx, cx, cy, types, grouped, maxPerRow, iconSize, spacingX, spacingY, zoom);
       }
     }
+    this._drawFactoryDamageBadges(ctx, zoom, mobile);
+  }
+
+  // Damage chip on the territory, drawn with the unit overlay. The number is
+  // sized in screen pixels so it stays readable at phone width.
+  _drawFactoryDamageBadges(ctx, zoom, mobile) {
+    const damage = this.gameState?.factoryDamage || {};
+    for (const [territory, points] of Object.entries(damage)) {
+      const n = Math.floor(Number(points) || 0);
+      if (n <= 0) continue;
+      const t = this.territoryByName[territory];
+      if (!t || t.isWater) continue;
+      let [cx, cy] = this._getTerritoryCenter(t);
+      if (cx === null) continue;
+      const landOffset = UnitRenderer.TERRITORY_CENTER_OFFSETS[territory];
+      if (landOffset) {
+        cx += landOffset.x;
+        cy += landOffset.y;
+      }
+      const { unitDy } = phoneMapStackOffsets(zoom, { mobile });
+      const iconSize = phoneUnitIconSize(zoom, { mobile });
+      this._drawFactoryDamageBadge(ctx, cx + iconSize, cy + unitDy, n, zoom, mobile);
+    }
+  }
+
+  _drawFactoryDamageBadge(ctx, x, y, damage, zoom, mobile) {
+    const z = Math.max(0.08, Number(zoom) || 1);
+    const fontPx = (mobile ? 16 : 12) / z;
+    const text = String(damage);
+    ctx.save();
+    ctx.font = `bold ${fontPx}px sans-serif`;
+    const metrics = ctx.measureText(text);
+    const pad = 4 / z;
+    const width = Math.max(metrics.width + pad * 2, fontPx + pad * 2);
+    const height = fontPx + pad * 2;
+    ctx.fillStyle = 'rgba(0,0,0,0.85)';
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') {
+      ctx.roundRect(x - width / 2, y - height / 2, width, height, 4 / z);
+    } else {
+      ctx.rect(x - width / 2, y - height / 2, width, height);
+    }
+    ctx.fill();
+    ctx.strokeStyle = '#fde68a';
+    ctx.lineWidth = Math.max(1, 1 / z);
+    ctx.stroke();
+    ctx.fillStyle = '#fde68a';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x, y);
+    ctx.restore();
   }
 
   // Render units in a sea zone with three visual sections:

@@ -17,6 +17,9 @@ export function getFriendlyCombatUnits(units, currentPlayerId) {
     && (Number(u.quantity) || 0) > 0
     && u.owner === currentPlayerId
     && u.type !== 'factory'
+    // A bomber committed to a raid is a separate battle and does not fight here.
+    && u.raid !== true
+    && u.raided !== true
   ));
 }
 

@@ -16,7 +16,7 @@ export const SENTENCE_FAIR = 'Consistent with fair dice';
 export const SENTENCE_WATCH = 'Slightly unusual — worth watching';
 export const SENTENCE_UNUSUAL = 'Unusual — unlikely with fair dice';
 
-const CONTEXTS = new Set(['combat', 'aa', 'bombard', 'sub', 'rocket', 'tech']);
+const CONTEXTS = new Set(['combat', 'aa', 'bombard', 'sub', 'rocket', 'tech', 'raid']);
 
 export function emptyTotals() {
   return {
@@ -66,18 +66,19 @@ export function normalizeRollContext(input, face, gameState) {
     else if (raw === 'sub' || raw.startsWith('sub')) context = 'sub';
     else if (raw === 'rocket' || raw.startsWith('rocket')) context = 'rocket';
     else if (raw === 'tech' || raw.startsWith('tech')) context = 'tech';
+    else if (raw === 'raid' || raw.startsWith('raid')) context = 'raid';
     else context = 'combat';
     if (raw === 'attack' || raw.endsWith(':attack') || raw.endsWith(':attacker')) side = 'attacker';
     else if (raw === 'defense' || raw.endsWith(':defense') || raw.endsWith(':defender')) side = 'defender';
     if (context === 'aa') need = 1;
     else if (context === 'tech') need = 6;
-    else if (context === 'rocket') need = null;
+    else if (context === 'rocket' || context === 'raid') need = null;
   } else if (input && typeof input === 'object') {
     context = CONTEXTS.has(input.context) ? input.context : 'combat';
     if (input.side === 'defender' || input.side === 'attacker') side = input.side;
     unit = input.unit == null ? '' : String(input.unit).slice(0, 40);
     playerSeat = input.playerSeat ?? null;
-    if (context === 'rocket') need = null;
+    if (context === 'rocket' || context === 'raid') need = null;
     else if (input.need == null || input.need === '') {
       if (context === 'aa') need = 1;
       else if (context === 'tech') need = 6;
@@ -110,7 +111,7 @@ export function normalizeRollContext(input, face, gameState) {
 
 // null = this die counts toward faces only (rocket, or no threshold).
 export function dieHitModel(context, need, face) {
-  if (context === 'rocket') return null;
+  if (context === 'rocket' || context === 'raid') return null;
   if (need == null || need === '') return null;
   const n = Number(need);
   const f = Number(face);

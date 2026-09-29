@@ -1,4 +1,5 @@
 import { hasLegalAirLandingFrom, wasFriendlyAtTurnStart } from './airLanding.js';
+import { enemyFactoryAt } from './strategicBombing.js';
 
 // Shared combat-move eligibility. A&A: you may empty a territory during
 // combat move. All unmoved eligible units can leave. Friendly transit is
@@ -152,6 +153,7 @@ export function combatMoveReachableDests(gameState, fromName, picked = {}, unitD
       return hasLongRange ? base + 2 : base;
     }));
     const airType = airUnits[0].type;
+    const bombersOnly = airUnits.every((unit) => unit.type === 'bomber');
     const reachable = gameState.getReachableTerritoriesForAir(fromName, minMovement, playerId, true);
     for (const [name, info] of reachable) {
       if (dests.has(name)) continue;
@@ -160,7 +162,10 @@ export function combatMoveReachableDests(gameState, fromName, picked = {}, unitD
       // Empty ocean is not an attack dest (landing is a carrier or a later phase).
       if (zone?.isWater && !seaZoneHasEnemyForAirAttack(gameState, name, playerId)) continue;
       // Empty enemy / neutral land is not an attack and not an occupation.
-      if (!zone?.isWater && !airCombatMoveMayOccupy(gameState, name, playerId)) continue;
+      // A stack of only strategic bombers may still fly to an enemy factory to raid.
+      if (!zone?.isWater && !airCombatMoveMayOccupy(gameState, name, playerId)) {
+        if (!(bombersOnly && enemyFactoryAt(gameState, name, playerId))) continue;
+      }
       // Must still be able to land: start-of-turn friendly land, or a carrier,
       // within movement left after reaching this hex (9.21.26.11).
       const remaining = minMovement - (info.distance || 0);

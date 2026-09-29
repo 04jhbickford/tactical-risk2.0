@@ -81,10 +81,27 @@ import {
   unitsSubsMayRoll,
 } from './combatUnits.js';
 import {
-  factoryProductionLimit,
   factoryProductionUsed,
   resolveSeaMobilizeFactory,
 } from './mobilizeSource.js';
+import {
+  aiRepairChoice,
+  applyFactoryDamage,
+  bomberDicePerSurvivor,
+  countAaHits,
+  enemyFactoryAt,
+  factoryOutput,
+  isRaidMission,
+  maxFactoryDamage,
+  normalizeFactoryDamage,
+  ownedFactoryNames,
+  raidPromptApplies,
+  clearRaidedForTurnEnd,
+  releaseRaidBombersForNcm,
+  repairCost,
+  sumDice,
+  undamagedPlacement,
+} from './strategicBombing.js';
 
 export const GAME_PHASES = {
   LOBBY: 'lobby',
@@ -277,6 +294,12 @@ export class GameState {
 
     // Territories with pending combat
     this.combatQueue = [];
+    // Territories with a pending strategic bombing raid this combat phase.
+    // Separate from combatQueue: the same land can have both.
+    this.raidQueue = [];
+    // Factory damage by territory name. Missing or 0 means undamaged.
+    // Additive (no schema bump). Old saves omit it and load as {}.
+    this.factoryDamage = {};
 
     // Movement history for current turn: [{ from, to, units }]
     this.moveHistory = [];
@@ -821,6 +844,18 @@ export class GameState {
     }
 
     return t.production || 0;
+  }
+
+  getFactoryDamage(territoryName) {
+    return Math.max(0, Math.floor(Number(this.factoryDamage?.[territoryName]) || 0));
+  }
+
+  // Undamaged placement: factory output minus damage, minimum 0.
+  // Output is the capital 20 / other 5 capacity, for the owner named here.
+  getFactoryPlacementLimit(territoryName, ownerId = null) {
+    const owner = ownerId || this.getOwner(territoryName);
+    const output = factoryOutput(this, territoryName, owner);
+    return undamagedPlacement(output, this.getFactoryDamage(territoryName));
   }
 
   // Get factory capacity for a territory (capital factory = 20, other factories = 5)
@@ -2078,7 +2113,7 @@ export class GameState {
           ambiguous: !!resolved.ambiguous,
         };
       }
-      const limit = factoryProductionLimit(resolved.factory, capital);
+      const limit = this.getFactoryPlacementLimit(resolved.factory, player.id);
       const used = factoryProductionUsed(this.mobilizationHistory, resolved.factory, player.id);
       if (used >= limit) {
         return { success: false, error: `Factory production limit reached (${limit} units per turn)` };
@@ -2132,7 +2167,7 @@ export class GameState {
           ambiguous: !!resolved.ambiguous,
         };
       }
-      const airLimit = factoryProductionLimit(resolved.factory, capital);
+      const airLimit = this.getFactoryPlacementLimit(resolved.factory, player.id);
       const airUsed = factoryProductionUsed(this.mobilizationHistory, resolved.factory, player.id);
       if (airUsed >= airLimit) {
         return { success: false, error: `Factory production limit reached (${airLimit} units per turn)` };
@@ -2206,7 +2241,7 @@ export class GameState {
       // Factory production limit check
       // Capital factories can produce 20 units per turn, non-capital 5 units
       const isCapitalFactory = territoryName === capital;
-      const productionLimit = factoryProductionLimit(territoryName, capital);
+      const productionLimit = this.getFactoryPlacementLimit(territoryName, player.id);
       const unitsPlacedHere = factoryProductionUsed(
         this.mobilizationHistory, territoryName, player.id,
       );
@@ -2322,12 +2357,12 @@ export class GameState {
     const capital = this.playerState[playerId]?.capitalTerritory;
     let totalCapacity = 0;
 
-    // Capital provides 20 capacity if player still owns it
+    // Capital provides 20 capacity if player still owns it, minus factory damage.
     if (capital && this.getOwner(capital) === playerId) {
-      totalCapacity += 20;
+      totalCapacity += this.getFactoryPlacementLimit(capital, playerId);
     }
 
-    // Each additional factory provides 5 capacity
+    // Each additional factory provides 5 capacity, minus factory damage.
     for (const [terrName, units] of Object.entries(this.units)) {
       // Skip capital (already counted)
       if (terrName === capital) continue;
@@ -2338,11 +2373,177 @@ export class GameState {
       // Check for factory
       const hasFactory = units.some(u => u.type === 'factory' && u.owner === playerId);
       if (hasFactory) {
-        totalCapacity += 5;
+        totalCapacity += this.getFactoryPlacementLimit(terrName, playerId);
       }
     }
 
     return totalCapacity;
+  }
+
+  // Optional repair during Purchase. 1 IPC per damage point. Owner only.
+  repairFactoryDamage(territoryName, points = 1) {
+    if (this.phase !== GAME_PHASES.PLAYING || this.turnPhase !== TURN_PHASES.PURCHASE) {
+      return { success: false, error: 'Factories are repaired during Purchase' };
+    }
+    const player = this.currentPlayer;
+    if (!player) return { success: false, error: 'No current player' };
+    if (this.getOwner(territoryName) !== player.id) {
+      return { success: false, error: 'Only the owner can repair this factory' };
+    }
+    const owned = ownedFactoryNames(this, player.id);
+    if (!owned.includes(territoryName)) {
+      return { success: false, error: 'No factory there' };
+    }
+    const damage = this.getFactoryDamage(territoryName);
+    if (damage <= 0) return { success: false, error: 'Factory is not damaged' };
+    const requested = Math.max(0, Math.floor(Number(points) || 0));
+    const affordable = Math.max(0, Math.floor(Number(this.getIPCs(player.id)) || 0));
+    const spend = Math.min(requested, damage, affordable);
+    if (spend <= 0) return { success: false, error: 'Not enough IPCs' };
+    const cost = repairCost(spend);
+    const ipcsBefore = Math.max(0, Math.floor(Number(this.getIPCs(player.id)) || 0));
+    this.playerState[player.id].ipcs -= cost;
+    const ipcsAfter = Math.max(0, Math.floor(Number(this.getIPCs(player.id)) || 0));
+    emitGameEvent('purchase', {
+      gameState: this,
+      territory: territoryName,
+      playerId: player.id,
+      payload: {
+        territory: territoryName,
+        repairSpend: cost,
+        ipcsBefore,
+        ipcsAfter,
+      },
+    });
+    const next = damage - spend;
+    if (!this.factoryDamage || typeof this.factoryDamage !== 'object') this.factoryDamage = {};
+    if (next > 0) this.factoryDamage[territoryName] = next;
+    else delete this.factoryDamage[territoryName];
+    this._notify();
+    return {
+      success: true,
+      repaired: spend,
+      cost,
+      damage: this.getFactoryDamage(territoryName),
+      placeable: this.getFactoryPlacementLimit(territoryName, player.id),
+    };
+  }
+
+  // AI: repair only when it would otherwise place nothing.
+  repairIfNothingCanBePlaced(playerId = this.currentPlayer?.id) {
+    const rows = ownedFactoryNames(this, playerId).map((name) => ({
+      name,
+      output: factoryOutput(this, name, playerId),
+      damage: this.getFactoryDamage(name),
+      placeable: this.getFactoryPlacementLimit(name, playerId),
+    }));
+    const choice = aiRepairChoice(rows, this.getIPCs(playerId));
+    if (!choice) return { success: true, repaired: 0 };
+    return this.repairFactoryDamage(choice.territory, choice.points);
+  }
+
+  // Factory AA, then one die per surviving bomber (two with Heavy Bombers).
+  // `rolls` is an optional scripted sequence: AA faces first, then damage faces.
+  resolveStrategicRaid(territory, _unitDefs = {}, { rolls } = {}) {
+    const player = this.currentPlayer;
+    if (!player) return { resolved: false, error: 'No current player' };
+    const queue = Array.isArray(rolls) ? rolls.slice() : null;
+    const take = (kind) => {
+      if (queue) return Number(queue.shift()) || 0;
+      if (kind === 'aa') {
+        return this._rollDie({ context: 'aa', unit: 'factory', side: 'defender', need: 1 });
+      }
+      return this._rollDie({ context: 'raid', unit: 'bomber', side: 'attacker', need: null });
+    };
+
+    const stacks = (this.units[territory] || []).filter((unit) => (
+      unit.owner === player.id
+      && unit.type === 'bomber'
+      && unit.raid === true
+      && (Number(unit.quantity) || 0) > 0
+    ));
+    const bomberCount = stacks.reduce((sum, unit) => sum + (Number(unit.quantity) || 0), 0);
+    const aaRolls = [];
+    for (let i = 0; i < bomberCount; i += 1) aaRolls.push(take('aa'));
+    let toRemove = countAaHits(aaRolls);
+    const hits = toRemove;
+    for (const stack of stacks) {
+      if (toRemove <= 0) break;
+      const lose = Math.min(stack.quantity, toRemove);
+      stack.quantity -= lose;
+      toRemove -= lose;
+    }
+    this.units[territory] = (this.units[territory] || []).filter((unit) => (Number(unit.quantity) || 0) > 0);
+
+    const survivors = (this.units[territory] || []).filter((unit) => (
+      unit.owner === player.id && unit.type === 'bomber' && unit.raid === true
+    ));
+    const survivorCount = survivors.reduce((sum, unit) => sum + (Number(unit.quantity) || 0), 0);
+    const diceEach = bomberDicePerSurvivor(this.hasTech(player.id, 'heavyBombers'));
+    const damageRolls = [];
+    for (let i = 0; i < survivorCount * diceEach; i += 1) damageRolls.push(take('damage'));
+
+    const owner = this.getOwner(territory);
+    const victimIpcsBefore = Math.max(0, Math.floor(Number(this.getIPCs(owner)) || 0));
+    const output = factoryOutput(this, territory, owner);
+    const cap = maxFactoryDamage(output);
+    const hasFactory = (this.units[territory] || []).some((unit) => unit.type === 'factory');
+    const rolled = hasFactory ? sumDice(damageRolls) : 0;
+    const applied = hasFactory
+      ? applyFactoryDamage(this.getFactoryDamage(territory), rolled, cap)
+      : { applied: 0, excess: rolled, next: this.getFactoryDamage(territory) };
+    if (!this.factoryDamage || typeof this.factoryDamage !== 'object') this.factoryDamage = {};
+    if (hasFactory && applied.next > 0) this.factoryDamage[territory] = applied.next;
+    else if (hasFactory) delete this.factoryDamage[territory];
+
+    for (const stack of this.units[territory] || []) {
+      if (stack.owner === player.id && stack.type === 'bomber' && stack.raid === true) {
+        stack.raided = true;
+        delete stack.raid;
+      }
+    }
+    this.raidQueue = (this.raidQueue || []).filter((name) => name !== territory);
+
+    const victimIpcsAfter = Math.max(0, Math.floor(Number(this.getIPCs(owner)) || 0));
+    const raidLedger = {
+      territory,
+      attackerOwner: player.id,
+      damageDealt: applied.applied,
+      victimIpcsBefore,
+      victimIpcsAfter,
+    };
+    emitGameEvent('combat', {
+      gameState: this,
+      territory,
+      playerId: player.id,
+      payload: raidLedger,
+    });
+    this.logCombat({
+      territory,
+      attacker: player.name || player.id,
+      defender: owner,
+      attackerId: player.id,
+      defenderId: owner || null,
+      winner: 'attacker',
+      attackerLosses: hits,
+      defenderLosses: 0,
+      raid: true,
+      raidDamage: applied.applied,
+      ...raidLedger,
+    });
+    this._notify();
+    return {
+      resolved: true,
+      territory,
+      aaRolls,
+      hits,
+      damageRolls,
+      survivors: survivorCount,
+      cap,
+      output,
+      placeable: undamagedPlacement(output, applied.next),
+      ...applied,
+    };
   }
 
   // Get current pending purchase count for a player
@@ -2476,6 +2677,7 @@ export class GameState {
       console.warn(`nextTurn() ignored: game phase is '${this.phase}', not playing`);
       return;
     }
+    clearRaidedForTurnEnd(this.units);
 
     // Advance to the next player still in the game
     let advanceGuard = 0;
@@ -2561,9 +2763,9 @@ export class GameState {
 
     switch (phase) {
       case TURN_PHASES.COMBAT:
-        // Skip if no combats pending
+        // Skip if no combats and no strategic bombing raids are pending
         this._detectCombats();
-        return this.combatQueue.length === 0;
+        return this.combatQueue.length === 0 && (this.raidQueue || []).length === 0;
 
       case TURN_PHASES.MOBILIZE:
         // Skip if nothing was purchased
@@ -2619,14 +2821,14 @@ export class GameState {
       // Handle special phase transitions
       if (nextPhase === TURN_PHASES.COMBAT) {
         this._detectCombats();
-        // Skip if no combats
-        if (this.combatQueue.length === 0) {
+        // Skip if no combats and no raids
+        if (this.combatQueue.length === 0 && (this.raidQueue || []).length === 0) {
           continue;
         }
       } else if (nextPhase === TURN_PHASES.NON_COMBAT_MOVE) {
-        // Block advancing if there are unresolved combats
-        if (this.combatQueue && this.combatQueue.length > 0) {
-          // Cannot advance - combats must be resolved first
+        // Block advancing if there are unresolved combats or raids
+        if ((this.combatQueue && this.combatQueue.length > 0)
+          || (this.raidQueue && this.raidQueue.length > 0)) {
           console.warn('Cannot advance to non-combat move: unresolved combats remain');
           return; // Don't advance, stay in current phase
         }
@@ -2665,6 +2867,12 @@ export class GameState {
 
       // COMBAT→NCM and NCM→mobilize: aircraft cannot remain over open water.
       landLooseAirIfLeavingAirPhase();
+      // Raiding bombers stay over the factory through that rescue so the
+      // player can fly them home during Non-Combat Move. Clear `moved`
+      // only after the rescue, or they would be picked up by it.
+      if (nextPhase === TURN_PHASES.NON_COMBAT_MOVE) {
+        releaseRaidBombersForNcm(this.units);
+      }
       // Set the phase and break
       this.turnPhase = nextPhase;
       break;
@@ -2748,6 +2956,26 @@ export class GameState {
     const isEnemy = toOwner && toOwner !== player.id && !this.areAllies(player.id, toOwner);
     const isAllied = toOwner && toOwner !== player.id && this.areAllies(player.id, toOwner);
     const hostileSea = !!(toT?.isWater && seaZoneHasEnemyForAirAttack(this, toTerritory, player.id));
+
+    // The AI always makes a normal attack. A human moving strategic bombers
+    // onto an enemy factory must choose before the move is committed.
+    const raidChoice = player.isAI ? false : options.raid;
+    const raid = raidChoice === true && enemyFactoryAt(this, toTerritory, player.id);
+    if (raidPromptApplies({
+      gameState: this,
+      player,
+      isCombatMove,
+      units: unitsToMove,
+      territory: toTerritory,
+      raidChoice,
+    })) {
+      return {
+        success: false,
+        needsRaidChoice: true,
+        territory: toTerritory,
+        error: 'Choose normal attack or strategic bombing raid',
+      };
+    }
 
     // Non-combat move rules
     if (isNonCombatMove) {
@@ -2915,7 +3143,9 @@ export class GameState {
       }
       // Empty enemy or neutral land is not a combat-move attack. Aircraft
       // do not conquer it and must not end the move sitting on it.
-      if (isCombatMove && !toT?.isWater && !airCombatMoveMayOccupy(this, toTerritory, player.id)) {
+      // A strategic bomber sent on a raid may still enter a factory-only territory.
+      const bombingThis = raid && airUnit.type === 'bomber' && enemyFactoryAt(this, toTerritory, player.id);
+      if (isCombatMove && !toT?.isWater && !airCombatMoveMayOccupy(this, toTerritory, player.id) && !bombingThis) {
         return { success: false, error: 'Aircraft cannot attack or occupy an empty territory' };
       }
       if (isCombatMove && !hasLegalAirLandingFrom(
@@ -3232,8 +3462,16 @@ export class GameState {
             }
           }
         } else {
-          // Land/air units or sea units with movement=1: use simple moved flag
-          const destUnit = toUnits.find(u => u.type === moveUnit.type && u.owner === player.id && u.moved);
+          // Land/air units or sea units with movement=1: use simple moved flag.
+          // Raiding bombers stay on their own stack so a normal attack in
+          // the same territory does not absorb them.
+          const assignRaid = raid && moveUnit.type === 'bomber';
+          const destUnit = toUnits.find(u => (
+            u.type === moveUnit.type
+            && u.owner === player.id
+            && u.moved
+            && !!u.raid === assignRaid
+          ));
           if (destUnit) {
             // Merge with existing moved stack
             destUnit.quantity += moveUnit.quantity;
@@ -3243,7 +3481,8 @@ export class GameState {
               type: moveUnit.type,
               quantity: moveUnit.quantity,
               owner: player.id,
-              moved: true
+              moved: true,
+              ...(assignRaid ? { raid: true } : {}),
             });
           }
         }
@@ -3336,6 +3575,9 @@ export class GameState {
       launchedFromCarrier: Object.keys(launchedFromCarrier).length > 0 ? launchedFromCarrier : undefined,
       blitzedCaptures: blitzedCaptures.length > 0 ? blitzedCaptures : undefined, // Track blitzed territories for undo
       ...(Number.isInteger(captureEventIdx) ? { captureEventIdx } : {}),
+      ...(raid && unitsToMove.some((unit) => unit.type === 'bomber' && (Number(unit.quantity) || 0) > 0)
+        ? { raid: true }
+        : {}),
     });
 
     // Track air unit origins for post-combat landing (combat move only)
@@ -3655,8 +3897,11 @@ export class GameState {
     } else {
       // Handle regular units (aggregated by type)
       for (const moveUnit of lastMove.units) {
-        // Remove from destination
-        const destUnit = toUnits.find(u => u.type === moveUnit.type && u.owner === player.id && !u.id);
+        // Remove from destination. A raid move took the bomber stack marked raid.
+        const wantRaid = !!lastMove.raid && moveUnit.type === 'bomber';
+        const destUnit = toUnits.find(u => (
+          u.type === moveUnit.type && u.owner === player.id && !u.id && !!u.raid === wantRaid
+        )) || toUnits.find(u => u.type === moveUnit.type && u.owner === player.id && !u.id);
         if (destUnit) {
           destUnit.quantity -= moveUnit.quantity;
           if (destUnit.quantity <= 0) {
@@ -3756,7 +4001,7 @@ export class GameState {
       for (const moveUnit of move.units) {
         // Find unit in combat territory
         const combatUnit = combatUnits.find(u =>
-          u.type === moveUnit.type && u.owner === player.id
+          u.type === moveUnit.type && u.owner === player.id && !isRaidMission(u)
         );
 
         if (combatUnit) {
@@ -3976,9 +4221,12 @@ export class GameState {
 
     const navalCombats = [];
     const landCombats = [];
+    const raidTerritories = [];
 
     for (const [territory, units] of Object.entries(this.units)) {
-      const hasPlayerUnits = units.some(u => u.owner === player.id);
+      const hasPlayerUnits = units.some(u => (
+        u.owner === player.id && !isRaidMission(u) && (Number(u.quantity) || 0) > 0
+      ));
       const hasEnemyUnits = units.some(u =>
         u.owner !== player.id && !this.areAllies(player.id, u.owner)
       );
@@ -3991,10 +4239,17 @@ export class GameState {
           landCombats.push(territory);
         }
       }
+
+      if (units.some(u => (
+        u.owner === player.id && u.raid === true && u.type === 'bomber' && (Number(u.quantity) || 0) > 0
+      ))) {
+        raidTerritories.push(territory);
+      }
     }
 
-    // Naval battles first, then land battles
+    // Naval battles first, then land battles. Raids are a separate queue.
     this.combatQueue = [...navalCombats, ...landCombats];
+    this.raidQueue = raidTerritories;
   }
 
   // Mark a sea zone as cleared for shore bombardment (after winning naval battle)
@@ -4261,7 +4516,9 @@ export class GameState {
     const isNavalBattle = t?.isWater;
     if (isNavalBattle) this._launchCarrierAircraft(units);
 
-    let attackers = units.filter(u => u.owner === player.id && (Number(u.quantity) || 0) > 0);
+    let attackers = units.filter(u => (
+      u.owner === player.id && !isRaidMission(u) && (Number(u.quantity) || 0) > 0
+    ));
     // All enemy units in territory (for rolling dice - AA guns still roll at aircraft)
     let allDefenders = units.filter(u => u.owner !== player.id && !this.areAllies(player.id, u.owner) && (Number(u.quantity) || 0) > 0);
     if (isNavalBattle) {
@@ -4456,7 +4713,9 @@ export class GameState {
       this.units[territory] = this.units[territory].filter((u) => (Number(u.quantity) || 0) > 0 || u.type === 'factory');
     }
 
-    const remainingAttackers = this.units[territory].filter(u => u.owner === player.id && (Number(u.quantity) || 0) > 0);
+    const remainingAttackers = this.units[territory].filter(u => (
+      u.owner === player.id && !isRaidMission(u) && (Number(u.quantity) || 0) > 0
+    ));
     const remainingDefenders = this.units[territory].filter(u => {
       if (u.owner === player.id || this.areAllies(player.id, u.owner)) return false;
       // Factories are captured, not combat units - don't count them as defenders
@@ -5488,6 +5747,12 @@ export class GameState {
       outcome: result.winner === 'attacker' ? 'attacker' : 'defender',
       attackerLosses,
       defenderLosses,
+      ...(result.raid ? {
+        attackerOwner: result.attackerOwner ?? attackerId,
+        damageDealt: Number(result.damageDealt) || 0,
+        victimIpcsBefore: Number(result.victimIpcsBefore) || 0,
+        victimIpcsAfter: Number(result.victimIpcsAfter) || 0,
+      } : {}),
     });
   }
 
@@ -6526,6 +6791,9 @@ export class GameState {
       if (wasFriendlyAtTurnStart(this, name, player.id)) continue;
       for (const unit of [...(stacks || [])]) {
         if (unit.owner !== player.id || !unitDefs[unit.type]?.isAir) continue;
+        // Raiders land in Non-Combat Move. The end-of-NCM check destroys
+        // them if they are still not on a legal spot. Do not fly them home here.
+        if (isRaidMission(unit)) continue;
         let left = unit.quantity || 0;
         let guard = 0;
         while (left > 0 && guard++ < 40) {
@@ -6836,6 +7104,12 @@ export class GameState {
       playerState: this.playerState,
       pendingPurchases: this.pendingPurchases,
       combatQueue: this.combatQueue,
+      // Additive (no schema bump): pending raids and factory damage.
+      // Omitted when empty so an old client and an old save stay quiet.
+      raidQueue: (this.raidQueue || []).length ? this.raidQueue.slice() : undefined,
+      factoryDamage: Object.keys(normalizeFactoryDamage(this.factoryDamage)).length
+        ? normalizeFactoryDamage(this.factoryDamage)
+        : undefined,
       gameOver: this.gameOver,
       winner: this.winner,
       winCondition: this.winCondition,
@@ -6935,6 +7209,8 @@ export class GameState {
     this.playerState = data.playerState;
     this.pendingPurchases = data.pendingPurchases || [];
     this.combatQueue = data.combatQueue || [];
+    this.raidQueue = Array.isArray(data.raidQueue) ? data.raidQueue.slice() : [];
+    this.factoryDamage = normalizeFactoryDamage(data.factoryDamage);
     this.gameOver = data.gameOver || false;
     this.winner = data.winner || null;
     this.winCondition = data.winCondition || null;

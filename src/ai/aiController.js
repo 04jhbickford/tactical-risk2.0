@@ -455,6 +455,7 @@ export class AIController {
     this._updateStatus(`${player.name} purchasing units...`);
     await this._delay(this._getActionDelay());
 
+    this.gameState.repairIfNothingCanBePlaced?.(player.id);
     const ipcs = this.gameState.getIPCs(player.id);
     if (ipcs <= 0 || !this.unitDefs) {
       this.gameState.nextPhase();
@@ -915,6 +916,13 @@ export class AIController {
   // ============================================
   async _handleCombat(aiPlayer, player) {
     this._updateStatus(`${player.name} resolving combat...`);
+
+    // AI does not choose raids. Anything already flagged (a human did) still resolves.
+    while (this.gameState.raidQueue && this.gameState.raidQueue.length > 0) {
+      const territory = this.gameState.raidQueue[0];
+      this.gameState.resolveStrategicRaid(territory, this.unitDefs);
+      await this._delay(this.skipMode ? 20 : 200);
+    }
 
     // Auto-resolve all combats
     while (this.gameState.combatQueue && this.gameState.combatQueue.length > 0) {

@@ -27,6 +27,7 @@ import {
 } from '../state/combatUnits.js';
 import { dequeueResolvedCombatHeads, applyTerritoryCapture } from '../state/combatFinalize.js';
 import { persistableUnit } from '../state/persistState.js';
+import { isRaidMission } from '../state/strategicBombing.js';
 import { emitGameEvent, getGameEventLog } from '../multiplayer/gameEventLog.js';
 import { flushDiceBuffer } from '../stats/diceTracker.js';
 import { renderCombatBattleList } from './battleOrder.js';
@@ -388,7 +389,7 @@ export class CombatUI {
     const units = this.gameState.getUnitsAt(this.currentTerritory);
 
     const attackers = units
-      .filter(u => u.owner === player.id)
+      .filter(u => u.owner === player.id && u.raid !== true && u.raided !== true)
       .map(u => ({ ...u }));
 
     // Include aircraft from carriers as separate combat units
@@ -1999,6 +2000,13 @@ export class CombatUI {
     this._render();
   }
 
+  // Bombers committed to a raid share the hex but are not in the combat copies.
+  _preservedRaidUnits(existingUnits) {
+    return (existingUnits || [])
+      .filter((unit) => isRaidMission(unit) && (Number(unit.quantity) || 0) > 0)
+      .map((unit) => ({ ...unit }));
+  }
+
   // Sync current combat state to gameState.units for real-time map updates
   _syncCombatStateToGame() {
     if (!this.currentTerritory) return;
@@ -2024,11 +2032,14 @@ export class CombatUI {
 
     // IMPORTANT: Preserve factories - they are NOT part of combat (excluded from defenders)
     // They will be captured/transferred during _finalizeCombat()
+    // Raiders are a separate battle in this same territory. The combat copies
+    // never included them, so writing the battle back must put them back.
     const existingUnits = this.gameState.units[this.currentTerritory] || [];
     const factory = existingUnits.find(u => u.type === 'factory');
     if (factory) {
       units.push({ ...factory });
     }
+    units.push(...this._preservedRaidUnits(existingUnits));
 
     // Update gameState and trigger re-render
     this.gameState.units[this.currentTerritory] = units;
@@ -2203,7 +2214,11 @@ export class CombatUI {
       this._restoreSubmergedSide(units, submergedSubs.defender, defenderOwner, false);
     }
 
-    this.gameState.units[this.currentTerritory] = mergeLiveCarrierLoads(liveCarrierBoard, units);
+    const raidUnits = this._preservedRaidUnits(this.gameState.units[this.currentTerritory] || []);
+    this.gameState.units[this.currentTerritory] = mergeLiveCarrierLoads(
+      liveCarrierBoard,
+      units.concat(raidUnits),
+    );
 
     // Log combat result. Sea zones have no owner, so the defender seat is
     // the side that actually had units in the battle.
