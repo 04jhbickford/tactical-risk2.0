@@ -172,6 +172,8 @@ const {
   resolveHostAwayBanner,
   shouldShowHudTicker,
   shouldShowHudLastAction,
+  shouldShowHudClickLine,
+  confirmLineNamesLand,
   formatAiTurnLine,
   resolveHudWhoseTurn,
 } = await import(pathToFileURL(join(root, 'src/ui/hudClarity.js')));
@@ -189,7 +191,7 @@ const unitDefs = {
 };
 
 console.log('=== Version stamps ===');
-check('GAME_VERSION is V2.81.57-unified.28', GAME_VERSION === 'V2.81.57-unified.28');
+check('GAME_VERSION is V2.81.57-unified.29', GAME_VERSION === 'V2.81.57-unified.29');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== Presence: background must not delete or go offline ===');
@@ -728,6 +730,18 @@ console.log('=== James lock HUD: whose turn / last action / click landed ===');
       phase: GAME_PHASES.CAPITAL_PLACEMENT,
       lastActionEntry: { type: 'turn', data: { message: "Round 1 - Germans' turn begins" } },
     }) === false);
+  check('no log entry is not a Last action line',
+    shouldShowHudLastAction({ phase: GAME_PHASES.CAPITAL_PLACEMENT, lastActionEntry: null }) === false);
+  check('confirm that names the land drops the click strip',
+    confirmLineNamesLand('Confirm: Capital in Finland Norway', 'Finland Norway')
+    && shouldShowHudClickLine({
+      lastClick: { landed: true, label: 'Finland Norway' },
+      confirmLabel: 'Confirm: Capital in Finland Norway',
+    }) === false
+    && shouldShowHudClickLine({
+      lastClick: { landed: true, label: 'Finland Norway' },
+      confirmLabel: '',
+    }) === true);
   const phoneClick = resolveHudClarity({
     phase: GAME_PHASES.CAPITAL_PLACEMENT,
     currentPlayerName: 'Russians',
@@ -1737,7 +1751,7 @@ console.log('=== V2.81.42 My Games hygiene + presence comments ===');
     && shouldStartHostFailover({ hostPresence: 'offline', offlineForMs: 90000 }) === true);
 }
 
-console.log('=== V2.81.57-unified.28 Bastion same-match rejoin ===');
+console.log('=== V2.81.57-unified.29 Bastion same-match rejoin ===');
 {
   const seated = [{
     id: 'game_a29',

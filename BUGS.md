@@ -2,6 +2,20 @@
 
 ---
 
+## 9.29.26 — unified.29 local setup, confirm line, top bar
+
+Stamp `V2.81.57-unified.29`. Schema stays 11. A `V2.82-unified.28` doc is older than this tab and does not prompt. A `V2.82-unified.30` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.29`). Rebased onto `9a33af38` (unified.28). The speed fix stays: boot does not load map tiles, a game loads only its own map, and the outline cache is kept for the board already built.
+
+James: execute, no mockup. Three screens only.
+
+New Local Game keeps the painted cover as a quiet backdrop. One short column lists the powers, Human or AI (Easy, Medium, and Hard stay on that control), a name, a color, and Start. Territories, starting IPCs, units per round, starting army, tech, map, land bridges, tactical bombers, teams, and max players sit behind one More control. "Standard rules" is that control's summary, once. Sign-in and the online lobby options card are unchanged.
+
+Place Capital uses one confirm line on the bottom edge of the screen. The full land name stays on that line. The side panel does not cover the map; Actions, Players, Territory, and Log stay a corner cluster. The same confirm control is one full line on the bottom edge anywhere it is shared. Purchase, combat, noncombat, and Mobilize steps are not redesigned.
+
+The top bar is one row: round, phase (the phase prompt when that step has one), whose turn, and the money. The power chips and the turn-order flag pair are gone. When the confirm line already names the land, the "Click landed" strip is not shown. A last-action line appears only for a real log entry, and it does not repeat the phase.
+
+`firestore.rules`, `src/map/camera.js`, `src/map/mapRenderer.js`, and `src/ui/minimap.js` stay byte-identical to unified.28. No merge, no deploy, no Discord post.
+
 ## 9.29.26 — unified.28 pan and load
 
 Stamp `V2.81.57-unified.28`. Schema stays 11. A `V2.82-unified.27` doc is older than this tab and does not prompt. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.28`).

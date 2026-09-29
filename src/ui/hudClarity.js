@@ -80,10 +80,26 @@ export function shouldShowHudTicker({ mobile = false } = {}) {
 // "X's turn begins" is the previous seat's banner. Do not keep it as
 // "Last action" while the current seat is placing a capital.
 export function shouldShowHudLastAction({ phase, lastActionEntry } = {}) {
-  const msg = lastActionEntry?.data?.message || lastActionEntry?.type || '';
-  if (phase === GAME_PHASES.CAPITAL_PLACEMENT && /turn begins/i.test(String(msg))) {
+  if (!lastActionEntry) return false;
+  const msg = String(lastActionEntry?.data?.message || lastActionEntry?.type || '').trim();
+  if (!msg) return false;
+  if (phase === GAME_PHASES.CAPITAL_PLACEMENT && /turn begins/i.test(msg)) {
     return false;
   }
+  return true;
+}
+
+// The confirm line already names the land. The click strip would repeat it
+// as a second header under the one top-bar row.
+export function confirmLineNamesLand(confirmLabel, landName) {
+  const land = String(landName || '').trim();
+  const label = String(confirmLabel || '').replace(/\s+/g, ' ').trim();
+  if (!land || !label) return false;
+  return label.includes(land);
+}
+
+export function shouldShowHudClickLine({ lastClick, confirmLabel } = {}) {
+  if (lastClick?.landed && confirmLineNamesLand(confirmLabel, lastClick.label)) return false;
   return true;
 }
 

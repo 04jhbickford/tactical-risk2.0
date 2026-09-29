@@ -1,10 +1,9 @@
 // Top bar HUD: game title, current turn info, player legend
 
-import { GAME_PHASES, TURN_PHASES, TURN_PHASE_ORDER, TURN_PHASE_NAMES } from '../state/gameState.js';
-import { possessivePhrase } from '../utils/possessive.js';
-import { isMobileShell, formatMobilePhaseWord, formatMobilePlayerMeta, readableFactionTextColor, setShellFlag, shouldShowPhoneMenuPlayerRoster, isPhoneSetupPhase, phoneMenuHomeActions } from './mobileShell.js';
+import { GAME_PHASES, TURN_PHASE_NAMES } from '../state/gameState.js';
+import { isMobileShell, formatMobilePlayerMeta, setShellFlag, shouldShowPhoneMenuPlayerRoster, isPhoneSetupPhase, phoneMenuHomeActions } from './mobileShell.js';
 import { syncBottomSurfaces } from './bottomSurface.js';
-import { resolveHudClarity, shouldShowHudTicker } from './hudClarity.js';
+import { resolveHudClarity, shouldShowHudClickLine, shouldShowHudTicker } from './hudClarity.js';
 import { confirmChoice } from './confirmChoice.js';
 import { bindDiceStatsControls, ensureDiceStatsLoaded, renderDiceStatsMarkup } from './diceStatsPanel.js';
 import { loadBattleDice, renderBattleDiceMarkup } from './battleDicePanel.js';
@@ -208,84 +207,11 @@ export class HUD {
       </div>
     `;
 
-    html += `<span class="hud-title">Tactical Risk</span>`;
-
-    if (this.gameState && this.gameState.phase !== GAME_PHASES.LOBBY) {
-      const phase = this.gameState.phase;
-      const player = this.gameState.currentPlayer;
-
-      if (player) {
-        // Current player indicator - prominent display
-        const flagSrc = player.flag ? `assets/flags/${player.flag}` : null;
-        html += `
-          <div class="hud-current-turn">
-            ${flagSrc ? `<img src="${flagSrc}" class="hud-flag-large" alt="${player.name}">` : ''}
-            <div class="hud-turn-info">
-              <span class="hud-player-name" style="color: ${player.color}">${possessivePhrase(player.name, phase === GAME_PHASES.TERRITORY_DRAFT ? 'pick' : 'Turn')}</span>
-              <span class="hud-phase-name">${this._getPhaseName(phase)}</span>
-            </div>
-          </div>`;
-
-        // Turn phase progress (during PLAYING)
-        if (phase === GAME_PHASES.PLAYING) {
-          const currentIndex = TURN_PHASE_ORDER.indexOf(this.gameState.turnPhase);
-          html += `
-            <div class="hud-phase-progress">
-              <span class="hud-round-badge">Round ${this.gameState.round}</span>
-              ${this._victoryChipHtml()}
-              <div class="phase-dots">
-                ${TURN_PHASE_ORDER.map((tp, i) => {
-                  const isActive = i === currentIndex;
-                  const isPast = i < currentIndex;
-                  const cls = isActive ? 'active' : isPast ? 'past' : '';
-                  return `<span class="phase-dot ${cls}" title="${TURN_PHASE_NAMES[tp]}"></span>`;
-                }).join('')}
-              </div>
-            </div>`;
-        }
-
-        // Turn order display
-        html += `<div class="hud-turn-order">`;
-        const currentIdx = this.gameState.currentPlayerIndex;
-        for (let i = 0; i < this.gameState.players.length; i++) {
-          const p = this.gameState.players[i];
-          const isCurrent = i === currentIdx;
-          const isPast = i < currentIdx;
-          let cls = isCurrent ? 'current' : isPast ? 'past' : '';
-          if (p.surrendered) cls += ' out';
-          const flagSrc = p.flag ? `assets/flags/${p.flag}` : null;
-
-          if (i > 0) {
-            html += `<span class="turn-order-arrow">→</span>`;
-          }
-
-          html += `
-            <div class="turn-order-item ${cls}" ${p.surrendered ? 'title="Surrendered"' : ''}>
-              ${flagSrc ? `<img src="${flagSrc}" class="turn-order-flag" alt="${p.name}">` : `<span style="color:${p.color}">●</span>`}
-            </div>
-          `;
-        }
-        html += `</div>`;
-      }
+    if (this.gameState && this.gameState.phase !== GAME_PHASES.LOBBY && this.gameState.currentPlayer) {
+      html += this._renderLiveRow();
+    } else {
+      html += `<span class="hud-title">Tactical Risk</span>`;
     }
-
-    // Player legend - compact, shows turn order only (detailed stats in Players tab)
-    html += `<div class="hud-legend">`;
-    if (this.gameState && this.gameState.players.length > 0) {
-      for (const p of this.gameState.players) {
-        const isActive = this.gameState.currentPlayer?.id === p.id;
-        let itemClass = isActive ? ' active' : '';
-        if (p.surrendered) itemClass += ' out';
-        const flagSrc = p.flag ? `assets/flags/${p.flag}` : null;
-
-        html += `
-          <span class="legend-item${itemClass}" ${p.surrendered ? 'title="Surrendered"' : ''}>
-            ${flagSrc ? `<img src="${flagSrc}" class="legend-flag" alt="${p.name}">` : `<span class="legend-dot" style="background:${p.color}"></span>`}
-            <span class="legend-name">${p.name}</span>${p.surrendered ? '<span class="legend-out">OUT</span>' : ''}
-          </span>`;
-      }
-    }
-    html += `</div>`;
 
     this.el.innerHTML = html;
     this._bindEvents();
@@ -299,29 +225,9 @@ export class HUD {
   _renderMobile() {
     const player = this.gameState?.currentPlayer;
     const inGame = this.gameState && this.gameState.phase !== GAME_PHASES.LOBBY && player;
-    const phaseName = inGame
-      ? formatMobilePhaseWord(this.gameState.phase, this.gameState.turnPhase)
-      : '';
-    const flagSrc = inGame && player.flag ? `assets/flags/${player.flag}` : null;
-    const ipcVal = inGame && this.gameState.getIPCs
-      ? this.gameState.getIPCs(player.id)
-      : null;
 
     let identity = `<span class="hud-title">Tactical Risk</span>`;
-    if (inGame) {
-      identity = `
-        <div class="hud-mobile-identity">
-          <span class="hud-mobile-chip hud-mobile-phase" title="Phase">${phaseName}</span>
-          <span class="hud-mobile-chip hud-mobile-seat">
-            ${flagSrc
-              ? `<img src="${flagSrc}" class="hud-mobile-flag" alt="">`
-              : `<span class="hud-mobile-swatch" style="background:${player.color}"></span>`}
-            <span class="hud-mobile-faction" style="color:${readableFactionTextColor(player.color)}">${player.name}</span>
-          </span>
-          ${ipcVal != null ? `<span class="hud-mobile-chip hud-mobile-ipc" title="IPCs">IPC ${ipcVal}</span>` : ''}
-          ${this._victoryChipHtml(true)}
-        </div>`;
-    }
+    if (inGame) identity = this._renderLiveRow();
 
     let playersHtml = '';
     if (this.gameState?.players?.length) {
@@ -432,6 +338,24 @@ export class HUD {
     });
   }
 
+  _renderLiveRow() {
+    const gs = this.gameState;
+    const player = gs?.currentPlayer;
+    if (!gs || !player || gs.phase === GAME_PHASES.LOBBY) return '';
+    const c = this._clarityModel();
+    const phaseName = this._getPhaseName(gs.phase);
+    const ipc = typeof gs.getIPCs === 'function' ? gs.getIPCs(player.id) : '';
+    const phaseText = c.next || phaseName;
+    return `
+      <div class="hud-live-row" data-hud-live="1">
+        <span class="hud-live-round">Round ${gs.round}</span>
+        <span class="hud-live-phase">${phaseText}</span>
+        <span class="hud-live-turn" style="color:${player.color}">${player.name}</span>
+        <span class="hud-live-money hud-mobile-ipc">IPC ${ipc}</span>
+        ${this._victoryChipHtml(isMobileShell())}
+      </div>`;
+  }
+
   _victoryChipHtml(mobile = false) {
     const state = this.gameState;
     if (!state || state.phase === GAME_PHASES.LOBBY) return '';
@@ -454,16 +378,32 @@ export class HUD {
       return;
     }
     const c = this._clarityModel();
+    const confirmBtn = document.querySelector('.pp-confirm-edge:not(:disabled):not(.disabled)');
+    const confirmLabel = confirmBtn ? confirmBtn.textContent : '';
+    const showClick = shouldShowHudClickLine({
+      lastClick: this.lastClick,
+      confirmLabel,
+    });
+    const last = c.lastAction
+      ? `<span class="hud-clarity-last" data-clarity="last">${c.lastAction}</span>`
+      : '';
+    const click = showClick
+      ? `<span class="hud-clarity-click" data-clarity="click">${c.click}</span>`
+      : '';
+    const match = c.match
+      ? `<span class="hud-clarity-match" data-clarity="match">${c.match}</span>`
+      : '';
+    if (!last && !click && !match) {
+      this.clarityEl.hidden = true;
+      this.clarityEl.innerHTML = '';
+      return;
+    }
     this.clarityEl.hidden = false;
     this.clarityEl.className = `hud-clarity${c.ownSeat ? ' your-turn' : ' waiting'}`;
     this.clarityEl.innerHTML = `
-      <span class="hud-clarity-turn" data-clarity="turn">${c.whoseTurn}</span>
-      <span class="hud-clarity-phase" data-clarity="phase">${c.phase}</span>
-      ${c.next ? `<span class="hud-clarity-next" data-clarity="next">${c.next}</span>` : ''}
-      ${c.budget ? `<span class="hud-clarity-budget" data-clarity="budget">${c.budget}</span>` : ''}
-      <span class="hud-clarity-last" data-clarity="last">${c.lastAction}</span>
-      <span class="hud-clarity-click" data-clarity="click">${c.click}</span>
-      ${c.match ? `<span class="hud-clarity-match" data-clarity="match">${c.match}</span>` : ''}
+      ${last}
+      ${click}
+      ${match}
     `;
   }
 

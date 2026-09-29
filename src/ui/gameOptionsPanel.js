@@ -179,10 +179,28 @@ export function renderGameOptionsPanel(raw, {
   draftMode = null,
   seatedCount = 0,
   mapId = CLASSIC_MAP_ID,
+  chrome = 'options',
 } = {}) {
   const options = normalizeGameOptions(raw);
   const summary = describe(options);
   const phone = phoneOptionsLabel(options);
+  const rows = rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMode, seatedCount, mapId });
+  if (chrome === 'more') {
+    return `
+    <section class="go-panel go-panel--more${open ? ' is-open' : ''}" data-game-options="1" data-editable="${editable ? '1' : '0'}">
+      <button type="button" class="go-more" data-action="go-toggle" aria-expanded="${open ? 'true' : 'false'}">
+        <span>More</span>
+        <span class="go-summary-text">${esc(summary)}</span>
+      </button>
+      ${editable ? '' : '<p class="go-host-note">Set by host</p>'}
+      <div class="go-anchor">
+        <div class="go-body">
+          ${rows}
+        </div>
+      </div>
+    </section>
+  `;
+  }
   return `
     <section class="go-panel${open ? ' is-open' : ''}${sheet ? ' is-sheet' : ''}" data-game-options="1" data-editable="${editable ? '1' : '0'}">
       <button type="button" class="go-collapsed" data-action="go-toggle" aria-expanded="${open ? 'true' : 'false'}">
@@ -201,7 +219,7 @@ export function renderGameOptionsPanel(raw, {
       ${editable ? '' : '<p class="go-host-note">Set by host</p>'}
       <div class="go-anchor">
         <div class="go-body">
-          ${rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMode, seatedCount, mapId })}
+          ${rows}
         </div>
       </div>
       <div class="go-sheet" ${sheet ? '' : 'hidden'}>
@@ -256,8 +274,10 @@ function paintSummary(panel, options) {
   const phone = phoneOptionsLabel(options);
   const collapsed = panel.querySelector('.go-collapsed .go-summary-text');
   const launch = panel.querySelector('.go-phone-launch .go-summary-text');
+  const more = panel.querySelector('.go-more .go-summary-text');
   if (collapsed) collapsed.textContent = summary;
   if (launch) launch.textContent = phone;
+  if (more) more.textContent = summary;
   const per = panel.querySelector('[data-go="unitsPerRound"]');
   if (per) {
     per.dataset.value = String(options.unitsPerRound);
@@ -315,6 +335,7 @@ export function bindGameOptions(root, { onChange, onToggle, onMapChange } = {}) 
       panel.classList.toggle('is-open');
       const expanded = panel.classList.contains('is-open');
       panel.querySelector('.go-collapsed')?.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      panel.querySelector('.go-more')?.setAttribute('aria-expanded', expanded ? 'true' : 'false');
       const label = panel.querySelector('.go-customize');
       if (label) label.textContent = expanded ? 'Hide' : 'Customize';
       tellToggle();
