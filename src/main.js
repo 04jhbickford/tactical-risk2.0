@@ -17,14 +17,18 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
   };
 }
 
-import { applyMapMetrics, Camera, MAP_WIDTH, SCROLL_WRAP_X } from './map/camera.js';
+import { applyMapMetrics, Camera, MAP_HEIGHT, MAP_WIDTH, SCROLL_WRAP_X } from './map/camera.js';
 import {
   activateMap,
+  CLASSIC_MAP_ID,
   getActiveMap,
+  getMap,
   loadMapDecision,
+  mapIdFromDoc,
   resolveMapId,
   UNKNOWN_MAP_MESSAGE,
 } from './map/mapRegistry.js';
+import { getBoard, registerBoard } from './map/boardCatalog.js';
 import { decomposeMoveSelection } from './state/combatMoveEligibility.js';
 import { MapRenderer } from './map/mapRenderer.js';
 import { TerritoryRenderer } from './map/territoryRenderer.js';
@@ -286,10 +290,73 @@ async function init() {
     fetch(bootMap.data.setup),
     fetch(bootMap.data.units),
   ]);
-  const territories = await territoriesRes.json();
-  const continents = await continentsRes.json();
-  const setup = await setupRes.json();
+  let territories = await territoriesRes.json();
+  let continents = await continentsRes.json();
+  let setup = await setupRes.json();
   const unitDefs = await unitsRes.json();
+  registerBoard(CLASSIC_MAP_ID, { territories, continents, setup });
+
+  const boardLoads = new Map();
+  function ensureBoard(mapId) {
+    const resolved = resolveMapId(mapId);
+    const id = resolved.ok ? resolved.mapId : CLASSIC_MAP_ID;
+    const ready = getBoard(id);
+    if (ready) return Promise.resolve(ready);
+    if (boardLoads.has(id)) return boardLoads.get(id);
+    const map = getMap(id);
+    if (!map?.data) return Promise.resolve(null);
+    const job = Promise.all([
+      fetch(map.data.territories),
+      fetch(map.data.continents),
+      fetch(map.data.setup),
+    ]).then(async ([territoryRes, continentRes, setupRes]) => {
+      if (!territoryRes.ok || !continentRes.ok || !setupRes.ok) return null;
+      const board = {
+        territories: await territoryRes.json(),
+        continents: await continentRes.json(),
+        setup: await setupRes.json(),
+      };
+      registerBoard(id, board);
+      return board;
+    });
+    boardLoads.set(id, job);
+    return job;
+  }
+
+  let tilesLoadedFor = CLASSIC_MAP_ID;
+  function useMap(mapId) {
+    const resolved = resolveMapId(mapId);
+    const id = resolved.ok ? resolved.mapId : CLASSIC_MAP_ID;
+    const changed = getActiveMap().id !== id;
+    activateMap(id);
+    applyMapMetrics(getActiveMap());
+    const board = getBoard(id);
+    if (board) {
+      territories = board.territories;
+      continents = board.continents;
+      setup = board.setup;
+      territoryRenderer.setBoard(territories, continents);
+      territoryMap.setTerritories(territories);
+      tooltip.setContinents(continents);
+      purchasePopup.setTerritories(territories);
+      movementUI.setTerritories(territories);
+      placementUI.setTerritories(territories);
+      mobilizeUI.setTerritories(territories);
+      airLandingUI.setTerritories(territories);
+      playerPanel?.setTerritories?.(territories);
+      playerPanel?.setContinents?.(continents);
+      lobby?.setSetup?.(setup);
+      if (multiplayerLobby) multiplayerLobby.setup = setup;
+    }
+    if (changed) {
+      camera.x = MAP_WIDTH / 2;
+      camera.y = MAP_HEIGHT / 2;
+      tilesLoadedFor = id;
+      mapRenderer.load(getActiveMap());
+      minimap.reloadForActiveMap();
+    }
+    return id;
+  }
 
   // Canvas setup
   const canvas = document.getElementById('mapCanvas');
@@ -1193,6 +1260,18 @@ async function init() {
       // Also hide the main lobby just in case
       lobby.hide();
 
+      const namedMap = mapIdFromDoc(lobbyData);
+      if (!namedMap.ok) {
+        showVersionBanner('', { mapRefusal: true, message: namedMap.message || '' });
+        return;
+      }
+      const boardReady = await ensureBoard(namedMap.mapId);
+      if (!boardReady) {
+        showVersionBanner('', { message: 'That map failed to load. Refresh and try again.' });
+        return;
+      }
+      useMap(namedMap.mapId);
+
       // Initialize game state
       gameState = new GameState(setup, territories, continents);
       gameState.isMultiplayer = true;
@@ -1340,8 +1419,22 @@ async function init() {
         }
         return;
       }
-      activateMap(gameState?.mapId || 'classic');
-      applyMapMetrics(getActiveMap());
+      if (gameState?.mapId && gameState.mapId !== getActiveMap().id) {
+        const rejoined = loadMapDecision(gameState.mapId);
+        if (!rejoined.ok) {
+          showVersionBanner('', {
+            mapRefusal: rejoined.code === 'unknown_map',
+            message: rejoined.code === 'unknown_map' ? '' : rejoined.message,
+          });
+          return;
+        }
+        const rejoinedBoard = await ensureBoard(rejoined.mapId);
+        if (!rejoinedBoard) {
+          showVersionBanner('', { message: 'That map failed to load. Refresh and try again.' });
+          return;
+        }
+        useMap(rejoined.mapId);
+      }
     } else if (shouldInitialize && playersData) {
       // Initialize the game (person who clicked Start)
       const players = playersData.map(p => {
@@ -1378,8 +1471,14 @@ async function init() {
         });
         return;
       }
-      activateMap(startingMap.mapId);
-      applyMapMetrics(getActiveMap());
+      if (startingMap.mapId !== getActiveMap().id) {
+        const startingBoard = await ensureBoard(startingMap.mapId);
+        if (!startingBoard) {
+          showVersionBanner('', { message: 'That map failed to load. Refresh and try again.' });
+          return;
+        }
+        useMap(startingMap.mapId);
+      }
       try {
         gameState.initGame('risk', players, options);
       } catch (err) {
@@ -1433,6 +1532,22 @@ async function init() {
         return;
       }
       console.log('[MP] Game state received');
+      if (gameState?.mapId && gameState.mapId !== getActiveMap().id) {
+        const waited = loadMapDecision(gameState.mapId);
+        if (!waited.ok) {
+          showVersionBanner('', {
+            mapRefusal: waited.code === 'unknown_map',
+            message: waited.code === 'unknown_map' ? '' : waited.message,
+          });
+          return;
+        }
+        const waitedBoard = await ensureBoard(waited.mapId);
+        if (!waitedBoard) {
+          showVersionBanner('', { message: 'That map failed to load. Refresh and try again.' });
+          return;
+        }
+        useMap(waited.mapId);
+      }
     }
 
     // Create multiplayer guard after state is ready
@@ -2248,6 +2363,7 @@ async function init() {
         }
       }
     );
+    multiplayerLobby.loadBoard = ensureBoard;
     multiplayerLobby.onCoverHome = () => lobby.hide();
     return multiplayerLobby;
   };
@@ -2420,7 +2536,7 @@ async function init() {
   };
 
   // Lobby (local games)
-  const lobby = new Lobby(setup, (gameMode, selectedPlayers, options = {}) => {
+  const lobby = new Lobby(setup, async (gameMode, selectedPlayers, options = {}) => {
     const savedMap = options.loadFromSave ? loadMapDecision(options.loadFromSave.mapId) : null;
     if (savedMap && !savedMap.ok) {
       showVersionBanner('', {
@@ -2439,8 +2555,13 @@ async function init() {
       lobby.show();
       return;
     }
-    activateMap(chosen.mapId);
-    applyMapMetrics(getActiveMap());
+    const chosenBoard = await ensureBoard(chosen.mapId);
+    if (!chosenBoard) {
+      showVersionBanner('', { message: 'That map failed to load. Refresh and try again.' });
+      lobby.show();
+      return;
+    }
+    useMap(chosen.mapId);
 
     // Initialize game state for local game
     gameState = new GameState(setup, territories, continents);
@@ -2461,6 +2582,24 @@ async function init() {
         }
         throw err;
       }
+      if (gameState.mapId && gameState.mapId !== getActiveMap().id) {
+        const loaded = loadMapDecision(gameState.mapId);
+        if (!loaded.ok) {
+          showVersionBanner('', {
+            mapRefusal: loaded.code === 'unknown_map',
+            message: loaded.code === 'unknown_map' ? '' : loaded.message,
+          });
+          lobby.show();
+          return;
+        }
+        const loadedBoard = await ensureBoard(loaded.mapId);
+        if (!loadedBoard) {
+          showVersionBanner('', { message: 'That map failed to load. Refresh and try again.' });
+          lobby.show();
+          return;
+        }
+        useMap(loaded.mapId);
+      }
     } else {
       gameState.initGame(gameMode, selectedPlayers, options);
     }
@@ -2475,6 +2614,7 @@ async function init() {
       requestAnimationFrame(fitPhoneCamera);
     }
   }, handlePlayOnline);
+  lobby.loadBoard = ensureBoard;
   lobby.setOnRulesToggle(() => {
     rulesPanel.show();
   });
@@ -3566,6 +3706,8 @@ async function init() {
         if (unitRenderer) {
           unitRenderer.render(ctx, camera.zoom);
         }
+
+        territoryRenderer.renderVictoryCities(ctx, camera.zoom);
 
         ctx.restore();
       }

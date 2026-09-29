@@ -1,4 +1,4 @@
-// V2.81.57-unified.23 S4 — aircraft cannot hit subs unless their side has a destroyer.
+// V2.81.57-unified.24 S4 — aircraft cannot hit subs unless their side has a destroyer.
 // Run: node tools/test-air-vs-sub.mjs
 
 import { readFileSync } from 'fs';

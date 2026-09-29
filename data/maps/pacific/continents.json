@@ -1,0 +1,178 @@
+[
+  {
+    "name": "Japanese Home Islands",
+    "bonus": 9,
+    "territories": [
+      "Japan",
+      "Okinawa",
+      "Iwo Jima"
+    ],
+    "color": "#FF8C00"
+  },
+  {
+    "name": "Manchuria and Korea",
+    "bonus": 9,
+    "territories": [
+      "Manchuria",
+      "Korea",
+      "Jehol"
+    ],
+    "color": "#B8860B"
+  },
+  {
+    "name": "China",
+    "bonus": 54,
+    "territories": [
+      "Anhwe",
+      "Chahar",
+      "Hainan",
+      "Hopei",
+      "Hunan",
+      "Kansu",
+      "Kiangsi",
+      "Kiangsu",
+      "Kwangsi",
+      "Kwangtung",
+      "Kweichow",
+      "Shantung",
+      "Shensi",
+      "Sikang",
+      "Suiyuan",
+      "Szechwan",
+      "Tsinghai",
+      "Yunnan"
+    ],
+    "color": "#8B008B"
+  },
+  {
+    "name": "Southeast Asia",
+    "bonus": 15,
+    "territories": [
+      "French Indo China",
+      "Siam",
+      "Burma",
+      "Malaya",
+      "Shan State"
+    ],
+    "color": "#228B22"
+  },
+  {
+    "name": "East Indies",
+    "bonus": 21,
+    "territories": [
+      "Borneo",
+      "Celebes",
+      "Java",
+      "Sumatra",
+      "Dutch New Guinea",
+      "New Guinea",
+      "New Britain"
+    ],
+    "color": "#20B2AA"
+  },
+  {
+    "name": "Philippines and Formosa",
+    "bonus": 6,
+    "territories": [
+      "Philippines",
+      "Formosa"
+    ],
+    "color": "#1E90FF"
+  },
+  {
+    "name": "Australia",
+    "bonus": 18,
+    "territories": [
+      "New South Wales",
+      "Queensland",
+      "Northern Territory",
+      "South Australia",
+      "Victoria",
+      "Western Australia"
+    ],
+    "color": "#DAA520"
+  },
+  {
+    "name": "New Zealand and South Pacific",
+    "bonus": 18,
+    "territories": [
+      "New Zealand",
+      "Fiji",
+      "Samoa",
+      "New Hebrides",
+      "Solomon Islands",
+      "Gilbert Islands"
+    ],
+    "color": "#008B8B"
+  },
+  {
+    "name": "Central Pacific",
+    "bonus": 30,
+    "territories": [
+      "Caroline Islands",
+      "Marshall Islands",
+      "Marianas",
+      "Paulau Island",
+      "Wake Island",
+      "Midway",
+      "Guam",
+      "Johnston Island",
+      "Hawaiian Islands",
+      "Line Islands"
+    ],
+    "color": "#4169E1"
+  },
+  {
+    "name": "India",
+    "bonus": 6,
+    "territories": [
+      "India",
+      "Ceylon"
+    ],
+    "color": "#C4A35A"
+  },
+  {
+    "name": "North America (West)",
+    "bonus": 18,
+    "territories": [
+      "Western United States",
+      "Mexico",
+      "Alaska",
+      "British Columbia",
+      "Yukon Territory",
+      "Aleutian Islands"
+    ],
+    "color": "#556B2F"
+  },
+  {
+    "name": "Soviet Far East",
+    "bonus": 33,
+    "territories": [
+      "Amur",
+      "Buryatia",
+      "Evenkiyskiy",
+      "Kazakhstan",
+      "Moscow",
+      "Sakha",
+      "Siberia",
+      "Soviet Far East",
+      "Tunguska",
+      "Yakut S.S.R.",
+      "Yenisey"
+    ],
+    "color": "#B22222"
+  },
+  {
+    "name": "Mongolia",
+    "bonus": 18,
+    "territories": [
+      "Olgiy",
+      "Dzavhan",
+      "Central Mongolia",
+      "Buyant-Uhaa",
+      "Ulaanbaatar",
+      "Tsagaan-Olom"
+    ],
+    "color": "#4A4A4A"
+  }
+]

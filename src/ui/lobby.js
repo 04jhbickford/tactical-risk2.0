@@ -12,6 +12,7 @@ import { captureLobbyScroll, restoreLobbyScroll } from './lobbyScroll.js';
 import { describe, draftModeSource, normalizeGameOptions } from '../gameOptions.js';
 import { bindGameOptions, renderGameOptionsPanel } from './gameOptionsPanel.js';
 import { CLASSIC_MAP_ID } from '../map/mapRegistry.js';
+import { getBoard } from '../map/boardCatalog.js';
 import { bindLobbyDice, lobbyDiceEntryMarkup, renderDiceStatsMarkup } from './diceStatsPanel.js';
 export { GAME_VERSION };
 
@@ -90,6 +91,13 @@ export class Lobby {
 
   setOnRulesToggle(callback) {
     this.onRulesToggle = callback;
+  }
+
+  setSetup(setup) {
+    if (!setup?.risk?.factions) return;
+    this.setup = setup;
+    const ids = new Set(setup.risk.factions.map((faction) => faction.id));
+    this.selectedPlayers = this.selectedPlayers.filter((id) => ids.has(id));
   }
 
   _create() {
@@ -731,6 +739,15 @@ export class Lobby {
       },
       onMapChange: (mapId) => {
         this.mapId = mapId || CLASSIC_MAP_ID;
+        const apply = () => {
+          const board = getBoard(this.mapId);
+          if (board?.setup) this.setSetup(board.setup);
+          this._render();
+        };
+        if (getBoard(this.mapId) || typeof this.loadBoard !== 'function') apply();
+        else this.loadBoard(this.mapId).then(() => {
+          if (this.mapId === (mapId || CLASSIC_MAP_ID)) apply();
+        });
       },
     });
 

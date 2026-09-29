@@ -11,8 +11,10 @@ import {
   draftModeSource,
   maxPlayerChoices,
   normalizeGameOptions,
+  PACIFIC_HISTORICAL_SETUP,
   phoneOptionsLabel,
   techAcquisitionLabel,
+  territorySetupLabel,
 } from '../gameOptions.js';
 import { CLASSIC_MAP_ID, getMap, listPickerMaps } from '../map/mapRegistry.js';
 
@@ -86,17 +88,21 @@ function rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMod
   const draft = draftMode || draftModeSource(null);
   const maxChoices = maxPlayerChoices(seatedCount);
   const maxSelected = clampMaxPlayers(o.maxPlayers, seatedCount);
-  const territoryTitle = `${draft.name}: ${draft.description}. Random deal is today's setup.`;
+  const territoryChoices = [
+    ['random', 'Random deal'],
+    ['draft', draft.name || 'Draft'],
+  ];
+  if (mapId === 'pacific') territoryChoices.push([PACIFIC_HISTORICAL_SETUP, 'Pacific 1940 (historical)']);
+  const territoryTitle = mapId === 'pacific'
+    ? 'Random deal, draft, or the 1940 historical setup.'
+    : `${draft.name}: ${draft.description}. Random deal is today's setup.`;
   const techTitle = `Dice tokens cost 5 IPCs and are spent on the roll. Keep tokens until success leaves them in place on a miss and spends them on a breakthrough. Buy directly pays ${DIRECT_TECH_IPC_COST} IPCs for one technology during Purchase, with no dice.`;
   return `
     <div class="go-group">
       <h3 class="go-group-label">Setup</h3>
       <div class="go-row" title="${esc(territoryTitle)}">
         <span class="go-label">Territories</span>
-        ${shownValue(editable, enumSelect('territorySetup', [
-          ['random', 'Random deal'],
-          ['draft', draft.name || 'Draft'],
-        ], o.territorySetup, { editable, label: 'Territories', title: territoryTitle }), o.territorySetup === 'draft' ? (draft.name || 'Draft') : 'Random deal')}
+        ${shownValue(editable, enumSelect('territorySetup', territoryChoices, o.territorySetup, { editable, label: 'Territories', title: territoryTitle }), territorySetupLabel(o.territorySetup, draft.name))}
       </div>
       <div class="go-row" title="IPCs each power starts with">
         <span class="go-label" id="go-label-ipcs">Starting IPCs</span>

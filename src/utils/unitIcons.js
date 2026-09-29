@@ -27,6 +27,18 @@ const UNIT_IMAGE_MAP = {
   Russians: {
     tacticalBomber: 'HeavyFighter.png', // Russians don't have S.Bomber, use HeavyFighter
   },
+  // Pacific folders. Chinese and ANZAC have no S.Bomber.png.
+  Chinese: {
+    tacticalBomber: 'HeavyFighter.png',
+  },
+  ANZAC: {
+    tacticalBomber: 'HeavyFighter.png',
+  },
+};
+
+// The ANZAC art already lives in units/Anzac. Other faction ids match the folder.
+const FACTION_ICON_DIR = {
+  ANZAC: 'Anzac',
 };
 
 /**
@@ -45,7 +57,8 @@ export function getUnitIconPath(unitType, factionId) {
     return null;
   }
 
-  return `units/${factionId}/${imageName}`;
+  const dir = FACTION_ICON_DIR[factionId] || factionId;
+  return `units/${dir}/${imageName}`;
 }
 
 /**

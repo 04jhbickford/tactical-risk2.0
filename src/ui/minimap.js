@@ -33,7 +33,18 @@ export class Minimap {
     this.bgImage.onerror = () => {
       console.warn('Minimap background failed to load. Make sure to serve from the project root directory.');
     };
-    this.bgImage.src = getActiveMap()?.tiles?.smallMap || '../map/smallMap.jpeg';
+    this._src = getActiveMap()?.tiles?.smallMap || '../map/smallMap.jpeg';
+    this.bgImage.src = this._src;
+  }
+
+  // Pacific uses a different smallMap. Called when the active map changes.
+  reloadForActiveMap() {
+    const src = getActiveMap()?.tiles?.smallMap || '../map/smallMap.jpeg';
+    if (this._src === src) {
+      this.render();
+      return;
+    }
+    this._loadBackground();
   }
 
   _bindEvents() {

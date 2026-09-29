@@ -378,12 +378,7 @@ export class TerritoryTooltip {
     this.unitDefs = null;
 
     // Build continent lookup
-    this.continentByTerritory = {};
-    for (const c of continents) {
-      for (const t of c.territories) {
-        this.continentByTerritory[t] = c;
-      }
-    }
+    this.setContinents(continents);
 
     // Create tooltip element
     this.el = document.createElement('div');
@@ -394,6 +389,14 @@ export class TerritoryTooltip {
     this.currentTerritory = null;
     this._phoneDismissTimer = null;
     this._phaseKey = null;
+  }
+
+  setContinents(continents) {
+    this.continents = continents || [];
+    this.continentByTerritory = {};
+    for (const c of this.continents) {
+      for (const t of c.territories || []) this.continentByTerritory[t] = c;
+    }
   }
 
   setGameState(gameState) {

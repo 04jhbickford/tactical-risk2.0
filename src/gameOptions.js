@@ -25,6 +25,9 @@ export const MAX_PLAYER_VALUES = Object.freeze([2, 3, 4, 5]);
 export const UNITS_PER_ROUND_VALUES = Object.freeze([3, 4, 5, 6, 7, 8, 9, 10]);
 export const STARTING_ARMY_VALUES = Object.freeze(['standard', 'light', 'heavy']);
 export const TERRITORY_SETUP_VALUES = Object.freeze(['random', 'draft']);
+// Pacific-only. Classic saves never carry it, and an unknown value still
+// falls back to random. normalizeGameOptions keeps an explicit pacific1940.
+export const PACIFIC_HISTORICAL_SETUP = 'pacific1940';
 export const TECH_ACQUISITION_VALUES = Object.freeze(['dice', 'keep', 'buy']);
 // Buy directly: one technology, no dice, paid during Purchase.
 export const DIRECT_TECH_IPC_COST = 20;
@@ -42,6 +45,18 @@ function pickArmy(value) {
 function pickEnum(value, allowed, fallback) {
   const key = String(value || '');
   return allowed.includes(key) ? key : fallback;
+}
+
+function pickTerritorySetup(value) {
+  const key = String(value || '');
+  if (key === PACIFIC_HISTORICAL_SETUP) return PACIFIC_HISTORICAL_SETUP;
+  return pickEnum(key, TERRITORY_SETUP_VALUES, DEFAULT_GAME_OPTIONS.territorySetup);
+}
+
+export function territorySetupLabel(value, draftName = 'Draft') {
+  if (value === PACIFIC_HISTORICAL_SETUP) return 'Pacific 1940 (historical)';
+  if (value === 'draft') return draftName || 'Draft';
+  return 'Random deal';
 }
 
 /** Choices at or above the number of players already seated. */
@@ -108,11 +123,7 @@ export function normalizeGameOptions(raw, legacy = {}) {
     multipleTech: multiRaw === true,
     // Default ON. Only an explicit false removes the bridges.
     landBridges: bridgesRaw === false ? false : true,
-    territorySetup: pickEnum(
-      src.territorySetup ?? old.territorySetup,
-      TERRITORY_SETUP_VALUES,
-      DEFAULT_GAME_OPTIONS.territorySetup,
-    ),
+    territorySetup: pickTerritorySetup(src.territorySetup ?? old.territorySetup),
     techAcquisition: pickEnum(
       src.techAcquisition ?? old.techAcquisition,
       TECH_ACQUISITION_VALUES,
@@ -154,6 +165,7 @@ export function describe(raw, legacy) {
   if (o.maxPlayers !== DEFAULT_GAME_OPTIONS.maxPlayers) parts.push(`max ${o.maxPlayers}`);
   if (o.multipleTech) parts.push('multiple breakthroughs');
   if (o.territorySetup === 'draft') parts.push('Draft territories');
+  if (o.territorySetup === PACIFIC_HISTORICAL_SETUP) parts.push('Pacific 1940');
   if (o.techAcquisition === 'keep') parts.push('keep tech tokens');
   if (o.techAcquisition === 'buy') parts.push(`buy tech (${DIRECT_TECH_IPC_COST})`);
   if (o.tacticalBombers) parts.push('tactical bombers');
@@ -267,7 +279,7 @@ export function optionRows(raw, legacy) {
     ['Max players', String(o.maxPlayers)],
     ['Units per setup round', String(o.unitsPerRound)],
     ['Starting army', army],
-    ['Territories', o.territorySetup === 'draft' ? 'Draft' : 'Random deal'],
+    ['Territories', territorySetupLabel(o.territorySetup)],
     ['Multiple tech breakthroughs', o.multipleTech ? 'On' : 'Off'],
     ['Tech', techAcquisitionLabel(o.techAcquisition)],
     ['Land bridges', o.landBridges ? 'On' : 'Off'],

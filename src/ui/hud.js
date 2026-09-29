@@ -8,6 +8,8 @@ import { resolveHudClarity, shouldShowHudTicker } from './hudClarity.js';
 import { confirmChoice } from './confirmChoice.js';
 import { bindDiceStatsControls, ensureDiceStatsLoaded, renderDiceStatsMarkup } from './diceStatsPanel.js';
 import { loadBattleDice, renderBattleDiceMarkup } from './battleDicePanel.js';
+import { getMap } from '../map/mapRegistry.js';
+import { pacificVictoryChip, pacificVictoryLine } from '../map/pacificVictory.js';
 
 export class HUD {
   constructor() {
@@ -230,6 +232,7 @@ export class HUD {
           html += `
             <div class="hud-phase-progress">
               <span class="hud-round-badge">Round ${this.gameState.round}</span>
+              ${this._victoryChipHtml()}
               <div class="phase-dots">
                 ${TURN_PHASE_ORDER.map((tp, i) => {
                   const isActive = i === currentIndex;
@@ -316,6 +319,7 @@ export class HUD {
             <span class="hud-mobile-faction" style="color:${readableFactionTextColor(player.color)}">${player.name}</span>
           </span>
           ${ipcVal != null ? `<span class="hud-mobile-chip hud-mobile-ipc" title="IPCs">IPC ${ipcVal}</span>` : ''}
+          ${this._victoryChipHtml(true)}
         </div>`;
     }
 
@@ -426,6 +430,18 @@ export class HUD {
       hostName: this.clarityCtx.hostName,
       isHost: this.clarityCtx.isHost,
     });
+  }
+
+  _victoryChipHtml(mobile = false) {
+    const state = this.gameState;
+    if (!state || state.phase === GAME_PHASES.LOBBY) return '';
+    if (getMap(state.mapId)?.victoryMode !== 'pacificVC') return '';
+    const line = pacificVictoryLine(state);
+    const chip = pacificVictoryChip(state);
+    if (mobile) {
+      return `<span class="hud-mobile-chip hud-mobile-vc" title="${line}">${chip}</span>`;
+    }
+    return `<span class="hud-vc-badge" title="${line}">${chip}</span>`;
   }
 
   _renderClarity() {

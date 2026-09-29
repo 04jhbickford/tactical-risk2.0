@@ -19,6 +19,20 @@ export class TerritoryMap {
     this._lastHit = null;
   }
 
+  setTerritories(territories) {
+    this.territories = territories || [];
+    this.bounds = [];
+    for (const t of this.territories) {
+      const b = this._computeBounds(t);
+      this.bounds.push({ territory: t, ...b });
+    }
+    this.bounds.sort((a, b) => {
+      if (a.territory.isWater !== b.territory.isWater) return a.territory.isWater ? 1 : -1;
+      return 0;
+    });
+    this._lastHit = null;
+  }
+
   /** Returns the territory at (worldX, worldY), or null. */
   hitTest(worldX, worldY) {
     // Quick re-check last hit — but skip for water territories so that

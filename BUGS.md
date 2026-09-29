@@ -2,6 +2,22 @@
 
 ---
 
+## 9.29.26 — unified.24 Pacific 1940
+
+Stamp `V2.81.57-unified.24`. Schema stays 11. A `V2.82-unified.23` doc is older than this tab and does not prompt. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.24`).
+
+Pacific is in the Map picker. `mapId` is `pacific` on saves, dice batches, and phase snapshots. A save with no mapId still loads as classic. `firestore.rules` is unchanged. `data/territories.json` and `data/continents.json` are unchanged.
+
+Russians stay Neutral (`PACIFIC_RUSSIAN_LAND` in `tools/map-convert/pacific.mjs`). Folding Soviet Far East into China raises Chinese income from 21 to 65. Himalayas has no connections. Victory cities are checked at the end of a full round. The phone HUD shows `VC n/8`. Stars are drawn on the eight cities.
+
+390 phone profile, coarse pointer: no horizontal overflow. Classic fetches the eager 14×8 png grid (base 840,448 bytes, relief 2,979,355 bytes, small map 34,565 bytes). First contentful paint was 36ms and the renderer reported 112 base and 112 relief tiles. Pacific Fit uses the same phone rule that skips baked art below zoom 0.85, so the opening view is the small map (19,205 bytes) plus territory fills. Relief stays off (`reliefPhone: false`). The webp grid is 195 tiles, 204,900 bytes, which is under 1.2× the Classic phone fetch even if every base tile loads. Zooming in loads those tiles lazily. Desktop at 1280 showed the map, the side panel, and `VC 2/8`.
+
+Three easy AI games of Pacific 1940 ran 10 rounds each (they stopped at the start of round 11). Steps 235, 225, and 226. No stalls, no errors, no winner. Times were 445ms, 290ms, and 270ms with delays removed in the runner only.
+
+`node tools/test-pacific.mjs` passed. The full `tools/test-*.mjs` suite passed except the known `tools/test-lobby-nav.mjs` failure `boot auto-resume is gameId-only`.
+
+---
+
 ## 9.29.26 — unified.23 multi-map plumbing
 
 Stamp `V2.81.57-unified.23`. Schema stays 11. A `V2.82-unified.22` doc is older than this tab and does not prompt. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.23`).

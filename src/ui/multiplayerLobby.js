@@ -49,6 +49,7 @@ import {
 } from '../gameOptions.js';
 import { bindGameOptions, readGameOptionsFrom, readMapIdFrom, renderGameOptionsPanel } from './gameOptionsPanel.js';
 import { CLASSIC_MAP_ID, UNKNOWN_MAP_MESSAGE } from '../map/mapRegistry.js';
+import { getBoard } from '../map/boardCatalog.js';
 import { bindLobbyDice, lobbyDiceEntryMarkup, renderDiceStatsMarkup } from './diceStatsPanel.js';
 import { isMobileShell } from './mobileShell.js';
 import {
@@ -355,6 +356,13 @@ export class MultiplayerLobby {
   }
 
   _render() {
+    const activeMapId = this._activeMapId();
+    if (!getBoard(activeMapId) && typeof this.loadBoard === 'function' && this._boardLoadId !== activeMapId) {
+      this._boardLoadId = activeMapId;
+      this.loadBoard(activeMapId).then((board) => {
+        if (board && this._activeMapId() === activeMapId) this._render();
+      });
+    }
     const savedScroll = captureLobbyScroll(this.el);
     const discordInput = this.el?.querySelector?.(DISCORD_SEAT_INPUT) || null;
     const active = typeof document !== 'undefined' ? document.activeElement : null;
@@ -1023,7 +1031,7 @@ export class MultiplayerLobby {
       ? (listing.buttons.find((b) => b.action === 'publish') || null)
       : null;
     const unlistBtn = listing.buttons.find((b) => b.action === 'unlist') || null;
-    const factions = this.setup?.risk?.factions || FACTIONS;
+    const factions = this._factionsForActiveMap();
 
     // Get taken factions and colors
     const takenFactions = new Set(lobby.players.map(p => p.factionId).filter(Boolean));
@@ -1473,15 +1481,34 @@ export class MultiplayerLobby {
     return true;
   }
 
+  _activeMapId() {
+    if (this.mode === 'create') return this._draftMapId || CLASSIC_MAP_ID;
+    return this.lobby?.settings?.mapId || this._draftMapId || CLASSIC_MAP_ID;
+  }
+
+  _factionsForActiveMap() {
+    const setup = getBoard(this._activeMapId())?.setup || this.setup;
+    return setup?.risk?.factions || FACTIONS;
+  }
+
   async _commitMapId(mapId) {
     const next = mapId || CLASSIC_MAP_ID;
     if (this.mode === 'create') {
       this._draftMapId = next;
+      const ready = getBoard(next) || typeof this.loadBoard !== 'function'
+        ? Promise.resolve()
+        : this.loadBoard(next);
+      await ready;
+      if (this._draftMapId === next) this._render();
       return;
     }
     const isHost = this.lobbyManager.isHost();
     if (settingsEditError({ isHost })) return;
+    if (!getBoard(next) && typeof this.loadBoard === 'function') {
+      await this.loadBoard(next);
+    }
     await this.lobbyManager.updateSettings({ mapId: next });
+    if (this._activeMapId() === next) this._render();
   }
 
   async _commitGameOptions(next) {
@@ -1508,7 +1535,7 @@ export class MultiplayerLobby {
   }
 
   _showAddAIDialog() {
-    const factions = this.setup?.risk?.factions || FACTIONS;
+    const factions = this._factionsForActiveMap();
     const lobby = this.lobbyManager.getLobby();
     const takenFactions = new Set(lobby.players.map(p => p.factionId).filter(Boolean));
     const takenColors = new Set(lobby.players.map(p => p.color).filter(Boolean));

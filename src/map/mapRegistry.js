@@ -1,6 +1,8 @@
 // Map registry. Classic points at the files and paths the game already loads.
-// Pacific is listed so a dev flag can show it; its data is not in this build.
-// A missing mapId means classic. An id that is not in this table is refused.
+// Pacific is playable. A missing mapId means classic. An id that is not in
+// this table is refused.
+
+import { PACIFIC_VICTORY_CITIES } from './pacificVictory.js';
 
 export const CLASSIC_MAP_ID = 'classic';
 
@@ -106,12 +108,40 @@ const CLASSIC = Object.freeze({
   credits: 'TripleA World War II Classic map assets (base tiles, relief tiles, polygons, centers).',
 });
 
-// Registered so ?maps=all can show the row. Data and tiles are not shipped.
+const PACIFIC_NATION_NAMES = Object.freeze({
+  japanese: { name: 'Japan', adj: 'Japanese' },
+  japan: { name: 'Japan', adj: 'Japanese' },
+  americans: { name: 'US', adj: 'American' },
+  american: { name: 'US', adj: 'American' },
+  us: { name: 'US', adj: 'American' },
+  usa: { name: 'US', adj: 'American' },
+  chinese: { name: 'China', adj: 'Chinese' },
+  china: { name: 'China', adj: 'Chinese' },
+  british: { name: 'UK', adj: 'British' },
+  uk: { name: 'UK', adj: 'British' },
+  anzac: { name: 'ANZAC', adj: 'ANZAC' },
+});
+
+const PACIFIC_FACTION_HOMES = Object.freeze({
+  Japanese: 'Japan',
+  Americans: 'Western United States',
+  Chinese: 'Szechwan',
+  British: 'India',
+  ANZAC: 'New South Wales',
+});
+
+// Graph-derived. New South Wales borders Queensland, Victoria, and
+// South Australia, so it is not sea-locked. Japan and Hawaiian Islands are.
+const PACIFIC_ISLAND_CAPITAL_HINTS = Object.freeze({
+  connected: Object.freeze(['New South Wales', 'India', 'Western United States', 'Szechwan']),
+  seaLocked: Object.freeze(['Japan', 'Hawaiian Islands']),
+});
+
 const PACIFIC = Object.freeze({
   id: 'pacific',
   name: 'Pacific',
-  released: false,
-  playable: false,
+  released: true,
+  playable: true,
   data: Object.freeze({
     territories: 'data/maps/pacific/territories.json',
     continents: 'data/maps/pacific/continents.json',
@@ -134,15 +164,27 @@ const PACIFIC = Object.freeze({
   height: 3213,
   scrollWrapX: false,
   landBridges: Object.freeze([]),
-  islandCapitalHints: Object.freeze({
-    connected: Object.freeze([]),
-    seaLocked: Object.freeze(['Philippines', 'Hawaiian Islands', 'Wake Island']),
+  islandCapitalHints: PACIFIC_ISLAND_CAPITAL_HINTS,
+  nationNames: PACIFIC_NATION_NAMES,
+  factionHomes: PACIFIC_FACTION_HOMES,
+  phoneInspectLands: Object.freeze([
+    'Wake Island',
+    'Guam',
+    'Midway',
+    'Iwo Jima',
+    'Johnston Island',
+    'Formosa',
+  ]),
+  capitals: Object.freeze({
+    Japanese: 'Japan',
+    Americans: 'Western United States',
+    British: 'India',
+    ANZAC: 'New South Wales',
+    Chinese: 'Szechwan',
   }),
-  nationNames: Object.freeze({}),
-  factionHomes: Object.freeze({}),
-  phoneInspectLands: Object.freeze([]),
-  victoryMode: 'pacific',
-  credits: 'TripleA World War II Pacific (GPLv3). XML: Veqryn. Unit art: CrystalCT and Veqryn. Relief tiles: Gudkarma. Not in this build.',
+  victoryCities: PACIFIC_VICTORY_CITIES,
+  victoryMode: 'pacificVC',
+  credits: 'TripleA World War II Pacific (GPLv3). XML: Veqryn. Unit art: CrystalCT and Veqryn. Relief tiles: Gudkarma. See map/pacific/CREDITS.md.',
 });
 
 const MAPS = {
