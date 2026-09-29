@@ -14,7 +14,7 @@ With it on, each seated power gets one tactical bomber in the setup tray for Ran
 
 Left out, because there is no placement tray and this build does not add a setup phase: Pacific 1940 (historical placements stay as they are; off still turns those bombers into fighters) and the retired Classic 1942 init (`initGame('classic')`, which the live lobby does not start).
 
-`node tools/test-tacbomber-ai-buy.mjs` and `node tools/test-tacbomber-setup.mjs` passed. AI runs with the option on, delays removed in the runner only: Classic random seed 2, three easy games to round 11, steps 331, 318, and 326, no stalls, no errors, tactical bombers bought 1, 1, and 3. Pacific 1940, three easy games to round 11, steps 233, 230, and 229, no stalls, no errors, tactical bombers bought 34, 33, and 33. A Classic setup stall on occupied seas, and a combat that never leaves the queue, also happen with the option off.
+`node tools/test-tacbomber-ai-buy.mjs` and `node tools/test-tacbomber-setup.mjs` passed. The full `tools/test-*.mjs` suite passed except the known `tools/test-lobby-nav.mjs` failure `boot auto-resume is gameId-only`. Stamp checks that match `index.html` with escaped dots were bumped with the other stamp assertions. AI runs with the option on, delays removed in the runner only: Classic random seed 2, three easy games to round 11, steps 331, 318, and 326, no stalls, no errors, tactical bombers bought 1, 1, and 3. Pacific 1940, three easy games to round 11, steps 233, 230, and 229, no stalls, no errors, tactical bombers bought 34, 33, and 33. A Classic setup stall on occupied seas, and a combat that never leaves the queue, also happen with the option off.
 
 ---
 
