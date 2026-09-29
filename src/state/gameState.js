@@ -54,6 +54,8 @@ import {
   resolveMapId,
   UNKNOWN_MAP_MESSAGE,
 } from '../map/mapRegistry.js';
+import { getBoard } from '../map/boardCatalog.js';
+import { applyPacificRoundVictory } from '../map/pacificVictory.js';
 import {
   DRAFT_MIN_CLIENT,
   DRAFT_PHASE,
@@ -388,7 +390,7 @@ export class GameState {
     this.landTerritories = [];
     for (const t of territories) {
       this.territoryByName[t.name] = t;
-      if (!t.isWater) {
+      if (!t.isWater && !t.impassable) {
         this.landTerritories.push(t);
       }
     }
@@ -532,6 +534,7 @@ export class GameState {
       throw err;
     }
     this.mapId = map.mapId;
+    this._adoptRegisteredBoard(this.mapId);
     resetLedgerIdSeq(0);
     this.gameMode = mode;
     this.alliancesEnabled = options.alliancesEnabled || (mode === 'classic');
@@ -657,8 +660,95 @@ export class GameState {
     this.currentPlayerIndex = 0;
   }
 
+  _adoptRegisteredBoard(mapId) {
+    const board = getBoard(mapId);
+    if (!board?.territories) return false;
+    this.territories = board.territories;
+    if (board.continents) this.continents = board.continents;
+    if (board.setup) this.setup = board.setup;
+    this.territoryByName = {};
+    this.landTerritories = [];
+    for (const t of this.territories) {
+      this.territoryByName[t.name] = t;
+      if (!t.isWater && !t.impassable) this.landTerritories.push(t);
+    }
+    this.continentByTerritory = {};
+    for (const c of this.continents || []) {
+      for (const tName of c.territories || []) {
+        this.continentByTerritory[tName] = c;
+      }
+    }
+    return true;
+  }
+
+  _initPacificHistorical(selectedPlayers) {
+    const scenario = this.setup?.pacific1940 || {};
+    const order = this.setup?.turnOrder || [];
+    const byId = new Map((selectedPlayers || []).map((player) => [player.id, player]));
+    const ordered = [];
+    for (const id of order) {
+      if (byId.has(id)) ordered.push(byId.get(id));
+    }
+    for (const player of selectedPlayers || []) {
+      if (!ordered.includes(player)) ordered.push(player);
+    }
+    this.players = ordered.map((player, index) => ({ ...player, turnOrder: index }));
+
+    const tactical = this.gameOptions?.tacticalBombers === true;
+    const owners = scenario.territoryOwners || {};
+    for (const [territory, owner] of Object.entries(owners)) {
+      const info = this.territoryByName[territory];
+      if (!info || info.isWater || info.impassable) continue;
+      this.territoryState[territory] = { owner, isCapital: false };
+    }
+
+    for (const [territory, placements] of Object.entries(scenario.unitPlacements || {})) {
+      if (!this.territoryByName[territory]) continue;
+      const units = [];
+      for (const placement of placements || []) {
+        let type = placement.type;
+        if (type === 'tacticalBomber' && !tactical) type = 'fighter';
+        const existing = units.find((unit) => unit.type === type && unit.owner === placement.owner);
+        if (existing) existing.quantity += placement.quantity;
+        else units.push({ type, quantity: placement.quantity, owner: placement.owner });
+      }
+      this.units[territory] = units;
+    }
+
+    const capitals = getMap('pacific')?.capitals || {};
+    const factionRows = scenario.factions || [];
+    for (const player of this.players) {
+      const territory = capitals[player.id] || null;
+      const faction = factionRows.find((row) => row.id === player.id);
+      this.playerState[player.id] = {
+        ipcs: faction?.startingPUs || 0,
+        hasPlacedCapital: true,
+        capitalTerritory: territory,
+      };
+      this.playerTechs[player.id] = { techTokens: 0, unlockedTechs: [] };
+      this.riskCards[player.id] = [];
+      this.cardTradeCount[player.id] = 0;
+      if (territory && this.territoryState[territory]) {
+        this.territoryState[territory].isCapital = true;
+        const units = this.units[territory] || [];
+        if (!units.some((unit) => unit.type === 'factory' && unit.owner === player.id)) {
+          units.push({ type: 'factory', quantity: 1, owner: player.id });
+        }
+        this.units[territory] = units;
+      }
+    }
+
+    this.phase = GAME_PHASES.PLAYING;
+    this.turnPhase = TURN_PHASES.DEVELOP_TECH;
+    this.currentPlayerIndex = 0;
+    this._initFriendlyTerritoriesAtTurnStart();
+  }
+
   _initRiskMode(selectedPlayers, options = {}) {
-    const riskData = this.setup.risk;
+    if (this.mapId === 'pacific' && this.gameOptions?.territorySetup === 'pacific1940') {
+      this._initPacificHistorical(selectedPlayers);
+      return;
+    }
     const playerCount = selectedPlayers.length;
 
     // Lobby passes startingIPCs (default 80). A caller that omits both the
@@ -2771,6 +2861,10 @@ export class GameState {
     do {
       this.currentPlayerIndex++;
       if (this.currentPlayerIndex >= this.players.length) {
+        // End of a full round. Classic victory stays on capital capture.
+        if (!this.gameOver && getMap(this.mapId)?.victoryMode === 'pacificVC') {
+          applyPacificRoundVictory(this);
+        }
         this.currentPlayerIndex = 0;
         this.round++;
         // Clear combat log at start of new round
@@ -5592,6 +5686,9 @@ export class GameState {
           this._checkCapitalVictory();
         }
         break;
+      case 'pacificVC':
+        // Victory cities are checked when a full round ends, not on capture.
+        break;
       default:
         // A named mode this build does not implement does not declare a winner.
         break;
@@ -7439,6 +7536,7 @@ export class GameState {
     const prevPlacementRound = this.placementRound || 0;
     const prevActionSeq = Number(this.actionSeq) || 0;
     this.mapId = resolveMapId(data.mapId).mapId;
+    this._adoptRegisteredBoard(this.mapId);
     this.gameMode = data.gameMode;
     this.alliancesEnabled = data.alliancesEnabled ?? (data.gameMode === 'classic');
     this.teamsEnabled = data.teamsEnabled ?? false;

@@ -5,6 +5,8 @@ import { GAME_PHASES, TURN_PHASES, TURN_PHASE_NAMES, TECHNOLOGIES, shouldShowTec
 import { renderCombatBattleList } from './battleOrder.js';
 import { adjacentMobilizeSeas } from './mobilizeDeployAll.js';
 import { DIRECT_TECH_IPC_COST } from '../gameOptions.js';
+import { getMap } from '../map/mapRegistry.js';
+import { pacificVictoryLine } from '../map/pacificVictory.js';
 import { tacticalBombersEnabled } from '../state/tacticalPairing.js';
 import { getUnitIconPath } from '../utils/unitIcons.js';
 import { formatUnitName } from '../utils/unitNames.js';
@@ -2607,6 +2609,9 @@ export class PlayerPanel {
 
   _renderStatsTab(currentPlayer) {
     let html = '<div class="pp-stats-tab">';
+    if (getMap(this.gameState?.mapId)?.victoryMode === 'pacificVC') {
+      html += `<p class="pp-vc-line">${pacificVictoryLine(this.gameState)}</p>`;
+    }
 
     // All players comparison table
     html += `<div class="pp-all-players">`;

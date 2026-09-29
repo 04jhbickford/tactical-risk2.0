@@ -10,11 +10,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { classicConvertConfig } from './map-convert/classic.mjs';
+import { pacificConvertConfig } from './map-convert/pacific.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const CONFIGS = {
   classic: classicConvertConfig,
+  pacific: pacificConvertConfig,
 };
 
 function unionPolygons(polygons) {
@@ -129,6 +131,54 @@ export function convertMap(mapId, { log = console.log } = {}) {
   const { territories, connections } = parseXML(path.join(ROOT, config.xml));
   log(`  Found ${Object.keys(territories).length} territories`);
 
+  const sourceLand = Object.values(territories).filter((t) => !t.isWater).length;
+  const sourceSea = Object.values(territories).filter((t) => t.isWater).length;
+
+  for (const name of config.exclude || []) {
+    delete territories[name];
+    delete connections[name];
+    delete polygons[name];
+    delete centers[name];
+    for (const set of Object.values(connections)) set.delete(name);
+    log(`  Excluded "${name}"`);
+  }
+
+  for (const name of config.impassable || []) {
+    if (!territories[name]) continue;
+    territories[name].impassable = true;
+    territories[name].production = 0;
+    territories[name].originalOwner = 'Neutral';
+    territories[name].isCapital = false;
+    delete territories[name].capitalOf;
+    const mine = connections[name] || new Set();
+    for (const other of mine) connections[other]?.delete(name);
+    connections[name] = new Set();
+    log(`  Impassable: ${name} (connections removed)`);
+  }
+
+  if (config.ownerRemap) {
+    for (const data of Object.values(territories)) {
+      const next = config.ownerRemap[data.originalOwner];
+      if (next) data.originalOwner = next;
+    }
+  }
+
+  if (config.capitals) {
+    for (const data of Object.values(territories)) {
+      delete data.isCapital;
+      delete data.capitalOf;
+    }
+    for (const cap of config.capitals) {
+      if (!territories[cap.territory]) {
+        log(`  WARN: capital "${cap.territory}" not found`);
+        continue;
+      }
+      territories[cap.territory].isCapital = true;
+      territories[cap.territory].capitalOf = cap.owner;
+      log(`  Capital: ${cap.territory} (${cap.owner})`);
+    }
+  }
+
   const territoryToContinent = {};
   for (const c of config.continents) {
     for (const t of c.territories) territoryToContinent[t] = c.name;
@@ -185,7 +235,12 @@ export function convertMap(mapId, { log = console.log } = {}) {
   for (const [name, data] of Object.entries(territories)) {
     const entry = { name, isWater: data.isWater };
     if (!data.isWater) {
-      entry.production = config.productionRule === 'keep' ? (data.production || 0) : 1;
+      if (data.impassable) {
+        entry.production = 0;
+        entry.impassable = true;
+      } else {
+        entry.production = config.productionRule === 'keep' ? (data.production || 0) : 1;
+      }
       entry.continent = territoryToContinent[name] || null;
       entry.originalOwner = data.originalOwner || 'Neutral';
       if (data.isCapital) {
@@ -222,6 +277,10 @@ export function convertMap(mapId, { log = console.log } = {}) {
     continentsJson: JSON.stringify(continents, null, 2),
     territoryCount: territoryList.length,
     continentCount: continents.length,
+    sourceLand,
+    sourceSea,
+    land: land.length,
+    sea: sea.length,
   };
 }
 

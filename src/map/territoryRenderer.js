@@ -1056,6 +1056,58 @@ export class TerritoryRenderer {
     return mergedTerritoryOutlineEdges(polygons);
   }
 
+  setBoard(territories, continents) {
+    this.territories = territories || [];
+    this.continents = continents || [];
+    this.territoryByName = {};
+    for (const t of this.territories) this.territoryByName[t.name] = t;
+    this.continentByName = {};
+    this.continentByTerritory = {};
+    for (const c of this.continents) {
+      this.continentByName[c.name] = c;
+      for (const tName of c.territories || []) this.continentByTerritory[tName] = c;
+    }
+    this._externalEdgesCache = {};
+    this.highlightedTerritories = [];
+  }
+
+  /** Small gold star on each Pacific victory city. Classic has none. */
+  renderVictoryCities(ctx, zoom) {
+    const cities = getActiveMap()?.victoryCities;
+    if (!cities?.length || !this.gameState) return;
+    const size = 14 / Math.max(zoom || 0.1, 0.08);
+    for (const name of cities) {
+      const territory = this.territoryByName[name];
+      if (!territory || territory.isWater) continue;
+      const [cx, cy] = this._getTerritoryCenter(territory);
+      if (cx == null) continue;
+      this._drawVictoryStar(ctx, cx, cy, size);
+    }
+  }
+
+  _drawVictoryStar(ctx, x, y, size) {
+    const r = size / 2;
+    const inner = r * 0.42;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const radius = i % 2 === 0 ? r : inner;
+      const angle = (Math.PI / 5) * i - Math.PI / 2;
+      const px = Math.cos(angle) * radius;
+      const py = Math.sin(angle) * radius;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fillStyle = '#DAA520';
+    ctx.strokeStyle = '#1a1204';
+    ctx.lineWidth = Math.max(1.5, size * 0.08);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
   /** Draw capital markers with faction flags */
   renderCapitals(ctx, zoom) {
     if (!this.gameState) return;

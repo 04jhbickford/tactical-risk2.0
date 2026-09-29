@@ -4,11 +4,29 @@
 // Uses firebase-admin with GOOGLE_APPLICATION_CREDENTIALS.
 // It only reads games/{id}/snapshots and games/{id}/events.
 
+import { readFileSync } from 'node:fs';
 import { auditSnapshots, formatAuditReport, parseSnapshotId } from '../src/audit/replayGame.js';
+
+const fixtureFlag = process.argv.indexOf('--fixture');
+if (fixtureFlag !== -1) {
+  const fixturePath = process.argv[fixtureFlag + 1];
+  if (!fixturePath) {
+    console.error('Usage: node tools/audit-game.mjs --fixture <file.json>');
+    process.exit(2);
+  }
+  const payload = JSON.parse(readFileSync(fixturePath, 'utf8'));
+  const result = await auditSnapshots({
+    snapshots: payload.snapshots || [],
+    events: payload.events || [],
+  });
+  console.log(formatAuditReport(payload.gameId || 'fixture', result));
+  process.exit(result.ok ? 0 : 1);
+}
 
 const gameId = process.argv[2];
 if (!gameId || gameId.startsWith('-')) {
   console.error('Usage: node tools/audit-game.mjs <gameId>');
+  console.error('       node tools/audit-game.mjs --fixture <file.json>');
   process.exit(2);
 }
 if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {

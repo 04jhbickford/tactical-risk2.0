@@ -94,7 +94,7 @@ const kazakh = data.find((row) => row.name === 'Kazakh S.S.R.');
 const txt = parsePolygonsLine(readFileSync(join(root, 'map/polygons.txt'), 'utf8'), 'Kazakh S.S.R.');
 const ring = kazakh?.polygons?.[0] || [];
 
-check('stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.23');
+check('stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.24');
 check('Kazakh is one ring', kazakh && kazakh.polygons.length === 1 && !kazakh.isWater);
 check('map polygons.txt matches territories.json',
   txt && JSON.stringify(txt) === JSON.stringify(ring));

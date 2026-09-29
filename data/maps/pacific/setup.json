@@ -1,0 +1,1132 @@
+{
+  "gameModes": [
+    {
+      "id": "risk",
+      "name": "Risk Style",
+      "description": "Random territories, Pacific factions",
+      "enabled": true,
+      "useHistoricalSetup": false,
+      "startingIPCs": 80,
+      "startingInfantryPerTerritory": 1
+    },
+    {
+      "id": "pacific1940",
+      "name": "Pacific 1940 (historical)",
+      "description": "1940 2nd-edition owners and placements",
+      "enabled": true,
+      "useHistoricalSetup": true
+    }
+  ],
+  "turnOrder": [
+    "Japanese",
+    "Americans",
+    "Chinese",
+    "British",
+    "ANZAC"
+  ],
+  "russianLand": "neutral",
+  "factions": [
+    {
+      "id": "Japanese",
+      "name": "Japanese",
+      "color": "#FF8C00",
+      "lightColor": "#FFA500",
+      "flag": "Pacific_Japanese.png",
+      "alliance": "Axis",
+      "startingPUs": 44
+    },
+    {
+      "id": "Americans",
+      "name": "Americans",
+      "color": "#556B2F",
+      "lightColor": "#6B8E23",
+      "flag": "Pacific_Americans.png",
+      "alliance": "Allies",
+      "startingPUs": 20
+    },
+    {
+      "id": "Chinese",
+      "name": "Chinese",
+      "color": "#8B008B",
+      "lightColor": "#9932CC",
+      "flag": "Chinese.png",
+      "alliance": "Allies",
+      "startingPUs": 21
+    },
+    {
+      "id": "British",
+      "name": "British",
+      "color": "#B8860B",
+      "lightColor": "#DAA520",
+      "flag": "Pacific_British.png",
+      "alliance": "Allies",
+      "startingPUs": 29
+    },
+    {
+      "id": "ANZAC",
+      "name": "ANZAC",
+      "color": "#008B8B",
+      "lightColor": "#20B2AA",
+      "flag": "ANZAC.png",
+      "alliance": "Allies",
+      "startingPUs": 41
+    }
+  ],
+  "alliances": {
+    "Axis": {
+      "name": "Axis Powers",
+      "color": "#FF8C00",
+      "members": [
+        "Japanese"
+      ]
+    },
+    "Allies": {
+      "name": "Allied Forces",
+      "color": "#4169E1",
+      "members": [
+        "Americans",
+        "Chinese",
+        "British",
+        "ANZAC"
+      ]
+    }
+  },
+  "risk": {
+    "factions": [
+      {
+        "id": "Japanese",
+        "name": "Japanese",
+        "color": "#FF8C00",
+        "lightColor": "#FFA500",
+        "flag": "Pacific_Japanese.png",
+        "alliance": "Axis",
+        "startingPUs": 44
+      },
+      {
+        "id": "Americans",
+        "name": "Americans",
+        "color": "#556B2F",
+        "lightColor": "#6B8E23",
+        "flag": "Pacific_Americans.png",
+        "alliance": "Allies",
+        "startingPUs": 20
+      },
+      {
+        "id": "Chinese",
+        "name": "Chinese",
+        "color": "#8B008B",
+        "lightColor": "#9932CC",
+        "flag": "Chinese.png",
+        "alliance": "Allies",
+        "startingPUs": 21
+      },
+      {
+        "id": "British",
+        "name": "British",
+        "color": "#B8860B",
+        "lightColor": "#DAA520",
+        "flag": "Pacific_British.png",
+        "alliance": "Allies",
+        "startingPUs": 29
+      },
+      {
+        "id": "ANZAC",
+        "name": "ANZAC",
+        "color": "#008B8B",
+        "lightColor": "#20B2AA",
+        "flag": "ANZAC.png",
+        "alliance": "Allies",
+        "startingPUs": 41
+      }
+    ]
+  },
+  "pacific1940": {
+    "factions": [
+      {
+        "id": "Japanese",
+        "name": "Japanese",
+        "color": "#FF8C00",
+        "lightColor": "#FFA500",
+        "flag": "Pacific_Japanese.png",
+        "alliance": "Axis",
+        "startingPUs": 44
+      },
+      {
+        "id": "Americans",
+        "name": "Americans",
+        "color": "#556B2F",
+        "lightColor": "#6B8E23",
+        "flag": "Pacific_Americans.png",
+        "alliance": "Allies",
+        "startingPUs": 20
+      },
+      {
+        "id": "Chinese",
+        "name": "Chinese",
+        "color": "#8B008B",
+        "lightColor": "#9932CC",
+        "flag": "Chinese.png",
+        "alliance": "Allies",
+        "startingPUs": 21
+      },
+      {
+        "id": "British",
+        "name": "British",
+        "color": "#B8860B",
+        "lightColor": "#DAA520",
+        "flag": "Pacific_British.png",
+        "alliance": "Allies",
+        "startingPUs": 29
+      },
+      {
+        "id": "ANZAC",
+        "name": "ANZAC",
+        "color": "#008B8B",
+        "lightColor": "#20B2AA",
+        "flag": "ANZAC.png",
+        "alliance": "Allies",
+        "startingPUs": 41
+      }
+    ],
+    "territoryOwners": {
+      "Alaska": "Americans",
+      "Aleutian Islands": "Americans",
+      "Amur": "Neutral",
+      "Anhwe": "Chinese",
+      "Borneo": "British",
+      "British Columbia": "British",
+      "Burma": "British",
+      "Buryatia": "Neutral",
+      "Buyant-Uhaa": "Neutral",
+      "Caroline Islands": "Japanese",
+      "Celebes": "ANZAC",
+      "Central Mongolia": "Neutral",
+      "Ceylon": "British",
+      "Chahar": "Chinese",
+      "Dutch New Guinea": "ANZAC",
+      "Dzavhan": "Neutral",
+      "Evenkiyskiy": "Neutral",
+      "Fiji": "British",
+      "Formosa": "Japanese",
+      "French Indo China": "British",
+      "Gilbert Islands": "British",
+      "Guam": "Americans",
+      "Hainan": "Japanese",
+      "Hawaiian Islands": "Americans",
+      "Hopei": "Chinese",
+      "Hunan": "Chinese",
+      "India": "British",
+      "Iwo Jima": "Japanese",
+      "Japan": "Japanese",
+      "Java": "ANZAC",
+      "Jehol": "Japanese",
+      "Johnston Island": "Americans",
+      "Kansu": "Chinese",
+      "Kazakhstan": "Neutral",
+      "Kiangsi": "Japanese",
+      "Kiangsu": "Japanese",
+      "Korea": "Japanese",
+      "Kwangsi": "Japanese",
+      "Kwangtung": "British",
+      "Kweichow": "Chinese",
+      "Line Islands": "Americans",
+      "Malaya": "British",
+      "Manchuria": "Japanese",
+      "Marianas": "Japanese",
+      "Marshall Islands": "Japanese",
+      "Mexico": "Americans",
+      "Midway": "Americans",
+      "Moscow": "Neutral",
+      "New Britain": "ANZAC",
+      "New Guinea": "ANZAC",
+      "New Hebrides": "British",
+      "New South Wales": "ANZAC",
+      "New Zealand": "ANZAC",
+      "Northern Territory": "ANZAC",
+      "Okinawa": "Japanese",
+      "Olgiy": "Neutral",
+      "Paulau Island": "Japanese",
+      "Philippines": "Americans",
+      "Queensland": "ANZAC",
+      "Sakha": "Neutral",
+      "Samoa": "British",
+      "Shan State": "British",
+      "Shantung": "Japanese",
+      "Shensi": "Chinese",
+      "Siam": "Japanese",
+      "Siberia": "Neutral",
+      "Sikang": "Chinese",
+      "Solomon Islands": "ANZAC",
+      "South Australia": "ANZAC",
+      "Soviet Far East": "Neutral",
+      "Suiyuan": "Chinese",
+      "Sumatra": "ANZAC",
+      "Szechwan": "Chinese",
+      "Tsagaan-Olom": "Neutral",
+      "Tsinghai": "Chinese",
+      "Tunguska": "Neutral",
+      "Ulaanbaatar": "Neutral",
+      "Victoria": "ANZAC",
+      "Wake Island": "Americans",
+      "Western Australia": "ANZAC",
+      "Western United States": "Americans",
+      "Yakut S.S.R.": "Neutral",
+      "Yenisey": "Neutral",
+      "Yukon Territory": "British",
+      "Yunnan": "Chinese"
+    },
+    "unitPlacements": {
+      "Japan": [
+        {
+          "type": "infantry",
+          "quantity": 6,
+          "owner": "Japanese"
+        },
+        {
+          "type": "artillery",
+          "quantity": 2,
+          "owner": "Japanese"
+        },
+        {
+          "type": "armour",
+          "quantity": 1,
+          "owner": "Japanese"
+        },
+        {
+          "type": "fighter",
+          "quantity": 2,
+          "owner": "Japanese"
+        },
+        {
+          "type": "tacticalBomber",
+          "quantity": 2,
+          "owner": "Japanese"
+        },
+        {
+          "type": "bomber",
+          "quantity": 2,
+          "owner": "Japanese"
+        },
+        {
+          "type": "aaGun",
+          "quantity": 3,
+          "owner": "Japanese"
+        },
+        {
+          "type": "factory",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "Manchuria": [
+        {
+          "type": "infantry",
+          "quantity": 7,
+          "owner": "Japanese"
+        },
+        {
+          "type": "artillery",
+          "quantity": 1,
+          "owner": "Japanese"
+        },
+        {
+          "type": "aaGun",
+          "quantity": 1,
+          "owner": "Japanese"
+        },
+        {
+          "type": "fighter",
+          "quantity": 2,
+          "owner": "Japanese"
+        },
+        {
+          "type": "tacticalBomber",
+          "quantity": 2,
+          "owner": "Japanese"
+        }
+      ],
+      "Paulau Island": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "Kiangsi": [
+        {
+          "type": "infantry",
+          "quantity": 3,
+          "owner": "Japanese"
+        },
+        {
+          "type": "artillery",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "Formosa": [
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "Shantung": [
+        {
+          "type": "infantry",
+          "quantity": 3,
+          "owner": "Japanese"
+        },
+        {
+          "type": "artillery",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "Kwangsi": [
+        {
+          "type": "infantry",
+          "quantity": 3,
+          "owner": "Japanese"
+        },
+        {
+          "type": "artillery",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "Iwo Jima": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "Jehol": [
+        {
+          "type": "infantry",
+          "quantity": 2,
+          "owner": "Japanese"
+        },
+        {
+          "type": "artillery",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "Caroline Islands": [
+        {
+          "type": "infantry",
+          "quantity": 2,
+          "owner": "Japanese"
+        },
+        {
+          "type": "aaGun",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "Siam": [
+        {
+          "type": "infantry",
+          "quantity": 2,
+          "owner": "Japanese"
+        }
+      ],
+      "Okinawa": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Japanese"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "Kiangsu": [
+        {
+          "type": "infantry",
+          "quantity": 3,
+          "owner": "Japanese"
+        },
+        {
+          "type": "artillery",
+          "quantity": 1,
+          "owner": "Japanese"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Japanese"
+        },
+        {
+          "type": "tacticalBomber",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "Korea": [
+        {
+          "type": "infantry",
+          "quantity": 4,
+          "owner": "Japanese"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "6 Sea Zone": [
+        {
+          "type": "submarine",
+          "quantity": 1,
+          "owner": "Japanese"
+        },
+        {
+          "type": "destroyer",
+          "quantity": 2,
+          "owner": "Japanese"
+        },
+        {
+          "type": "carrier",
+          "quantity": 2,
+          "owner": "Japanese"
+        },
+        {
+          "type": "fighter",
+          "quantity": 2,
+          "owner": "Japanese"
+        },
+        {
+          "type": "tacticalBomber",
+          "quantity": 2,
+          "owner": "Japanese"
+        },
+        {
+          "type": "cruiser",
+          "quantity": 1,
+          "owner": "Japanese"
+        },
+        {
+          "type": "battleship",
+          "quantity": 1,
+          "owner": "Japanese"
+        },
+        {
+          "type": "transport",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "19 Sea Zone": [
+        {
+          "type": "submarine",
+          "quantity": 1,
+          "owner": "Japanese"
+        },
+        {
+          "type": "battleship",
+          "quantity": 1,
+          "owner": "Japanese"
+        },
+        {
+          "type": "destroyer",
+          "quantity": 1,
+          "owner": "Japanese"
+        },
+        {
+          "type": "transport",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "33 Sea Zone": [
+        {
+          "type": "destroyer",
+          "quantity": 1,
+          "owner": "Japanese"
+        },
+        {
+          "type": "carrier",
+          "quantity": 1,
+          "owner": "Japanese"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Japanese"
+        },
+        {
+          "type": "tacticalBomber",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "20 Sea Zone": [
+        {
+          "type": "cruiser",
+          "quantity": 1,
+          "owner": "Japanese"
+        },
+        {
+          "type": "transport",
+          "quantity": 1,
+          "owner": "Japanese"
+        }
+      ],
+      "New South Wales": [
+        {
+          "type": "infantry",
+          "quantity": 2,
+          "owner": "ANZAC"
+        },
+        {
+          "type": "aaGun",
+          "quantity": 2,
+          "owner": "ANZAC"
+        },
+        {
+          "type": "factory",
+          "quantity": 1,
+          "owner": "ANZAC"
+        }
+      ],
+      "New Zealand": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "ANZAC"
+        },
+        {
+          "type": "fighter",
+          "quantity": 2,
+          "owner": "ANZAC"
+        }
+      ],
+      "Queensland": [
+        {
+          "type": "infantry",
+          "quantity": 2,
+          "owner": "ANZAC"
+        },
+        {
+          "type": "artillery",
+          "quantity": 1,
+          "owner": "ANZAC"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "ANZAC"
+        }
+      ],
+      "Malaya": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "ANZAC"
+        },
+        {
+          "type": "infantry",
+          "quantity": 3,
+          "owner": "British"
+        }
+      ],
+      "62 Sea Zone": [
+        {
+          "type": "destroyer",
+          "quantity": 1,
+          "owner": "ANZAC"
+        },
+        {
+          "type": "transport",
+          "quantity": 1,
+          "owner": "ANZAC"
+        }
+      ],
+      "63 Sea Zone": [
+        {
+          "type": "cruiser",
+          "quantity": 1,
+          "owner": "ANZAC"
+        }
+      ],
+      "Western United States": [
+        {
+          "type": "infantry",
+          "quantity": 3,
+          "owner": "Americans"
+        },
+        {
+          "type": "artillery",
+          "quantity": 1,
+          "owner": "Americans"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Americans"
+        },
+        {
+          "type": "aaGun",
+          "quantity": 2,
+          "owner": "Americans"
+        },
+        {
+          "type": "factory",
+          "quantity": 1,
+          "owner": "Americans"
+        }
+      ],
+      "Hawaiian Islands": [
+        {
+          "type": "infantry",
+          "quantity": 2,
+          "owner": "Americans"
+        },
+        {
+          "type": "fighter",
+          "quantity": 2,
+          "owner": "Americans"
+        }
+      ],
+      "Philippines": [
+        {
+          "type": "infantry",
+          "quantity": 2,
+          "owner": "Americans"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Americans"
+        }
+      ],
+      "26 Sea Zone": [
+        {
+          "type": "submarine",
+          "quantity": 1,
+          "owner": "Americans"
+        },
+        {
+          "type": "destroyer",
+          "quantity": 1,
+          "owner": "Americans"
+        },
+        {
+          "type": "cruiser",
+          "quantity": 1,
+          "owner": "Americans"
+        },
+        {
+          "type": "transport",
+          "quantity": 1,
+          "owner": "Americans"
+        }
+      ],
+      "10 Sea Zone": [
+        {
+          "type": "battleship",
+          "quantity": 1,
+          "owner": "Americans"
+        },
+        {
+          "type": "cruiser",
+          "quantity": 1,
+          "owner": "Americans"
+        },
+        {
+          "type": "destroyer",
+          "quantity": 1,
+          "owner": "Americans"
+        },
+        {
+          "type": "transport",
+          "quantity": 1,
+          "owner": "Americans"
+        },
+        {
+          "type": "carrier",
+          "quantity": 1,
+          "owner": "Americans"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Americans"
+        },
+        {
+          "type": "tacticalBomber",
+          "quantity": 1,
+          "owner": "Americans"
+        }
+      ],
+      "35 Sea Zone": [
+        {
+          "type": "destroyer",
+          "quantity": 1,
+          "owner": "Americans"
+        },
+        {
+          "type": "submarine",
+          "quantity": 1,
+          "owner": "Americans"
+        }
+      ],
+      "Szechwan": [
+        {
+          "type": "infantry",
+          "quantity": 6,
+          "owner": "Chinese"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "Chinese"
+        },
+        {
+          "type": "factory",
+          "quantity": 1,
+          "owner": "Chinese"
+        }
+      ],
+      "Hunan": [
+        {
+          "type": "infantry",
+          "quantity": 2,
+          "owner": "Chinese"
+        }
+      ],
+      "Yunnan": [
+        {
+          "type": "infantry",
+          "quantity": 4,
+          "owner": "Chinese"
+        }
+      ],
+      "Kweichow": [
+        {
+          "type": "infantry",
+          "quantity": 2,
+          "owner": "Chinese"
+        }
+      ],
+      "Shensi": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Chinese"
+        }
+      ],
+      "Suiyuan": [
+        {
+          "type": "infantry",
+          "quantity": 2,
+          "owner": "Chinese"
+        }
+      ],
+      "Kwangtung": [
+        {
+          "type": "infantry",
+          "quantity": 2,
+          "owner": "British"
+        }
+      ],
+      "Burma": [
+        {
+          "type": "infantry",
+          "quantity": 2,
+          "owner": "British"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "British"
+        }
+      ],
+      "India": [
+        {
+          "type": "infantry",
+          "quantity": 6,
+          "owner": "British"
+        },
+        {
+          "type": "artillery",
+          "quantity": 1,
+          "owner": "British"
+        },
+        {
+          "type": "aaGun",
+          "quantity": 3,
+          "owner": "British"
+        },
+        {
+          "type": "fighter",
+          "quantity": 1,
+          "owner": "British"
+        },
+        {
+          "type": "tacticalBomber",
+          "quantity": 1,
+          "owner": "British"
+        },
+        {
+          "type": "factory",
+          "quantity": 1,
+          "owner": "British"
+        }
+      ],
+      "37 Sea Zone": [
+        {
+          "type": "battleship",
+          "quantity": 1,
+          "owner": "British"
+        }
+      ],
+      "39 Sea Zone": [
+        {
+          "type": "destroyer",
+          "quantity": 1,
+          "owner": "British"
+        },
+        {
+          "type": "cruiser",
+          "quantity": 1,
+          "owner": "British"
+        },
+        {
+          "type": "transport",
+          "quantity": 1,
+          "owner": "British"
+        }
+      ],
+      "Amur": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Neutral"
+        }
+      ],
+      "Buryatia": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Neutral"
+        }
+      ],
+      "Buyant-Uhaa": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Neutral"
+        }
+      ],
+      "Central Mongolia": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Neutral"
+        }
+      ],
+      "Dzavhan": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Neutral"
+        }
+      ],
+      "Evenkiyskiy": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Neutral"
+        }
+      ],
+      "Kazakhstan": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Neutral"
+        }
+      ],
+      "Moscow": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Neutral"
+        }
+      ],
+      "Olgiy": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Neutral"
+        }
+      ],
+      "Sakha": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Neutral"
+        }
+      ],
+      "Siberia": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Neutral"
+        }
+      ],
+      "Soviet Far East": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Neutral"
+        }
+      ],
+      "Tsagaan-Olom": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Neutral"
+        }
+      ],
+      "Tunguska": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Neutral"
+        }
+      ],
+      "Ulaanbaatar": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Neutral"
+        }
+      ],
+      "Yakut S.S.R.": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Neutral"
+        }
+      ],
+      "Yenisey": [
+        {
+          "type": "infantry",
+          "quantity": 1,
+          "owner": "Neutral"
+        }
+      ]
+    },
+    "notes": {
+      "russianLand": "neutral",
+      "dropped": {
+        "airfield": 11,
+        "harbour": 11
+      },
+      "substituted": {
+        "tactical_bomber": "tacticalBomber",
+        "factory_major": "factory",
+        "mech_infantry": "infantry",
+        "factory_minor": "factory"
+      },
+      "neutralGarrisons": [
+        "Amur",
+        "Buryatia",
+        "Buyant-Uhaa",
+        "Central Mongolia",
+        "Dzavhan",
+        "Evenkiyskiy",
+        "Kazakhstan",
+        "Moscow",
+        "Olgiy",
+        "Sakha",
+        "Siberia",
+        "Soviet Far East",
+        "Tsagaan-Olom",
+        "Tunguska",
+        "Ulaanbaatar",
+        "Yakut S.S.R.",
+        "Yenisey"
+      ],
+      "capitalFactoriesAdded": [
+        "Szechwan"
+      ],
+      "incomeNeutral": {
+        "Japanese": {
+          "territories": 17,
+          "ipc": 44,
+          "continents": [
+            "Japanese Home Islands +9",
+            "Manchuria and Korea +9"
+          ]
+        },
+        "Americans": {
+          "territories": 11,
+          "ipc": 20,
+          "continents": []
+        },
+        "Chinese": {
+          "territories": 12,
+          "ipc": 21,
+          "continents": []
+        },
+        "British": {
+          "territories": 14,
+          "ipc": 29,
+          "continents": [
+            "India +6"
+          ]
+        },
+        "ANZAC": {
+          "territories": 14,
+          "ipc": 41,
+          "continents": [
+            "Australia +18"
+          ]
+        }
+      },
+      "incomeSovietFoldedIntoChinese": {
+        "Japanese": {
+          "territories": 17,
+          "ipc": 44,
+          "continents": [
+            "Japanese Home Islands +9",
+            "Manchuria and Korea +9"
+          ]
+        },
+        "Americans": {
+          "territories": 11,
+          "ipc": 20,
+          "continents": []
+        },
+        "Chinese": {
+          "territories": 23,
+          "ipc": 65,
+          "continents": [
+            "Soviet Far East +33"
+          ]
+        },
+        "British": {
+          "territories": 14,
+          "ipc": 29,
+          "continents": [
+            "India +6"
+          ]
+        },
+        "ANZAC": {
+          "territories": 14,
+          "ipc": 41,
+          "continents": [
+            "Australia +18"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,4 +1,4 @@
-// V2.81.57-unified.23 — map registry, non-wrap camera, mapId, converter identity.
+// V2.81.57-unified.24 — map registry, non-wrap camera, mapId, converter identity.
 // Run: node tools/test-map-registry.mjs
 
 import { readFileSync } from 'node:fs';
@@ -47,7 +47,7 @@ console.log('=== map registry ===');
 activateMap('classic');
 applyMapMetrics(getActiveMap());
 const classic = getMap('classic');
-check('stamp is unified.23', GAME_VERSION === 'V2.81.57-unified.23');
+check('stamp is unified.24', GAME_VERSION === 'V2.81.57-unified.24');
 check('schema stays 11', SCHEMA_VERSION === 11);
 check('classic id and size', classic.id === 'classic' && classic.width === 3500 && classic.height === 2000);
 check('classic wraps and uses the existing data files',
@@ -67,11 +67,12 @@ check('classic victory mode and 16 bridges',
 check('nation table still names Germany and the UK',
   classic.nationNames.germans.name === 'Germany'
   && classic.nationNames.british.name === 'UK');
-check('default picker is classic only',
-  listPickerMaps('').map((map) => map.id).join(',') === 'classic');
-check('?maps=all lists pacific and it is not playable',
+check('default picker lists classic and pacific',
+  listPickerMaps('').map((map) => map.id).join(',') === 'classic,pacific'
+  && listPickerMaps('').every((map) => map.playable === true && map.released === true));
+check('?maps=all still lists both playable maps',
   mapsAllRequested('?maps=all') === true
-  && listPickerMaps('?maps=all').some((map) => map.id === 'pacific' && map.playable === false));
+  && listPickerMaps('?maps=all').map((map) => map.id).join(',') === 'classic,pacific');
 check('pacific does not wrap and turns relief off on phones',
   getMap('pacific').scrollWrapX === false
   && getMap('pacific').tiles.format === 'webp'
@@ -142,8 +143,9 @@ console.log('=== mapId ===');
   }
   check('loadFromJSON throws the refresh sentence', refused);
   check('state was not replaced by the unknown save', loaded.mapId === 'classic');
-  check('pacific is known but not loadable',
-    resolveMapId('pacific').ok === true && loadMapDecision('pacific').code === 'map_unplayable');
+  check('pacific is known and loadable',
+    resolveMapId('pacific').ok === true && loadMapDecision('pacific').ok === true
+    && loadMapDecision('pacific').mapId === 'pacific');
   check('a game doc mapId is read before a missing state id',
     mapIdFromDoc({ mapId: 'pacific', state: {} }).mapId === 'pacific');
 }
