@@ -6,6 +6,7 @@ import { airCombatMoveMayOccupy, combatMoveReachableDests, maxMoveSelection, sea
 import { hasLegalAirLandingFrom, wasFriendlyAtTurnStart } from '../state/airLanding.js';
 import { isLandingCarrier } from '../state/carrierPlacement.js';
 import { moveUnitsWithRaidPrompt } from './raidPrompt.js';
+import { raiderNcmMovementRange } from '../state/strategicBombing.js';
 
 export class MovementUI {
   constructor() {
@@ -414,17 +415,35 @@ export class MovementUI {
     return canCarryAny && capacity > 0;
   }
 
-  // Get the maximum movement range of selected air units
+  // Get the maximum movement range of selected air units.
+  // A raiding bomber in Non-Combat Move keeps only the movement left
+  // after the flight to the factory. Other aircraft stay on catalog range.
   _getMaxAirMovementRange() {
     let maxRange = 0;
+    let sawAir = false;
+    const player = this.gameState?.currentPlayer;
+    const nonCombat = this.gameState?.turnPhase === TURN_PHASES.NON_COMBAT_MOVE;
+    const longRange = !!(player && this.gameState?.hasTech?.(player.id, 'longRangeAircraft'));
     for (const [type, qty] of Object.entries(this.selectedUnits)) {
       if (qty <= 0) continue;
       const def = this.unitDefs[type];
-      if (def?.isAir && def.movement > maxRange) {
-        maxRange = def.movement;
+      if (!def?.isAir) continue;
+      sawAir = true;
+      let range = def.movement || 0;
+      if (nonCombat && type === 'bomber' && player && this.selectedFrom) {
+        const total = longRange ? range + 2 : range;
+        const remaining = raiderNcmMovementRange(this.gameState, {
+          fromTerritory: this.selectedFrom.name,
+          quantity: qty,
+          ownerId: player.id,
+          totalMovement: total,
+        });
+        if (remaining != null) range = remaining;
       }
+      if (range > maxRange) maxRange = range;
     }
-    return maxRange || 4;
+    if (sawAir) return maxRange;
+    return 4;
   }
 
   // Get the maximum movement range of selected land units

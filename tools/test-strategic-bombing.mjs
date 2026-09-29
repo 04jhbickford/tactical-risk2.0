@@ -31,7 +31,7 @@ const {
   sumDice,
   undamagedPlacement,
 } = await import('../src/state/strategicBombing.js');
-const { listIllegalAir } = await import('../src/state/ncmAirCheck.js');
+const { destroyIllegalAir, listIllegalAir } = await import('../src/state/ncmAirCheck.js');
 const { bindGameEventLog, unbindGameEventLog } = await import('../src/multiplayer/gameEventLog.js');
 
 let failures = 0;
@@ -370,6 +370,42 @@ console.log('=== raiders must land in non-combat ===');
   check('the end-of-NCM check still sees it', illegal.some((row) => row.territory === 'Germany' && row.type === 'bomber'));
 }
 
+console.log('=== raider returns with movement left ===');
+{
+  const gs = raidAlongChain('Home');
+  check('the raid flight spent 4 of 6', gs.airUnitOrigins.Factory?.bomber?.distance === 4);
+  check('a fresh move would still reach the landing 3 away', gs.canAirUnitReach('Factory', 'Far', 6));
+  const tooFar = gs.moveUnits('Factory', 'Far', [{ type: 'bomber', quantity: 1 }], unitDefs);
+  check('2 movement left cannot reach a landing 3 away', tooFar.success === false);
+  const stuck = (gs.units.Factory || []).find((u) => u.type === 'bomber' && u.owner === 'usa');
+  check('the short bomber is still over the factory', !!stuck && stuck.quantity === 1 && stuck.raided === true);
+  const illegal = listIllegalAir(gs, unitDefs, 'usa');
+  check('the end-of-NCM check still sees the bomber that cannot land', illegal.some((row) => row.territory === 'Factory' && row.type === 'bomber'));
+  const removed = destroyIllegalAir(gs, unitDefs, 'usa');
+  check('that check destroys the bomber with no legal landing', removed.some((row) => row.territory === 'Factory' && row.type === 'bomber' && row.quantity === 1));
+  check('the destroyed bomber is gone', !(gs.units.Factory || []).some((u) => u.type === 'bomber' && u.owner === 'usa'));
+
+  const home = raidAlongChain('Home');
+  const near = home.moveUnits('Factory', 'Near', [{ type: 'bomber', quantity: 1 }], unitDefs);
+  check('the same 2 movement can reach a landing 2 away', near.success === true);
+  check('that landing is no longer an illegal air unit', !listIllegalAir(home, unitDefs, 'usa').some((row) => row.type === 'bomber'));
+
+  const longer = raidAlongChain('S2');
+  check('the shorter raid spent 2', longer.airUnitOrigins.Factory?.bomber?.distance === 2);
+  const far = longer.moveUnits('Factory', 'Far', [{ type: 'bomber', quantity: 1 }], unitDefs);
+  check('a bomber with enough remaining movement can land 3 away', far.success === true);
+  const landed = (longer.units.Far || []).find((u) => u.type === 'bomber' && u.owner === 'usa');
+  check('that bomber is on the landing', !!landed && landed.quantity === 1);
+  check('a legal landing is not destroyed', !listIllegalAir(longer, unitDefs, 'usa').some((row) => row.type === 'bomber'));
+
+  const ai = raidAlongChain('Home');
+  ai.players[0].isAI = true;
+  const aiFar = ai.moveUnits('Factory', 'Far', [{ type: 'bomber', quantity: 1 }], unitDefs);
+  check('the AI cannot give the raider a fresh full move', aiFar.success === false);
+  const aiNear = ai.moveUnits('Factory', 'Near', [{ type: 'bomber', quantity: 1 }], unitDefs);
+  check('the AI can land the raider inside the movement left', aiNear.success === true);
+}
+
 console.log('=== rules panel ===');
 {
   const rules = readFileSync(join(root, 'src/ui/rulesPanel.js'), 'utf8');
@@ -382,6 +418,61 @@ if (failures) {
   process.exit(1);
 }
 console.log('\nAll strategic bombing checks passed');
+
+// Home–S1–S2–S3–Factory is 4. Factory–N1–Near is 2. Factory–F1–F2–Far is 3.
+function raidAlongChain(start) {
+  const link = (name, connections) => ({ name, isWater: false, production: 1, connections });
+  const territories = [
+    link('Home', ['S1']),
+    link('S1', ['Home', 'S2']),
+    link('S2', ['S1', 'S3']),
+    link('S3', ['S2', 'Factory']),
+    link('Factory', ['S3', 'N1', 'F1']),
+    link('N1', ['Factory', 'Near']),
+    link('Near', ['N1']),
+    link('F1', ['Factory', 'F2']),
+    link('F2', ['F1', 'Far']),
+    link('Far', ['F2']),
+  ];
+  const gs = new GameState({ risk: { factions: [] } }, territories, []);
+  gs.players = [
+    { id: 'usa', name: 'USA', isAI: false },
+    { id: 'germans', name: 'Germany', isAI: true },
+  ];
+  gs.currentPlayerIndex = 0;
+  gs.phase = GAME_PHASES.PLAYING;
+  gs.turnPhase = TURN_PHASES.COMBAT_MOVE;
+  gs.territoryState = {
+    Home: { owner: 'usa', isCapital: true },
+    Near: { owner: 'usa', isCapital: false },
+    Far: { owner: 'usa', isCapital: false },
+    Factory: { owner: 'germans', isCapital: true },
+  };
+  gs.playerState = {
+    usa: { ipcs: 30, capitalTerritory: 'Home', hasPlacedCapital: true },
+    germans: { ipcs: 20, capitalTerritory: 'Factory', hasPlacedCapital: true },
+  };
+  gs.playerTechs = { usa: { unlockedTechs: [] }, germans: { unlockedTechs: [] } };
+  gs.friendlyTerritoriesAtTurnStart = new Set(['Home', 'Near', 'Far']);
+  gs.factoriesAtTurnStart = new Set(['Home', 'Factory']);
+  gs.units = {
+    Factory: [{ type: 'factory', quantity: 1, owner: 'germans' }],
+  };
+  gs.units[start] = [{ type: 'bomber', quantity: 1, owner: 'usa' }];
+  gs.factoryDamage = {};
+  gs.raidQueue = [];
+  const raid = gs.moveUnits(start, 'Factory', [{ type: 'bomber', quantity: 1 }], unitDefs, { raid: true });
+  if (!raid.success) throw new Error(`chain raid from ${start} failed: ${raid.error || 'unknown'}`);
+  gs.turnPhase = TURN_PHASES.COMBAT;
+  gs._detectCombats(unitDefs);
+  gs.resolveStrategicRaid('Factory', unitDefs, { rolls: [6, 3] });
+  gs.combatQueue = [];
+  gs.nextPhase();
+  if (gs.turnPhase !== TURN_PHASES.NON_COMBAT_MOVE) {
+    throw new Error(`expected non-combat after the raid, got ${gs.turnPhase}`);
+  }
+  return gs;
+}
 
 function makeState() {
   const territories = [

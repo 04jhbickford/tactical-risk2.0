@@ -178,7 +178,8 @@ export function renderFactoryRepairHtml(rows, { ipcs = 0 } = {}) {
   return `<div class="pp-raid-repair" data-raid-repair="1">${items}</div>`;
 }
 
-// Pending raid bombers become movable for Non-Combat Move. The end-of-NCM
+// Pending raid bombers become movable for Non-Combat Move. They keep only
+// the movement not already spent flying to the factory. The end-of-NCM
 // check still destroys them if they are not on a legal landing spot.
 // The raid exclusion lasts for the bombing power's turn. The next turn
 // can fight with those bombers again, including on defense.
@@ -204,4 +205,53 @@ export function releaseRaidBombersForNcm(units) {
     }
   }
   return released;
+}
+
+// Distance already stored for this air type. A failed search stores 999
+// and must not be treated as a spent move.
+export function airDistanceFlown(gameState, territory, unitType) {
+  const raw = Number(gameState?.airUnitOrigins?.[territory]?.[unitType]?.distance) || 0;
+  if (raw >= 999) return 0;
+  return Math.max(0, raw);
+}
+
+// Anniversary: the return uses total movement minus the flight to the factory.
+export function raidBomberRemainingMove(totalMovement, distanceFlown) {
+  const total = Math.max(0, Number(totalMovement) || 0);
+  const spent = distanceFlown >= 999 ? 0 : Math.max(0, Number(distanceFlown) || 0);
+  return Math.max(0, total - spent);
+}
+
+// Non-Combat range when this move consumes a raiding bomber. Null when it
+// does not, so every other aircraft keeps the range the caller already uses.
+// Humans and the AI both move through this number.
+export function raiderNcmMovementRange(gameState, {
+  fromTerritory,
+  quantity,
+  ownerId,
+  totalMovement,
+} = {}) {
+  if (!gameState || !fromTerritory || !ownerId) return null;
+  const stacks = (gameState.units?.[fromTerritory] || []).filter((unit) => (
+    unit?.type === 'bomber'
+    && unit.owner === ownerId
+    && !unit.moved
+    && !unit.id
+  ));
+  let need = Math.max(0, Number(quantity) || 0);
+  let range = null;
+  for (const stack of stacks) {
+    if (need <= 0) break;
+    const have = Math.max(0, Number(stack.quantity) || 0);
+    const take = Math.min(need, have);
+    if (take <= 0) continue;
+    need -= take;
+    if (!isRaidMission(stack)) continue;
+    const left = raidBomberRemainingMove(
+      totalMovement,
+      airDistanceFlown(gameState, fromTerritory, 'bomber'),
+    );
+    range = range == null ? left : Math.min(range, left);
+  }
+  return range;
 }

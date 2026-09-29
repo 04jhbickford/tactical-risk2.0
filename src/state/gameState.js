@@ -98,6 +98,7 @@ import {
   ownedFactoryNames,
   raidPromptApplies,
   clearRaidedForTurnEnd,
+  raiderNcmMovementRange,
   releaseRaidBombersForNcm,
   repairCost,
   sumDice,
@@ -2870,7 +2871,8 @@ export class GameState {
       landLooseAirIfLeavingAirPhase();
       // Raiding bombers stay over the factory through that rescue so the
       // player can fly them home during Non-Combat Move. Clear `moved`
-      // only after the rescue, or they would be picked up by it.
+      // only after the rescue, or they would be picked up by it. The
+      // return spends only the movement left from the flight to the factory.
       if (nextPhase === TURN_PHASES.NON_COMBAT_MOVE) {
         releaseRaidBombersForNcm(this.units);
       }
@@ -3129,7 +3131,18 @@ export class GameState {
 
       // Apply Long Range Aircraft tech bonus (+2 movement for fighters and bombers)
       const baseMovement = unitDef.movement || 4;
-      const movementRange = hasLongRangeAircraft ? baseMovement + 2 : baseMovement;
+      let movementRange = hasLongRangeAircraft ? baseMovement + 2 : baseMovement;
+      // A raiding bomber returns with the movement it has not already spent.
+      // The same gate covers a human click and an AI moveUnits call.
+      if (isNonCombatMove && airUnit.type === 'bomber') {
+        const remaining = raiderNcmMovementRange(this, {
+          fromTerritory,
+          quantity: airUnit.quantity,
+          ownerId: player.id,
+          totalMovement: movementRange,
+        });
+        if (remaining != null) movementRange = remaining;
+      }
 
       // Check if destination is reachable within air unit's movement range
       if (!this.canAirUnitReach(fromTerritory, toTerritory, movementRange)) {
