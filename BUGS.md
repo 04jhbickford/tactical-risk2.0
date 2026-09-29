@@ -18,6 +18,8 @@ A raid writes a combat event. The payload fields are `territory`, `attackerOwner
 
 Receipt: `node tools/test-strategic-bombing.mjs`.
 
+Rob, `#tactical-risk`, 29 Sep 6:52–6:54pm PT, standard Anniversary. A transport is not a casualty while any other unit on that side is still in the battle. The human picker hides it on desktop and phone, and `applyCasualtySelection` ignores the pick. Lone transports are still removed with no dice when the enemy can hit them. Air versus a submarine plus a transport submerges; the transport stays because the submarine is still there. Ships and land units still retreat to one territory. Each retreating aircraft uses its remaining movement and the existing landing picker. The AI lands that aircraft on the closest friendly land, or a carrier when that is the legal option. Nothing in range is parked for the end-of-NCM check. A tank blitz through an empty enemy land territory captures it, including its IPC income, and the move undoes. A territory with any enemy unit, including an AA gun or a factory, blocks the blitz. Infantry and artillery cannot blitz. A blitz cannot cross a sea zone.
+
 ---
 
 ## 9.28.26 — unified.20.2 sub and air rules, retreat landings

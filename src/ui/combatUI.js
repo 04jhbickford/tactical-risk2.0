@@ -20,6 +20,7 @@ import {
   unitsForGeneralCombat,
   unitsSubsMayRoll,
   airVersusSubStalemate,
+  sideHasNonTransportUnit,
   sideIsOnlyTransports,
   enemyCanHitTransports,
   AIR_CANNOT_HIT_SUBS_HINT,
@@ -1896,8 +1897,37 @@ export class CombatUI {
     }
   }
 
+  // A transport pick is illegal while any other unit on that side is alive.
+  // Drop it and spend those hits on a combat unit, the same way an illegal
+  // sub pick is clamped before Confirm.
+  _clampIllegalTransportCasualties() {
+    for (const side of ['attacker', 'defender']) {
+      const units = side === 'attacker' ? this.combatState.attackers : this.combatState.defenders;
+      const selected = side === 'attacker'
+        ? this.combatState.selectedAttackerCasualties
+        : this.combatState.selectedDefenderCasualties;
+      if (!selected?.transport || !sideHasNonTransportUnit(units)) continue;
+      const dropped = Number(selected.transport) || 0;
+      delete selected.transport;
+      if (dropped <= 0) continue;
+      const room = (units || []).filter((unit) => unit.type !== 'transport').map((unit) => ({ ...unit }));
+      applyCasualtySelection(room, selected);
+      const refill = this._selectCheapestCasualties(
+        room.filter((unit) => (Number(unit.quantity) || 0) > 0),
+        dropped,
+        this._casualtyDefaultOptions(units),
+      );
+      delete refill.transport;
+      for (const [type, count] of Object.entries(refill)) {
+        if (!count) continue;
+        selected[type] = (selected[type] || 0) + count;
+      }
+    }
+  }
+
   _applyCasualties() {
     this._clampIllegalSubCasualties();
+    this._clampIllegalTransportCasualties();
     const { attackers, defenders, selectedAttackerCasualties, selectedDefenderCasualties,
             totalAttackerLosses, totalDefenderLosses, pendingBombardmentLosses } = this.combatState;
 
@@ -2483,7 +2513,7 @@ export class CombatUI {
     `;
 
     // Shore Bombardment section
-    if (this.combatState.bombardmentRolls.length > 0) {
+    if (this.combatState.bombardmentRolls?.length > 0) {
       if (phase === 'bombardment') {
         // Show bombardment ready to fire
         const shipCounts = {};
@@ -2660,7 +2690,7 @@ export class CombatUI {
             <span class="air-landing-title">${isRetreating ? 'Retreat - ' : ''}Air Unit Landing Required</span>
           </div>
           <div class="air-landing-desc">
-            ${isRetreating ? 'Your forces are retreating. ' : ''}Air units must land on friendly land within range. Fighters and tactical bombers may land on a friendly carrier. Bombers never land at sea.
+            ${isRetreating ? 'Aircraft will choose their own landing. ' : ''}Air units must land on friendly land within range. Fighters and tactical bombers may land on a friendly carrier. Bombers never land at sea.
             Newly captured territories are NOT valid landing locations.
           </div>
       `;
@@ -2934,11 +2964,12 @@ export class CombatUI {
         }
       `;
     } else if (phase === 'selectRetreat') {
-      // Select retreat destination (A&A rule: all units go to one territory)
+      // Ships and land units share one destination. Aircraft do not.
       const { retreatOptions } = this.combatState;
       html += `
         <div class="retreat-selection">
           <div class="retreat-header">Select Retreat Destination</div>
+          <p class="retreat-air-note">Aircraft will choose their own landing.</p>
           <div class="retreat-options">
             ${retreatOptions.map(dest => `
               <button class="combat-btn retreat-dest-btn" data-action="confirm-retreat" data-destination="${dest}">
@@ -3098,7 +3129,7 @@ export class CombatUI {
     if (phase === 'selectRetreat') {
       const { retreatOptions } = this.combatState;
       return `
-        <p class="phone-combat-blurb">Tap one friendly land. All retreating units go there.</p>
+        <p class="phone-combat-blurb">Tap one territory. Ships and land units go there. Aircraft will choose their own landing.</p>
         <div class="retreat-selection">
           ${(retreatOptions || []).map((dest) => `
             <button class="combat-btn retreat-dest-btn" data-action="confirm-retreat" data-destination="${dest}">${dest}</button>
@@ -3273,7 +3304,7 @@ export class CombatUI {
           <span class="air-landing-title">${isRetreating ? 'Retreat — ' : ''}Air Unit Landing Required</span>
         </div>
         <div class="air-landing-desc">
-          Air units must land in a territory that was friendly at the start of your turn.
+          ${isRetreating ? 'Aircraft will choose their own landing. ' : ''}Air units must land in a territory that was friendly at the start of your turn.
         </div>`;
     for (const airUnit of airUnitsToLand) {
       const def = this.unitDefs[airUnit.type];
@@ -3920,9 +3951,10 @@ export class CombatUI {
     let max = 0;
     for (const unit of units) {
       if (unit.quantity <= 0) continue;
-      // Factories are captured. Transports can take a hit when they are
-      // the only legal target; an undefended transport is removed with no dice.
+      // Factories are captured. A transport is not a casualty while any
+      // other unit is alive. An undefended transport is removed with no dice.
       if (unit.type === 'factory') continue;
+      if (unit.type === 'transport' && sideHasNonTransportUnit(units)) continue;
 
       if (unit.type === 'battleship') {
         // Battleships can take 2 hits each (1 damage + 1 destroy)
@@ -3939,11 +3971,16 @@ export class CombatUI {
   }
 
   _renderCasualtyUnits(units, selected, side, readonly = false) {
-    // Factories are captured, not destroyed. Transports stay selectable so an
-    // edited pick is the hull that Confirm removes. Stacks of one type share
+    // Factories are captured, not destroyed. A transport is hidden while any
+    // other unit on that side is still in the battle. Stacks of one type share
     // one row; the count is the sum, which is what apply spends.
     let html = '';
-    const living = (units || []).filter((u) => (Number(u.quantity) || 0) > 0 && u.type !== 'factory');
+    const concealTransports = sideHasNonTransportUnit(units);
+    const living = (units || []).filter((u) => (
+      (Number(u.quantity) || 0) > 0
+      && u.type !== 'factory'
+      && !(concealTransports && u.type === 'transport')
+    ));
     const rows = [];
     const seen = new Set();
     for (const unit of living) {
@@ -4306,6 +4343,9 @@ export class CombatUI {
 
     const stacks = stacksOf(unitType);
     if (!stacks.length) return;
+    if (unitType === 'transport' && sideHasNonTransportUnit(
+      side === 'attacker' ? this.combatState.attackers : this.combatState.defenders,
+    )) return;
 
     // For battleship destruction, account for damage selections across stacks.
     let maxSelectable = stacks.reduce((sum, unit) => sum + (Number(unit.quantity) || 0), 0);
@@ -4368,10 +4408,18 @@ export class CombatUI {
   _executeRetreat(destination) {
     this.combatState.isRetreating = true;
 
-    // Move all units to the selected retreat destination
+    // Ships and land units share the destination. Aircraft stay for the
+    // landing picker, or the AI lands them on the best legal option.
     const retreatResult = this.gameState.retreatToTerritory(this.currentTerritory, destination);
     if (!retreatResult.success) {
       console.warn('Retreat failed:', retreatResult.error);
+    }
+
+    if (this.gameState.currentPlayer?.isAI) {
+      this.gameState.combatQueue = this.gameState.combatQueue.filter(t => t !== this.currentTerritory);
+      this.gameState._notify();
+      this._nextCombat();
+      return;
     }
 
     // Check for air landing BEFORE removing from queue

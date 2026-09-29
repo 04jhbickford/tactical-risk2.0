@@ -72,15 +72,29 @@ function openSea(units) {
   const { gs, ui } = openSea([
     { type: 'bomber', quantity: 1, owner: 'Germans', moved: true },
     { type: 'submarine', quantity: 1, owner: 'Americans', id: 'sub_def' },
-    { type: 'transport', quantity: 1, owner: 'Americans' },
+    { type: 'cruiser', quantity: 1, owner: 'Americans' },
   ]);
   check('bomber battle starts ready', ui.combatState.phase === 'ready');
   ui._submergeSub('defender', 1);
-  ui.combatState.defenders = ui.combatState.defenders.filter((unit) => unit.type !== 'transport');
+  ui.combatState.defenders = ui.combatState.defenders.filter((unit) => unit.type !== 'cruiser');
   ui.combatState.winner = 'attacker';
   ui._finalizeCombat();
   const sub = (gs.units['Caspian Sea Zone'] || []).find((unit) => unit.type === 'submarine');
   check('defender sub keeps owner and id', sub?.owner === 'Americans' && sub?.id === 'sub_def', sub);
+}
+
+{
+  const { gs, ui } = openSea([
+    { type: 'bomber', quantity: 1, owner: 'Germans', moved: true },
+    { type: 'submarine', quantity: 1, owner: 'Americans', id: 'sub_sea' },
+    { type: 'transport', quantity: 1, owner: 'Americans' },
+  ]);
+  const zone = 'Caspian Sea Zone';
+  const sub = (gs.units[zone] || []).find((unit) => unit.type === 'submarine');
+  const transport = (gs.units[zone] || []).find((unit) => unit.type === 'transport');
+  check('air versus a sub and a transport submerges', ui.combatState.winner === 'submerged' && ui.combatState.phase === 'resolved');
+  check('that sub keeps its owner and the transport stays',
+    sub?.owner === 'Americans' && sub?.id === 'sub_sea' && transport?.quantity === 1, { sub, transport });
 }
 
 {

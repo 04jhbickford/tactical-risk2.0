@@ -86,9 +86,21 @@ export function livingForcePicture(units) {
 // One carrier id is one hull: a hit removes that hull (and its aircraft
 // only when the hull's quantity reaches 0). A sibling hull is left alone.
 // battleship_damage marks undamaged hulls and does not remove them.
-// An explicit transport count is removed; the default picker still skips them.
+// A transport is not a casualty while any other unit on that side is alive.
+// The count is ignored in that case. When only transports are left, an
+// explicit pick can still remove them; the battle also scraps them with no dice.
+export function sideHasNonTransportUnit(units) {
+  return (units || []).some((unit) => (
+    !!unit
+    && unit.type !== 'transport'
+    && unit.type !== 'factory'
+    && (Number(unit.quantity) || 0) > 0
+  ));
+}
+
 export function applyCasualtySelection(units, selected = {}) {
   const list = Array.isArray(units) ? units : [];
+  const ignoreTransport = sideHasNonTransportUnit(list);
   const applied = [];
   const sunk = [];
 
@@ -132,6 +144,7 @@ export function applyCasualtySelection(units, selected = {}) {
 
   for (const [type, raw] of Object.entries(selected || {})) {
     if (type === 'battleship' || type === 'battleship_damage' || type === 'factory') continue;
+    if (type === 'transport' && ignoreTransport) continue;
     let left = Math.max(0, Number(raw) || 0);
     if (left <= 0) continue;
     for (const unit of list) {
@@ -219,9 +232,12 @@ export function sideCombatIsOnlySubs(units, unitDefs = {}) {
 }
 
 function sideHasNonSubTarget(units, unitDefs = {}) {
+  // A transport is not a casualty while a submarine is still in the battle,
+  // so it does not keep an air-versus-sub fight going.
   return livingStacks(units).some((unit) => (
     unit.type !== 'submarine'
     && unit.type !== 'aaGun'
+    && unit.type !== 'transport'
     && !unitIsAir(unit, unitDefs)
   ));
 }

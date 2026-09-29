@@ -142,10 +142,10 @@ console.log('=== East US: fighter vs sub + transport ===');
   const gs = makeState();
   // Reported dice: fighter 2 vs 3 hits, sub 4 misses, then a later 1 that must not kill the fighter.
   const first = resolveScripted(gs, EAST, [fighter(), sub(), transport()], [2, 4, 6, 1]);
-  check('the fighter hit is spent and the battle does not continue', first.result?.resolved === true && first.used <= 2, {
+  check('the battle ends without spending the hit on the transport', first.result?.resolved === true && first.used === 0, {
     used: first.used, result: first.result,
   });
-  check('the transport dies and the fighter survives', qty(gs, EAST, 'transport') === 0 && qty(gs, EAST, 'fighter') === 1, {
+  check('the transport stays while the sub is still in the battle', qty(gs, EAST, 'transport') === 1 && qty(gs, EAST, 'fighter') === 1, {
     transport: qty(gs, EAST, 'transport'), fighter: qty(gs, EAST, 'fighter'),
   });
   check('the sub stays and the battle is submerged', qty(gs, EAST, 'submarine') === 1 && first.result?.submerged === true && first.result?.winner === 'submerged');
@@ -186,25 +186,16 @@ console.log('=== undefended transports are removed with no dice ===');
   check('the fighter wins the transport fight', first.result?.winner === 'attacker' && first.result?.resolved === true);
 }
 
-console.log('=== human picker: air hit lands on the transport, sub hit cannot land on air ===');
+console.log('=== human opening: air versus sub and transport submerges ===');
 {
   const gs = makeState();
   const ui = openCombat(gs, EAST, [fighter()], [sub(), transport()]);
-  let i = 0;
-  const faces = [2, 4, 6, 1];
-  ui._rollD6 = () => faces[i++] ?? 6;
-  const rolled = ui._rollDice();
-  ui.combatState.pendingDefenderCasualties = rolled.attackHits;
-  ui.combatState.pendingAttackerCasualties = rolled.defenseHits;
-  ui.combatState.phase = 'selectCasualties';
-  ui._autoSelectCasualties();
-  check('the fighter hit is assigned to the transport', ui.combatState.selectedDefenderCasualties.transport === 1, ui.combatState.selectedDefenderCasualties);
-  check('the air hit is not assigned to the sub', !ui.combatState.selectedDefenderCasualties.submarine);
-  ui._adjustCasualty('defender', 'submarine', 1);
-  check('manual plus cannot put the air hit on the sub', !ui.combatState.selectedDefenderCasualties.submarine);
-  ui._applyCasualties();
-  check('confirm removes the transport and keeps the fighter', qty(gs, EAST, 'transport') === 0 && qty(gs, EAST, 'fighter') === 1 && qty(gs, EAST, 'submarine') === 1);
-  check('the human battle ends submerged', ui.combatState.phase === 'resolved' && ui.combatState.winner === 'submerged');
+  check('the transport is not a casualty while the sub is there',
+    ui.combatState?.phase === 'resolved'
+    && ui.combatState?.winner === 'submerged'
+    && qty(gs, EAST, 'transport') === 1
+    && qty(gs, EAST, 'submarine') === 1
+    && qty(gs, EAST, 'fighter') === 1);
 }
 
 {
@@ -248,8 +239,9 @@ console.log('=== retreat air: sea zone parks the bomber, carrier takes the fight
   check('naval retreat succeeds', result.success === true, result);
   check('retreat log keeps real quantities', logged.length === 3 && logged.every((unit) => unit.quantity === 1), logged);
   const carrier = (gs.units[WEST] || []).find((unit) => unit.id === 'carrier_2');
-  check('the fighter embarks on the carrier', (carrier?.aircraft || []).some((craft) => craft.type === 'fighter' && craft.owner === J));
-  check('the bomber is not in the sea zone', !Object.values(gs.units).flat().some((unit) => unit.type === 'bomber' && (unit.quantity || 0) > 0));
+  check('the fighter is not forced onto the retreat carrier', !(carrier?.aircraft || []).some((craft) => craft.type === 'fighter'));
+  check('the fighter stays for its own landing', qty(gs, EAST, 'fighter') === 1);
+  check('the cruiser retreated', qty(gs, WEST, 'cruiser') === 1);
   const parked = (gs.pendingAirLandings || []).flatMap((entry) => entry.units || []);
   check('the bomber is parked for the end of non-combat movement', parked.some((unit) => unit.type === 'bomber' && unit.quantity === 1 && unit.parked === true), parked);
   unbindGameEventLog();
@@ -291,8 +283,8 @@ console.log('=== land retreat Ukraine to Russia keeps the bomber and the fighter
   const logged = retreat?.fields?.payload?.units || [];
   check('land retreat succeeds', result.success === true, result);
   check('land retreat log quantities are 1', logged.length === 2 && logged.every((unit) => unit.quantity === 1), logged);
-  check('bomber and fighter land in Russia', qty(gs, RUSSIA, 'bomber') === 1 && qty(gs, RUSSIA, 'fighter') === 1, gs.units[RUSSIA]);
-  check('they are not left in Ukraine or parked', qty(gs, UKRAINE, 'bomber') === 0 && qty(gs, UKRAINE, 'fighter') === 0 && !(gs.pendingAirLandings || []).length);
+  check('aircraft are not sent with the land retreat', qty(gs, RUSSIA, 'bomber') === 0 && qty(gs, RUSSIA, 'fighter') === 0);
+  check('they stay over the battle for their own landing', qty(gs, UKRAINE, 'bomber') === 1 && qty(gs, UKRAINE, 'fighter') === 1 && !(gs.pendingAirLandings || []).length);
   unbindGameEventLog();
 }
 

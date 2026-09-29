@@ -69,6 +69,7 @@ import { destroyIllegalAir, previewNcmAirDestruction as previewNcmAir, ncmAirWar
 import { consumePairedAttack, countPairing, tacticalBombersEnabled } from './tacticalPairing.js';
 import {
   applyCasualtySelection,
+  airMayUseLandingOption,
   airVersusSubStalemate,
   countAirHits,
   countSubHits,
@@ -4089,7 +4090,72 @@ export class GameState {
     return (Number(unit.quantity) || 0) - left;
   }
 
-  // Retreat ALL units from combat to a SINGLE destination (A&A rule)
+  // AI retreat: each aircraft takes the closest friendly land, otherwise a
+  // carrier. No legal option is parked for the end-of-NCM check.
+  _landRetreatingAir(combatTerritory, unitDefs = this._unitDefs || this.unitDefs || {}) {
+    const player = this.currentPlayer;
+    if (!player) return { landed: 0, parked: 0 };
+    let landed = 0;
+    let parked = 0;
+    const stacks = (this.units[combatTerritory] || []).filter((unit) => (
+      unit.owner === player.id
+      && isAirUnitType(unit.type, unitDefs)
+      && (Number(unit.quantity) || 0) > 0
+    ));
+    for (const unit of stacks) {
+      let left = Number(unit.quantity) || 0;
+      let guard = 0;
+      while (left > 0 && guard++ < 40) {
+        const options = (this.getAirLandingOptions(combatTerritory, unit.type, unitDefs) || [])
+          .filter((opt) => airMayUseLandingOption(unit.type, opt));
+        const choice = preferAirLandingOption(options);
+        if (!choice?.territory) {
+          const origin = this.units[combatTerritory] || [];
+          const taken = takeAirUnitsFromTerritory(origin, {
+            type: unit.type,
+            owner: player.id,
+            quantity: left,
+          });
+          this.units[combatTerritory] = origin;
+          if (taken > 0) {
+            parked += taken;
+            this.addPendingAirLandings(combatTerritory, [{
+              id: unit.id || `${unit.type}_retreat`,
+              type: unit.type,
+              quantity: taken,
+              owner: player.id,
+              parked: true,
+            }]);
+          }
+          left = 0;
+          break;
+        }
+        const applied = applyAirLandingPlan({
+          units: this.units,
+          territoryByName: this.territoryByName,
+          originTerritory: combatTerritory,
+          owner: player.id,
+          plan: [{
+            id: `${unit.type}_retreat_${guard}`,
+            type: unit.type,
+            quantity: 1,
+            destination: choice.territory,
+          }],
+          unitDefs,
+          gameState: this,
+        });
+        const moved = (applied || []).reduce((sum, item) => (
+          sum + (item.stayed ? 0 : (item.quantity || 0))
+        ), 0);
+        if (moved <= 0) break;
+        landed += moved;
+        left -= moved;
+      }
+    }
+    return { landed, parked };
+  }
+
+  // Ships and land units retreat together to one territory. Aircraft do not.
   retreatToTerritory(combatTerritory, destination) {
     const player = this.currentPlayer;
     if (!player) return { success: false, error: 'No current player' };
@@ -4103,9 +4169,9 @@ export class GameState {
     const destUnits = this.units[destination] || [];
     const unitDefs = this._unitDefs || this.unitDefs || {};
 
-    // Move the player's ships and land units. Air goes to the retreat
-    // choice only when that hex is a legal landing; otherwise it is parked
-    // in pendingAirLandings and taken off the sea zone. It is not deleted.
+    // Move the player's ships and land units to the one destination.
+    // Aircraft stay over the battle for the landing picker, using remaining
+    // movement. Nothing in range is parked, not deleted.
     const unitsToRetreat = combatUnits.filter(u =>
       u.owner === player.id && u.type !== 'factory' && (Number(u.quantity) || 0) > 0
     );
@@ -4140,55 +4206,33 @@ export class GameState {
     };
 
     const airToPark = [];
-    const destIsWater = !!this.territoryByName?.[destination]?.isWater;
-    const carrierDef = unitDefs.carrier || {};
-    const carrierTypes = new Set(carrierDef.canCarry || ['fighter', 'tacticalBomber']);
     for (const unit of unitsToRetreat) {
       if (isAirUnitType(unit.type, unitDefs)) continue;
       deliver(unit);
       unit.quantity = 0;
     }
     this.units[destination] = destUnits;
+    // Aircraft do not follow the retreat destination. Each one keeps its
+    // remaining movement and uses the landing picker. Nothing in range is
+    // parked for the end-of-NCM check, not deleted.
     for (const unit of unitsToRetreat) {
       if (!isAirUnitType(unit.type, unitDefs)) continue;
       const qty = Number(unit.quantity) || 0;
       if (qty <= 0) continue;
-      let legalLand = false;
-      let legalCarrier = false;
-      try {
-        const options = this.getAirLandingOptions(combatTerritory, unit.type, unitDefs) || [];
-        const match = options.find((opt) => opt?.territory === destination);
-        legalLand = !!match && !match.isCarrier && !destIsWater;
-        legalCarrier = !!match?.isCarrier && destIsWater && carrierTypes.has(unit.type) && unit.type !== 'bomber';
-      } catch { legalLand = false; legalCarrier = false; }
-      if (legalLand) {
-        deliver(unit);
-      } else if (legalCarrier) {
-        const embarked = this._embarkRetreatingAir(destination, unit);
-        const left = qty - embarked;
-        if (left > 0) {
-          airToPark.push({
-            id: unit.id || `${unit.type}_retreat`,
-            type: unit.type,
-            quantity: left,
-            owner: unit.owner || player.id,
-            parked: true,
-          });
-        }
-      } else {
-        // No friendly land, and no carrier for this air type. Park it.
-        // Do not put it in the sea zone and do not delete it.
-        airToPark.push({
-          id: unit.id || `${unit.type}_retreat`,
-          type: unit.type,
-          quantity: qty,
-          owner: unit.owner || player.id,
-          parked: true,
-        });
-      }
+      const options = (this.getAirLandingOptions(combatTerritory, unit.type, unitDefs) || [])
+        .filter((opt) => airMayUseLandingOption(unit.type, opt));
+      if (options.length > 0) continue;
+      airToPark.push({
+        id: unit.id || `${unit.type}_retreat`,
+        type: unit.type,
+        quantity: qty,
+        owner: unit.owner || player.id,
+        parked: true,
+      });
       unit.quantity = 0;
     }
     if (airToPark.length) this.addPendingAirLandings(combatTerritory, airToPark);
+    if (player.isAI) this._landRetreatingAir(combatTerritory, unitDefs);
 
     // Clean up empty units
     this.units[combatTerritory] = combatUnits.filter(u => (Number(u.quantity) || 0) > 0);
