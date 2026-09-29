@@ -40,7 +40,7 @@ const EMPTY_OWNED = [
 ];
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-unified.27', GAME_VERSION === 'V2.81.57-unified.27');
+check('GAME_VERSION is V2.81.57-unified.28', GAME_VERSION === 'V2.81.57-unified.28');
 
 console.log('=== empty owned land still marked ===');
 {
