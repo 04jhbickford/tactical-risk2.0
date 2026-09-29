@@ -13,9 +13,9 @@ assert.equal(GAME_VERSION, 'V2.81.57-unified.27', 'stamp is unified.2');
 assert.equal(SCHEMA_VERSION, 11, 'SCHEMA stays 11');
 
 const html = readFileSync(join(root, 'index.html'), 'utf8');
-assert.match(html, /tr-game-version" content="V2\.81\.57-unified\.26"/);
-assert.match(html, /style\.css\?v=V2\.81\.57-unified\.26/);
-assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.26'/);
+assert.match(html, /tr-game-version" content="V2\.81\.57-unified\.27"/);
+assert.match(html, /style\.css\?v=V2\.81\.57-unified\.27/);
+assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.27'/);
 
 const css = readFileSync(join(root, 'style.css'), 'utf8');
 assert.match(css, /html\.mobile-shell\.has-lobby/);
