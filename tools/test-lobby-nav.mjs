@@ -39,8 +39,8 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-console.log('=== V2.81.57-unified.28 lobby nav ===');
-check('GAME_VERSION is V2.81.57-unified.28', GAME_VERSION === 'V2.81.57-unified.28');
+console.log('=== V2.81.57-unified.29 lobby nav ===');
+check('GAME_VERSION is V2.81.57-unified.29', GAME_VERSION === 'V2.81.57-unified.29');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== 9.20.26.08 explicit Back ===');

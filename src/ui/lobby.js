@@ -9,7 +9,7 @@
 import { GAME_VERSION } from '../version.js';
 import { isMobileShell } from './mobileShell.js';
 import { captureLobbyScroll, restoreLobbyScroll } from './lobbyScroll.js';
-import { describe, draftModeSource, normalizeGameOptions } from '../gameOptions.js';
+import { draftModeSource, normalizeGameOptions } from '../gameOptions.js';
 import { bindGameOptions, renderGameOptionsPanel } from './gameOptionsPanel.js';
 import { CLASSIC_MAP_ID, markMapChrome } from '../map/mapRegistry.js';
 import { getBoard } from '../map/boardCatalog.js';
@@ -128,7 +128,7 @@ export class Lobby {
         content = phone ? this._renderMobileMainMenu() : this._renderMainMenu();
         break;
       case 'local-setup':
-        content = phone ? this._renderMobileLocalSetup() : this._renderLocalSetup();
+        content = this._renderLocalSetupColumn();
         break;
       case 'my-games':
         content = this._renderMyGames();
@@ -225,7 +225,8 @@ export class Lobby {
     return renderGameOptionsPanel(this.gameOptions, {
       editable: true,
       open: this._optionsOpen,
-      sheet: this._optionsSheet,
+      sheet: false,
+      chrome: 'more',
       teamsToggleId: 'teams-enabled',
       teamsToggleClass: 'lobby-phone-teams-toggle',
       draftMode: draftModeSource(this.setup),
@@ -258,20 +259,19 @@ export class Lobby {
     return factions;
   }
 
-  _renderMobileLocalSetup() {
+  _renderLocalSetupColumn() {
     const factions = this._initFactionDefaults();
     const selectedCount = this.selectedPlayers.length;
     const canStart = selectedCount >= 2;
 
     return `
-      <div class="lobby-phone-setup">
+      <div class="lobby-phone-setup lobby-setup lobby-setup-column">
         <div class="lobby-phone-setup-head">
           <button class="back-btn lobby-phone-back" data-action="back" aria-label="Back">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
           </button>
           <div class="setup-title">
             <h2>New Local Game</h2>
-            <p>Tap 2–5 factions</p>
           </div>
         </div>
 
@@ -281,16 +281,17 @@ export class Lobby {
 
         ${this._optionsPanelHtml()}
 
-        <div class="setup-footer lobby-phone-start">
-          <div class="lobby-phone-footer-opts">
-            <span class="go-live-mirror">${describe(this.gameOptions)}</span>
-          </div>
+        <div class="setup-footer lobby-phone-start lobby-phone-footer-opts">
           <button class="start-game-btn ${canStart ? '' : 'disabled'}" data-action="start" ${canStart ? '' : 'disabled'}>
-            ${canStart ? `Start Game (${selectedCount})` : 'Select at least 2 factions'}
+            ${canStart ? 'Start' : 'Select at least 2'}
           </button>
         </div>
       </div>
     `;
+  }
+
+  _renderMobileLocalSetup() {
+    return this._renderLocalSetupColumn();
   }
 
   _renderMobileFactionCard(faction, index) {
@@ -321,7 +322,14 @@ export class Lobby {
                 </div>
               ` : ''}
             </div>
-            <span class="lobby-phone-faction-name">${faction.name}</span>
+            ${isSelected ? `
+              <input type="text" class="player-name-input modern lobby-phone-name"
+                     data-player="${faction.id}"
+                     placeholder="${faction.name}"
+                     value="${String(this.playerNames[faction.id] || faction.name).replace(/"/g, '&quot;')}"
+                     maxlength="15"
+                     aria-label="Name">
+            ` : `<span class="lobby-phone-faction-name">${faction.name}</span>`}
             ${isSelected ? `
               <div class="lobby-phone-occupant">
                 <select class="ai-select modern" data-player="${faction.id}" aria-label="Occupant">
@@ -406,46 +414,7 @@ export class Lobby {
   }
 
   _renderLocalSetup() {
-    const factions = this._initFactionDefaults();
-
-    const selectedCount = this.selectedPlayers.length;
-    const canStart = selectedCount >= 2;
-
-    return `
-      <div class="lobby-setup">
-        <div class="setup-header">
-          <button class="back-btn" data-action="back">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-          </button>
-          <div class="setup-title">
-            <h2>New Local Game</h2>
-            <p>Select 2-5 players to begin</p>
-          </div>
-        </div>
-
-        <div class="setup-body">
-          <div class="players-section">
-            <div class="players-header">
-              <h3 class="section-label">Players</h3>
-            </div>
-            <div class="player-grid modern">
-              ${factions.map((p, i) => this._renderPlayerCard(p, i)).join('')}
-            </div>
-          </div>
-
-          ${this._optionsPanelHtml()}
-        </div>
-
-        <div class="setup-footer">
-          <div class="game-rules-preview">
-            <span class="go-live-mirror">${describe(this.gameOptions)}</span>
-          </div>
-          <button class="start-game-btn ${canStart ? '' : 'disabled'}" data-action="start" ${canStart ? '' : 'disabled'}>
-            ${canStart ? `Start Game (${selectedCount} Players)` : 'Select at least 2 players'}
-          </button>
-        </div>
-      </div>
-    `;
+    return this._renderLocalSetupColumn();
   }
 
   _renderPlayerCard(faction, index) {

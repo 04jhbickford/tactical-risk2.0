@@ -21295,3 +21295,393 @@ html.mobile-shell.map-pacific .phone-tray-body {
 .battle-dice-faces {
   font-variant-numeric: tabular-nums;
 }
+
+/* unified.29 — New Local Game is one short column on the painted cover.
+   Standard rules is the More summary, once. */
+.lobby-overlay.modern:has(.lobby-setup-column) {
+  justify-content: center;
+  align-items: center;
+}
+.lobby-overlay.modern:has(.lobby-setup-column)::before,
+html.mobile-shell .lobby-overlay.modern:has(.lobby-setup-column)::before,
+html.mobile-shell.has-lobby .lobby-overlay.modern:has(.lobby-setup-column)::before {
+  display: block !important;
+  position: absolute;
+  inset: 0;
+  flex: none;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  opacity: 0.4;
+  filter: saturate(0.72) brightness(0.7);
+  pointer-events: none;
+  z-index: 0;
+}
+.lobby-overlay.modern:has(.lobby-setup-column)::after,
+html.mobile-shell .lobby-overlay.modern:has(.lobby-setup-column)::after,
+html.mobile-shell.has-lobby .lobby-overlay.modern:has(.lobby-setup-column)::after {
+  display: block !important;
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 10, 16, 0.5);
+  pointer-events: none;
+  z-index: 0;
+}
+.lobby-container.modern:has(.lobby-setup-column),
+html.mobile-shell .lobby-container.modern:has(.lobby-setup-column) {
+  position: relative;
+  z-index: 1;
+  width: min(440px, calc(100% - 24px));
+  min-width: 0;
+  max-width: 440px;
+  height: auto;
+  max-height: calc(100dvh - 24px);
+  margin: 12px auto;
+  align-self: center;
+  justify-content: flex-start;
+  background: rgba(10, 14, 22, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.lobby-content-wrapper:has(.lobby-setup-column),
+html.mobile-shell .lobby-phone-wrap:has(.lobby-setup-column) {
+  height: auto;
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  padding: 14px 14px 16px;
+}
+.lobby-setup-column {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  min-height: 0;
+}
+.lobby-setup-column .lobby-phone-setup-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lobby-setup-column .setup-title h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+}
+.lobby-setup-column .lobby-phone-factions {
+  flex: 0 0 auto;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding-bottom: 0;
+}
+.lobby-setup-column .lobby-phone-seat {
+  flex: 0 0 auto;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0;
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+.lobby-setup-column .lobby-phone-seat.selected {
+  border-color: #c9a227;
+  background: rgba(201, 162, 39, 0.1);
+}
+.lobby-setup-column .lobby-phone-faction {
+  display: block;
+  min-height: 44px;
+  width: 100%;
+  margin: 0;
+  padding: 0 12px;
+  border: none;
+  background: transparent;
+  box-sizing: border-box;
+}
+.lobby-setup-column .lobby-phone-faction-main {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 0;
+  width: 100%;
+}
+.lobby-setup-column .lobby-phone-faction-logo {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  border-radius: 50%;
+  border: 2px solid;
+  overflow: visible;
+  position: relative;
+  box-sizing: border-box;
+}
+.lobby-setup-column .lobby-phone-faction-logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+.lobby-setup-column .lobby-phone-faction-name,
+.lobby-setup-column .lobby-phone-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  font-size: 16px;
+  font-weight: 700;
+  color: #f8fafc;
+}
+.lobby-setup-column .lobby-phone-name {
+  height: 36px;
+  min-height: 36px;
+  margin: 0;
+  padding: 0 8px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.55);
+}
+.lobby-setup-column .lobby-phone-faction-meta {
+  flex: 0 0 auto;
+  font-size: 13px;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+.lobby-setup-column .lobby-phone-occupant {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+}
+.lobby-setup-column .lobby-phone-occupant .ai-select.modern {
+  min-width: 96px;
+  max-width: 132px;
+  min-height: 44px;
+  height: 44px;
+  font-size: 14px;
+}
+.lobby-setup-column .start-game-btn {
+  min-height: 48px;
+}
+.go-more {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 10px;
+  background: rgba(30, 41, 59, 0.55);
+  color: #f8fafc;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.go-panel--more .go-collapsed,
+.go-panel--more .go-phone-launch,
+.go-panel--more .go-sheet,
+html.mobile-shell .go-panel--more .go-phone-launch {
+  display: none !important;
+}
+.go-panel--more.is-open .go-body,
+html.mobile-shell .go-panel--more.is-open .go-body {
+  display: flex;
+  max-height: min(52vh, 420px);
+  overflow-y: auto;
+  touch-action: pan-y;
+}
+
+/* unified.29 — one top-bar row. Last action stays a line under it. */
+.hud-live-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+html.mobile-shell .hud-live-row {
+  gap: 4px;
+  pointer-events: none;
+}
+html.mobile-shell .hud-live-round,
+html.mobile-shell .hud-live-phase,
+html.mobile-shell .hud-live-turn,
+html.mobile-shell .hud-live-money {
+  font-size: 12px;
+}
+.hud-live-round,
+.hud-live-turn,
+.hud-live-money {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.hud-live-round,
+.hud-live-money {
+  color: #ffd700;
+}
+.hud-live-phase {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #f4ead4;
+}
+.hud-live-turn {
+  color: #f8fafc;
+}
+#hud-clarity {
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+#hud-clarity .hud-clarity-last,
+#hud-clarity .hud-clarity-click,
+#hud-clarity .hud-clarity-match {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Confirm is one full line on the bottom edge. The land name stays one line.
+   The sidebar still reaches the screen bottom so this line sits inside it. */
+.pp-confirm-btn.pp-confirm-edge:not(:disabled):not(.disabled) {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 80;
+  width: auto;
+  max-width: none;
+  height: auto;
+  min-height: calc(48px + env(safe-area-inset-bottom, 0px));
+  max-height: none;
+  margin: 0;
+  padding: 0 12px env(safe-area-inset-bottom, 0px);
+  border-radius: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+  letter-spacing: 0;
+  font-size: clamp(11px, 3.5vw, 16px);
+  line-height: 1;
+}
+html.mobile-shell .pp-peek-primary-slot .pp-confirm-btn.pp-confirm-edge:not(:disabled):not(.disabled),
+html.mobile-shell .pp-peek-cta-row .pp-confirm-btn.pp-confirm-edge:not(:disabled):not(.disabled) {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: auto;
+  max-width: none;
+  height: auto;
+  min-height: calc(48px + env(safe-area-inset-bottom, 0px));
+  max-height: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+  font-size: clamp(11px, 3.5vw, 16px);
+}
+
+/* Place Capital: the side panel does not cover the map. Tabs stay a corner cluster. */
+html:not(.mobile-shell) #sidebar.player-panel.player-panel--capital-clear {
+  top: 56px;
+  right: 12px;
+  left: auto;
+  bottom: auto !important;
+  width: auto;
+  max-width: min(340px, calc(100vw - 24px));
+  height: auto;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  overflow: visible;
+  pointer-events: none;
+}
+html:not(.mobile-shell) #sidebar.player-panel--capital-clear .pp-content {
+  overflow: visible;
+  background: transparent;
+  pointer-events: none;
+}
+html:not(.mobile-shell) #sidebar.player-panel--capital-clear .pp-header,
+html:not(.mobile-shell) #sidebar.player-panel--capital-clear .pp-phase,
+html:not(.mobile-shell) #sidebar.player-panel--capital-clear .pp-tab-content {
+  display: none;
+}
+html:not(.mobile-shell) #sidebar.player-panel--capital-clear .pp-tabs {
+  pointer-events: auto;
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 4px;
+  background: rgba(16, 18, 28, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+}
+html:not(.mobile-shell) #sidebar.player-panel--capital-clear.player-panel--tab-open .pp-tab-content {
+  display: block;
+  pointer-events: auto;
+  max-height: min(42vh, 360px);
+  overflow: auto;
+  margin-top: 8px;
+  background: rgba(16, 18, 28, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+}
+html.mobile-shell #sidebar.player-panel.player-panel--capital-clear,
+html.mobile-shell .player-panel.player-panel--capital-clear {
+  top: auto;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: auto;
+  max-height: none;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  pointer-events: none;
+}
+.player-panel--capital-clear .pp-bottom-actions,
+.player-panel--capital-clear .pp-tray-peek {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  pointer-events: none;
+}
+.player-panel--capital-clear .pp-tabs,
+.player-panel--capital-clear .pp-peek-undo-slot,
+.player-panel--capital-clear .pp-undo-ghost,
+.player-panel--capital-clear .pp-confirm-edge {
+  pointer-events: auto;
+}

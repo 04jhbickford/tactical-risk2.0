@@ -1867,6 +1867,9 @@ export class PlayerPanel {
     this.el.classList.toggle('player-panel--expanded', mobile && !peek);
     this.el.classList.toggle('player-panel--place-tray', phoneTray && !peek);
     this.el.classList.toggle('player-panel--mobilize', mobile && turnPhase === TURN_PHASES.MOBILIZE);
+    const capitalClear = phase === GAME_PHASES.CAPITAL_PLACEMENT;
+    this.el.classList.toggle('player-panel--capital-clear', capitalClear);
+    this.el.classList.toggle('player-panel--tab-open', capitalClear && this.activeTab !== 'actions');
 
     if (mobile) {
       html += peek ? '' : this._renderSeatChip(chrome);
@@ -2300,7 +2303,7 @@ export class PlayerPanel {
       });
 
       html += `
-        <button class="pp-confirm-btn ${disabledClass} ${attackClass} ${undoableClass} ${selectUnitsClass} ${confirmChromeClass(chrome)}"
+        <button class="pp-confirm-btn pp-confirm-edge ${disabledClass} ${attackClass} ${undoableClass} ${selectUnitsClass} ${confirmChromeClass(chrome)}"
                 data-action="${btn.action}" data-chrome="${chrome}" ${dataAttrs} ${btn.disabled ? 'disabled' : ''}>
           ${btn.label}
         </button>`;
