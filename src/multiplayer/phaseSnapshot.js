@@ -3,6 +3,7 @@
 // Solo play and a missing game id do not write and do not toast.
 
 import { GAME_VERSION } from '../version.js';
+import { CLASSIC_MAP_ID, resolveMapId } from '../map/mapRegistry.js';
 import { ensureLedgerIds, ipcMapFromState } from '../state/unitLedger.js';
 
 export const SNAPSHOT_ATTEMPTS = 3;
@@ -62,6 +63,10 @@ export async function buildPhaseSnapshot(gameState, {
   const state = { units, pendingAir, playerState, ipcs };
   const checksum = await sha256Hex(canonicalJson(state));
   const id = snapshotDocId({ turn, phase, seq });
+  // mapId is additive and stays outside the checksum. A missing id is classic.
+  // Old snapshots omit it. The rules file allows the extra key.
+  const resolvedMap = resolveMapId(gameState?.mapId);
+  const mapId = resolvedMap.ok ? resolvedMap.mapId : (resolvedMap.raw || CLASSIC_MAP_ID);
   return {
     id,
     turn,
@@ -72,6 +77,7 @@ export async function buildPhaseSnapshot(gameState, {
     playerState,
     ipcs,
     checksum,
+    mapId,
     clientVersion,
     writerUid: writerUid || null,
     ts: Number(ts) || Date.now(),

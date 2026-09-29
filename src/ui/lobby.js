@@ -11,6 +11,7 @@ import { isMobileShell } from './mobileShell.js';
 import { captureLobbyScroll, restoreLobbyScroll } from './lobbyScroll.js';
 import { describe, draftModeSource, normalizeGameOptions } from '../gameOptions.js';
 import { bindGameOptions, renderGameOptionsPanel } from './gameOptionsPanel.js';
+import { CLASSIC_MAP_ID } from '../map/mapRegistry.js';
 import { bindLobbyDice, lobbyDiceEntryMarkup, renderDiceStatsMarkup } from './diceStatsPanel.js';
 export { GAME_VERSION };
 
@@ -74,6 +75,7 @@ export class Lobby {
     this.playerAI = {};
     this.playerTeams = {};
     this.gameOptions = normalizeGameOptions(null);
+    this.mapId = CLASSIC_MAP_ID;
     this.teamsEnabled = this.gameOptions.teams;
     this.startingIPCs = this.gameOptions.startingIPCs;
     this._optionsOpen = false;
@@ -218,6 +220,7 @@ export class Lobby {
       teamsToggleId: 'teams-enabled',
       teamsToggleClass: 'lobby-phone-teams-toggle',
       draftMode: draftModeSource(this.setup),
+      mapId: this.mapId,
     });
   }
 
@@ -726,6 +729,9 @@ export class Lobby {
         this._optionsOpen = open;
         this._optionsSheet = sheet;
       },
+      onMapChange: (mapId) => {
+        this.mapId = mapId || CLASSIC_MAP_ID;
+      },
     });
 
     // Team buttons
@@ -822,6 +828,7 @@ export class Lobby {
       startingIPCs: this.gameOptions.startingIPCs,
       maxPlayers: this.gameOptions.maxPlayers,
       gameOptions: this.gameOptions,
+      mapId: this.mapId || CLASSIC_MAP_ID,
     };
 
     this.hide();

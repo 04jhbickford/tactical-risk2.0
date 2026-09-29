@@ -3,6 +3,7 @@
 // every other write error are swallowed by the caller.
 
 import { GAME_VERSION } from '../version.js';
+import { CLASSIC_MAP_ID, resolveMapId } from '../map/mapRegistry.js';
 import { safeDisplayName } from './diceMath.js';
 
 export async function commitDicePayload(payload, session) {
@@ -61,6 +62,7 @@ export async function commitDicePayload(payload, session) {
       battleRound: group.battleRound || null,
       writerUid: uid,
       clientVersion: payload.clientVersion || GAME_VERSION,
+      mapId: resolveMapId(payload.mapId).mapId || CLASSIC_MAP_ID,
       ts: Date.now(),
       seq: group.seq,
       dice: (group.dice || []).map((die) => ({

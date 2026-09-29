@@ -1,5 +1,7 @@
 // Renders territory overlays: ownership colors, outlines, continent borders, hover/selection, labels
 
+import { MAP_WIDTH, SCROLL_WRAP_X } from './camera.js';
+import { CLASSIC_LAND_BRIDGES as LAND_BRIDGES, getActiveMap } from './mapRegistry.js';
 import { experimentalControlFlagSize, politicalControlMarks } from './politicalControl.js';
 import {
   isMobileShell,
@@ -24,35 +26,8 @@ import {
   PHONE_LEGAL_EDGE_COLOR,
 } from '../ui/mobileShell.js';
 
-// Cross-water connections that should be drawn as visual lines on the map
-// These are land-to-land connections that cross water (like Alaska-Kamchatka in Risk)
-// Land bridges - allow land movement between these territories (no naval required)
-const LAND_BRIDGES = [
-  // Pacific wrap-around
-  ['Alaska', 'Soviet Far East'],
-  // Atlantic crossings
-  ['East Canada', 'Eire'],
-  ['Brazil', 'French West Africa'],
-  ['East US', 'Cuba'],
-  // UK connections
-  ['Eire', 'United Kingdom'],
-  ['United Kingdom', 'Finland Norway'],
-  ['United Kingdom', 'West Europe'],
-  // Mediterranean
-  ['Spain', 'Algeria'],
-  ['South Europe', 'Anglo Sudan Egypt'],
-  ['Syria Jordan', 'Anglo Sudan Egypt'],  // Suez crossing
-  // Red Sea
-  ['Italian East Africa', 'Saudi Arabia'],  // Red Sea crossing
-  // Pacific / Asian connections
-  ['French Indo China', 'East Indies'],  // Note: "French Indo China" (no hyphen) matches territory name
-  ['East Indies', 'Australia'],
-  ['Australia', 'New Zealand'],
-  // African
-  ['Kenya-Rhodesia', 'Madagascar'],
-  // Asian
-  ['Japan', 'Manchuria'],  // Korea Strait crossing
-];
+// Land-bridge overlay lines. The pairs live on the active map
+// (CLASSIC_LAND_BRIDGES). LAND_BRIDGES stays as the Classic alias.
 
 function pointInPolygonRing(px, py, ring) {
   let inside = false;
@@ -727,7 +702,6 @@ export class TerritoryRenderer {
   }
 
   _getContinentCenter(continent) {
-    const MAP_WIDTH = 3500; // Must match camera.js MAP_WIDTH
     const centers = [];
 
     for (const tName of continent.territories) {
@@ -747,7 +721,7 @@ export class TerritoryRenderer {
 
     let sumX = 0, sumY = 0;
 
-    if (leftSide.length > 0 && rightSide.length > 0) {
+    if (SCROLL_WRAP_X && leftSide.length > 0 && rightSide.length > 0) {
       // Continent spans the wrap - shift right-side territories to negative x for averaging
       for (const [x, y] of centers) {
         const adjustedX = x > MAP_WIDTH / 2 ? x - MAP_WIDTH : x;
@@ -1453,10 +1427,9 @@ export class TerritoryRenderer {
     ctx.save();
 
     // Handle map wrap-around: if the direct distance is > half the map width,
-    // the shorter path is across the wrap boundary
-    const MAP_WIDTH = 3500; // Must match camera.js MAP_WIDTH
+    // the shorter path is across the wrap boundary. Non-wrapping maps skip this.
     let dx = x2 - x1;
-    if (Math.abs(dx) > MAP_WIDTH / 2) {
+    if (SCROLL_WRAP_X && Math.abs(dx) > MAP_WIDTH / 2) {
       // Shorter path is across the wrap - adjust x2
       if (dx > 0) {
         x2 -= MAP_WIDTH; // Target is on right, wrap to left
@@ -1781,7 +1754,7 @@ export class TerritoryRenderer {
 
     ctx.save();
 
-    const bridges = this.gameState?.activeLandBridges?.() || LAND_BRIDGES;
+    const bridges = this.gameState?.activeLandBridges?.() || getActiveMap().landBridges || LAND_BRIDGES;
     for (const [t1Name, t2Name] of bridges) {
       const t1 = this.territoryByName[t1Name];
       const t2 = this.territoryByName[t2Name];
@@ -1881,7 +1854,7 @@ export class TerritoryRenderer {
 
   // Get land bridges for movement validation
   static getLandBridges() {
-    return LAND_BRIDGES;
+    return getActiveMap().landBridges || LAND_BRIDGES;
   }
 
   // Air landing destinations - show valid territories where air units can land

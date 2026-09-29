@@ -1,11 +1,11 @@
-// V2.81.57-unified.22 — offline audit fixture.
+// V2.81.57-unified.23 — offline audit fixture.
 // Reference case shaped like game 6XQ7CN: stored IPCs do not match the ledger.
 // Run: node tools/test-audit-game.mjs
 
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { auditSnapshots, formatAuditReport } from '../src/audit/replayGame.js';
+import { auditSnapshots, checksumMatches, formatAuditReport } from '../src/audit/replayGame.js';
 import { buildPhaseSnapshot, writeSnapshotWithRetry, SNAPSHOT_VISIBLE_ERROR } from '../src/multiplayer/phaseSnapshot.js';
 import { GAME_VERSION, SCHEMA_VERSION } from '../src/version.js';
 import { battlesFromDiceSources } from '../src/stats/battleDice.js';
@@ -34,9 +34,9 @@ function board({ round, phase, ipcs, units }) {
   };
 }
 
-console.log('=== V2.81.57-unified.22 audit fixture ===');
+console.log('=== V2.81.57-unified.23 audit fixture ===');
 check('schema stays 11', SCHEMA_VERSION === 11);
-check('display stamp is unified.22', GAME_VERSION === 'V2.81.57-unified.22');
+check('display stamp is unified.23', GAME_VERSION === 'V2.81.57-unified.23');
 
 const opening = await buildPhaseSnapshot(board({
   round: 4,
@@ -104,6 +104,23 @@ const quiet = await auditSnapshots({
   }],
 });
 check('a matching ledger has no findings', quiet.ok === true && quiet.findings.length === 0);
+check('snapshot mapId defaults to classic', opening.mapId === 'classic');
+check('classic snapshot checksum ignores mapId', await checksumMatches(opening));
+const namedMap = await buildPhaseSnapshot({
+  ...board({
+    round: 4,
+    phase: 'develop_tech',
+    ipcs: { Russians: 100, Germans: 90, Americans: 30 },
+    units: {
+      France: [{ type: 'fighter', quantity: 1, owner: 'Russians', ledgerId: 'fighter_air_1' }],
+    },
+  }),
+  mapId: 'pacific',
+}, { seq: 1, ts: 1000, clientVersion: GAME_VERSION });
+check('snapshot records a named mapId outside the checksum',
+  namedMap.mapId === 'pacific'
+  && namedMap.checksum === opening.checksum
+  && await checksumMatches(namedMap));
 
 let attempts = 0;
 let surfaced = null;

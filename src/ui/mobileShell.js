@@ -11,6 +11,7 @@
 
 import { GAME_PHASES, TURN_PHASES, TURN_PHASE_ORDER, TURN_PHASE_NAMES } from '../state/gameState.js';
 import { MAP_WIDTH, MAP_HEIGHT } from '../map/camera.js';
+import { getActiveMap } from '../map/mapRegistry.js';
 
 export const MOBILE_SHELL_MAX_WIDTH = 640;
 export const MOBILE_SHELL_QUERY = `(max-width: ${MOBILE_SHELL_MAX_WIDTH}px)`;
@@ -822,16 +823,26 @@ export const PHONE_CAPITAL_INSPECT_LANDS = new Set([
   'Japan',
 ]);
 
+function factionHomes() {
+  return getActiveMap()?.factionHomes || PHONE_FACTION_HOME_LAND;
+}
+
+function inspectLands() {
+  const list = getActiveMap()?.phoneInspectLands;
+  if (!list) return PHONE_CAPITAL_INSPECT_LANDS;
+  return list instanceof Set ? list : new Set(list);
+}
+
 export function isPhoneCapitalInspectOnlyLand(name, currentPlayerId) {
   const n = String(name || '');
   if (!n) return false;
-  const home = PHONE_FACTION_HOME_LAND[currentPlayerId];
+  const home = factionHomes()[currentPlayerId];
   if (home && n === home) return false;
-  return PHONE_CAPITAL_INSPECT_LANDS.has(n);
+  return inspectLands().has(n);
 }
 
 export function phoneHomeTerritoryName(playerId, ownedNames = []) {
-  const home = PHONE_FACTION_HOME_LAND[playerId];
+  const home = factionHomes()[playerId];
   if (home && (!ownedNames.length || ownedNames.includes(home))) return home;
   return null;
 }

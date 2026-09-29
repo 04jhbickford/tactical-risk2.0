@@ -4,6 +4,7 @@
 // writes are swallowed until Firestore rules are published.
 
 import { GAME_VERSION } from '../version.js';
+import { CLASSIC_MAP_ID, resolveMapId } from '../map/mapRegistry.js';
 import {
   applyDiceBatch,
   batchDocId,
@@ -156,6 +157,7 @@ export function buildFlushPayload(gameState, dice, session = getDiceSession()) {
     round,
     turnPhase: gameState?.turnPhase || '',
     clientVersion: GAME_VERSION,
+    mapId: resolveMapId(gameState?.mapId).mapId || CLASSIC_MAP_ID,
     writerUid: uid,
     groups: built.map((group) => ({
       id: group.id,

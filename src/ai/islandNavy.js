@@ -5,12 +5,18 @@
 // (Eire, Finland Norway, West Europe), and Eire are not island capitals.
 // The set is derived from the movement graph. No faction list.
 
+import { getActiveMap } from '../map/mapRegistry.js';
 import { LAND_BRIDGES } from '../state/gameState.js';
+
+function bridgeList(landBridges) {
+  if (landBridges !== undefined) return landBridges;
+  return getActiveMap()?.landBridges || LAND_BRIDGES;
+}
 
 const ESCORT_TYPES = ['submarine', 'destroyer', 'cruiser', 'battleship', 'carrier'];
 
 /** Land territories a land unit can step to, including land bridges. */
-export function landMoveTargets(territoryByName, landName, landBridges = LAND_BRIDGES) {
+export function landMoveTargets(territoryByName, landName, landBridges) {
   const land = territoryByName?.[landName];
   if (!land || land.isWater) return [];
   const names = new Set();
@@ -18,7 +24,7 @@ export function landMoveTargets(territoryByName, landName, landBridges = LAND_BR
     const next = territoryByName?.[conn];
     if (next && !next.isWater) names.add(conn);
   }
-  for (const pair of landBridges || []) {
+  for (const pair of bridgeList(landBridges) || []) {
     const other = pair[0] === landName ? pair[1] : pair[1] === landName ? pair[0] : null;
     if (!other || other === landName) continue;
     if (territoryByName?.[other]?.isWater) continue;
@@ -27,14 +33,14 @@ export function landMoveTargets(territoryByName, landName, landBridges = LAND_BR
   return [...names];
 }
 
-export function landmassNames(territoryByName, startName, landBridges = LAND_BRIDGES) {
+export function landmassNames(territoryByName, startName, landBridges) {
   const start = territoryByName?.[startName];
   if (!start || start.isWater) return [];
   const seen = new Set([startName]);
   const queue = [startName];
   while (queue.length) {
     const name = queue.pop();
-    for (const conn of landMoveTargets(territoryByName, name, landBridges)) {
+    for (const conn of landMoveTargets(territoryByName, name, bridgeList(landBridges))) {
       if (!territoryByName?.[conn] || seen.has(conn)) continue;
       seen.add(conn);
       queue.push(conn);
@@ -48,10 +54,10 @@ export function landmassNames(territoryByName, startName, landBridges = LAND_BRI
  * The only remaining land-unit move is loading a transport in an
  * adjacent sea zone, and only when a transport is there.
  */
-export function isIslandCapital(territoryByName, capitalName, landBridges = LAND_BRIDGES) {
+export function isIslandCapital(territoryByName, capitalName, landBridges) {
   const land = territoryByName?.[capitalName];
   if (!land || land.isWater) return false;
-  return landMoveTargets(territoryByName, capitalName, landBridges).length === 0;
+  return landMoveTargets(territoryByName, capitalName, bridgeList(landBridges)).length === 0;
 }
 
 export function adjacentSeas(territoryByName, landName) {
@@ -140,15 +146,16 @@ export function pickSecondaryFactorySite({
   ownedLands = [],
   factoryAt = () => false,
   friendlyAtStart = null,
-  landBridges = LAND_BRIDGES,
+  landBridges,
 } = {}) {
-  const home = new Set(landmassNames(territoryByName, capitalName, landBridges));
+  const bridges = bridgeList(landBridges);
+  const home = new Set(landmassNames(territoryByName, capitalName, bridges));
   const sites = [];
   for (const name of ownedLands) {
     if (home.has(name) || territoryByName?.[name]?.isWater) continue;
     if (factoryAt(name)) continue;
     if (friendlyAtStart && friendlyAtStart.size > 0 && !friendlyAtStart.has(name)) continue;
-    sites.push({ name, size: landmassNames(territoryByName, name, landBridges).length });
+    sites.push({ name, size: landmassNames(territoryByName, name, bridges).length });
   }
   sites.sort((a, b) => b.size - a.size || a.name.localeCompare(b.name));
   return sites[0]?.name || null;

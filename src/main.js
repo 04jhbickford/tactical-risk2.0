@@ -17,7 +17,14 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
   };
 }
 
-import { Camera, MAP_WIDTH } from './map/camera.js';
+import { applyMapMetrics, Camera, MAP_WIDTH, SCROLL_WRAP_X } from './map/camera.js';
+import {
+  activateMap,
+  getActiveMap,
+  loadMapDecision,
+  resolveMapId,
+  UNKNOWN_MAP_MESSAGE,
+} from './map/mapRegistry.js';
 import { decomposeMoveSelection } from './state/combatMoveEligibility.js';
 import { MapRenderer } from './map/mapRenderer.js';
 import { TerritoryRenderer } from './map/territoryRenderer.js';
@@ -207,6 +214,7 @@ const DEBUG_SEA_ZONE_CLICKS = false;
 const DEBUG_SEA_ZONE_OFFSETS = []; // Accumulates all clicked offsets
 
 function wrapX(x) {
+  if (!SCROLL_WRAP_X) return x;
   return ((x % MAP_WIDTH) + MAP_WIDTH) % MAP_WIDTH;
 }
 
@@ -238,13 +246,17 @@ function showNotification(message, duration = 3000) {
 // while this tab stayed open. Non-blocking on purpose: an async player mid-turn
 // must still be able to finish; the schema is what governs actual compatibility.
 // Stays until the user reloads (or dismisses).
-function showVersionBanner(remoteVersion) {
+function showVersionBanner(remoteVersion, { mapRefusal = false, message = '' } = {}) {
   if (document.getElementById('version-banner')) return; // one banner only
   const banner = document.createElement('div');
   banner.id = 'version-banner';
   banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2000;background:#b45309;color:#fff;padding:10px 16px;font-size:14px;display:flex;align-items:center;justify-content:center;gap:16px;box-shadow:0 2px 8px rgba(0,0,0,0.4);';
   const label = document.createElement('span');
-  label.textContent = `A newer version (${remoteVersion}) is live. Refresh to update.`;
+  label.textContent = message
+    ? message
+    : (mapRefusal
+      ? UNKNOWN_MAP_MESSAGE
+      : `A newer version (${remoteVersion}) is live. Refresh to update.`);
   const refreshBtn = document.createElement('button');
   refreshBtn.textContent = 'Refresh';
   refreshBtn.style.cssText = 'background:#fff;color:#b45309;border:none;padding:6px 14px;border-radius:6px;font-weight:600;cursor:pointer;';
@@ -259,12 +271,20 @@ function showVersionBanner(remoteVersion) {
 }
 
 async function init() {
-  // Load data
+  // Classic metrics before the camera is built. A later map calls this again.
+  activateMap('classic');
+  applyMapMetrics(getActiveMap());
+  document.addEventListener('tr-map-refusal', () => {
+    showVersionBanner('', { mapRefusal: true });
+  });
+
+  // Load data for the active map. Classic paths are the existing files.
+  const bootMap = getActiveMap();
   const [territoriesRes, continentsRes, setupRes, unitsRes] = await Promise.all([
-    fetch('data/territories.json'),
-    fetch('data/continents.json'),
-    fetch('data/setup.json'),
-    fetch('data/units.json'),
+    fetch(bootMap.data.territories),
+    fetch(bootMap.data.continents),
+    fetch(bootMap.data.setup),
+    fetch(bootMap.data.units),
   ]);
   const territories = await territoriesRes.json();
   const continents = await continentsRes.json();
@@ -1313,9 +1333,15 @@ async function init() {
         console.error('[MP] Failed to load existing game state');
         ensureMultiplayerLobby();
         multiplayerLobby.showReconnectOnly();
-        alert('Error 1: Failed to rejoin game. Could not load game state.');
+        if (syncManager?._mapRefusal) {
+          showVersionBanner('', { message: syncManager._mapRefusal });
+        } else {
+          alert('Error 1: Failed to rejoin game. Could not load game state.');
+        }
         return;
       }
+      activateMap(gameState?.mapId || 'classic');
+      applyMapMetrics(getActiveMap());
     } else if (shouldInitialize && playersData) {
       // Initialize the game (person who clicked Start)
       const players = playersData.map(p => {
@@ -1340,10 +1366,32 @@ async function init() {
         startingIPCs: settingsData?.startingIPCs || 80,
         maxPlayers: settingsData?.maxPlayers || 5,
         gameOptions: settingsData?.gameOptions,
-        isMultiplayer: true
+        isMultiplayer: true,
+        mapId: settingsData?.mapId || lobbyData?.mapId || null,
       };
 
-      gameState.initGame('risk', players, options);
+      const startingMap = loadMapDecision(options.mapId);
+      if (!startingMap.ok) {
+        showVersionBanner('', {
+          mapRefusal: startingMap.code === 'unknown_map',
+          message: startingMap.code === 'unknown_map' ? '' : startingMap.message,
+        });
+        return;
+      }
+      activateMap(startingMap.mapId);
+      applyMapMetrics(getActiveMap());
+      try {
+        gameState.initGame('risk', players, options);
+      } catch (err) {
+        if (err?.code === 'unknown_map' || err?.code === 'map_unplayable') {
+          showVersionBanner('', {
+            mapRefusal: err.code === 'unknown_map',
+            message: err.code === 'unknown_map' ? '' : err.message,
+          });
+          return;
+        }
+        throw err;
+      }
 
       // Log player mapping for debugging
       console.log('[MP] Player mapping:');
@@ -1547,6 +1595,12 @@ async function init() {
 
       // A newer app version wrote the game doc (redeploy while this tab stayed
       // open) — show the persistent refresh banner (Dimension C)
+      if (event === 'unknown_map') {
+        showVersionBanner('', { mapRefusal: true });
+      }
+      if (event === 'map_unplayable') {
+        showVersionBanner('', { message: data?.message || 'That map is not in this build.' });
+      }
       const refreshReason = versionRefreshReason(event, data);
       if (refreshReason) {
         showVersionBanner(refreshReason);
@@ -2367,13 +2421,46 @@ async function init() {
 
   // Lobby (local games)
   const lobby = new Lobby(setup, (gameMode, selectedPlayers, options = {}) => {
+    const savedMap = options.loadFromSave ? loadMapDecision(options.loadFromSave.mapId) : null;
+    if (savedMap && !savedMap.ok) {
+      showVersionBanner('', {
+        mapRefusal: savedMap.code === 'unknown_map',
+        message: savedMap.code === 'unknown_map' ? '' : savedMap.message,
+      });
+      lobby.show();
+      return;
+    }
+    const chosen = loadMapDecision(options.mapId || savedMap?.mapId);
+    if (!chosen.ok) {
+      showVersionBanner('', {
+        mapRefusal: chosen.code === 'unknown_map',
+        message: chosen.code === 'unknown_map' ? '' : chosen.message,
+      });
+      lobby.show();
+      return;
+    }
+    activateMap(chosen.mapId);
+    applyMapMetrics(getActiveMap());
+
     // Initialize game state for local game
     gameState = new GameState(setup, territories, continents);
     gameState.isMultiplayer = false;
 
     // Check if loading from save
     if (options.loadFromSave) {
-      gameState.loadFromJSON(options.loadFromSave);
+      try {
+        gameState.loadFromJSON(options.loadFromSave);
+      } catch (err) {
+        if (err?.code === 'unknown_map' || err?.code === 'map_unplayable') {
+          showVersionBanner('', {
+            mapRefusal: err.code === 'unknown_map',
+            message: err.code === 'unknown_map' ? '' : err.message,
+          });
+          lobby.show();
+          return;
+        }
+        throw err;
+      }
     } else {
       gameState.initGame(gameMode, selectedPlayers, options);
     }
@@ -3320,8 +3407,8 @@ async function init() {
       camera.applyTransform(ctx);
 
       const viewport = camera.getViewport();
-      const startCopy = Math.floor(viewport.x / MAP_WIDTH);
-      const endCopy = Math.floor((viewport.x + viewport.width) / MAP_WIDTH);
+      const startCopy = SCROLL_WRAP_X ? Math.floor(viewport.x / MAP_WIDTH) : 0;
+      const endCopy = SCROLL_WRAP_X ? Math.floor((viewport.x + viewport.width) / MAP_WIDTH) : 0;
 
       for (let copy = startCopy; copy <= endCopy; copy++) {
         const offsetX = copy * MAP_WIDTH;

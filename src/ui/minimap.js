@@ -2,7 +2,8 @@
 // Click/drag on minimap pans the main camera.
 // Handles horizontal wraparound for the viewport indicator.
 
-import { MAP_WIDTH, MAP_HEIGHT } from '../map/camera.js';
+import { MAP_WIDTH, MAP_HEIGHT, SCROLL_WRAP_X } from '../map/camera.js';
+import { getActiveMap } from '../map/mapRegistry.js';
 
 export class Minimap {
   constructor(camera) {
@@ -32,7 +33,7 @@ export class Minimap {
     this.bgImage.onerror = () => {
       console.warn('Minimap background failed to load. Make sure to serve from the project root directory.');
     };
-    this.bgImage.src = '../map/smallMap.jpeg';
+    this.bgImage.src = getActiveMap()?.tiles?.smallMap || '../map/smallMap.jpeg';
   }
 
   _bindEvents() {
@@ -75,6 +76,8 @@ export class Minimap {
 
   render() {
     const ctx = this.ctx;
+    this.scaleX = this.canvas.width / MAP_WIDTH;
+    this.scaleY = this.canvas.height / MAP_HEIGHT;
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
     // Draw background
@@ -88,8 +91,10 @@ export class Minimap {
     // Draw viewport rectangle (with horizontal wrap handling)
     const vp = this.camera.getViewport();
 
-    // Wrap viewport x into [0, MAP_WIDTH)
-    let vpX = ((vp.x % MAP_WIDTH) + MAP_WIDTH) % MAP_WIDTH;
+    // Wrap viewport x into [0, MAP_WIDTH). A non-wrapping map keeps the raw x.
+    let vpX = SCROLL_WRAP_X
+      ? ((vp.x % MAP_WIDTH) + MAP_WIDTH) % MAP_WIDTH
+      : Math.max(0, vp.x);
 
     const rx = vpX * this.scaleX;
     const ry = Math.max(0, vp.y * this.scaleY);
@@ -100,7 +105,7 @@ export class Minimap {
     ctx.lineWidth = 2;
     ctx.fillStyle = 'rgba(255, 50, 50, 0.1)';
 
-    if (rx + rw > this.canvas.width) {
+    if (SCROLL_WRAP_X && rx + rw > this.canvas.width) {
       // Viewport wraps around — draw two rectangles
       const rw1 = this.canvas.width - rx;
       ctx.strokeRect(rx, ry, rw1, rh);

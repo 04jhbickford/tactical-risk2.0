@@ -1,8 +1,21 @@
 // Camera system for pan/zoom on the map canvas.
 // Maintains world-space center (x,y), zoom level, and a dirty flag for rendering.
+// MAP_WIDTH / MAP_HEIGHT / SCROLL_WRAP_X are live bindings. applyMapMetrics
+// updates them from the active map. Classic starts at 3500×2000 with wrap on.
 
-export const MAP_WIDTH = 3500;
-export const MAP_HEIGHT = 2000;
+import { getActiveMap } from './mapRegistry.js';
+
+export let MAP_WIDTH = 3500;
+export let MAP_HEIGHT = 2000;
+export let SCROLL_WRAP_X = true;
+
+export function applyMapMetrics(map) {
+  const source = map || getActiveMap();
+  MAP_WIDTH = source.width;
+  MAP_HEIGHT = source.height;
+  SCROLL_WRAP_X = source.scrollWrapX !== false;
+  return source;
+}
 
 const BASE_MIN_ZOOM = 0.4;
 const MAX_ZOOM = 3.0;
@@ -135,14 +148,26 @@ export class Camera {
 
   /** Start a smooth pan to (wx, wy). Wraps horizontally to the nearest copy. */
   panTo(wx, wy) {
-    // Wrap target to [0, MAP_WIDTH), then pick the copy closest to current position
-    let targetX = ((wx % MAP_WIDTH) + MAP_WIDTH) % MAP_WIDTH;
-    const copies = [targetX - MAP_WIDTH, targetX, targetX + MAP_WIDTH];
-    this._targetX = copies.reduce((best, x) =>
-      Math.abs(x - this.x) < Math.abs(best - this.x) ? x : best
-    );
+    if (SCROLL_WRAP_X) {
+      // Wrap target to [0, MAP_WIDTH), then pick the copy closest to current position
+      let targetX = ((wx % MAP_WIDTH) + MAP_WIDTH) % MAP_WIDTH;
+      const copies = [targetX - MAP_WIDTH, targetX, targetX + MAP_WIDTH];
+      this._targetX = copies.reduce((best, x) =>
+        Math.abs(x - this.x) < Math.abs(best - this.x) ? x : best
+      );
+    } else {
+      this._targetX = this._clampCenterX(wx);
+    }
     this._targetY = Math.max(0, Math.min(MAP_HEIGHT, wy));
     this.dirty = true;
+  }
+
+  // Horizontal center range when the map does not wrap.
+  _clampCenterX(x) {
+    const vw = this.viewportWidth;
+    const halfW = vw / 2;
+    if (vw >= MAP_WIDTH) return MAP_WIDTH / 2;
+    return Math.max(halfW, Math.min(MAP_WIDTH - halfW, x));
   }
 
   /** Update animation state. Call each frame. Returns true if still animating. */
@@ -257,10 +282,14 @@ export class Camera {
     const vh = this.viewportHeight;
     const halfH = vh / 2;
 
-    // No horizontal clamp — map wraps horizontally
-    // Periodically normalize x to avoid float precision drift
-    if (this.x < -MAP_WIDTH || this.x > MAP_WIDTH * 2) {
-      this.x = ((this.x % MAP_WIDTH) + MAP_WIDTH) % MAP_WIDTH;
+    if (SCROLL_WRAP_X) {
+      // No horizontal clamp — map wraps horizontally
+      // Periodically normalize x to avoid float precision drift
+      if (this.x < -MAP_WIDTH || this.x > MAP_WIDTH * 2) {
+        this.x = ((this.x % MAP_WIDTH) + MAP_WIDTH) % MAP_WIDTH;
+      }
+    } else {
+      this.x = this._clampCenterX(this.x);
     }
 
     // Hard vertical clamp — viewport stays within map bounds

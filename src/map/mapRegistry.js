@@ -1,0 +1,272 @@
+// Map registry. Classic points at the files and paths the game already loads.
+// Pacific is listed so a dev flag can show it; its data is not in this build.
+// A missing mapId means classic. An id that is not in this table is refused.
+
+export const CLASSIC_MAP_ID = 'classic';
+
+export const UNKNOWN_MAP_MESSAGE = "This game uses a map your version doesn't have. Refresh to update.";
+
+// Movement pairs. Same 16 bridges gameState and the map overlay used.
+// Order is the gameState list. Connectivity does not depend on order.
+export const CLASSIC_LAND_BRIDGES = Object.freeze([
+  ['Alaska', 'Soviet Far East'],
+  ['East Canada', 'Eire'],
+  ['Brazil', 'French West Africa'],
+  ['East US', 'Cuba'],
+  ['Eire', 'United Kingdom'],
+  ['United Kingdom', 'Finland Norway'],
+  ['United Kingdom', 'West Europe'],
+  ['South Europe', 'Anglo Sudan Egypt'],
+  ['Syria Jordan', 'Anglo Sudan Egypt'],
+  ['French Indo China', 'East Indies'],
+  ['East Indies', 'Australia'],
+  ['Australia', 'New Zealand'],
+  ['Kenya-Rhodesia', 'Madagascar'],
+  ['Spain', 'Algeria'],
+  ['Japan', 'Manchuria'],
+  ['Italian East Africa', 'Saudi Arabia'],
+]);
+
+// Turn-ping power names. Same table discordTurnPing used.
+export const CLASSIC_NATION_NAMES = Object.freeze({
+  germans: { name: 'Germany', adj: 'German' },
+  germany: { name: 'Germany', adj: 'German' },
+  german: { name: 'Germany', adj: 'German' },
+  british: { name: 'UK', adj: 'British' },
+  uk: { name: 'UK', adj: 'British' },
+  russians: { name: 'Russia', adj: 'Russian' },
+  russia: { name: 'Russia', adj: 'Russian' },
+  russian: { name: 'Russia', adj: 'Russian' },
+  japanese: { name: 'Japan', adj: 'Japanese' },
+  japan: { name: 'Japan', adj: 'Japanese' },
+  americans: { name: 'US', adj: 'American' },
+  american: { name: 'US', adj: 'American' },
+  us: { name: 'US', adj: 'American' },
+  usa: { name: 'US', adj: 'American' },
+});
+
+// Phone Fit homes and inspect-only lands. Same names mobileShell used.
+export const CLASSIC_FACTION_HOMES = Object.freeze({
+  Russians: 'Russia',
+  Germans: 'Germany',
+  British: 'United Kingdom',
+  Japanese: 'Japan',
+  Americans: 'East US',
+});
+
+export const CLASSIC_PHONE_INSPECT_LANDS = Object.freeze([
+  'China',
+  'Wake Island',
+  'French Indo China',
+  'Manchuria',
+  'Germany',
+  'Japan',
+]);
+
+// Graph-derived today. These names are the expected Classic result:
+// land bridges connect the first set; the second set has no land step.
+export const CLASSIC_ISLAND_CAPITAL_HINTS = Object.freeze({
+  connected: Object.freeze(['Japan', 'United Kingdom', 'Eire', 'Australia']),
+  seaLocked: Object.freeze(['Philippines', 'Hawaiian Islands', 'Wake Island']),
+});
+
+const CLASSIC = Object.freeze({
+  id: CLASSIC_MAP_ID,
+  name: 'Classic',
+  released: true,
+  playable: true,
+  data: Object.freeze({
+    territories: 'data/territories.json',
+    continents: 'data/continents.json',
+    setup: 'data/setup.json',
+    units: 'data/units.json',
+  }),
+  tiles: Object.freeze({
+    baseDir: '../map/baseTiles',
+    reliefDir: '../map/reliefTiles',
+    smallMap: '../map/smallMap.jpeg',
+    cols: 14,
+    rows: 8,
+    tileSize: 256,
+    format: 'png',
+    relief: true,
+    // Explicit true: phones keep the relief overlay. A later map sets false.
+    reliefPhone: true,
+    lazy: false,
+  }),
+  width: 3500,
+  height: 2000,
+  scrollWrapX: true,
+  landBridges: CLASSIC_LAND_BRIDGES,
+  islandCapitalHints: CLASSIC_ISLAND_CAPITAL_HINTS,
+  nationNames: CLASSIC_NATION_NAMES,
+  factionHomes: CLASSIC_FACTION_HOMES,
+  phoneInspectLands: CLASSIC_PHONE_INSPECT_LANDS,
+  victoryMode: 'classic',
+  credits: 'TripleA World War II Classic map assets (base tiles, relief tiles, polygons, centers).',
+});
+
+// Registered so ?maps=all can show the row. Data and tiles are not shipped.
+const PACIFIC = Object.freeze({
+  id: 'pacific',
+  name: 'Pacific',
+  released: false,
+  playable: false,
+  data: Object.freeze({
+    territories: 'data/maps/pacific/territories.json',
+    continents: 'data/maps/pacific/continents.json',
+    setup: 'data/maps/pacific/setup.json',
+    units: 'data/units.json',
+  }),
+  tiles: Object.freeze({
+    baseDir: '../map/pacific/baseTiles',
+    reliefDir: '../map/pacific/reliefTiles',
+    smallMap: '../map/pacific/smallMap.jpeg',
+    cols: 15,
+    rows: 13,
+    tileSize: 256,
+    format: 'webp',
+    relief: true,
+    reliefPhone: false,
+    lazy: true,
+  }),
+  width: 3773,
+  height: 3213,
+  scrollWrapX: false,
+  landBridges: Object.freeze([]),
+  islandCapitalHints: Object.freeze({
+    connected: Object.freeze([]),
+    seaLocked: Object.freeze(['Philippines', 'Hawaiian Islands', 'Wake Island']),
+  }),
+  nationNames: Object.freeze({}),
+  factionHomes: Object.freeze({}),
+  phoneInspectLands: Object.freeze([]),
+  victoryMode: 'pacific',
+  credits: 'TripleA World War II Pacific (GPLv3). XML: Veqryn. Unit art: CrystalCT and Veqryn. Relief tiles: Gudkarma. Not in this build.',
+});
+
+const MAPS = {
+  [CLASSIC.id]: CLASSIC,
+  [PACIFIC.id]: PACIFIC,
+};
+
+let activeId = CLASSIC_MAP_ID;
+
+export function listMaps() {
+  return Object.values(MAPS);
+}
+
+export function getMap(id) {
+  if (id == null || id === '') return MAPS[CLASSIC_MAP_ID];
+  return MAPS[id] || null;
+}
+
+export function getActiveMap() {
+  return MAPS[activeId] || MAPS[CLASSIC_MAP_ID];
+}
+
+export function getActiveMapId() {
+  return getActiveMap().id;
+}
+
+// Switch the active registry entry. Camera metrics are applied by the caller
+// (applyMapMetrics) so this module does not import the camera.
+export function activateMap(id) {
+  const map = getMap(id);
+  if (!map) return null;
+  activeId = map.id;
+  return map;
+}
+
+// Missing id is classic. Any other unknown id is refused.
+export function resolveMapId(raw) {
+  if (raw == null || raw === '') {
+    return { ok: true, mapId: CLASSIC_MAP_ID, raw: null };
+  }
+  const id = String(raw);
+  if (MAPS[id]) return { ok: true, mapId: id, raw: id };
+  return { ok: false, mapId: null, raw: id, message: UNKNOWN_MAP_MESSAGE };
+}
+
+export function isPlayableMapId(raw) {
+  const resolved = resolveMapId(raw);
+  if (!resolved.ok) return false;
+  return !!getMap(resolved.mapId)?.playable;
+}
+
+// Missing id loads classic. An unknown id is refused. A known id with no
+// data in this build is refused so Classic geometry is not reused for it.
+export function loadMapDecision(raw) {
+  const resolved = resolveMapId(raw);
+  if (!resolved.ok) return { ...resolved, code: 'unknown_map' };
+  if (!getMap(resolved.mapId)?.playable) {
+    return {
+      ok: false,
+      mapId: resolved.mapId,
+      raw: resolved.raw || resolved.mapId,
+      code: 'map_unplayable',
+      message: 'That map is not in this build.',
+    };
+  }
+  return { ...resolved, code: null };
+}
+
+// Lobby doc, game doc, or saved state. The first explicit id wins.
+// A missing id on every slot is classic.
+export function mapIdFromDoc(doc, state = null) {
+  const raw = firstMapId(
+    state?.mapId,
+    doc?.state?.mapId,
+    doc?.mapId,
+    doc?.lobbyData?.settings?.mapId,
+    doc?.settings?.mapId,
+  );
+  return resolveMapId(raw);
+}
+
+function firstMapId(...values) {
+  for (const value of values) {
+    if (value == null || value === '') continue;
+    return value;
+  }
+  return null;
+}
+
+export function mapsAllRequested(search) {
+  let query = search;
+  if (query == null) {
+    try {
+      query = typeof location !== 'undefined' ? location.search : '';
+    } catch {
+      query = '';
+    }
+  }
+  const text = String(query || '');
+  const params = new URLSearchParams(text.startsWith('?') ? text.slice(1) : text);
+  return params.get('maps') === 'all';
+}
+
+// Released maps, plus unreleased ones when ?maps=all is set.
+export function listPickerMaps(search) {
+  const all = mapsAllRequested(search);
+  return listMaps().filter((map) => map.released || all);
+}
+
+// Relief stays on unless the map sets reliefPhone false AND this is a phone.
+export function reliefEnabledForClient(map, { coarse = false, width = 1280 } = {}) {
+  const tiles = map?.tiles;
+  if (!tiles || tiles.relief === false) return false;
+  if (tiles.reliefPhone === false && coarse && width <= 820) return false;
+  return true;
+}
+
+export function clientLooksLikePhone() {
+  try {
+    const coarse = typeof window !== 'undefined'
+      && !!window.matchMedia?.('(pointer: coarse)')?.matches;
+    const width = typeof window !== 'undefined' ? window.innerWidth : 1280;
+    return { coarse, width };
+  } catch {
+    return { coarse: false, width: 1280 };
+  }
+}

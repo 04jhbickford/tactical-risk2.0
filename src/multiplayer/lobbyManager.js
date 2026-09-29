@@ -54,6 +54,13 @@ import {
 import { readRememberedDiscordSeat } from './discordTurnPing.js';
 import { buildHumanLobbySeat, shouldApplyDiscordWrite } from './discordSeat.js';
 import { mergeGameOptionsIntoSettings } from '../gameOptions.js';
+import {
+  CLASSIC_MAP_ID,
+  isPlayableMapId,
+  mapIdFromDoc,
+  resolveMapId,
+  UNKNOWN_MAP_MESSAGE,
+} from '../map/mapRegistry.js';
 
 // Generate a random 6-character lobby code
 function generateLobbyCode() {
@@ -101,6 +108,14 @@ export class LobbyManager {
     const user = this.authManager.getUser();
     if (!user) return { success: false, error: 'Not logged in' };
 
+    const map = resolveMapId(settings.mapId);
+    if (!map.ok) {
+      return { success: false, error: UNKNOWN_MAP_MESSAGE, code: 'unknown_map', mapId: map.raw };
+    }
+    if (!isPlayableMapId(map.mapId)) {
+      return { success: false, error: 'That map is not in this build.', code: 'map_unplayable' };
+    }
+
     // Generate lobby code — collision probability is negligible (~1 billion combinations)
     // so we skip the Firestore uniqueness pre-check entirely
     const code = generateLobbyCode();
@@ -113,7 +128,7 @@ export class LobbyManager {
       password: settings.password || null,
       status: 'waiting', // 'waiting', 'starting', 'in_progress', 'finished'
       isPublished: false, // Lobby not visible in Open Games until host clicks "Create Game"
-      settings: mergeGameOptionsIntoSettings({}, settings.gameOptions || {
+      settings: mergeGameOptionsIntoSettings({ mapId: map.mapId }, settings.gameOptions || {
         maxPlayers: settings.maxPlayers,
         startingIPCs: settings.startingIPCs,
         teams: settings.teamsEnabled,
@@ -416,6 +431,17 @@ export class LobbyManager {
   }
 
   // Join a lobby by code (or rejoin a started game by code)
+  _blockUnknownMap(doc) {
+    const map = mapIdFromDoc(doc);
+    if (map.ok) return null;
+    return {
+      success: false,
+      error: map.message || UNKNOWN_MAP_MESSAGE,
+      code: 'unknown_map',
+      mapId: map.raw,
+    };
+  }
+
   async joinLobby(code, password = null) {
     if (!this.db) return { success: false, error: 'Not connected' };
 
@@ -431,6 +457,10 @@ export class LobbyManager {
     if (!game && remembered?.gameId) {
       game = await this.getGameById(remembered.gameId);
     }
+    const lobbyBlock = this._blockUnknownMap(lobbyDoc);
+    if (lobbyBlock) return lobbyBlock;
+    const gameBlock = this._blockUnknownMap(game);
+    if (gameBlock) return gameBlock;
     const waitingLobby = lobbyDoc?.status === 'waiting' ? lobbyDoc : null;
     const resolved = resolveJoinByCode({
       waitingLobby,
@@ -444,6 +474,8 @@ export class LobbyManager {
       if (!hasHydratePayload(gameDoc) && gameDoc?.id) {
         gameDoc = await this.getGameById(gameDoc.id) || gameDoc;
       }
+      const hydratedBlock = this._blockUnknownMap(gameDoc);
+      if (hydratedBlock) return hydratedBlock;
       return { success: true, isGame: true, gameId: gameDoc.id, game: gameDoc };
     }
     if (resolved.kind === 'started-lobby') {
@@ -458,6 +490,8 @@ export class LobbyManager {
     if (resolved.kind === 'not-found') {
       const seated = await this._lookupSameMatch(code, 'join-code');
       if (seated?.action === 'resume' && seated.game?.id) {
+        const seatedBlock = this._blockUnknownMap(seated.game);
+        if (seatedBlock) return seatedBlock;
         return { success: true, isGame: true, gameId: seated.game.id, game: seated.game };
       }
       if (seated?.action === 'block-other') {
@@ -469,13 +503,19 @@ export class LobbyManager {
           exists: true,
           status: fetched.status,
         }))) {
+          const fetchedBlock = this._blockUnknownMap(fetched);
+          if (fetchedBlock) return fetchedBlock;
           return { success: true, isGame: true, gameId: fetched.id, game: fetched };
         }
         const again = await this._lookupSameMatch(code, 'rejoin');
         if (again?.action === 'resume' && again.game?.id) {
+          const againBlock = this._blockUnknownMap(again.game);
+          if (againBlock) return againBlock;
           return { success: true, isGame: true, gameId: again.game.id, game: again.game };
         }
         if (fetched) {
+          const fetchedBlock = this._blockUnknownMap(fetched);
+          if (fetchedBlock) return fetchedBlock;
           return { success: true, isGame: true, gameId: fetched.id, game: fetched };
         }
         return {
@@ -1063,8 +1103,11 @@ export class LobbyManager {
           return { success: false, error: 'All players must select a faction' };
         }
 
+        const mapGate = this._blockUnknownMap(live);
+        if (mapGate) return mapGate;
         const roster = startGameRoster(live.players);
         const gameId = `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const mapId = resolveMapId(live.settings?.mapId).mapId || CLASSIC_MAP_ID;
         const gameRef = doc(this.db, 'games', gameId);
 
         console.log('[LobbyManager] Starting game with players:');
@@ -1084,6 +1127,7 @@ export class LobbyManager {
           stateVersion: 0,
           playerUserIds: roster.playerUserIds,
           startedBy: user.id,
+          mapId,
           state: null,
           lobbyData: {
             players: roster.players,

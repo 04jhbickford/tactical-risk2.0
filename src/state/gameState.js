@@ -47,6 +47,14 @@ import {
 } from '../gameOptions.js';
 import { GAME_VERSION } from '../version.js';
 import {
+  CLASSIC_LAND_BRIDGES,
+  CLASSIC_MAP_ID,
+  getMap,
+  loadMapDecision,
+  resolveMapId,
+  UNKNOWN_MAP_MESSAGE,
+} from '../map/mapRegistry.js';
+import {
   DRAFT_MIN_CLIENT,
   DRAFT_PHASE,
   buildSnakeDraftOrder,
@@ -207,25 +215,8 @@ export const TECHNOLOGIES = {
 // RISK card trade values (escalating)
 export const RISK_CARD_VALUES = [12, 18, 24, 30, 36, 45, 60, 75];
 
-// Land bridges - allow land movement between these territories without naval transport
-export const LAND_BRIDGES = [
-  ['Alaska', 'Soviet Far East'],
-  ['East Canada', 'Eire'],
-  ['Brazil', 'French West Africa'],
-  ['East US', 'Cuba'],
-  ['Eire', 'United Kingdom'],
-  ['United Kingdom', 'Finland Norway'],
-  ['United Kingdom', 'West Europe'],  // Channel crossing
-  ['South Europe', 'Anglo Sudan Egypt'],
-  ['Syria Jordan', 'Anglo Sudan Egypt'],
-  ['French Indo China', 'East Indies'],  // Note: "French Indo China" (no hyphen) matches territory name
-  ['East Indies', 'Australia'],
-  ['Australia', 'New Zealand'],
-  ['Kenya-Rhodesia', 'Madagascar'],
-  ['Spain', 'Algeria'],  // Strait of Gibraltar
-  ['Japan', 'Manchuria'],  // Korea Strait crossing
-  ['Italian East Africa', 'Saudi Arabia'],  // Red Sea crossing
-];
+// Land bridges — the active map's list. Classic is CLASSIC_LAND_BRIDGES.
+export const LAND_BRIDGES = CLASSIC_LAND_BRIDGES;
 
 // Starting IPCs by player count for Risk mode
 export const STARTING_IPCS_BY_PLAYER_COUNT = {
@@ -285,6 +276,8 @@ export class GameState {
     this.teamsEnabled = false;
     // Optional. Missing on old saves; defaults match today's rules.
     this.gameOptions = normalizeGameOptions(null);
+    // Additive. Old saves omit it and load as classic.
+    this.mapId = CLASSIC_MAP_ID;
 
     this.players = [];
     this.currentPlayerIndex = 0;
@@ -531,6 +524,14 @@ export class GameState {
 
   // Initialize game based on mode
   initGame(mode, selectedPlayers, options = {}) {
+    const map = loadMapDecision(options.mapId);
+    if (!map.ok) {
+      const err = new Error(map.message || UNKNOWN_MAP_MESSAGE);
+      err.code = map.code || 'unknown_map';
+      err.mapId = map.raw;
+      throw err;
+    }
+    this.mapId = map.mapId;
     resetLedgerIdSeq(0);
     this.gameMode = mode;
     this.alliancesEnabled = options.alliancesEnabled || (mode === 'classic');
@@ -1364,7 +1365,7 @@ export class GameState {
   // Land bridges on (today) or off. Off drops all 16 pairs from movement.
   activeLandBridges() {
     if (this.gameOptions?.landBridges === false) return [];
-    return LAND_BRIDGES;
+    return getMap(this.mapId)?.landBridges || LAND_BRIDGES;
   }
 
   hasLandBridge(t1Name, t2Name) {
@@ -5580,12 +5581,20 @@ export class GameState {
   _checkVictoryConditions() {
     if (this.gameOver) return;
 
-    if (this.gameMode === 'classic' || this.alliancesEnabled) {
-      this._checkAllianceVictory();
-    } else if (this.teamsEnabled) {
-      this._checkTeamVictory();
-    } else {
-      this._checkCapitalVictory();
+    const mode = getMap(this.mapId)?.victoryMode || 'classic';
+    switch (mode) {
+      case 'classic':
+        if (this.gameMode === 'classic' || this.alliancesEnabled) {
+          this._checkAllianceVictory();
+        } else if (this.teamsEnabled) {
+          this._checkTeamVictory();
+        } else {
+          this._checkCapitalVictory();
+        }
+        break;
+      default:
+        // A named mode this build does not implement does not declare a winner.
+        break;
     }
   }
 
@@ -7324,6 +7333,8 @@ export class GameState {
   toJSON() {
     return omitUndefinedDeep({
       version: 11, // v11: Added turn events for turn summary modal
+      // Additive (no schema bump). Missing on old saves loads as classic.
+      mapId: this.mapId || CLASSIC_MAP_ID,
       gameMode: this.gameMode,
       alliancesEnabled: this.alliancesEnabled,
       teamsEnabled: this.teamsEnabled,
@@ -7399,6 +7410,13 @@ export class GameState {
   }
 
   loadFromJSON(data) {
+    const map = loadMapDecision(data?.mapId);
+    if (!map.ok) {
+      const err = new Error(map.message || UNKNOWN_MAP_MESSAGE);
+      err.code = map.code || 'unknown_map';
+      err.mapId = map.raw;
+      throw err;
+    }
     const refusal = draftOpenRefusal(data, GAME_VERSION);
     if (refusal) {
       const err = new Error('This game is in a territory draft. Update Tactical Risk to open it.');
@@ -7420,6 +7438,7 @@ export class GameState {
     const prevPlacedThisRound = this.unitsPlacedThisRound || 0;
     const prevPlacementRound = this.placementRound || 0;
     const prevActionSeq = Number(this.actionSeq) || 0;
+    this.mapId = resolveMapId(data.mapId).mapId;
     this.gameMode = data.gameMode;
     this.alliancesEnabled = data.alliancesEnabled ?? (data.gameMode === 'classic');
     this.teamsEnabled = data.teamsEnabled ?? false;

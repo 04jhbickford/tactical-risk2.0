@@ -2,6 +2,24 @@
 
 ---
 
+## 9.29.26 — unified.23 multi-map plumbing
+
+Stamp `V2.81.57-unified.23`. Schema stays 11. A `V2.82-unified.22` doc is older than this tab and does not prompt. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.23`).
+
+James approved Tier A on 28 Sep (via Arc). This build is A1 only: the app can record which map a game uses, and Classic play does not change. Pacific data is not in this build. The setup row is labeled Map. It offers Classic. `?maps=all` also lists Pacific, and that option cannot be selected.
+
+A save or doc with no mapId loads as classic. An id this build does not know refuses to join or load and uses the existing refresh banner: "This game uses a map your version doesn't have. Refresh to update." `firestore.rules` is unchanged. A dice batch may include `mapId`; the rules already allow extra fields on `diceBatches`. A phase snapshot may include `mapId` outside the checksum; the snapshot rules already allow extra fields. Old snapshots omit it.
+
+The Classic converter reads the post-K1 `map/polygons.txt`. Kazakh S.S.R. stays a 411-point ring. Converter output matches `data/territories.json` and `data/continents.json`.
+
+Rebased onto `642985aca046b2b0845d242598cd14bc5932e10e` (unified.22). Strategic bombing, the Anniversary transport and retreat-air rules, phase snapshots, the IPC and unit ledger, the audit, and Past battles stay in place.
+
+Checked the Map row in local setup at 1280, 1024, 820, and 390 before this rebase. No horizontal scroll. The start control stays on screen (50px tall at 390). The select is 44px at 820 and 390. `?maps=all` lists Pacific disabled. Online create uses the same options panel and sits behind sign-in, so that form was not opened in the browser. No new colors.
+
+Receipt: `node tools/test-map-registry.mjs` and the full `tools/test-*.mjs` suite. `tools/test-lobby-nav.mjs` still fails `boot auto-resume is gameId-only`, which was already failing before this build.
+
+---
+
 ## 9.29.26 — unified.22 phase snapshots, ledgers, audit, past battles
 
 Stamp `V2.81.57-unified.22`. Schema stays 11. A `V2.82-unified.21` doc is older than this tab and does not prompt. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.22`).
