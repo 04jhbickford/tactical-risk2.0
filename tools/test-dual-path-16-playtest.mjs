@@ -46,8 +46,8 @@ const lobbyScreens = readFileSync(join(root, 'src/map/threeSoloLobby.js'), 'utf8
 
 assert.equal(GAME_VERSION, 'V2.81.57-unified.20.2');
 assert.equal(SCHEMA_VERSION, 11);
-assert.match(html, /content="V2\.81\.57-unified\.20\.1"/);
-assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.20\.1'/);
+assert.match(html, /content="V2\.81\.57-unified\.20\.2"/);
+assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.20\.2'/);
 
 function fresh() {
   const territories = [

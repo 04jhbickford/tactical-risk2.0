@@ -28,7 +28,7 @@ const check = (label, cond, extra) => {
   } else console.log('ok  :', label);
 };
 
-check('stamp is unified.20.1', GAME_VERSION === 'V2.81.57-unified.20.2');
+check('stamp is unified.20.2', GAME_VERSION === 'V2.81.57-unified.20.2');
 
 function names(snapshot, isHost) {
   return lobbyListingButtons({
