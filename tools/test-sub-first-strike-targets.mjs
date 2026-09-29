@@ -1,4 +1,4 @@
-// V2.81.57-unified.20.2 — subs fire first only when a hittable target is present.
+// V2.81.57-unified.21 — subs fire first only when a hittable target is present.
 // Run: node tools/test-sub-first-strike-targets.mjs
 
 import { readFileSync } from 'fs';
@@ -109,9 +109,15 @@ const atkSub = { type: 'submarine', quantity: 1, owner: 'Germans', id: 'sub_a' }
 const atkTransport = { type: 'transport', quantity: 1, owner: 'Germans' };
 
 {
-  const { ui } = openCombat([bomber], [sub, transport]);
-  check('bomber vs sub skips first strike', ui.combatState.phase === 'ready' && !ui.combatState.defenderSubsHaveFirstStrike);
-  check('submerge is still offered', ui.el.innerHTML.includes('Submerge'));
+  const { gs, ui } = openCombat([bomber], [sub, transport]);
+  const zone = 'Caspian Sea Zone';
+  check('bomber vs sub and transport ends submerged',
+    ui.combatState.phase === 'resolved'
+    && ui.combatState.winner === 'submerged'
+    && !ui.combatState.defenderSubsHaveFirstStrike);
+  check('the transport is destroyed and the sub stays',
+    !(gs.units[zone] || []).some((unit) => unit.type === 'transport' && (unit.quantity || 0) > 0)
+    && (gs.units[zone] || []).some((unit) => unit.type === 'submarine' && unit.quantity === 1));
   const before = (ui.gameState._rollLog || []).length;
   ui._rollSubmarineFirstStrike();
   check('no first-strike roll against a bomber', ((ui.gameState._rollLog || []).length - before) === 0);

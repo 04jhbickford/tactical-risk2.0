@@ -2,6 +2,26 @@
 
 ---
 
+## 9.29.26 — unified.21 strategic bombing raids, rebased on unified.20.2
+
+Stamp `V2.81.57-unified.21`. Schema stays 11. Display stamp only; game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.21`). Old saves omit `factoryDamage` and load as 0. A non-empty damage map and `raidQueue` ride the existing schema-11 snapshot, including online sync. A `V2.82-unified.20.2` doc is older than this tab.
+
+James approved this (via Arc, 28 Sep 3:39pm PT). Rules are Rob's, `#tactical-risk` `1554257598289551361`. Only strategic bombers raid. Tactical bombers and fighters do not raid and do not escort. Escorts and interceptors are not in this build. A raid is its own battle: the same territory can also have a normal combat, resolved separately. The AI does not raid. It always takes the normal attack, and it never sees the prompt. Fighters that moved in as a normal attack still fight each other in that battle. The submarine and air rules from unified.20.2 still apply there: a sub fires once per round, subs and air do not hit each other without a destroyer, air-only versus sub-only submerges the subs, and lone transports are removed with no dice. Raiding bombers are left out of that battle.
+
+During Combat Move, a human strategic bomber entering an enemy factory is asked "Normal attack or strategic bombing raid?" Cancel leaves the bomber where it was. Choosing a raid puts those bombers on their own stack. Factory AA fires once per bomber and hits on a 1. Each survivor rolls 1 die, or 2 if that power has Heavy Bombers. The total is damage. Damage is capped at twice the factory's output. Output here is the existing placement capacity: 20 on that power's capital factory, 5 on any other. Rob's example is a factory that places 20 with 17 damage, which places 3. Excess over the cap is not applied. Captured factories keep the damage number. The new owner's placeable amount uses their own output, so a captured capital is a 5-output factory minus the damage it already has.
+
+A damaged factory places that undamaged amount in mobilize, for humans and the AI. The mobilize row shows `used/limit can place · N damage` when the factory is damaged. Purchase can repair at 1 IPC per point, owner only, one point at a time. The AI repairs only when every factory it can use would place nothing. It then spends the fewest IPCs that reopen one slot on the cheapest blocked factory, and buys with what is left. If any factory can still place, it does not repair.
+
+The damage number is a chip on the unit overlay, next to the stack, including when unit icons are hidden at low zoom. The territory tooltip says the damage and how many units the factory can place. Raiding bombers fight in no other combat that turn. The `raided` flag clears when that power's turn ends, so the bomber can fight again next turn. Leaving combat does not fly them home. Non-Combat Move clears their moved flag so they can fly home with the movement left after the flight to the factory (total move minus the distance already flown). A fresh full air move is not granted. If they are still not on land that was friendly at the start of the turn, the existing end-of-NCM warning and destruction apply. That check still counts carrier room for fighters and tactical bombers. A bomber does not use that room.
+
+A raid writes a combat event. The payload fields are `territory`, `attackerOwner`, `damageDealt`, `victimIpcsBefore`, and `victimIpcsAfter`. A repair writes a purchase event with `territory`, `repairSpend`, `ipcsBefore`, and `ipcsAfter`. Those fields are additive. The raid does not change the victim's IPC total; both IPC numbers are the balance at the moment of the raid. Repair is what spends IPCs.
+
+Receipt: `node tools/test-strategic-bombing.mjs`.
+
+Rob, `#tactical-risk`, 29 Sep 6:52–6:54pm PT, standard Anniversary. A transport is not a casualty while a unit the enemy can hit is still in the battle. The human picker hides it on desktop and phone, and `applyCasualtySelection` ignores that pick. A submarine facing only aircraft, with no enemy destroyer, cannot be hit, so it does not protect transports: they are destroyed with no dice and the submarine submerges. If a destroyer or another sea unit can hit the submarine, the submarine shields the transports and normal combat applies. Lone transports are still removed with no dice when the enemy can hit them. Ships and land units still retreat to one territory. Each retreating aircraft uses its remaining movement and the existing landing picker. The AI lands that aircraft on the closest friendly land, or a carrier when that is the legal option. Nothing in range is parked for the end-of-NCM check. A tank blitz through an empty enemy land territory captures it, including its IPC income, and the move undoes. A territory with any enemy unit, including an AA gun or a factory, blocks the blitz. Infantry and artillery cannot blitz. A blitz cannot cross a sea zone.
+
+---
+
 ## 9.28.26 — unified.20.2 sub and air rules, retreat landings
 
 Stamp stays `V2.81.57-unified.20.2`. Schema stays 11. `firestore.rules` is unchanged.

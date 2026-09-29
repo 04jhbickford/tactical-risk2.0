@@ -1,4 +1,5 @@
-// unified.20.2 — East Canada casualty picks match the next round and the save.
+// unified.21 — East Canada casualty picks match the next round and the save.
+// A transport is not a legal pick while another unit is in the battle.
 // Run: node tools/test-casualty-apply.mjs
 
 import { readFileSync } from 'node:fs';
@@ -172,16 +173,16 @@ console.log('=== East Canada: report, next round, and save match ===');
   check('defender default damages the battleship', defenderDefault.battleship_damage === 1, defenderDefault);
   check('defender default does not take a carrier', !defenderDefault.carrier, defenderDefault);
 
-  if (!ui.combatState.selectedAttackerCasualties.transport) {
-    const drop = ['bomber', 'cruiser', 'carrier', 'fighter', 'destroyer', 'submarine']
-      .find((type) => (ui.combatState.selectedAttackerCasualties[type] || 0) > 0);
-    check('a default hull can be swapped for the transport', !!drop, ui.combatState.selectedAttackerCasualties);
-    ui._adjustCasualty('attacker', drop, -1);
-    ui._adjustCasualty('attacker', 'transport', 1);
-  }
-  check('attacker pick includes the transport', ui.combatState.selectedAttackerCasualties.transport === 1, ui.combatState.selectedAttackerCasualties);
+  const held = { ...ui.combatState.selectedAttackerCasualties };
+  check('the default pick does not take the transport', !held.transport, held);
+  check('a combat unit is holding a hit',
+    Object.entries(held).some(([type, count]) => type !== 'transport' && count > 0), held);
+  ui._adjustCasualty('attacker', 'transport', 1);
+  check('the transport pick is refused', !ui.combatState.selectedAttackerCasualties.transport, ui.combatState.selectedAttackerCasualties);
+  check('the hit stays on a combat unit',
+    JSON.stringify(ui.combatState.selectedAttackerCasualties) === JSON.stringify(held));
   ui._autoSelectCasualties();
-  check('a later auto-pick does not erase the transport edit', ui.combatState.selectedAttackerCasualties.transport === 1);
+  check('a later auto-pick still skips the transport', !ui.combatState.selectedAttackerCasualties.transport);
   check('defender default survived the second auto-pick',
     JSON.stringify(ui.combatState.selectedDefenderCasualties) === JSON.stringify(defenderDefault));
 
@@ -210,14 +211,18 @@ console.log('=== East Canada: report, next round, and save match ===');
     (gs.units[zone] || []).some((unit) => unit.owner === 'Japanese' && unit.type === 'battleship' && unit.damaged && unit.damagedCount === 1));
   check('both Japanese carrier stacks are still on the board',
     ['carrier_2', 'carrier_3'].every((id) => (gs.units[zone] || []).some((unit) => unit.id === id && unit.quantity === 1)));
-  check('the edited American transport is gone',
-    !(gs.units[zone] || []).some((unit) => unit.owner === 'Americans' && unit.type === 'transport' && (unit.quantity || 0) > 0));
+  check('the American transport survives',
+    (gs.units[zone] || []).some((unit) => unit.owner === 'Americans' && unit.type === 'transport' && (unit.quantity || 0) > 0));
   check('round-2 list shows the damage mark', (ui.el.innerHTML || '').includes('combat-damage-mark'));
   check('round-2 list shows 2 Japanese carriers', (ui.el.innerHTML || '').includes('>2<'));
 
   const casualtyLog = (gs.combatTelemetry || []).filter((entry) => entry.step === 'casualties');
-  check('chosen casualties are logged',
-    casualtyLog.some((entry) => (entry.casualties?.attacker || []).some((row) => row.type === 'transport' && row.quantity === 1)),
+  check('chosen casualties are logged without the transport',
+    casualtyLog.some((entry) => {
+      const rows = entry.casualties?.attacker || [];
+      return rows.some((row) => row.quantity > 0 && row.type !== 'transport')
+        && !rows.some((row) => row.type === 'transport' && row.quantity > 0);
+    }),
     casualtyLog);
 
   const roundLog = (gs.combatTelemetry || []).filter((entry) => entry.step === 'round');
@@ -288,11 +293,10 @@ console.log('=== Naval retreat keeps the bomber and logs real quantities ===');
   check('transport and battleship arrived', arrived('transport') && arrived('battleship'));
   check('retreated battleship keeps its damage',
     (gs.units[west] || []).some((unit) => unit.type === 'battleship' && unit.damaged && unit.damagedCount === 1));
-  const parked = (gs.pendingAirLandings || []).flatMap((entry) => entry.units || []);
-  const bomberBoard = Object.values(gs.units).flat().some((unit) => unit.type === 'bomber' && (unit.quantity || 0) > 0);
-  check('bomber is parked, not deleted',
-    parked.some((unit) => unit.type === 'bomber' && unit.quantity === 1 && unit.parked) && !bomberBoard,
-    { parked, units: gs.units });
+  check('the bomber is not deleted and does not follow the ships',
+    (gs.units[east] || []).some((unit) => unit.type === 'bomber' && unit.quantity === 1)
+    && !(gs.units[west] || []).some((unit) => unit.type === 'bomber'),
+    gs.units);
   unbindGameEventLog();
 }
 

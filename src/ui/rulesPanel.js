@@ -93,13 +93,13 @@ export class RulesPanel {
                 <tr><td>Armour (Tank)</td><td>6</td><td>3</td><td>3</td><td>2</td><td>Can blitz through friendly territory</td></tr>
                 <tr><td>Fighter</td><td>10</td><td>3</td><td>4</td><td>4</td><td>Air unit, can land on carriers</td></tr>
                 <tr data-rules-tactical hidden><td>Tactical Bomber</td><td>11</td><td>3</td><td>3</td><td>4</td><td>Attacks at 4 when paired with a fighter or tank in the same battle. Can land on a carrier.</td></tr>
-                <tr><td>Bomber</td><td>12</td><td>4</td><td>1</td><td>6</td><td>Cannot capture. Strategic bombing raids are not yet available.</td></tr>
+                <tr><td>Bomber</td><td>12</td><td>4</td><td>1</td><td>6</td><td>Cannot capture. Can strategic-bomb an enemy factory. Factory AA hits on 1, then each survivor rolls 1 die (2 with Heavy Bombers).</td></tr>
                 <tr><td>Submarine</td><td>6</td><td>2</td><td>1</td><td>2</td><td>Cannot hit aircraft. Surprise strike replaces that round's roll. Submerges against aircraft</td></tr>
                 <tr><td>Destroyer</td><td>8</td><td>2</td><td>2</td><td>2</td><td>Blocks sub surprise strike. Aircraft hit subs only while a destroyer is in the battle</td></tr>
                 <tr><td>Cruiser</td><td>12</td><td>3</td><td>3</td><td>2</td><td>Shore bombardment</td></tr>
                 <tr><td>Carrier</td><td>14</td><td>1</td><td>2</td><td>2</td><td data-rules-carrier-table>Carries 2 fighters</td></tr>
                 <tr><td>Battleship</td><td>20</td><td>4</td><td>4</td><td>2</td><td>2 HP, shore bombardment</td></tr>
-                <tr><td>Transport</td><td>7</td><td>0</td><td>0</td><td>2</td><td>Carries 2 infantry or 1 infantry + 1 other. Destroyed automatically when it is the only unit and the enemy can hit it</td></tr>
+                <tr><td>Transport</td><td>7</td><td>0</td><td>0</td><td>2</td><td>Carries 2 infantry or 1 infantry + 1 other. Not a casualty while a unit the enemy can hit is still in the battle. Destroyed automatically when it is the only unit and the enemy can hit it. A submarine aircraft cannot hit does not protect it</td></tr>
               </tbody>
             </table>
           </section>
@@ -111,16 +111,17 @@ export class RulesPanel {
               <li><strong>Defending:</strong> Roll dice equal to unit's defense value. Same rules for hits.</li>
               <li><strong>Casualties:</strong> Attacker chooses defender casualties, defender chooses attacker casualties.</li>
               <li><strong>Submarines:</strong> Cannot hit aircraft. Aircraft cannot hit a submarine unless that side has a destroyer in the battle. If one side has only aircraft and the other has only submarines, the submarines submerge and the battle ends.</li>
-              <li><strong>Transports:</strong> If a side's only units are transports and the enemy can hit them, the transports are destroyed with no dice.</li>
+              <li><strong>Transports:</strong> A transport is not chosen as a casualty while a unit the enemy can hit is still in the battle. A submarine facing only aircraft, with no enemy destroyer, does not protect transports: they are destroyed with no dice and the submarine submerges. If a side's only units are transports and the enemy can hit them, the transports are destroyed with no dice.</li>
               <li><strong>Air Units:</strong> Cannot capture territory. Fighters and tactical bombers land on friendly land or a friendly carrier with room. Bombers land on friendly land only and never at sea.</li>
-              <li><strong>Retreat:</strong> Ships and land units retreat to a territory they came from. Retreating aircraft land on friendly land within range, or on a friendly carrier for fighters and tactical bombers. If no legal landing exists, the aircraft stays for the end of non-combat movement.</li>
+              <li><strong>Retreat:</strong> Ships and land units retreat together to one territory they came from. Aircraft will choose their own landing, using remaining movement: friendly land held since the start of the turn, or a friendly carrier for fighters and tactical bombers. A bomber never lands in a sea zone. If no legal landing exists, the aircraft stays for the end of non-combat movement.</li>
+              <li><strong>Strategic bombing:</strong> Only bombers can raid, and only a territory that has an enemy factory. Tactical bombers and fighters do not raid and do not escort. The raid is a separate battle from any normal combat in that territory. The factory's AA fires once per bomber and hits on a 1. Each surviving bomber rolls 1 die, or 2 with Heavy Bombers. The total is damage, capped at twice the factory's output (a capital places 20, any other factory places 5). A damaged factory places output minus damage, minimum 0. The owner may repair during Purchase at 1 IPC per point. A bomber that raided fights in no other combat that turn and must land in Non-Combat Move, using only the movement left after the flight to the factory. Fighters in that same territory still fight each other in the normal battle.</li>
             </ul>
           </section>
 
           <section class="rules-section" id="rules-transport" data-rules-section="transport">
             <h3>Transport & Carrier Rules</h3>
             <ul>
-              <li><strong>Transports:</strong> Can carry 2 infantry OR 1 infantry + 1 other land unit. Undefended transports are destroyed when an enemy unit can hit them.</li>
+              <li><strong>Transports:</strong> Can carry 2 infantry OR 1 infantry + 1 other land unit. Not a casualty while a unit the enemy can hit is still in the battle. A submarine aircraft cannot hit does not protect it. Undefended transports are destroyed when an enemy unit can hit them.</li>
               <li><strong>Carriers:</strong> <span data-rules-carrier-bullet>Can carry up to 2 fighters.</span></li>
               <li><strong>Loading:</strong> Units can load during non-combat movement from adjacent coastal territories.</li>
               <li><strong>Unloading:</strong> Units can unload during combat movement for amphibious assault.</li>

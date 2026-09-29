@@ -1,4 +1,4 @@
-// V2.81.57-unified.20.2 — tactical bomber labels, pairing copy, carrier text.
+// V2.81.57-unified.21 — tactical bomber labels, pairing copy, carrier text.
 // Run: node tools/test-tactical-bomber-copy.mjs
 
 import { readFileSync } from 'fs';
@@ -46,7 +46,8 @@ console.log('=== rules copy ===');
   check('carrier table row is 2 air units', rules.includes('Carries 2 air units (fighters or tactical bombers)'));
   check('option off still has the fighter-only sentence', rules.includes('Can carry up to 2 fighters.'));
   check('tactical bomber pairs in the same battle', rules.includes('Attacks at 4 when paired with a fighter or tank in the same battle.'));
-  check('bomber note matches the code', rules.includes('Cannot capture. Strategic bombing raids are not yet available.'));
+  check('bomber note matches the code', rules.includes('Cannot capture. Can strategic-bomb an enemy factory. Factory AA hits on 1, then each survivor rolls 1 die (2 with Heavy Bombers).'));
+  check('rules panel has a strategic bombing entry', rules.includes('<strong>Strategic bombing:</strong>'));
   check('bomber note does not claim a raid', !rules.includes('Strategic bombing, cannot capture'));
 }
 

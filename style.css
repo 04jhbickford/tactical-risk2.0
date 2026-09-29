@@ -6055,6 +6055,17 @@ html:not(.mobile-shell) .pp-inline-placement .pp-unit-list {
   margin-top: 6px;
 }
 
+/* Repair sits under the damage line so the 44px control is not squeezed. */
+.pp-raid-repair .pp-factory-limit {
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.pp-raid-repair .pp-action-btn {
+  flex: 1 0 100%;
+  margin-bottom: 0;
+}
+
 .pp-factory-type {
   font-size: 11px;
   color: #ffc107;

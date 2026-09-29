@@ -98,9 +98,13 @@ import {
 import { hasLegalAirLandingFrom, wasFriendlyAtTurnStart } from '../state/airLanding.js';
 import {
   factoriesAdjacentToSeaZone,
-  factoryProductionLimit,
   factoryProductionUsed,
 } from '../state/mobilizeSource.js';
+import {
+  damagedFactoryRows,
+  factoryPlacementLabel,
+  renderFactoryRepairHtml,
+} from '../state/strategicBombing.js';
 import {
   canPlaceAirOnCarrierInSeaZone,
   pendingAirCanLoadInSeaZone,
@@ -1341,13 +1345,13 @@ export class PlayerPanel {
 
   _mobilizeSlotsRemaining(dest, player) {
     if (!dest || !player) return 0;
-    const capital = this.gameState?.playerState?.[player.id]?.capitalTerritory;
     let factoryName = dest.name;
     if (dest.isWater) {
       factoryName = this._mobilizeSourceFactory(dest, player);
       if (!factoryName) return 0;
     }
-    const productionLimit = factoryProductionLimit(factoryName, capital);
+    const productionLimit = this.gameState.getFactoryPlacementLimit?.(factoryName, player.id)
+      ?? 0;
     const placedHere = factoryProductionUsed(
       this.gameState?.mobilizationHistory,
       factoryName,
@@ -2103,7 +2107,7 @@ export class PlayerPanel {
     if (phase === GAME_PHASES.PLAYING && offerEndPhase) {
       const hasUnresolvedCombats = shouldDisableEndPhaseForCombat({
         hasCombatQueue: turnPhase === TURN_PHASES.COMBAT
-          && !!(this.gameState.combatQueue && this.gameState.combatQueue.length > 0),
+          && ((this.gameState.combatQueue?.length || 0) + (this.gameState.raidQueue?.length || 0)) > 0,
         airLandingReady,
       });
 
@@ -2570,11 +2574,17 @@ export class PlayerPanel {
 
       if (turnPhase === TURN_PHASES.COMBAT) {
         const combatCount = this.gameState.combatQueue?.length || 0;
+        const raidCount = this.gameState.raidQueue?.length || 0;
         if (combatCount > 0) {
           html += renderCombatBattleList(this.gameState, { phone: isMobileShell() });
+        }
+        if (raidCount + combatCount > 0) {
+          const parts = [];
+          if (raidCount > 0) parts.push(`${raidCount} raid${raidCount > 1 ? 's' : ''}`);
+          if (combatCount > 0) parts.push(`${combatCount} battle${combatCount > 1 ? 's' : ''}`);
           html += `
             <button class="pp-action-btn combat" data-action="open-combat">
-              ⚔️ Resolve ${combatCount} Battle${combatCount > 1 ? 's' : ''}
+              ⚔️ Resolve ${parts.join(' and ')}
             </button>`;
         } else {
           html += `<div class="pp-hint">No battles to resolve</div>`;
@@ -3183,6 +3193,8 @@ export class PlayerPanel {
           <span class="pp-budget-sep">/</span>
           <span class="pp-budget-total">${totalBudget} IPCs</span>
         </div>`;
+
+    html += renderFactoryRepairHtml(damagedFactoryRows(this.gameState, player.id), { ipcs: remaining });
 
     // Show Risk cards trade option if available
     if (riskCards.length > 0) {
@@ -4824,18 +4836,27 @@ export class PlayerPanel {
       if (isFactoryTerritory) {
         const capital = this.gameState.playerState?.[player.id]?.capitalTerritory;
         const isCapitalFactory = this.selectedTerritory.name === capital;
-        const productionLimit = factoryProductionLimit(this.selectedTerritory.name, capital);
+        const damage = this.gameState.getFactoryDamage?.(this.selectedTerritory.name) || 0;
+        const productionLimit = this.gameState.getFactoryPlacementLimit?.(
+          this.selectedTerritory.name,
+          player.id,
+        ) || 0;
         const unitsPlacedHere = factoryProductionUsed(
           this.gameState.mobilizationHistory,
           this.selectedTerritory.name,
           player.id,
         );
         const remaining = productionLimit - unitsPlacedHere;
+        const capacityText = factoryPlacementLabel({
+          placed: unitsPlacedHere,
+          limit: productionLimit,
+          damage,
+        });
 
         html += `
-          <div class="pp-factory-limit">
+          <div class="pp-factory-limit" data-mobilize-limit="1">
             <span class="pp-factory-type">${isCapitalFactory ? '★ Capital Factory' : 'Factory'}</span>
-            <span class="pp-factory-capacity ${remaining <= 0 ? 'full' : ''}">${unitsPlacedHere}/${productionLimit} units</span>
+            <span class="pp-factory-capacity ${remaining <= 0 ? 'full' : ''}">${capacityText}</span>
           </div>`;
       }
     } else {
@@ -5147,6 +5168,15 @@ export class PlayerPanel {
         if (action === 'trade-risk-cards') {
           if (this.onAction) {
             this.onAction('trade-risk-cards', {});
+          }
+          return;
+        }
+
+        if (action === 'repair-factory') {
+          const territory = btn.dataset.territory;
+          const points = parseInt(btn.dataset.points, 10) || 1;
+          if (this.onAction && territory) {
+            this.onAction('repair-factory', { territory, points });
           }
           return;
         }
