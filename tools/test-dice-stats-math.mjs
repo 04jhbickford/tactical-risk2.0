@@ -1,4 +1,4 @@
-// V2.81.57-unified.29 — chi-square, z-scores, runs test, recompute.
+// V2.81.57-unified.30 — chi-square, z-scores, runs test, recompute.
 // Run: node tools/test-dice-stats-math.mjs
 
 import { readFileSync } from 'fs';
