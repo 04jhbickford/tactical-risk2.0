@@ -2,6 +2,18 @@
 
 ---
 
+## 9.29.26 — unified.26 Pacific phone uses the Classic sheet
+
+Stamp `V2.81.57-unified.26`. Schema stays 11. A `V2.82-unified.25` doc is older than this tab and does not prompt. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.26`).
+
+James, 6:14am PT 29 Sep, on the live Pacific map: mobile touch scroll was not as clean as Classic, and menus overlapped in setup and during play.
+
+Pacific phone sheets are taller than the Classic capital peek. The shared zoom offset (88px) sat inside the tray, and the peek does not take hits, so + / − / Fit were under the dice row and the phase button. The setup sheet used an 84px bottom margin, and the sticky Start footer covered Done. Phone Fit also ran the Classic wrap shift on a map that does not wrap, so a cluster could be framed on the wrong copy and a one-finger drag fought the clamp.
+
+Pacific now sets `html.map-pacific`. Zoom sits above the live tray height. The options card clears the Start footer. Lists keep `touch-action: pan-y`. Fit skips the wrap shift while `SCROLL_WRAP_X` is off. Classic does not get the class, and the 88px zoom offset is unchanged. `firestore.rules`, `src/map/camera.js`, `src/map/mapRenderer.js`, and `src/ui/minimap.js` are unchanged.
+
+---
+
 ## 9.29.26 — unified.25 tactical bombers for the AI and the setup tray
 
 Stamp `V2.81.57-unified.25`. Schema stays 11. A `V2.82-unified.24` doc is older than this tab and does not prompt. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.25`).

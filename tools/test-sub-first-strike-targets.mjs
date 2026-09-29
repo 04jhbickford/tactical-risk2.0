@@ -1,4 +1,4 @@
-// V2.81.57-unified.25 — subs fire first only when a hittable target is present.
+// V2.81.57-unified.26 — subs fire first only when a hittable target is present.
 // Run: node tools/test-sub-first-strike-targets.mjs
 
 import { readFileSync } from 'fs';

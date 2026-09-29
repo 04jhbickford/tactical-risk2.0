@@ -18679,7 +18679,10 @@ html.mobile-shell .player-panel--expanded.player-panel--mobilize .pp-inline-mobi
     padding: 0 10px;
   }
 
-  /* Zoom / Fit always on BR above CTA (Experimental #three-zoom). Minimap stays off. */
+  /* Zoom / Fit always on BR above CTA (Experimental #three-zoom). Minimap stays off.
+     Classic keeps the 88px offset (capital peek is short). Pacific sheets are
+     taller, so the same offset sits inside the tray and the dead peek passes
+     taps through to +/−/Fit. --tr-sheet-h is the live tray height. */
   #zoom-controls {
     display: flex;
     right: max(10px, env(safe-area-inset-right, 0px));
@@ -18689,6 +18692,10 @@ html.mobile-shell .player-panel--expanded.player-panel--mobilize .pp-inline-mobi
     gap: 8px;
     z-index: 28;
     pointer-events: auto;
+  }
+
+  html.mobile-shell.map-pacific #zoom-controls {
+    bottom: calc(var(--tr-sheet-h, 112px) + 8px);
   }
 
   #minimap {
@@ -21161,6 +21168,22 @@ html.mobile-shell .go-panel.is-sheet .go-body {
   display: flex;
   overflow-y: auto;
   touch-action: pan-y;
+}
+
+/* Pacific setup: the sticky Start footer is taller than the 84px sheet
+   margin, so Done sat under Start. Classic keeps 84px. */
+html.mobile-shell.map-pacific .go-sheet-card {
+  margin-bottom: calc(120px + env(safe-area-inset-bottom, 0px));
+  max-height: calc(100dvh - 132px - env(safe-area-inset-bottom, 0px));
+}
+
+html.mobile-shell.map-pacific .phone-menu-list,
+html.mobile-shell.map-pacific .phone-menu-panel,
+html.mobile-shell.map-pacific .go-body,
+html.mobile-shell.map-pacific .lobby-phone-factions,
+html.mobile-shell.map-pacific .phone-tray-body {
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Past battles. One row per battle, dice wrap, no sideways scroll. */

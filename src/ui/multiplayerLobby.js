@@ -48,7 +48,7 @@ import {
   settingsEditError,
 } from '../gameOptions.js';
 import { bindGameOptions, readGameOptionsFrom, readMapIdFrom, renderGameOptionsPanel } from './gameOptionsPanel.js';
-import { CLASSIC_MAP_ID, UNKNOWN_MAP_MESSAGE } from '../map/mapRegistry.js';
+import { CLASSIC_MAP_ID, markMapChrome, UNKNOWN_MAP_MESSAGE } from '../map/mapRegistry.js';
 import { getBoard } from '../map/boardCatalog.js';
 import { bindLobbyDice, lobbyDiceEntryMarkup, renderDiceStatsMarkup } from './diceStatsPanel.js';
 import { isMobileShell } from './mobileShell.js';
@@ -357,6 +357,7 @@ export class MultiplayerLobby {
 
   _render() {
     const activeMapId = this._activeMapId();
+    markMapChrome(activeMapId);
     if (!getBoard(activeMapId) && typeof this.loadBoard === 'function' && this._boardLoadId !== activeMapId) {
       this._boardLoadId = activeMapId;
       this.loadBoard(activeMapId).then((board) => {

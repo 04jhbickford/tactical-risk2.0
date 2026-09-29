@@ -150,8 +150,10 @@ const {
   PHONE_FIT_MIN_REGION_W,
   PHONE_FIT_MIN_REGION_H,
 } = await import(pathToFileURL(join(root, 'src/ui/mobileShell.js')));
-const { Camera, MAP_WIDTH, MAP_HEIGHT } =
-  await import(pathToFileURL(join(root, 'src/map/camera.js')));
+const cameraMod = await import(pathToFileURL(join(root, 'src/map/camera.js')));
+const { Camera, MAP_WIDTH, MAP_HEIGHT, applyMapMetrics } = cameraMod;
+const { markMapChrome } =
+  await import(pathToFileURL(join(root, 'src/map/mapRegistry.js')));
 const {
   resolvePhaseHint,
   resolvePhonePeekHint,
@@ -200,7 +202,7 @@ const check = (label, cond) => {
 };
 
 console.log('=== Version stamps ===');
-check('GAME_VERSION is V2.81.57-unified.25', GAME_VERSION === 'V2.81.57-unified.25');
+check('GAME_VERSION is V2.81.57-unified.26', GAME_VERSION === 'V2.81.57-unified.26');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== resolveMapRightEdge ===');
@@ -381,6 +383,15 @@ console.log('=== V2.63 CSS is phone-scoped; tablet 481–900 and desktop ≥901 
     !/@media \(max-width:\s*767px\)/.test(css));
   check('unscoped zoom still parks left of the 320px panel',
     /#zoom-controls \{[\s\S]*?right:\s*calc\(320px \+ 12px\)/.test(css));
+  check('Classic phone zoom offset stays 88px',
+    /bottom:\s*calc\(88px \+ env\(safe-area-inset-bottom, 0px\)\)/.test(css));
+  check('Pacific phone zoom clears the live sheet',
+    css.includes('html.mobile-shell.map-pacific #zoom-controls')
+    && /bottom:\s*calc\(var\(--tr-sheet-h,\s*112px\)\s*\+\s*8px\)/.test(css));
+  check('Pacific options sheet clears the start footer',
+    css.includes('html.mobile-shell.map-pacific .go-sheet-card')
+    && /html\.mobile-shell\.map-pacific \.phone-menu-list[\s\S]*?touch-action:\s*pan-y/.test(css)
+    && !/html\.mobile-shell\.map-pacific \.phone-menu-list[\s\S]*?touch-action:\s*none/.test(css));
   const { beforePhone } = phoneCssParts(css);
   check('phone 100dvh is not unscoped on html/body',
     !/html,\s*body \{[^}]*100dvh/.test(beforePhone));
@@ -1816,6 +1827,30 @@ console.log('=== V2.81.26 capital star / sea dest / Fit dest / pulses ===');
   check('unwrap pulls the far copy onto the dest seed (no Pacific centroid)',
     Math.abs(unwrapFitX(3000, 200) - (3000 - 3500)) < 0.01
     && Math.abs(unwrapFitX(80, 2800) - (80 + 3500)) < 0.01);
+  applyMapMetrics({ width: 3773, height: 3213, scrollWrapX: false });
+  const pacificCluster = phoneProblemBounds(
+    [{ x: 3600, y: 400 }, { x: 3700, y: 500 }],
+    100,
+  );
+  check('Pacific fit does not wrap a cluster onto another copy',
+    cameraMod.SCROLL_WRAP_X === false
+    && cameraMod.MAP_WIDTH === 3773
+    && pacificCluster
+    && pacificCluster.minX > 3000
+    && pacificCluster.maxX < 3773);
+  applyMapMetrics({ width: 3500, height: 2000, scrollWrapX: true });
+  check('classic wrap metrics restored after the Pacific fit check',
+    cameraMod.MAP_WIDTH === 3500 && cameraMod.MAP_HEIGHT === 2000 && cameraMod.SCROLL_WRAP_X === true);
+  const chrome = { classes: new Set(), classList: null };
+  chrome.classList = {
+    toggle(name, on) { if (on) chrome.classes.add(name); else chrome.classes.delete(name); },
+    contains(name) { return chrome.classes.has(name); },
+  };
+  check('map chrome class is Pacific-only',
+    markMapChrome('pacific', chrome) === true
+    && chrome.classes.has('map-pacific')
+    && markMapChrome('classic', chrome) === false
+    && !chrome.classes.has('map-pacific'));
   const worldRussians = [
     { name: 'Ukraine S.S.R.', connections: ['West Russia'], center: [1300, 400] },
     { name: 'West Russia', connections: ['Ukraine S.S.R.'], center: [1400, 380] },

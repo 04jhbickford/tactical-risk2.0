@@ -1,4 +1,4 @@
-// V2.81.57-unified.25 — AI buys tactical bombers only when the option is on.
+// V2.81.57-unified.26 — AI buys tactical bombers only when the option is on.
 // OFF purchases and the Math.random sequence match the main fixture below,
 // recorded at 30d1515 (unified.24) before this change.
 // Run: node tools/test-tacbomber-ai-buy.mjs
@@ -161,7 +161,7 @@ async function buy(name, opts, difficulty, tacticalBombers) {
 }
 
 console.log('=== tactical bomber AI buy ===');
-check('stamp is unified.25', GAME_VERSION === 'V2.81.57-unified.25');
+check('stamp is unified.26', GAME_VERSION === 'V2.81.57-unified.26');
 
 const offRuns = [];
 for (const [name, opts, difficulty] of CASES) {

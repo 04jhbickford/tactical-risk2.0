@@ -217,7 +217,18 @@ export function activateMap(id) {
   const map = getMap(id);
   if (!map) return null;
   activeId = map.id;
+  markMapChrome(map.id);
   return map;
+}
+
+// Phone CSS that must not touch Classic is gated on html.map-pacific.
+// Classic never receives the class. Unknown ids clear it.
+export function markMapChrome(mapId, root = (typeof document !== 'undefined' ? document.documentElement : null)) {
+  if (!root?.classList) return false;
+  const resolved = resolveMapId(mapId);
+  const pacific = resolved.ok && resolved.mapId === 'pacific';
+  root.classList.toggle('map-pacific', pacific);
+  return pacific;
 }
 
 // Missing id is classic. Any other unknown id is refused.
