@@ -1,4 +1,4 @@
-// V2.81.57-unified.29 — Classic naval report shows defender dice already rolled.
+// V2.81.57-unified.30 — Classic naval report shows defender dice already rolled.
 // Run: node tools/test-naval-report-defender-dice.mjs
 
 import { readFileSync } from 'fs';

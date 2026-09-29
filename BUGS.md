@@ -2,6 +2,16 @@
 
 ---
 
+## 9.29.26 — unified.30 in-game menu
+
+Stamp `V2.81.57-unified.30`. Schema stays 11. A `V2.82-unified.29` doc is older than this tab and does not prompt. A `V2.82-unified.31` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.30`).
+
+James, on the live in-game menu. The softer rounded corners and the floating panel stay. Three fixes:
+
+The open menu sits under the one-row top bar, so round, phase, whose turn, and money stay visible and tappable. The panel opens at its final height. It does not open as an empty frame and then grow. Actions, Players, Territory, and Log use that same height, so switching menus does not resize the panel or jump the map.
+
+New Local Game, the one-line confirm, and the one-row top bar are unchanged.
+
 ## 9.29.26 — unified.29 local setup, confirm line, top bar
 
 Stamp `V2.81.57-unified.29`. Schema stays 11. A `V2.82-unified.28` doc is older than this tab and does not prompt. A `V2.82-unified.30` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.29`). Rebased onto `9a33af38` (unified.28). The speed fix stays: boot does not load map tiles, a game loads only its own map, and the outline cache is kept for the board already built.

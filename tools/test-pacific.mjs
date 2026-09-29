@@ -1,4 +1,4 @@
-// V2.81.57-unified.29 — Pacific board, historical setup, victory cities.
+// V2.81.57-unified.30 — Pacific board, historical setup, victory cities.
 // Run: node tools/test-pacific.mjs
 
 import { execFileSync } from 'node:child_process';

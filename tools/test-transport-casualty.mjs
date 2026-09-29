@@ -1,4 +1,4 @@
-// V2.81.57-unified.29 — transports are not casualties while another unit remains.
+// V2.81.57-unified.30 — transports are not casualties while another unit remains.
 // East Canada, game 6XQ7CN. Bastion could pick his transport. Run: node tools/test-transport-casualty.mjs
 
 import { readFileSync } from 'node:fs';
