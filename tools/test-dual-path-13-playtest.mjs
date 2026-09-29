@@ -78,7 +78,7 @@ function board() {
 }
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-unified.20.1', GAME_VERSION === 'V2.81.57-unified.20.1');
+check('GAME_VERSION is V2.81.57-unified.20.2', GAME_VERSION === 'V2.81.57-unified.20.2');
 
 console.log('=== 9.21.26.01 land-only sea zone is not a combat attack ===');
 {
@@ -154,9 +154,11 @@ console.log('=== 9.21.26.02 fighters cannot end combat over open water ===');
   const loose = looseAirOverWater(gs2.units, gs2.territoryByName, 'usa', unitDefs);
   const onCarrier = (gs2.units['Caribbean Sea Zone'] || [])
     .some((u) => u.type === 'carrier' && (u.aircraft || []).some((a) => a.type === 'fighter'));
-  check('NCM end does not leave the fighter loose', loose.every((a) => a.territory !== 'Caribbean Sea Zone') || onCarrier);
-  check('out-of-range fighter landed on the carrier or crashed',
-    onCarrier || !loose.some((a) => a.type === 'fighter' && a.territory === 'Caribbean Sea Zone'));
+  const looseHere = (gs2.units['Caribbean Sea Zone'] || [])
+    .some((u) => u.type === 'fighter' && u.owner === 'usa' && (u.quantity || 0) === 1);
+  check('NCM end keeps the fighter the carrier can hold', onCarrier || looseHere);
+  check('that fighter is not destroyed for being out of movement',
+    onCarrier || loose.some((a) => a.type === 'fighter' && a.territory === 'Caribbean Sea Zone'));
 }
 
 console.log('=== 9.21.26.03 prior-turn air can attack again ===');

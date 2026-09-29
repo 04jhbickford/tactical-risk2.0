@@ -12,10 +12,18 @@ import {
   territoryHasEnemyCombatUnits,
   territoryCombatAlreadyResolved,
   summarizeCombatForce,
+  livingForcePicture,
+  applyCasualtySelection,
   sideCanFirstStrike,
   sideHasDestroyer,
   countAirHits,
+  unitsForGeneralCombat,
+  unitsSubsMayRoll,
+  airVersusSubStalemate,
+  sideIsOnlyTransports,
+  enemyCanHitTransports,
   AIR_CANNOT_HIT_SUBS_HINT,
+  NO_LEGAL_AIR_LANDING_NOTE,
 } from '../state/combatUnits.js';
 import { dequeueResolvedCombatHeads, applyTerritoryCapture } from '../state/combatFinalize.js';
 import { persistableUnit } from '../state/persistState.js';
@@ -520,6 +528,63 @@ export class CombatUI {
       this.combatState.phase = 'resolved';
       this.combatState.winner = 'defender';
     }
+    this._applyOpeningSeaRules();
+  }
+
+  // Subs facing only aircraft leave the fight and stay in the zone.
+  // The battle does not roll again.
+  _openAirSubStalemate() {
+    if (!this.combatState || !this._currentTerritoryIsWater()) return false;
+    const { attackers, defenders } = this.combatState;
+    if (!airVersusSubStalemate(attackers, defenders, this.unitDefs)) return false;
+    this.combatState.phase = 'resolved';
+    this.combatState.winner = 'submerged';
+    this.combatState.submerged = true;
+    const territory = this.currentTerritory;
+    if (territory && this.gameState) {
+      this.gameState.combatQueue = (this.gameState.combatQueue || []).filter((name) => name !== territory);
+    }
+    return true;
+  }
+
+  // Transports with no escort are removed when the enemy can hit them.
+  _scrapUndefendedTransports() {
+    if (!this.combatState || !this._currentTerritoryIsWater()) return false;
+    const { attackers, defenders, totalAttackerLosses, totalDefenderLosses } = this.combatState;
+    let changed = false;
+    if (sideIsOnlyTransports(defenders) && enemyCanHitTransports(attackers, this.unitDefs, 'attack')) {
+      for (const transport of defenders.filter((unit) => unit.type === 'transport')) {
+        this._addTypedLoss(totalDefenderLosses, transport.owner, 'transport', transport.quantity);
+        transport.quantity = 0;
+        this._recordHullCargo(transport, totalDefenderLosses, this._extraLossMap());
+      }
+      this.combatState.defenders = [];
+      changed = true;
+    }
+    if (sideIsOnlyTransports(attackers) && enemyCanHitTransports(defenders, this.unitDefs, 'defense')) {
+      for (const transport of attackers.filter((unit) => unit.type === 'transport')) {
+        totalAttackerLosses.transport = (totalAttackerLosses.transport || 0) + (Number(transport.quantity) || 0);
+        transport.quantity = 0;
+        this._recordHullCargo(transport, totalAttackerLosses, this._extraLossMap());
+      }
+      this.combatState.attackers = [];
+      changed = true;
+    }
+    if (!changed) return false;
+    this._syncCombatStateToGame();
+    if (this.combatState.defenders.length === 0 && this.combatState.attackers.length > 0) {
+      this.combatState.winner = 'attacker';
+      this._checkAirLanding();
+    } else if (this.combatState.attackers.length === 0) {
+      this.combatState.winner = 'defender';
+      this.combatState.phase = 'resolved';
+    }
+    return true;
+  }
+
+  _applyOpeningSeaRules() {
+    if (this._scrapUndefendedTransports()) return true;
+    return this._openAirSubStalemate();
   }
 
   _calculateBombardment() {
@@ -913,12 +978,24 @@ export class CombatUI {
     this.combatState.pendingSubFirstStrikeAttackerCasualties = defenderSubHits; // Attacker takes hits from defender subs
     this.combatState.pendingSubFirstStrikeDefenderCasualties = attackerSubHits; // Defender takes hits from attacker subs
     this.combatState.submarineFirstStrikeFired = true;
+    this.combatState.preStrikeAttackForce = summarizeCombatForce(attackers);
+    this.combatState.preStrikeDefenseForce = summarizeCombatForce(defenders);
 
     // If there are casualties to select, go to casualty selection
     if (attackerSubHits > 0 || defenderSubHits > 0) {
       // First strike casualties don't fire back - apply immediately with auto-selection
       this._applySubmarineFirstStrikeCasualties();
     } else {
+      this.gameState?.recordCombatTelemetry?.({
+        kind: 'combat',
+        step: 'surprise',
+        territory: this.currentTerritory,
+        roundIndex: this.combatState.combatRound || 1,
+        hits: { attack: attackerSubHits, defense: defenderSubHits },
+        attackForce: this.combatState.preStrikeAttackForce,
+        defenseForce: this.combatState.preStrikeDefenseForce,
+        casualties: { attacker: {}, defender: {} },
+      });
       this.combatState.phase = 'ready';
     }
 
@@ -968,49 +1045,46 @@ export class CombatUI {
     const { attackers, defenders, pendingSubFirstStrikeAttackerCasualties,
             pendingSubFirstStrikeDefenderCasualties, totalAttackerLosses, totalDefenderLosses } = this.combatState;
 
+    const strikeAttackerPicks = {};
+    const strikeDefenderPicks = {};
+
     // Apply attacker casualties from defender submarines (non-sub, non-air units only)
     if (pendingSubFirstStrikeAttackerCasualties > 0) {
       const nonSubAttackers = attackers.filter(u => u.type !== 'submarine' && !this.unitDefs[u.type]?.isAir);
       const selected = this._selectCheapestCasualties(nonSubAttackers, pendingSubFirstStrikeAttackerCasualties);
-      for (const [type, count] of Object.entries(selected)) {
-        // Handle battleship damage specially
-        if (type === 'battleship_damage') {
-          const battleship = attackers.find(u => u.type === 'battleship');
-          if (battleship) {
-            battleship.damaged = true;
-            battleship.damagedCount = (battleship.damagedCount || 0) + count;
-          }
-          continue;
-        }
-        const unit = attackers.find(u => u.type === type);
-        if (unit) {
-          unit.quantity -= count;
-          totalAttackerLosses[type] = (totalAttackerLosses[type] || 0) + count;
-        }
+      Object.assign(strikeAttackerPicks, selected);
+      const result = applyCasualtySelection(attackers, selected);
+      for (const hit of result.applied) {
+        totalAttackerLosses[hit.type] = (totalAttackerLosses[hit.type] || 0) + hit.taken;
       }
+      for (const unit of result.sunk) this._recordHullCargo(unit, totalAttackerLosses, this._extraLossMap());
     }
 
     // Apply defender casualties from attacker submarines (non-sub, non-air units only)
     if (pendingSubFirstStrikeDefenderCasualties > 0) {
       const nonSubDefenders = defenders.filter(u => u.type !== 'submarine' && !this.unitDefs[u.type]?.isAir);
       const selected = this._selectCheapestCasualties(nonSubDefenders, pendingSubFirstStrikeDefenderCasualties);
-      for (const [type, count] of Object.entries(selected)) {
-        // Handle battleship damage specially
-        if (type === 'battleship_damage') {
-          const battleship = defenders.find(u => u.type === 'battleship');
-          if (battleship) {
-            battleship.damaged = true;
-            battleship.damagedCount = (battleship.damagedCount || 0) + count;
-          }
-          continue;
-        }
-        const unit = defenders.find(u => u.type === type);
-        if (unit) {
-          unit.quantity -= count;
-          totalDefenderLosses[type] = (totalDefenderLosses[type] || 0) + count;
-        }
+      Object.assign(strikeDefenderPicks, selected);
+      const result = applyCasualtySelection(defenders, selected);
+      for (const hit of result.applied) {
+        this._addTypedLoss(totalDefenderLosses, hit.unit?.owner, hit.type, hit.taken);
       }
+      for (const unit of result.sunk) this._recordHullCargo(unit, totalDefenderLosses, this._extraLossMap());
     }
+
+    this.gameState?.recordCombatTelemetry?.({
+      kind: 'combat',
+      step: 'surprise',
+      territory: this.currentTerritory,
+      roundIndex: this.combatState.combatRound || 1,
+      hits: {
+        attack: pendingSubFirstStrikeDefenderCasualties || 0,
+        defense: pendingSubFirstStrikeAttackerCasualties || 0,
+      },
+      attackForce: this.combatState.preStrikeAttackForce || summarizeCombatForce(attackers),
+      defenseForce: this.combatState.preStrikeDefenseForce || summarizeCombatForce(defenders),
+      casualties: { attacker: strikeAttackerPicks, defender: strikeDefenderPicks },
+    });
 
     // Remove dead units
     this.combatState.attackers = attackers.filter(u => u.quantity > 0);
@@ -1071,9 +1145,30 @@ export class CombatUI {
   }
 
   _rollDice() {
+    if (this.combatState?.phase === 'resolved' || this.combatState?.winner === 'submerged') {
+      return { attackHits: 0, defenseHits: 0 };
+    }
+    if (this._openAirSubStalemate()) return { attackHits: 0, defenseHits: 0 };
     const { attackers, defenders } = this.combatState;
+    this.combatState.attackerPicksTouched = false;
+    this.combatState.defenderPicksTouched = false;
+    this.combatState.preRollAttackForce = summarizeCombatForce(attackers);
+    this.combatState.preRollDefenseForce = summarizeCombatForce(defenders);
     const attackerId = this.gameState.currentPlayer?.id;
     const defenderId = defenders[0]?.owner;
+
+    // A surprise strike already fired is that sub's only roll this round.
+    // Later rounds (combatRound > 1) roll those subs in this step.
+    const openingStrike = !!this.combatState.submarineFirstStrikeFired
+      && (this.combatState.combatRound || 1) === 1;
+    const attackPool = unitsSubsMayRoll(unitsForGeneralCombat(
+      attackers,
+      openingStrike && !!this.combatState.attackerSubsHaveFirstStrike,
+    ), defenders, this.unitDefs);
+    const defensePool = unitsSubsMayRoll(unitsForGeneralCombat(
+      defenders,
+      openingStrike && !!this.combatState.defenderSubsHaveFirstStrike,
+    ), attackers, this.unitDefs);
 
     // Roll for attackers
     const attackRolls = [];
@@ -1092,7 +1187,7 @@ export class CombatUI {
     const hasSuperSubs = attackerId && this.gameState.hasTech(attackerId, 'superSubs');
     const hasHeavyBombers = attackerId && this.gameState.hasTech(attackerId, 'heavyBombers');
 
-    for (const unit of attackers) {
+    for (const unit of attackPool) {
       const def = this.unitDefs[unit.type];
       if (!def) continue;
 
@@ -1147,7 +1242,7 @@ export class CombatUI {
     // Check defender technologies
     const defenderHasJets = defenderId && this.gameState.hasTech(defenderId, 'jets');
 
-    for (const unit of defenders) {
+    for (const unit of defensePool) {
       const def = this.unitDefs[unit.type];
       if (!def) continue;
       for (let i = 0; i < unit.quantity; i++) {
@@ -1191,12 +1286,14 @@ export class CombatUI {
     };
     this.gameState?.recordCombatTelemetry?.({
       kind: 'combat',
+      step: 'round',
       territory: this.currentTerritory,
+      roundIndex: this.combatState.combatRound || 1,
       hits: { attack: attackHits, defense: defenseHits },
       attackRolls: attackRolls.map((r) => r.roll),
       defenseRolls: defenseRolls.map((r) => r.roll),
-      attackForce: summarizeCombatForce(attackers),
-      defenseForce: summarizeCombatForce(defenders),
+      attackForce: this.combatState.preRollAttackForce || summarizeCombatForce(attackers),
+      defenseForce: this.combatState.preRollDefenseForce || summarizeCombatForce(defenders),
       survivors: summarizeCombatForce(attackers),
     });
     flushDiceBuffer(this.gameState);
@@ -1278,11 +1375,13 @@ export class CombatUI {
     if (casualtySide === 'attacker') {
       return {
         airHits: state.defenderAirHits || 0,
+        subHits: state.defenderSubHits || 0,
         canAirHitSubs: !!state.defenderHasDestroyer,
       };
     }
     return {
       airHits: state.attackerAirHits || 0,
+      subHits: state.attackerSubHits || 0,
       canAirHitSubs: !!state.attackerHasDestroyer,
     };
   }
@@ -1302,13 +1401,22 @@ export class CombatUI {
   _assignableCasualtyHits(units, pendingHits, profile) {
     const pending = Math.max(0, pendingHits || 0);
     const max = this._getMaxAbsorbableCasualties(units);
-    if (!profile || profile.canAirHitSubs || !(profile.airHits > 0)) {
-      return Math.min(pending, max);
+    const subHits = Math.min(Math.max(0, profile?.subHits || 0), pending);
+    const seaMax = this._getMaxAbsorbableCasualties((units || []).filter((unit) => {
+      const def = this.unitDefs?.[unit.type];
+      return def && def.isSea && !def.isAir;
+    }));
+    const subPlaced = Math.min(subHits, seaMax);
+    const rest = pending - subHits;
+    let restPlaced = Math.min(rest, Math.max(0, max - subPlaced));
+    if (profile && profile.canAirHitSubs === false && profile.airHits > 0) {
+      const nonSubMax = this._getMaxAbsorbableCasualties((units || []).filter((unit) => unit.type !== 'submarine'));
+      const airHits = Math.min(Math.max(0, profile.airHits), rest);
+      const nonAir = rest - airHits;
+      const subRoom = Math.max(0, max - nonSubMax);
+      restPlaced = Math.min(rest, nonSubMax + Math.min(subRoom, nonAir));
     }
-    const nonSubMax = this._getMaxAbsorbableCasualties((units || []).filter((u) => u.type !== 'submarine'));
-    const nonAirHits = Math.max(0, pending - profile.airHits);
-    const subRoom = Math.max(0, max - nonSubMax);
-    return Math.min(pending, nonSubMax + Math.min(subRoom, nonAirHits));
+    return Math.min(pending, subPlaced + restPlaced);
   }
 
   _effectiveCasualtyCount(casualtySide) {
@@ -1340,22 +1448,27 @@ export class CombatUI {
     // Auto-select cheapest units as casualties
     // A&A Rule: Submarine hits can only be assigned to sea units, not air units.
     // Aircraft hits can only be assigned to subs when that side has a destroyer.
+    // A side the player already edited is left alone. A new roll clears the flag.
     const { attackers, defenders, pendingAttackerCasualties, pendingDefenderCasualties,
             attackerSubHits, defenderSubHits } = this.combatState;
     const onAttackers = this._airVsSubProfile('attacker');
     const onDefenders = this._airVsSubProfile('defender');
 
-    // Attacker casualties: defenderSubHits must go to non-air units
-    this.combatState.selectedAttackerCasualties = this._selectCasualtiesWithSubHits(
-      attackers, pendingAttackerCasualties, defenderSubHits || 0,
-      { ...this._casualtyDefaultOptions(attackers), ...onAttackers },
-    );
+    if (!this.combatState.attackerPicksTouched) {
+      // Attacker casualties: defenderSubHits must go to non-air units
+      this.combatState.selectedAttackerCasualties = this._selectCasualtiesWithSubHits(
+        attackers, pendingAttackerCasualties, defenderSubHits || 0,
+        { ...this._casualtyDefaultOptions(attackers), ...onAttackers },
+      );
+    }
 
-    // Defender casualties: attackerSubHits must go to non-air units
-    this.combatState.selectedDefenderCasualties = this._selectCasualtiesWithSubHits(
-      defenders, pendingDefenderCasualties, attackerSubHits || 0,
-      { ...this._casualtyDefaultOptions(defenders), ...onDefenders },
-    );
+    if (!this.combatState.defenderPicksTouched) {
+      // Defender casualties: attackerSubHits must go to non-air units
+      this.combatState.selectedDefenderCasualties = this._selectCasualtiesWithSubHits(
+        defenders, pendingDefenderCasualties, attackerSubHits || 0,
+        { ...this._casualtyDefaultOptions(defenders), ...onDefenders },
+      );
+    }
   }
 
   // Human sides damage an undamaged battleship before spending a cheaper hull.
@@ -1376,18 +1489,27 @@ export class CombatUI {
   }
 
   // Copies quantities so a later pass cannot spend a hull twice.
-  // A battleship damaged in an earlier pass stays damaged.
+  // The copy is spent with the same stack walk as Confirm, so the
+  // "left with" line matches the next round and the saved board.
   _unitsAfterCasualtyPick(units, picked) {
-    return (units || []).map((u) => {
-      if (u.type === 'battleship') {
-        const destroyed = picked?.battleship || 0;
-        const damaged = picked?.battleship_damage || 0;
-        const quantity = u.quantity - destroyed;
-        const damagedCount = Math.min(Math.max(0, quantity), (u.damagedCount || 0) + damaged);
-        return { ...u, quantity, damagedCount };
-      }
-      return { ...u, quantity: u.quantity - (picked?.[u.type] || 0) };
-    }).filter((u) => u.quantity > 0);
+    const copy = (units || []).map((u) => ({
+      ...u,
+      aircraft: Array.isArray(u.aircraft) ? u.aircraft.map((craft) => ({ ...craft })) : u.aircraft,
+      cargo: Array.isArray(u.cargo) ? u.cargo.map((item) => ({ ...item })) : u.cargo,
+    }));
+    applyCasualtySelection(copy, picked);
+    return copy.filter((u) => (Number(u.quantity) || 0) > 0);
+  }
+
+  _leftWithLine(units, selected) {
+    const left = livingForcePicture(this._unitsAfterCasualtyPick(units, selected));
+    if (!left.length) return 'Left: none';
+    const text = left.map((row) => {
+      const name = formatUnitName(row.type);
+      const dmg = row.damagedCount ? ` (${row.damagedCount} damaged)` : '';
+      return `${row.quantity}x ${name}${dmg}`;
+    }).join(', ');
+    return `Left: ${text}`;
   }
 
   // Select casualties accounting for submarine hits (which can't hit air)
@@ -1515,6 +1637,18 @@ export class CombatUI {
     destroyPredamaged();
     destroyJustDamaged();
 
+    // A transport is a valid target once nothing else can take the hit.
+    // An air hit against a submarine and a transport lands on the transport.
+    if (remaining > 0) {
+      const transports = units.filter((unit) => unit.type === 'transport' && unit.quantity > 0);
+      for (const unit of transports) {
+        if (remaining <= 0) break;
+        const take = Math.min(unit.quantity, remaining);
+        selected.transport = (selected.transport || 0) + take;
+        remaining -= take;
+      }
+    }
+
     return selected;
   }
 
@@ -1571,8 +1705,12 @@ export class CombatUI {
       const carrierInBattle = destination === this.currentTerritory && (option?.isCarrier || loadedHere);
 
       if (airUnit.landingOptions.length === 0) {
-        crashes[airUnit.type] = (crashes[airUnit.type] || 0) + airUnit.quantity;
-        console.log(`${airUnit.type} crashed - no valid landing location`);
+        if (this.combatState.isRetreating) {
+          // Already parked for the end-of-NCM check. Do not delete it.
+        } else {
+          crashes[airUnit.type] = (crashes[airUnit.type] || 0) + airUnit.quantity;
+          console.log(`${airUnit.type} crashed - no valid landing location`);
+        }
       } else if (destination && destination !== this.currentTerritory) {
         // Board apply already moved these. Still drop them from attackers
         // so _finalizeCombat cannot write them back onto the battle hex.
@@ -1762,69 +1900,55 @@ export class CombatUI {
     const { attackers, defenders, selectedAttackerCasualties, selectedDefenderCasualties,
             totalAttackerLosses, totalDefenderLosses, pendingBombardmentLosses } = this.combatState;
 
-    // Apply attacker casualties and track total losses
-    for (const [type, count] of Object.entries(selectedAttackerCasualties)) {
-      // Handle battleship damage specially
-      if (type === 'battleship_damage') {
-        const battleship = attackers.find(u => u.type === 'battleship');
-        if (battleship) {
-          battleship.damaged = true;
-          battleship.damagedCount = (battleship.damagedCount || 0) + count;
-        }
-        continue;
-      }
-      const unit = attackers.find(u => u.type === type);
-      if (unit) {
-        unit.quantity -= count;
-        totalAttackerLosses[type] = (totalAttackerLosses[type] || 0) + count;
-        this._recordHullCargo(unit, totalAttackerLosses, this._extraLossMap());
-      }
+    // Apply attacker casualties across every stack of the type, including
+    // an explicit transport pick. Damage stays on the battleship hull.
+    const attackerApplied = applyCasualtySelection(attackers, selectedAttackerCasualties);
+    for (const hit of attackerApplied.applied) {
+      totalAttackerLosses[hit.type] = (totalAttackerLosses[hit.type] || 0) + hit.taken;
+    }
+    for (const unit of attackerApplied.sunk) {
+      this._recordHullCargo(unit, totalAttackerLosses, this._extraLossMap());
     }
 
-    // Apply defender casualties and track total losses
-    for (const [type, count] of Object.entries(selectedDefenderCasualties)) {
-      // Handle battleship damage specially
-      if (type === 'battleship_damage') {
-        const battleship = defenders.find(u => u.type === 'battleship');
-        if (battleship) {
-          battleship.damaged = true;
-          battleship.damagedCount = (battleship.damagedCount || 0) + count;
-        }
-        continue;
-      }
-      const unit = defenders.find(u => u.type === type);
-      if (unit) {
-        unit.quantity -= count;
-        this._addTypedLoss(totalDefenderLosses, unit.owner, type, count);
-        this._recordHullCargo(unit, totalDefenderLosses, this._extraLossMap());
-      }
+    const defenderApplied = applyCasualtySelection(defenders, selectedDefenderCasualties);
+    for (const hit of defenderApplied.applied) {
+      this._addTypedLoss(totalDefenderLosses, hit.unit?.owner, hit.type, hit.taken);
+    }
+    for (const unit of defenderApplied.sunk) {
+      this._recordHullCargo(unit, totalDefenderLosses, this._extraLossMap());
     }
 
     // A&A Anniversary Rule: Apply pending bombardment casualties after first round
     // Bombardment casualties fired back in combat, now they die (losses already tracked)
     if (pendingBombardmentLosses) {
-      for (const [type, count] of Object.entries(pendingBombardmentLosses)) {
-        const unit = defenders.find(u => u.type === type);
-        if (unit) {
-          unit.quantity -= count;
-          // Losses were already tracked when bombardment was applied
-        }
-      }
+      applyCasualtySelection(defenders, pendingBombardmentLosses);
       // Clear pending bombardment losses - only applied once (first round)
       this.combatState.pendingBombardmentLosses = null;
     }
 
-    // Remove dead units
-    this.combatState.attackers = attackers.filter(u => u.quantity > 0);
-    this.combatState.defenders = defenders.filter(u => u.quantity > 0);
+    this.gameState?.recordCombatTelemetry?.({
+      kind: 'combat',
+      step: 'casualties',
+      territory: this.currentTerritory,
+      roundIndex: this.combatState.combatRound || 1,
+      attackForce: this.combatState.preRollAttackForce || summarizeCombatForce(attackers),
+      defenseForce: this.combatState.preRollDefenseForce || summarizeCombatForce(defenders),
+      casualties: {
+        attacker: selectedAttackerCasualties,
+        defender: selectedDefenderCasualties,
+      },
+    });
 
-    // A&A Anniversary Rule: Transports are defenseless
-    // Check if all non-transport units are destroyed - transports are then auto-destroyed
+    // Remove dead units
+    this.combatState.attackers = attackers.filter(u => (Number(u.quantity) || 0) > 0);
+    this.combatState.defenders = defenders.filter(u => (Number(u.quantity) || 0) > 0);
+
+    // Transports with no escort are removed when the enemy can still hit them.
     const attackerCombatUnits = this.combatState.attackers.filter(u => u.type !== 'transport');
     const defenderCombatUnits = this.combatState.defenders.filter(u => u.type !== 'transport');
 
-    // Auto-destroy transports if no combat units remain
-    if (attackerCombatUnits.length === 0 && this.combatState.attackers.length > 0) {
+    if (attackerCombatUnits.length === 0 && this.combatState.attackers.length > 0
+      && enemyCanHitTransports(this.combatState.defenders, this.unitDefs, 'defense')) {
       // Attacker only has transports left - they are destroyed
       for (const transport of this.combatState.attackers.filter(u => u.type === 'transport')) {
         totalAttackerLosses['transport'] = (totalAttackerLosses['transport'] || 0) + transport.quantity;
@@ -1833,7 +1957,8 @@ export class CombatUI {
       }
       this.combatState.attackers = [];
     }
-    if (defenderCombatUnits.length === 0 && this.combatState.defenders.length > 0) {
+    if (defenderCombatUnits.length === 0 && this.combatState.defenders.length > 0
+      && enemyCanHitTransports(this.combatState.attackers, this.unitDefs, 'attack')) {
       // Defender only has transports left - they are destroyed
       for (const transport of this.combatState.defenders.filter(u => u.type === 'transport')) {
         this._addTypedLoss(totalDefenderLosses, transport.owner, 'transport', transport.quantity);
@@ -1842,6 +1967,11 @@ export class CombatUI {
       }
       this.combatState.defenders = [];
     }
+
+    this.combatState.lastCasualtyReport = {
+      attacker: livingForcePicture(this.combatState.attackers),
+      defender: livingForcePicture(this.combatState.defenders),
+    };
 
     // IMMEDIATE UPDATE: Sync casualties to gameState so map updates in real-time
     this._syncCombatStateToGame();
@@ -1853,6 +1983,8 @@ export class CombatUI {
     } else if (this.combatState.attackers.length === 0) {
       this.combatState.winner = 'defender';
       this._checkAirLanding();
+    } else if (this._openAirSubStalemate()) {
+      this._syncCombatStateToGame();
     } else {
       // Continue combat
       this.combatState.phase = 'ready';
@@ -2201,6 +2333,7 @@ export class CombatUI {
     this.gameState?.pauseNotifications?.();
     try {
       while (this.combatState.phase !== 'resolved' && this.combatState.phase !== 'airLanding') {
+        if (this._openAirSubStalemate()) break;
         if (this._failCloseIfAttackerWiped({ persist: true })) break;
         if (this.combatState.phase === 'bombardment') {
           this._fireBombardment();
@@ -2512,7 +2645,7 @@ export class CombatUI {
             <span class="air-landing-title">${isRetreating ? 'Retreat - ' : ''}Air Unit Landing Required</span>
           </div>
           <div class="air-landing-desc">
-            ${isRetreating ? 'Your forces are retreating. ' : ''}Air units must land in a territory that was <strong>friendly at the start of your turn</strong>.
+            ${isRetreating ? 'Your forces are retreating. ' : ''}Air units must land on friendly land within range. Fighters and tactical bombers may land on a friendly carrier. Bombers never land at sea.
             Newly captured territories are NOT valid landing locations.
           </div>
       `;
@@ -2559,8 +2692,8 @@ export class CombatUI {
               </select>
             ` : `
               <div class="air-landing-crash">
-                <span class="crash-icon">💥</span>
-                <span class="crash-text">No valid landing - Unit will CRASH!</span>
+                <span class="crash-icon">${isRetreating ? '✈' : '💥'}</span>
+                <span class="crash-text">${isRetreating ? NO_LEGAL_AIR_LANDING_NOTE : 'No valid landing - Unit will CRASH!'}</span>
               </div>
             `}
           </div>
@@ -2747,8 +2880,13 @@ export class CombatUI {
 
       // Show submerge option if subs can submerge (no enemy destroyer)
       if ((attackerSubsCanSubmerge && attackerSubs > 0) || (defenderSubsCanSubmerge && defenderSubs > 0)) {
+        const alreadyStruck = !!this.combatState.submarineFirstStrikeFired
+          && (this.combatState.combatRound || 1) === 1;
+        const submergeHint = alreadyStruck
+          ? '🚢 Submarines already fired this round. Submerge to leave the battle:'
+          : '🚢 Submarines can submerge instead of fighting:';
         html += `<div class="submarine-submerge-options" style="margin-bottom: 10px; padding: 8px; background: rgba(100,149,237,0.1); border-radius: 4px;">`;
-        html += `<div style="font-size: 11px; color: #6495ED; margin-bottom: 6px;">🚢 Submarines can submerge instead of fighting:</div>`;
+        html += `<div style="font-size: 11px; color: #6495ED; margin-bottom: 6px;">${submergeHint}</div>`;
         html += `<div style="display: flex; gap: 8px; flex-wrap: wrap;">`;
 
         if (attackerSubsCanSubmerge && attackerSubs > 0) {
@@ -3155,7 +3293,7 @@ export class CombatUI {
                 </option>`
               ).join('')}
             </select>
-          ` : `<div class="air-landing-crash"><span class="crash-text">No valid landing — unit will crash</span></div>`}
+          ` : `<div class="air-landing-crash"><span class="crash-text">${isRetreating ? NO_LEGAL_AIR_LANDING_NOTE : 'No valid landing — unit will crash'}</span></div>`}
         </div>`;
     }
     html += `</div>`;
@@ -3273,9 +3411,23 @@ export class CombatUI {
       return '<div class="no-units">No units remaining</div>';
     }
 
+    const qtyOf = (list, type) => (list || []).reduce((sum, unit) => (
+      unit?.type === type ? sum + (Number(unit.quantity) || 0) : sum
+    ), 0);
+    const damagedOf = (list, type) => (list || []).reduce((sum, unit) => {
+      if (unit?.type !== type) return sum;
+      const qty = Math.max(0, Number(unit.quantity) || 0);
+      if (qty <= 0) return sum;
+      const marked = unit.damaged ? qty : 0;
+      return sum + Math.min(qty, Math.max(0, Number(unit.damagedCount) || marked));
+    }, 0);
+    const damageMark = (n) => (n > 0
+      ? `<span class="combat-damage-mark" title="Damaged battleship">${n} damaged</span>`
+      : '');
+
     // Calculate artillery support pairing for attackers
-    const attackerArtillery = attackers.find(u => u.type === 'artillery')?.quantity || 0;
-    const attackerInfantry = attackers.find(u => u.type === 'infantry')?.quantity || 0;
+    const attackerArtillery = qtyOf(attackers, 'artillery');
+    const attackerInfantry = qtyOf(attackers, 'infantry');
     const pairedCount = Math.min(attackerArtillery, attackerInfantry);
     const extraInfantry = attackerInfantry - pairedCount;
     const extraArtillery = attackerArtillery - pairedCount;
@@ -3351,9 +3503,7 @@ export class CombatUI {
     });
 
     for (const unitType of sortedTypes) {
-      const attackerUnit = attackers.find(u => u.type === unitType);
-      const defenderUnit = defenders.find(u => u.type === unitType);
-      const defendQtyCheck = defenderUnit?.quantity || 0;
+      const defendQtyCheck = qtyOf(defenders, unitType);
 
       // Skip infantry and artillery if they're fully paired AND defender doesn't have any
       // Don't skip if defender has these units - they need to be shown
@@ -3365,8 +3515,10 @@ export class CombatUI {
       const attackerIcon = attackerPlayer ? getUnitIconPath(unitType, attackerPlayer.id) : null;
       const defenderIcon = defenderPlayer ? getUnitIconPath(unitType, defenderPlayer.id) : null;
 
-      let attackQty = attackerUnit?.quantity || 0;
-      const defendQty = defenderUnit?.quantity || 0;
+      let attackQty = qtyOf(attackers, unitType);
+      const defendQty = qtyOf(defenders, unitType);
+      const attackDamaged = damagedOf(attackers, unitType);
+      const defendDamaged = damagedOf(defenders, unitType);
 
       // Adjust for unpaired infantry/artillery
       if (unitType === 'infantry' && pairedCount > 0) {
@@ -3407,7 +3559,8 @@ export class CombatUI {
             ${showDice ? renderInlineDice(attackerDice) : ''}
             <div class="combat-unit-icons" style="--player-color: ${attackerPlayer.color}">
               <span class="combat-unit-qty">${attackQty}</span>
-              ${attackerIcon ? `<img src="${attackerIcon}" class="combat-unit-icon" alt="${unitType}">` : ''}
+              ${damageMark(attackDamaged)}
+              ${attackerIcon ? `<img src="${attackerIcon}" class="combat-unit-icon${attackDamaged ? ' is-damaged' : ''}" alt="${unitType}">` : ''}
             </div>
             <span class="combat-unit-stat">A${attackValue}</span>
           </div>`;
@@ -3430,8 +3583,9 @@ export class CombatUI {
               ${defendQty > 0 ? `
                 <span class="combat-unit-stat">D${def?.defense || 0}</span>
                 <div class="combat-unit-icons" style="--player-color: ${defenderPlayer?.color || '#888'}">
-                  ${defenderIcon ? `<img src="${defenderIcon}" class="combat-unit-icon" alt="${unitType}">` : ''}
+                  ${defenderIcon ? `<img src="${defenderIcon}" class="combat-unit-icon${defendDamaged ? ' is-damaged' : ''}" alt="${unitType}">` : ''}
                   <span class="combat-unit-qty">${defendQty}</span>
+                  ${damageMark(defendDamaged)}
                 </div>
                 ${showDice ? renderInlineDice(defenderDice) : ''}
               ` : ''}
@@ -3704,6 +3858,7 @@ export class CombatUI {
           <div class="casualty-units-compact">
             ${this._renderCasualtyUnits(attackers, selectedAttackerCasualties, 'attacker')}
           </div>
+          <div class="casualty-left-with">${this._leftWithLine(attackers, selectedAttackerCasualties)}</div>
         ` : `
           <div class="casualty-none">
             <span class="casualty-none-icon">✓</span>
@@ -3731,6 +3886,7 @@ export class CombatUI {
           <div class="casualty-units-compact">
             ${this._renderCasualtyUnits(defenders, selectedDefenderCasualties, 'defender')}
           </div>
+          <div class="casualty-left-with">${this._leftWithLine(defenders, selectedDefenderCasualties)}</div>
         ` : `
           <div class="casualty-none">
             <span class="casualty-none-icon">✓</span>
@@ -3749,8 +3905,9 @@ export class CombatUI {
     let max = 0;
     for (const unit of units) {
       if (unit.quantity <= 0) continue;
-      // Skip transports and factories (can't be casualties)
-      if (unit.type === 'transport' || unit.type === 'factory') continue;
+      // Factories are captured. Transports can take a hit when they are
+      // the only legal target; an undefended transport is removed with no dice.
+      if (unit.type === 'factory') continue;
 
       if (unit.type === 'battleship') {
         // Battleships can take 2 hits each (1 damage + 1 destroy)
@@ -3767,11 +3924,29 @@ export class CombatUI {
   }
 
   _renderCasualtyUnits(units, selected, side, readonly = false) {
-    // A&A Anniversary: Transports are defenseless and cannot be selected as casualties
-    // Factories are captured, not destroyed - exclude from casualties
+    // Factories are captured, not destroyed. Transports stay selectable so an
+    // edited pick is the hull that Confirm removes. Stacks of one type share
+    // one row; the count is the sum, which is what apply spends.
     let html = '';
+    const living = (units || []).filter((u) => (Number(u.quantity) || 0) > 0 && u.type !== 'factory');
+    const rows = [];
+    const seen = new Set();
+    for (const unit of living) {
+      if (seen.has(unit.type)) continue;
+      seen.add(unit.type);
+      const stacks = living.filter((row) => row.type === unit.type);
+      rows.push({
+        type: unit.type,
+        owner: unit.owner,
+        quantity: stacks.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0),
+        damagedCount: stacks.reduce((sum, row) => sum + Math.min(
+          Number(row.quantity) || 0,
+          Math.max(0, Number(row.damagedCount) || 0),
+        ), 0),
+      });
+    }
 
-    for (const u of units.filter(u => u.quantity > 0 && u.type !== 'transport' && u.type !== 'factory')) {
+    for (const u of rows) {
       const def = this.unitDefs[u.type];
       const imageSrc = u.owner ? getUnitIconPath(u.type, u.owner) : (def?.image ? `assets/units/${def.image}` : null);
 
@@ -3803,7 +3978,7 @@ export class CombatUI {
         html += `
           <div class="casualty-unit">
             <div class="casualty-unit-info">
-              ${imageSrc ? `<img src="${imageSrc}" class="casualty-icon" alt="battleship" title="Battleship">` : ''}
+              ${imageSrc ? `<img src="${imageSrc}" class="casualty-icon${(u.damagedCount || 0) > 0 ? ' damaged' : ''}" alt="battleship" title="Battleship">` : ''}
               <span class="casualty-name">Battleship</span>
               <span class="casualty-avail">(${u.quantity})</span>
             </div>
@@ -4087,13 +4262,16 @@ export class CombatUI {
     const units = side === 'attacker' ? attackers : defenders;
     const pendingCasualties = side === 'attacker' ? pendingAttackerCasualties : pendingDefenderCasualties;
     const selectedCasualties = side === 'attacker' ? selectedAttackerCasualties : selectedDefenderCasualties;
+    const stacksOf = (type) => (units || []).filter((u) => u?.type === type && (Number(u.quantity) || 0) > 0);
 
     // Special handling for battleship_damage (refers to undamaged battleships taking damage)
     if (unitType === 'battleship_damage') {
-      const battleship = units.find(u => u.type === 'battleship');
-      if (!battleship) return;
+      const battleships = stacksOf('battleship');
+      if (!battleships.length) return;
 
-      const undamagedCount = battleship.quantity - (battleship.damagedCount || 0);
+      const undamagedCount = battleships.reduce((sum, battleship) => (
+        sum + Math.max(0, (Number(battleship.quantity) || 0) - (Number(battleship.damagedCount) || 0))
+      ), 0);
       const current = selectedCasualties['battleship_damage'] || 0;
       const newValue = Math.max(0, Math.min(undamagedCount, current + delta));
 
@@ -4104,19 +4282,21 @@ export class CombatUI {
 
       if (newTotal <= effectivePending) {
         selectedCasualties['battleship_damage'] = newValue;
+        if (side === 'attacker') this.combatState.attackerPicksTouched = true;
+        else this.combatState.defenderPicksTouched = true;
         this._render();
       }
       return;
     }
 
-    const unit = units.find(u => u.type === unitType);
-    if (!unit) return;
+    const stacks = stacksOf(unitType);
+    if (!stacks.length) return;
 
-    // For battleship destruction, account for damage selections
-    let maxSelectable = unit.quantity;
+    // For battleship destruction, account for damage selections across stacks.
+    let maxSelectable = stacks.reduce((sum, unit) => sum + (Number(unit.quantity) || 0), 0);
     if (unitType === 'battleship') {
-      const damagedCount = unit.damagedCount || 0;
-      const undamagedCount = unit.quantity - damagedCount;
+      const damagedCount = stacks.reduce((sum, unit) => sum + (Number(unit.damagedCount) || 0), 0);
+      const undamagedCount = maxSelectable - damagedCount;
       const pendingDamage = selectedCasualties['battleship_damage'] || 0;
       // Can destroy: damaged + (undamaged - pendingDamage)
       maxSelectable = damagedCount + Math.max(0, undamagedCount - pendingDamage);
@@ -4125,6 +4305,15 @@ export class CombatUI {
     const current = selectedCasualties[unitType] || 0;
     const newValue = Math.max(0, Math.min(maxSelectable, current + delta));
     if (unitType === 'submarine' && newValue > this._maxLegalSubSelections(side)) return;
+    if (this.unitDefs?.[unitType]?.isAir && newValue > current) {
+      const profile = this._airVsSubProfile(side);
+      const subBudget = Math.min(Math.max(0, profile.subHits || 0), pendingCasualties);
+      const airCap = Math.max(0, pendingCasualties - subBudget);
+      const airNow = Object.entries(selectedCasualties).reduce((sum, [type, count]) => (
+        sum + (this.unitDefs?.[type]?.isAir ? (Number(count) || 0) : 0)
+      ), 0);
+      if (airNow - current + newValue > airCap) return;
+    }
 
     // Check we don't exceed required casualties (using max absorbable)
     const effectivePending = this._effectiveCasualtyCount(side);
@@ -4133,6 +4322,8 @@ export class CombatUI {
 
     if (newTotal <= effectivePending) {
       selectedCasualties[unitType] = newValue;
+      if (side === 'attacker') this.combatState.attackerPicksTouched = true;
+      else this.combatState.defenderPicksTouched = true;
       this._render();
     }
   }

@@ -79,6 +79,7 @@ export function buildLandingPlan(airUnitsToLand = [], selectedLandings = {}) {
       type: unit.type,
       quantity: unit.quantity || 1,
       destination,
+      ...(unit.parked ? { parked: true } : {}),
     });
   });
   return plan;
@@ -91,6 +92,7 @@ export function upsertPendingAirLanding(pending, {
   quantity = 1,
   destination = null,
   applied = false,
+  parked = false,
 } = {}) {
   const list = Array.isArray(pending) ? pending.map((entry) => ({
     originTerritory: entry.originTerritory,
@@ -110,6 +112,7 @@ export function upsertPendingAirLanding(pending, {
     if (destination) existing.destination = destination;
     if (quantity) existing.quantity = quantity;
     if (applied) existing.applied = true;
+    if (parked) existing.parked = true;
   } else {
     group.units.push({
       id: key,
@@ -117,6 +120,7 @@ export function upsertPendingAirLanding(pending, {
       quantity,
       destination,
       applied: !!applied,
+      ...(parked ? { parked: true } : {}),
     });
   }
   return list;
@@ -308,26 +312,35 @@ export function applyAirLandingPlan({
       }
       continue;
     }
+    const requested = item.quantity || 1;
     const taken = takeAirUnitsFromTerritory(originUnits, {
       type: item.type,
       owner,
-      quantity: item.quantity || 1,
+      quantity: requested,
     });
-    if (taken <= 0) continue;
+    const parkedOffBoard = taken <= 0 && (item.parked || (gameState?.pendingAirLandings || []).some((entry) => (
+      entry.originTerritory === originTerritory
+      && (entry.units || []).some((unit) => (
+        unit.type === item.type && unit.parked && !unit.applied && (Number(unit.quantity) || 0) > 0
+      ))
+    )));
+    const moving = taken > 0 ? taken : (parkedOffBoard ? requested : 0);
+    if (moving <= 0) continue;
 
     const destT = territoryByName[item.destination];
     const placed = addMovedAirToTerritory(units, {
       destination: item.destination,
       type: item.type,
       owner,
-      quantity: taken,
+      quantity: moving,
       destIsWater: !!destT?.isWater,
       unitDefs,
       gameState,
     });
-    const unplaced = taken - placed;
-    if (unplaced > 0) {
+    const unplaced = moving - placed;
+    if (unplaced > 0 && taken > 0) {
       // A sea landing with no carrier room must not delete the aircraft.
+      // Parked aircraft that could not land stay in pendingAirLandings.
       const back = units[originTerritory] || [];
       const existing = back.find((unit) => unit.type === item.type && unit.owner === owner && unit.moved);
       if (existing) existing.quantity = (existing.quantity || 0) + unplaced;
@@ -540,6 +553,8 @@ export function assignLandingToIndexes(units, indexes, destination, selections =
 }
 
 // Origin is assigned only when that territory is already a legal landing.
+// Friendly land is legal. A carrier sea zone is legal for a fighter or
+// tactical bomber. A bomber is never sent back to a sea zone.
 export function returnToBaseAssignments(units, originsByType, selections = {}) {
   const next = { ...(selections || {}) };
   const unresolved = [];
@@ -547,8 +562,10 @@ export function returnToBaseAssignments(units, originsByType, selections = {}) {
     const key = landingKeyFor(unit, index);
     if (next[key]) return;
     const origin = originsByType?.[unit.type]?.origin || '';
-    const legal = !!origin && (unit.landingOptions || []).some((opt) => opt.territory === origin);
-    if (legal) next[key] = origin;
+    const option = (unit.landingOptions || []).find((opt) => opt?.territory === origin);
+    const carrierOk = !!option?.isCarrier && unit?.type !== 'bomber';
+    const landOk = !!option && !option.isCarrier;
+    if (origin && (landOk || carrierOk)) next[key] = origin;
     else unresolved.push(key);
   });
   return { selections: next, unresolved };

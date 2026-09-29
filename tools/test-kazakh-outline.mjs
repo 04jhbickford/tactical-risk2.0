@@ -1,4 +1,4 @@
-// V2.81.57-unified.20.1 — K1: Kazakh's outline has no interior edge.
+// V2.81.57-unified.20.2 — K1: Kazakh's outline has no interior edge.
 // The unified.18 stem cut left a short out-and-back at the south edge.
 // That stub is stroked with the country hairline, so it reads as a line
 // through the fill. The ring in data/territories.json and map/polygons.txt
@@ -94,7 +94,7 @@ const kazakh = data.find((row) => row.name === 'Kazakh S.S.R.');
 const txt = parsePolygonsLine(readFileSync(join(root, 'map/polygons.txt'), 'utf8'), 'Kazakh S.S.R.');
 const ring = kazakh?.polygons?.[0] || [];
 
-check('stamp is unified.20.1', GAME_VERSION === 'V2.81.57-unified.20.1');
+check('stamp is unified.20.2', GAME_VERSION === 'V2.81.57-unified.20.2');
 check('Kazakh is one ring', kazakh && kazakh.polygons.length === 1 && !kazakh.isWater);
 check('map polygons.txt matches territories.json',
   txt && JSON.stringify(txt) === JSON.stringify(ring));

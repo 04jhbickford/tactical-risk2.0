@@ -1,6 +1,7 @@
-// V2.81.57-unified.20.1 — A1: seeded auto battles do not score extra hits.
+// V2.81.57-unified.20.2 — A1: seeded auto battles do not score extra hits.
 // Per step: dice <= eligible units (heavy bombers count as 2), hits <= dice,
 // and every removed piece was a real unit on the board.
+// A submarine rolls once per round. A surprise strike replaces the general step.
 // Run: node tools/test-auto-battle-hits.mjs
 
 import { readFileSync } from 'node:fs';
@@ -61,6 +62,7 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const { GAME_VERSION, SCHEMA_VERSION } = await import(pathToFileURL(join(root, 'src/version.js')));
 const { GameState, GAME_PHASES, TURN_PHASES } = await import(pathToFileURL(join(root, 'src/state/gameState.js')));
 const { CombatUI } = await import(pathToFileURL(join(root, 'src/ui/combatUI.js')));
+const { unitIsFirstStrikeTarget } = await import(pathToFileURL(join(root, 'src/state/combatUnits.js')));
 const unitDefs = JSON.parse(readFileSync(join(root, 'data/units.json'), 'utf8'));
 
 let failures = 0;
@@ -71,7 +73,7 @@ const check = (label, cond, extra) => {
   } else console.log('ok  :', label);
 };
 
-check('stamp is unified.20.1', GAME_VERSION === 'V2.81.57-unified.20.1');
+check('stamp is unified.20.2', GAME_VERSION === 'V2.81.57-unified.20.2');
 check('schema stays 11', SCHEMA_VERSION === 11);
 
 function mulberry32(seed) {
@@ -233,9 +235,11 @@ function armDiceLive(gs, rng, territory) {
           }
         }
       }
-      current = { context, side, dice: 0, hits: 0, eligible };
+      current = { context, side, dice: 0, hits: 0, eligible, byUnit: {} };
       rounds.push(current);
     }
+    const unit = typeof ctx === 'object' && ctx ? ctx.unit : null;
+    if (unit) current.byUnit[unit] = (current.byUnit[unit] || 0) + 1;
     current.dice += 1;
     if (Number.isFinite(need) && face <= need) current.hits += 1;
     return face;
@@ -356,7 +360,17 @@ const SETUPS = [
 
 let battles = 0;
 let roundsPlayed = 0;
-let combinedSubOver = 0;
+let noDestroyerOpeningRounds = 0;
+let destroyerPresentOpeningRounds = 0;
+
+function subDice(steps, context, side) {
+  let n = 0;
+  for (const step of steps) {
+    if (step.context !== context || step.side !== side) continue;
+    n += context === 'sub' ? step.dice : (step.byUnit?.submarine || 0);
+  }
+  return n;
+}
 
 function playAiBattleLive(setup, seed) {
   const gs = makeState(seed);
@@ -367,14 +381,87 @@ function playAiBattleLive(setup, seed) {
   }
   gs.combatQueue = [setup.territory];
   const beforeAll = pieceMap(Object.values(gs.units).flat());
+  const allies = (a, b) => gs.areAllies(a, b);
   let guard = 0;
   let result = null;
   while (guard++ < 24) {
     const before = pieceMap(Object.values(gs.units).flat());
+    const subsAtStart = {
+      attacker: countType(gs.units[setup.territory], null, 'submarine', 'attacker', gs.currentPlayer.id, allies),
+      defender: countType(gs.units[setup.territory], null, 'submarine', 'defender', gs.currentPlayer.id, allies),
+    };
     const rng = mulberry32((seed * 1000) + guard);
     const steps = armDiceLive(gs, rng, setup.territory);
+    const attackerId = gs.currentPlayer.id;
+    const seaTarget = { attacker: false, defender: false };
+    for (const unit of gs.units[setup.territory] || []) {
+      if ((Number(unit?.quantity) || 0) <= 0) continue;
+      if (!unitIsFirstStrikeTarget(unit, unitDefs)) continue;
+      if (unit.owner === attackerId) seaTarget.defender = true;
+      else if (!gs.areAllies(attackerId, unit.owner)) seaTarget.attacker = true;
+    }
     result = gs.resolveCombat(setup.territory, unitDefs);
     roundsPlayed += 1;
+    for (const side of ['attacker', 'defender']) {
+      const strike = subDice(steps, 'sub', side);
+      const general = subDice(steps, 'combat', side);
+      const expected = seaTarget[side] ? subsAtStart[side] : 0;
+      if (strike + general !== expected || (strike > 0 && general > 0)) {
+        return {
+          ok: false,
+          why: 'sub-not-one-roll',
+          setup: setup.name,
+          seed,
+          round: guard,
+          side,
+          strike,
+          general,
+          living: subsAtStart[side],
+          expected,
+        };
+      }
+    }
+    if (setup.name === 'sea-subs-no-destroyer' && guard === 1) {
+      const generalSubs = subDice(steps, 'combat', 'attacker') + subDice(steps, 'combat', 'defender');
+      if (subsAtStart.attacker > 0 && subsAtStart.defender > 0 && generalSubs === 0
+        && subDice(steps, 'sub', 'attacker') === subsAtStart.attacker
+        && subDice(steps, 'sub', 'defender') === subsAtStart.defender) {
+        noDestroyerOpeningRounds += 1;
+      } else {
+        return {
+          ok: false,
+          why: 'no-destroyer-subs-in-general',
+          setup: setup.name,
+          seed,
+          generalSubs,
+          subsAtStart,
+          steps,
+        };
+      }
+    }
+    if (setup.name === 'sea-mixed' && guard === 1) {
+      // German destroyer blocks the British sub's surprise strike.
+      // German subs still strike (Britain has no destroyer) and skip the general step.
+      if (subDice(steps, 'sub', 'attacker') === subsAtStart.attacker
+        && subDice(steps, 'combat', 'attacker') === 0
+        && subDice(steps, 'sub', 'defender') === 0
+        && subDice(steps, 'combat', 'defender') === subsAtStart.defender
+        && subsAtStart.defender > 0) {
+        destroyerPresentOpeningRounds += 1;
+      } else {
+        return {
+          ok: false,
+          why: 'destroyer-present-sub-roll',
+          setup: setup.name,
+          seed,
+          subsAtStart,
+          attackStrike: subDice(steps, 'sub', 'attacker'),
+          attackGeneral: subDice(steps, 'combat', 'attacker'),
+          defenseStrike: subDice(steps, 'sub', 'defender'),
+          defenseGeneral: subDice(steps, 'combat', 'defender'),
+        };
+      }
+    }
     for (const step of steps) {
       if (step.context === 'aa') continue;
       if (step.dice > step.eligible) {
@@ -398,13 +485,6 @@ function playAiBattleLive(setup, seed) {
     }
     if (result && (result.attackHits + (result.bombardmentHits || 0)) > attackDice + bombardDice) {
       return { ok: false, why: 'aa-or-strike-added', setup: setup.name, seed, result, attackDice, bombardDice };
-    }
-    const subDice = steps
-      .filter((s) => s.context === 'sub' && s.side === 'attacker')
-      .reduce((sum, s) => sum + s.dice, 0);
-    if (setup.name === 'sea-subs-no-destroyer' && guard === 1 && subDice > 0) {
-      const combatAttackDice = attackDice;
-      if (subDice + combatAttackDice > 4) combinedSubOver += 1;
     }
     const after = pieceMap(Object.values(gs.units).flat());
     const grew = totalsGrew(before, after);
@@ -441,6 +521,10 @@ for (let seed = 1; seed <= 12; seed += 1) {
 check('seeded AI auto battles stay inside the dice cap', failuresSeen.length === 0, failuresSeen.slice(0, 3));
 check('ran a spread of seeded battles', battles >= SETUPS.length * 12, battles);
 check('those battles rolled more than one round', roundsPlayed > battles, { roundsPlayed, battles });
+check('sea-subs-no-destroyer: struck subs are absent from the general step',
+  noDestroyerOpeningRounds === 12, noDestroyerOpeningRounds);
+check('destroyer-present subs roll once in the general step and not in a strike',
+  destroyerPresentOpeningRounds === 12, destroyerPresentOpeningRounds);
 
 {
   const gs = makeState(7);
@@ -565,15 +649,69 @@ function humanUi(gs) {
   const strikeDice = (ui.combatState.subFirstStrikeRolls || []).filter((r) => r.side === 'attacker').length;
   check('human surprise strike rolls one die per sub, not the cruiser', strikeDice === 2, strikeDice);
   ui.combatState.phase = 'ready';
+  ui.combatState.combatRound = 1;
   const rolled = ui._rollDice();
   const subCombat = ui.lastRolls.attackRolls.filter((r) => r.unitType === 'submarine').length;
   const allCombat = ui.lastRolls.attackRolls.length;
-  check('surviving subs roll again in the general step, still within the living stack',
-    subCombat <= 2 && allCombat <= 3, { subCombat, allCombat, attackers: ui.combatState.attackers });
+  const defenseSubs = ui.lastRolls.defenseRolls.filter((r) => r.unitType === 'submarine').length;
+  check('general-step dice exclude subs that already struck',
+    subCombat === 0 && defenseSubs === 0 && allCombat === 1, { subCombat, defenseSubs, allCombat });
   check('general-step hits do not exceed general-step dice',
     rolled.attackHits <= allCombat && rolled.defenseHits <= ui.lastRolls.defenseRolls.length);
   check('surprise-strike hits are not copied into the general hit total',
     rolled.attackHits === ui.lastRolls.attackRolls.filter((r) => r.hit).length);
+  ui.combatState.combatRound = 2;
+  ui._rollDice();
+  const laterSubs = ui.lastRolls.attackRolls.filter((r) => r.unitType === 'submarine').length;
+  check('later rounds roll those subs once in the general step',
+    laterSubs === 2 && ui.lastRolls.attackRolls.length === 3, ui.lastRolls.attackRolls);
+  ui.combatState.combatRound = 1;
+  ui.combatState.phase = 'ready';
+  ui.combatState.bombardmentRolls = [];
+  ui.combatState.attackerSubsCanSubmerge = true;
+  ui.combatState.submarineFirstStrikeFired = true;
+  Object.getPrototypeOf(ui)._render.call(ui);
+  check('after a surprise strike the submerge line does not say they fight again',
+    ui.el.innerHTML.includes('already fired this round')
+    && !ui.el.innerHTML.includes('instead of fighting'));
+  ui.combatState.combatRound = 2;
+  Object.getPrototypeOf(ui)._render.call(ui);
+  check('a later round still offers submerge instead of fighting',
+    ui.el.innerHTML.includes('instead of fighting'));
+}
+
+{
+  const gs = makeState(11);
+  const ui = humanUi(gs);
+  ui.currentTerritory = 'North Atlantic';
+  gs.units = { 'North Atlantic': [] };
+  ui.combatState = {
+    attackers: [
+      { type: 'submarine', quantity: 2, owner: 'Germans' },
+      { type: 'destroyer', quantity: 1, owner: 'Germans' },
+    ],
+    defenders: [
+      { type: 'submarine', quantity: 1, owner: 'British' },
+      { type: 'cruiser', quantity: 1, owner: 'British' },
+    ],
+    attackerSubsHaveFirstStrike: true,
+    defenderSubsHaveFirstStrike: false,
+    submarineFirstStrikeFired: false,
+    attackerSubmergedSubs: 0,
+    defenderSubmergedSubs: 0,
+    phase: 'submarineFirstStrike',
+    combatRound: 1,
+    totalAttackerLosses: {},
+    totalDefenderLosses: {},
+  };
+  gs._rollDie = () => 6;
+  ui._rollSubmarineFirstStrike();
+  ui.combatState.phase = 'ready';
+  ui._rollDice();
+  const attackSubs = ui.lastRolls.attackRolls.filter((r) => r.unitType === 'submarine').length;
+  const defenseSubs = ui.lastRolls.defenseRolls.filter((r) => r.unitType === 'submarine').length;
+  check('human general step drops the striking subs and keeps the sub facing a destroyer',
+    attackSubs === 0 && defenseSubs === 1, { attackSubs, defenseSubs, attack: ui.lastRolls.attackRolls.length, defense: ui.lastRolls.defenseRolls.length });
 }
 
 {
@@ -656,4 +794,4 @@ if (failures) {
   console.error(`\n${failures} failed`);
   process.exit(1);
 }
-console.log(`\nauto-battle hit checks passed (${battles} battles, ${roundsPlayed} rounds, round-1 sub stacks that also fired in general combat: ${combinedSubOver})`);
+console.log(`\nauto-battle hit checks passed (${battles} battles, ${roundsPlayed} rounds, no-destroyer openings ${noDestroyerOpeningRounds}, destroyer-present openings ${destroyerPresentOpeningRounds})`);

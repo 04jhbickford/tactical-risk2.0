@@ -1,4 +1,4 @@
-// V2.81.57-unified.20.1 — subs fire first only when a hittable target is present.
+// V2.81.57-unified.20.2 — subs fire first only when a hittable target is present.
 // Run: node tools/test-sub-first-strike-targets.mjs
 
 import { readFileSync } from 'fs';
@@ -118,12 +118,21 @@ const atkTransport = { type: 'transport', quantity: 1, owner: 'Germans' };
 }
 
 {
-  const { ui } = openCombat([atkTransport], [sub]);
-  check('sub vs transport still opens first strike', ui.combatState.phase === 'submarineFirstStrike');
+  const cruiser = { type: 'cruiser', quantity: 1, owner: 'Germans' };
+  const { ui } = openCombat([cruiser, atkTransport], [sub]);
+  check('sub vs a transport with a cruiser still opens first strike', ui.combatState.phase === 'submarineFirstStrike');
   let rolls = 0;
   ui._rollD6 = () => { rolls += 1; return 6; };
   ui._rollSubmarineFirstStrike();
-  check('sub vs transport rolls one first-strike die', rolls === 1, rolls);
+  check('that sub rolls one first-strike die', rolls === 1, rolls);
+}
+
+{
+  const { gs, ui } = openCombat([atkTransport], [sub]);
+  check('a lone transport does not open first strike', !ui?.combatState || ui.combatState.phase !== 'submarineFirstStrike');
+  check('a lone transport is removed with no dice',
+    !(gs.units['Caspian Sea Zone'] || []).some((unit) => unit.type === 'transport' && (unit.quantity || 0) > 0)
+    && (gs.units['Caspian Sea Zone'] || []).some((unit) => unit.type === 'submarine' && unit.quantity === 1));
 }
 
 {
@@ -132,14 +141,20 @@ const atkTransport = { type: 'transport', quantity: 1, owner: 'Germans' };
 }
 
 {
-  const { ui } = openCombat([atkSub], [fighter]);
-  check('attacking sub vs fighters has no first strike', ui.combatState.phase === 'ready' && !ui.combatState.attackerSubsHaveFirstStrike);
+  const { gs, ui } = openCombat([atkSub], [fighter]);
+  check('attacking sub vs fighters ends without a first strike',
+    ui.combatState.phase === 'resolved'
+    && ui.combatState.winner === 'submerged'
+    && !ui.combatState.attackerSubsHaveFirstStrike);
+  check('the sub and the fighters both stay',
+    (gs.units['Caspian Sea Zone'] || []).some((unit) => unit.type === 'submarine' && unit.quantity === 1)
+    && (gs.units['Caspian Sea Zone'] || []).some((unit) => unit.type === 'fighter' && unit.quantity === 2));
 }
 
 {
   const cases = [
     { name: 'bomber', atk: [bomber], def: [sub, transport], attack: 0, defense: 0 },
-    { name: 'transport', atk: [atkTransport], def: [sub], attack: 0, defense: 1 },
+    { name: 'transport', atk: [atkTransport], def: [sub], attack: 0, defense: 0 },
     { name: 'destroyer', atk: [destroyer], def: [sub], attack: 0, defense: 0 },
     { name: 'fighters', atk: [atkSub], def: [fighter], attack: 0, defense: 0 },
   ];
@@ -180,42 +195,44 @@ function surpriseStrikeRounds(attackers, defenders, side) {
     [{ type: 'battleship', quantity: 2, owner: 'Americans' }],
     'attacker',
   );
-  check('AI attacker surprise strike is round 1 only',
+  check('AI attacker surprise strike is round 1 only and replaces that roll',
     attack.length === 3
-    && attack.every((row) => !row.resolved && row.combat === 2)
-    && attack[0].sub === 2
-    && attack[1].sub === 0
-    && attack[2].sub === 0,
+    && attack.every((row) => !row.resolved)
+    && attack[0].sub === 2 && attack[0].combat === 0
+    && attack[1].sub === 0 && attack[1].combat === 2
+    && attack[2].sub === 0 && attack[2].combat === 2,
     attack);
   const defense = surpriseStrikeRounds(
     [{ type: 'battleship', quantity: 2, owner: 'Germans' }],
     [{ type: 'submarine', quantity: 2, owner: 'Americans' }],
     'defender',
   );
-  check('AI defender surprise strike is round 1 only',
+  check('AI defender surprise strike is round 1 only and replaces that roll',
     defense.length === 3
-    && defense.every((row) => !row.resolved && row.combat === 2)
-    && defense[0].sub === 2
-    && defense[1].sub === 0
-    && defense[2].sub === 0,
+    && defense.every((row) => !row.resolved)
+    && defense[0].sub === 2 && defense[0].combat === 0
+    && defense[1].sub === 0 && defense[1].combat === 2
+    && defense[2].sub === 0 && defense[2].combat === 2,
     defense);
 }
 
 {
   documentElement.classList.remove('mobile-shell');
-  const { ui } = openCombat([atkTransport], [{ ...sub }]);
+  const cruiser = { type: 'cruiser', quantity: 1, owner: 'Germans' };
+  const { ui } = openCombat([cruiser], [{ ...sub }]);
   ui._submergeSub('defender', 'all');
   check('desktop all-submerged reads Continue to battle', ui.el.innerHTML.includes('Continue to battle') && !ui.el.innerHTML.includes('Fire First Strike'), ui.el.innerHTML);
-  const fresh = openCombat([atkTransport], [{ ...sub }]);
+  const fresh = openCombat([cruiser], [{ ...sub }]);
   check('desktop valid target reads Fire First Strike', fresh.ui.el.innerHTML.includes('Fire First Strike'));
 }
 
 {
   documentElement.classList.add('mobile-shell');
-  const { ui } = openCombat([atkTransport], [{ ...sub }]);
+  const cruiser = { type: 'cruiser', quantity: 1, owner: 'Germans' };
+  const { ui } = openCombat([cruiser], [{ ...sub }]);
   ui._submergeSub('defender', 'all');
   check('phone all-submerged reads Continue to battle', ui.el.innerHTML.includes('Continue to battle') && !ui.el.innerHTML.includes('Fire First Strike'));
-  const fresh = openCombat([atkTransport], [{ ...sub }]);
+  const fresh = openCombat([cruiser], [{ ...sub }]);
   check('phone valid target reads Fire First Strike', fresh.ui.el.innerHTML.includes('Fire First Strike'));
   documentElement.classList.remove('mobile-shell');
 }

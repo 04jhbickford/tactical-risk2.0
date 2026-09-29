@@ -2,13 +2,53 @@
 
 ---
 
+## 9.28.26 — unified.20.2 sub and air rules, retreat landings
+
+Stamp stays `V2.81.57-unified.20.2`. Schema stays 11. `firestore.rules` is unchanged.
+
+James (via Arc) adopted standard A&A for submarines. Rob, `#tactical-risk` `1554282241021050951`, 28 Sep 5:02pm PT, game `6XQ7CN` (`games/game_1790636577736_myn2r5rf8`), live unified.20.1. East US Sea Zone, 5:01pm PT. Robert007 (Japanese) had 1 fighter. The German AI had 1 sub and 1 transport. Round 1 the fighter rolled 2 against 3 and hit. The sub rolled 4 and missed. The transport needs 0. Round 2 still listed the sub and the transport, so the hit had been applied to nothing. Round 2 the sub rolled 1 against 1 and the fighter was lost.
+
+A submarine cannot hit an air unit. An air unit cannot hit a submarine unless that side has a destroyer in the battle, and an air hit is not dropped while a transport or other legal target is still there. If one side is only air and the other side's only combat units are subs, the subs submerge and the battle ends. If a side's only units are transports and the enemy can hit them, the transports are removed with no dice. `GameState.resolveCombat` and the human casualty picker both follow that, on attack and defense.
+
+The same game's 4:49pm retreat had sent a bomber to West Spain Sea Zone. James: return to base for a retreating air unit is friendly land within range. A fighter or tactical bomber may instead use a friendly carrier with room. A bomber never lands at sea. Nothing is sent to a sea zone or deleted. If no legal landing exists, the retreat UI says so and the aircraft stays for the end-of-NCM check. The same quantity-0 retreat happened in `6FSGBV` (turn 5, Ukraine to Russia, 27 Sep 1:15pm PT, a unified.17 client). A land retreat to friendly land keeps the bomber and the fighter.
+
+Rob, 5:04pm PT: the other fighter also disappeared, then he resigned. Before the 5:01pm battle Japan had 2 fighters loose in East Canada Sea Zone with `carrier_2` and `carrier_3`, each `aircraft: []`. He refreshed from a unified.19 client to unified.20.1 at 5:00:55pm. Loading that save does not delete the loose fighters. The end-of-NCM check did: it flagged every loose air stack in a sea zone and ignored carrier room. It now counts capacity on friendly carriers in that zone. Fighters and tactical bombers that fit are kept. A bomber still does not use that room. The .19 client had also logged a move of 2 fighters into East US Sea Zone at 4:53:22pm that the saved state never applied; this build does not invent that move.
+
+Receipt: `node tools/test-sub-air-rules.mjs`, `node tools/test-air-vs-sub.mjs`.
+
+---
+
+## 9.28.26 — unified.20.2 casualties, retreat air, combat log
+
+Stamp stays `V2.81.57-unified.20.2`. Schema stays 11. `firestore.rules` is unchanged.
+
+Bastion, `#tactical-risk` `1554278718275584142`, 28 Sep 4:48pm PT, game `6XQ7CN` (`games/game_1790636577736_myn2r5rf8`), live unified.19. East Canada Sea Zone, round 1, 4:43pm PT. Bastion (Americans) attacked Robert007 (Japanese). The dice were right (9 attack dice, 6 hits; 12 defense dice, 7 hits, and the transport rolled at need 0). The casualty report, the round-2 force list, and the saved board were three different Japanese fleets. Bastion edited his picks and took the transport; the saved state still had that transport in West Spain Sea Zone. Confirm now spends the edited pick across every stack of that type, including an id'd carrier or transport. A second auto-pick does not replace an edit. The "Left" line, the next-round list, and `gameState.units` are the same totals. A damaged battleship keeps `damaged` / `damagedCount`, shows an orange damage mark in the combat list, and keeps the slash on the map icon.
+
+Bastion, `#tactical-risk` `1554280132850749502`, 28 Sep 4:54pm PT. The same battle's retreat at 4:49pm PT logged the transport, battleship, and bomber to West Spain Sea Zone with quantity 0. The ships arrived. The bomber was gone, and there was no `pendingAirLandings` entry. The retreat log now records the real quantities. A bomber that cannot legally land on the retreat sea zone is parked in `pendingAirLandings` and is not deleted. Leaving combat with no legal landing does the same.
+
+Combat telemetry on the AI path was writing `forcesBefore` after casualties, and one entry per battle. Each round now logs the pre-roll forces, a surprise strike is its own entry, and the applied casualties for both sides are on the entry. Those fields are additive. The rules file did not need a change.
+
+Receipt: `node tools/test-casualty-apply.mjs`.
+
+---
+
+## 9.28.26 — unified.20.2 submarines fire once per round
+
+Stamp `V2.81.57-unified.20.2`. Schema stays 11. Display stamp only; game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.20.2`). `firestore.rules` is unchanged.
+
+James decided the open item from Rob and Bastion's "more hits than units" report (Bastion, `#general-chat` `1554242767260090379`, 28 Sep 2:25pm PT). A submarine fires once per combat round. When it makes a surprise strike, that strike replaces its roll in the general step that round, on attack and defense. Casualties from the strike still come off before the general step. A sub that does not get a surprise strike, because an enemy destroyer is present, still rolls once in the general step. Later rounds roll subs only in the general step. The AI resolver (`GameState.resolveCombat`, including auto-battle and any replay that re-resolves) and the human combat screen (`combatUI._rollDice`) use the same rule. The rules table says the surprise strike replaces that round's roll. After the strike, the submerge line no longer says those subs are about to fight.
+
+Receipt: `node tools/test-auto-battle-hits.mjs`, `node tools/test-sub-first-strike-targets.mjs`, `node tools/test-dice-tracker-golden.mjs`.
+
+---
+
 ## 9.28.26 — unified.20.1 lobby list button and auto-battle hits
 
 Stamp `V2.81.57-unified.20.1`. Schema stays 11. Display stamp only; game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.20.1`). No gameplay-rule changes. `firestore.rules` is unchanged.
 
 Bastion, `#tactical-risk` `1554261960378556488`, 28 Sep 3:42pm PT, on live unified.18: a lobby could show List and Unlist at the same time. The host of an unlisted room now sees only "List in Open Games". The host of a listed room sees only "Unlist Game". A joiner sees neither. Both labels follow the live `isPublished` snapshot, including a flip from another tab. Main Menu still leaves the room view and does not write the listed flag. Unlist never left the room; it only cleared `isPublished`. Hiding it on an unlisted room does not remove the way out.
 
-Bastion, `#general-chat` `1554242767260090379`, 28 Sep 2:25pm PT: auto battle sometimes looks like more hits than units. Seeded auto battles (AI `resolveCombat` and the human dice steps) keep each step's dice at or under the living units in that step. Heavy bombers are allowed two dice on the human step. Hits never exceed that step's dice. Removed pieces were on the board. A battleship rolls one die. Carrier aircraft roll once. AA hits are not added to the attack total. Dead stacks do not roll. Round 1 subs with no enemy destroyer also roll in the general combat step after the surprise strike. That is the current shared rule, not an extra hit inside one roll. The combat popup now names the round on the dice line and on the hits-to-assign counter, prefixes the surprise-strike heading with Round 1, and shows the paired infantry and artillery as two quantities. The tactical bomber row stays one count with the label "Tac bomber 4 (paired)". Round 1 subs with no enemy destroyer still roll again in the general step.
+Bastion, `#general-chat` `1554242767260090379`, 28 Sep 2:25pm PT: auto battle sometimes looks like more hits than units. Seeded auto battles (AI `resolveCombat` and the human dice steps) keep each step's dice at or under the living units in that step. Heavy bombers are allowed two dice on the human step. Hits never exceed that step's dice. Removed pieces were on the board. A battleship rolls one die. Carrier aircraft roll once. AA hits are not added to the attack total. Dead stacks do not roll. Round 1 subs with no enemy destroyer also roll in the general combat step after the surprise strike. That is the current shared rule, not an extra hit inside one roll. The combat popup now names the round on the dice line and on the hits-to-assign counter, prefixes the surprise-strike heading with Round 1, and shows the paired infantry and artillery as two quantities. The tactical bomber row stays one count with the label "Tac bomber 4 (paired)". Round 1 subs with no enemy destroyer still roll again in the general step. unified.20.2 removes that second roll; see the entry above.
 
 Dice stats chart, owner UX: All-time, This game, and each player card show one bar per face, one shared dotted fair-share line, and a percent to one decimal. The legend, chi-square fit line, skew meter, streak, and the caveat paragraph are gone. A muted “N rolls” line remains, plus the verdict. All-time still reads the `global` doc. Opening the panel fetches again instead of painting the previous totals.
 
