@@ -2,6 +2,24 @@
 
 ---
 
+## 9.29.26 — unified.28 pan and load
+
+Stamp `V2.81.57-unified.28`. Schema stays 11. A `V2.82-unified.27` doc is older than this tab and does not prompt. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.28`).
+
+James: pan and load on the unified.21 through unified.26 chain were too slow. unified.27 (desktop stays on the main menu) stays.
+
+The last clean pan and load treated here is `V2.81.57-unified.20.2` (`7ca3956`), the commit before that chain.
+
+On .27, before any game, boot requested 225 map images: 112 Classic base, 112 Classic relief, and smallMap. The main menu now requests 1 map image, the minimap `smallMap.jpeg`. Classic base, Classic relief, and Pacific tiles stay at 0 until a game starts, and that game loads only its own map. Classic is still the eager 14×8 grid. Pacific is still lazy.
+
+A redraw inside `render` in `src/main.js` was about 420ms on this machine before the fix (the .27 note recorded about 17ms). `useMap` called `setBoard`, which cleared the outline cache and did not keep the rebuilt edges, so every pan frame recomputed multi-polygon outlines. The cache stays when the board is the one already built, and a new board (Pacific) builds it once. The same headless drag now paints in about 4.6ms, in the same band as unified.20.2 on this machine (about 4.8ms).
+
+`firestore.rules`, `src/map/camera.js`, `src/map/mapRenderer.js`, and `src/ui/minimap.js` are unchanged. Phone polish, Pacific IPC setup, the China continent bonus, and the tactical-bomber option are unchanged.
+
+`node tools/test-*.mjs` passed. Classic and Pacific both still start.
+
+---
+
 ## 9.29.26 — unified.27 desktop stays on the main menu
 
 Stamp `V2.81.57-unified.27`. Schema stays 11. A `V2.82-unified.26` doc is older than this tab and does not prompt. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.27`).

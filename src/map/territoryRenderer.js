@@ -1040,12 +1040,14 @@ export class TerritoryRenderer {
    * Get external edges for multi-polygon territory (uses cache for performance).
    */
   _getExternalEdgesWithTolerance(polygons, territoryName) {
-    // Use cached result if available
+    // Use cached result if available. A miss stores the result so a pan
+    // frame does not rebuild the same outline again.
     if (territoryName && this._externalEdgesCache[territoryName]) {
       return this._externalEdgesCache[territoryName];
     }
-    // Fallback to computation (shouldn't happen often)
-    return this._computeExternalEdges(polygons);
+    const edges = this._computeExternalEdges(polygons);
+    if (territoryName) this._externalEdgesCache[territoryName] = edges;
+    return edges;
   }
 
   /**
@@ -1057,8 +1059,13 @@ export class TerritoryRenderer {
   }
 
   setBoard(territories, continents) {
-    this.territories = territories || [];
-    this.continents = continents || [];
+    const nextTerritories = territories || [];
+    const nextContinents = continents || [];
+    // Same board the constructor already cached. Clearing here made every
+    // later pan frame rebuild multi-polygon outlines.
+    const same = nextTerritories === this.territories && nextContinents === this.continents;
+    this.territories = nextTerritories;
+    this.continents = nextContinents;
     this.territoryByName = {};
     for (const t of this.territories) this.territoryByName[t.name] = t;
     this.continentByName = {};
@@ -1067,8 +1074,12 @@ export class TerritoryRenderer {
       this.continentByName[c.name] = c;
       for (const tName of c.territories || []) this.continentByTerritory[tName] = c;
     }
-    this._externalEdgesCache = {};
     this.highlightedTerritories = [];
+    if (!same) {
+      this._externalEdgesCache = {};
+      this._territoryCenterCache = {};
+      this._precomputeCaches();
+    }
   }
 
   /** Small gold star on each Pacific victory city. Classic has none. */

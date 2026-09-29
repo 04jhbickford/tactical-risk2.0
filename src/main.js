@@ -63,7 +63,6 @@ import {
   reportStartupError,
   reportStartupStatus,
   STARTUP_AUTH_TIMEOUT_MS,
-  STARTUP_MAP_LOAD_TIMEOUT_MS,
   STARTUP_RESUME_TIMEOUT_MS,
   resolveStartupAfterHang,
 } from './ui/startupLoader.js';
@@ -326,7 +325,8 @@ async function init() {
     return job;
   }
 
-  let tilesLoadedFor = CLASSIC_MAP_ID;
+  // Null until a game starts. Boot must not fetch Classic and Pacific tiles.
+  let tilesLoadedFor = null;
   function useMap(mapId) {
     const resolved = resolveMapId(mapId);
     const id = resolved.ok ? resolved.mapId : CLASSIC_MAP_ID;
@@ -354,6 +354,10 @@ async function init() {
     if (changed) {
       camera.x = MAP_WIDTH / 2;
       camera.y = MAP_HEIGHT / 2;
+    }
+    // One map: the game that is actually starting. Classic stays eager.
+    // Pacific stays lazy. The main menu does not fetch either grid.
+    if (tilesLoadedFor !== id) {
       tilesLoadedFor = id;
       mapRenderer.load(getActiveMap());
       minimap.reloadForActiveMap();
@@ -2683,12 +2687,6 @@ async function init() {
   } else {
     reportStartupStatus('Home ready', 100);
     dismissStartupLoader();
-  }
-
-  try {
-    await withTimeout(mapRenderer.load(), STARTUP_MAP_LOAD_TIMEOUT_MS, 'map-tiles');
-  } catch (err) {
-    console.warn('[Main] Map tile load timed out — continuing without every tile', err);
   }
 
   let resumedLastMatch = false;

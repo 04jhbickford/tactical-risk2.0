@@ -1,4 +1,4 @@
-// V2.81.57-unified.27 — dice stats panel, sentences, lobby entry, backfill.
+// V2.81.57-unified.28 — dice stats panel, sentences, lobby entry, backfill.
 // Run: node tools/test-dice-stats-v2.mjs
 
 import { readFileSync } from 'fs';
