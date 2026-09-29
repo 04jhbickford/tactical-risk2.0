@@ -66,7 +66,7 @@ import {
 } from './carrierPlacement.js';
 import { destroyIllegalAir, previewNcmAirDestruction as previewNcmAir, ncmAirWarningCopy } from './ncmAirCheck.js';
 import { consumePairedAttack, countPairing, tacticalBombersEnabled } from './tacticalPairing.js';
-import { countAirHits, sideCanFirstStrike, sideHasDestroyer, unitIsFirstStrikeTarget } from './combatUnits.js';
+import { countAirHits, sideCanFirstStrike, sideHasDestroyer, unitIsFirstStrikeTarget, unitsForGeneralCombat } from './combatUnits.js';
 import {
   factoryProductionLimit,
   factoryProductionUsed,
@@ -4202,32 +4202,48 @@ export class GameState {
 
     // Submarine surprise strike once per battle, on round 1, matching the
     // combat screen. The gate is the same: active subs, no enemy destroyer,
-    // and at least one unit those hits can be assigned to. Later rounds roll
-    // subs only in the normal combat step.
+    // and at least one unit those hits can be assigned to. That strike
+    // replaces their roll in the general step this round. A side that does
+    // not strike (enemy destroyer present) still rolls its subs once in the
+    // general step. Later rounds roll subs only in the general step.
+    // Casualties from the strike are removed before the general step.
     const attackerHasDestroyer = attackers.some((u) => u.type === 'destroyer' && (Number(u.quantity) || 0) > 0);
     const defenderHasDestroyer = allDefenders.some((u) => u.type === 'destroyer' && (Number(u.quantity) || 0) > 0);
     const attackerSubs = attackers.filter((u) => u.type === 'submarine');
     const defenderSubs = allDefenders.filter((u) => u.type === 'submarine');
     let firstStrikeAttackDice = 0;
     let firstStrikeDefenseDice = 0;
+    let attackerSubsStruck = false;
+    let defenderSubsStruck = false;
     if (this._combatRoundsTracker[territory] === 1) {
       if (sideCanFirstStrike(attackerSubs, allDefenders, defenderHasDestroyer, unitDefs)) {
         const strike = this._rollCombatWithRolls(attackerSubs, 'attack', unitDefs, 'sub');
         firstStrikeAttackDice = strike.rolls.length;
+        attackerSubsStruck = strike.rolls.length > 0;
         const targets = allDefenders.filter((u) => unitIsFirstStrikeTarget(u, unitDefs));
         this._applyCasualtiesWithDamage(targets, strike.hits, unitDefs, isNavalBattle);
       }
       if (sideCanFirstStrike(defenderSubs, attackers, attackerHasDestroyer, unitDefs)) {
         const strike = this._rollCombatWithRolls(defenderSubs, 'defense', unitDefs, 'sub');
         firstStrikeDefenseDice = strike.rolls.length;
+        defenderSubsStruck = strike.rolls.length > 0;
         const targets = attackers.filter((u) => unitIsFirstStrikeTarget(u, unitDefs));
         this._applyCasualtiesWithDamage(targets, strike.hits, unitDefs, isNavalBattle);
       }
     }
 
-    // Roll dice for combat (allDefenders includes AA guns which can fire at aircraft)
-    const { hits: attackHits, rolls: attackRolls } = this._rollCombatWithRolls(attackers, 'attack', unitDefs);
-    const { hits: defenseHits, rolls: defenseRolls } = this._rollCombatWithRolls(allDefenders, 'defense', unitDefs);
+    // Roll dice for combat (allDefenders includes AA guns which can fire at aircraft).
+    // Subs that just struck are omitted; everyone else still rolls.
+    const { hits: attackHits, rolls: attackRolls } = this._rollCombatWithRolls(
+      unitsForGeneralCombat(attackers, attackerSubsStruck),
+      'attack',
+      unitDefs,
+    );
+    const { hits: defenseHits, rolls: defenseRolls } = this._rollCombatWithRolls(
+      unitsForGeneralCombat(allDefenders, defenderSubsStruck),
+      'defense',
+      unitDefs,
+    );
 
     // Add bombardment hits to attack hits
     const totalAttackHits = attackHits + bombardmentHits;

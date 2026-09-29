@@ -1,4 +1,4 @@
-// V2.81.57-unified.20.1 — subs fire first only when a hittable target is present.
+// V2.81.57-unified.20.2 — subs fire first only when a hittable target is present.
 // Run: node tools/test-sub-first-strike-targets.mjs
 
 import { readFileSync } from 'fs';
@@ -180,24 +180,24 @@ function surpriseStrikeRounds(attackers, defenders, side) {
     [{ type: 'battleship', quantity: 2, owner: 'Americans' }],
     'attacker',
   );
-  check('AI attacker surprise strike is round 1 only',
+  check('AI attacker surprise strike is round 1 only and replaces that roll',
     attack.length === 3
-    && attack.every((row) => !row.resolved && row.combat === 2)
-    && attack[0].sub === 2
-    && attack[1].sub === 0
-    && attack[2].sub === 0,
+    && attack.every((row) => !row.resolved)
+    && attack[0].sub === 2 && attack[0].combat === 0
+    && attack[1].sub === 0 && attack[1].combat === 2
+    && attack[2].sub === 0 && attack[2].combat === 2,
     attack);
   const defense = surpriseStrikeRounds(
     [{ type: 'battleship', quantity: 2, owner: 'Germans' }],
     [{ type: 'submarine', quantity: 2, owner: 'Americans' }],
     'defender',
   );
-  check('AI defender surprise strike is round 1 only',
+  check('AI defender surprise strike is round 1 only and replaces that roll',
     defense.length === 3
-    && defense.every((row) => !row.resolved && row.combat === 2)
-    && defense[0].sub === 2
-    && defense[1].sub === 0
-    && defense[2].sub === 0,
+    && defense.every((row) => !row.resolved)
+    && defense[0].sub === 2 && defense[0].combat === 0
+    && defense[1].sub === 0 && defense[1].combat === 2
+    && defense[2].sub === 0 && defense[2].combat === 2,
     defense);
 }
 

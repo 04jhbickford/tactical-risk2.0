@@ -2,13 +2,23 @@
 
 ---
 
+## 9.28.26 — unified.20.2 submarines fire once per round
+
+Stamp `V2.81.57-unified.20.2`. Schema stays 11. Display stamp only; game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.20.2`). `firestore.rules` is unchanged.
+
+James decided the open item from Rob and Bastion's "more hits than units" report (Bastion, `#general-chat` `1554242767260090379`, 28 Sep 2:25pm PT). A submarine fires once per combat round. When it makes a surprise strike, that strike replaces its roll in the general step that round, on attack and defense. Casualties from the strike still come off before the general step. A sub that does not get a surprise strike, because an enemy destroyer is present, still rolls once in the general step. Later rounds roll subs only in the general step. The AI resolver (`GameState.resolveCombat`, including auto-battle and any replay that re-resolves) and the human combat screen (`combatUI._rollDice`) use the same rule. The rules table says the surprise strike replaces that round's roll. After the strike, the submerge line no longer says those subs are about to fight.
+
+Receipt: `node tools/test-auto-battle-hits.mjs`, `node tools/test-sub-first-strike-targets.mjs`, `node tools/test-dice-tracker-golden.mjs`.
+
+---
+
 ## 9.28.26 — unified.20.1 lobby list button and auto-battle hits
 
 Stamp `V2.81.57-unified.20.1`. Schema stays 11. Display stamp only; game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.20.1`). No gameplay-rule changes. `firestore.rules` is unchanged.
 
 Bastion, `#tactical-risk` `1554261960378556488`, 28 Sep 3:42pm PT, on live unified.18: a lobby could show List and Unlist at the same time. The host of an unlisted room now sees only "List in Open Games". The host of a listed room sees only "Unlist Game". A joiner sees neither. Both labels follow the live `isPublished` snapshot, including a flip from another tab. Main Menu still leaves the room view and does not write the listed flag. Unlist never left the room; it only cleared `isPublished`. Hiding it on an unlisted room does not remove the way out.
 
-Bastion, `#general-chat` `1554242767260090379`, 28 Sep 2:25pm PT: auto battle sometimes looks like more hits than units. Seeded auto battles (AI `resolveCombat` and the human dice steps) keep each step's dice at or under the living units in that step. Heavy bombers are allowed two dice on the human step. Hits never exceed that step's dice. Removed pieces were on the board. A battleship rolls one die. Carrier aircraft roll once. AA hits are not added to the attack total. Dead stacks do not roll. Round 1 subs with no enemy destroyer also roll in the general combat step after the surprise strike. That is the current shared rule, not an extra hit inside one roll. The combat popup now names the round on the dice line and on the hits-to-assign counter, prefixes the surprise-strike heading with Round 1, and shows the paired infantry and artillery as two quantities. The tactical bomber row stays one count with the label "Tac bomber 4 (paired)". Round 1 subs with no enemy destroyer still roll again in the general step.
+Bastion, `#general-chat` `1554242767260090379`, 28 Sep 2:25pm PT: auto battle sometimes looks like more hits than units. Seeded auto battles (AI `resolveCombat` and the human dice steps) keep each step's dice at or under the living units in that step. Heavy bombers are allowed two dice on the human step. Hits never exceed that step's dice. Removed pieces were on the board. A battleship rolls one die. Carrier aircraft roll once. AA hits are not added to the attack total. Dead stacks do not roll. Round 1 subs with no enemy destroyer also roll in the general combat step after the surprise strike. That is the current shared rule, not an extra hit inside one roll. The combat popup now names the round on the dice line and on the hits-to-assign counter, prefixes the surprise-strike heading with Round 1, and shows the paired infantry and artillery as two quantities. The tactical bomber row stays one count with the label "Tac bomber 4 (paired)". Round 1 subs with no enemy destroyer still roll again in the general step. unified.20.2 removes that second roll; see the entry above.
 
 Dice stats chart, owner UX: All-time, This game, and each player card show one bar per face, one shared dotted fair-share line, and a percent to one decimal. The legend, chi-square fit line, skew meter, streak, and the caveat paragraph are gone. A muted “N rolls” line remains, plus the verdict. All-time still reads the `global` doc. Opening the panel fetches again instead of painting the previous totals.
 

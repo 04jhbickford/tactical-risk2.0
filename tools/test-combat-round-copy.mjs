@@ -1,4 +1,4 @@
-// V2.81.57-unified.20.1 — A1 combat popup copy.
+// V2.81.57-unified.20.2 — A1 combat popup copy.
 // Paired infantry and artillery show both quantities. The surprise-strike
 // heading names round 1. Dice and casualty lines name the round.
 // The tactical bomber row keeps one count and "Tac bomber 4 (paired)".
@@ -120,7 +120,7 @@ ui.lastRolls = {
 };
 
 const forces = ui._renderExpandedForces(attackers, defenders, attacker, defender);
-check('stamp is unified.20.1', GAME_VERSION === 'V2.81.57-unified.20.1');
+check('stamp is unified.20.1', GAME_VERSION === 'V2.81.57-unified.20.2');
 check('paired infantry and artillery show both quantities', forces.includes('>2 + 2<'));
 check('tactical bomber row keeps one count and the paired label',
   forces.includes(`>${TACTICAL_PAIR_LABEL}<`)

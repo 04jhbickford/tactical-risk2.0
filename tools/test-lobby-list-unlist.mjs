@@ -1,4 +1,4 @@
-// V2.81.57-unified.20.1 — L1: a lobby shows List or Unlist, never both.
+// V2.81.57-unified.20.2 — L1: a lobby shows List or Unlist, never both.
 // Host unlisted, host listed, joiner, and a snapshot flip from another client.
 // Run: node tools/test-lobby-list-unlist.mjs
 
@@ -28,7 +28,7 @@ const check = (label, cond, extra) => {
   } else console.log('ok  :', label);
 };
 
-check('stamp is unified.20.1', GAME_VERSION === 'V2.81.57-unified.20.1');
+check('stamp is unified.20.1', GAME_VERSION === 'V2.81.57-unified.20.2');
 
 function names(snapshot, isHost) {
   return lobbyListingButtons({

@@ -15,6 +15,7 @@ import {
   sideCanFirstStrike,
   sideHasDestroyer,
   countAirHits,
+  unitsForGeneralCombat,
   AIR_CANNOT_HIT_SUBS_HINT,
 } from '../state/combatUnits.js';
 import { dequeueResolvedCombatHeads, applyTerritoryCapture } from '../state/combatFinalize.js';
@@ -1075,6 +1076,19 @@ export class CombatUI {
     const attackerId = this.gameState.currentPlayer?.id;
     const defenderId = defenders[0]?.owner;
 
+    // A surprise strike already fired is that sub's only roll this round.
+    // Later rounds (combatRound > 1) roll those subs in this step.
+    const openingStrike = !!this.combatState.submarineFirstStrikeFired
+      && (this.combatState.combatRound || 1) === 1;
+    const attackPool = unitsForGeneralCombat(
+      attackers,
+      openingStrike && !!this.combatState.attackerSubsHaveFirstStrike,
+    );
+    const defensePool = unitsForGeneralCombat(
+      defenders,
+      openingStrike && !!this.combatState.defenderSubsHaveFirstStrike,
+    );
+
     // Roll for attackers
     const attackRolls = [];
     let attackHits = 0;
@@ -1092,7 +1106,7 @@ export class CombatUI {
     const hasSuperSubs = attackerId && this.gameState.hasTech(attackerId, 'superSubs');
     const hasHeavyBombers = attackerId && this.gameState.hasTech(attackerId, 'heavyBombers');
 
-    for (const unit of attackers) {
+    for (const unit of attackPool) {
       const def = this.unitDefs[unit.type];
       if (!def) continue;
 
@@ -1147,7 +1161,7 @@ export class CombatUI {
     // Check defender technologies
     const defenderHasJets = defenderId && this.gameState.hasTech(defenderId, 'jets');
 
-    for (const unit of defenders) {
+    for (const unit of defensePool) {
       const def = this.unitDefs[unit.type];
       if (!def) continue;
       for (let i = 0; i < unit.quantity; i++) {
@@ -2747,8 +2761,13 @@ export class CombatUI {
 
       // Show submerge option if subs can submerge (no enemy destroyer)
       if ((attackerSubsCanSubmerge && attackerSubs > 0) || (defenderSubsCanSubmerge && defenderSubs > 0)) {
+        const alreadyStruck = !!this.combatState.submarineFirstStrikeFired
+          && (this.combatState.combatRound || 1) === 1;
+        const submergeHint = alreadyStruck
+          ? '🚢 Submarines already fired this round. Submerge to leave the battle:'
+          : '🚢 Submarines can submerge instead of fighting:';
         html += `<div class="submarine-submerge-options" style="margin-bottom: 10px; padding: 8px; background: rgba(100,149,237,0.1); border-radius: 4px;">`;
-        html += `<div style="font-size: 11px; color: #6495ED; margin-bottom: 6px;">🚢 Submarines can submerge instead of fighting:</div>`;
+        html += `<div style="font-size: 11px; color: #6495ED; margin-bottom: 6px;">${submergeHint}</div>`;
         html += `<div style="display: flex; gap: 8px; flex-wrap: wrap;">`;
 
         if (attackerSubsCanSubmerge && attackerSubs > 0) {

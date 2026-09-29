@@ -66,6 +66,14 @@ export function sideCanFirstStrike(subs, enemyUnits, enemyHasDestroyer, unitDefs
   return (enemyUnits || []).some((u) => unitIsFirstStrikeTarget(u, unitDefs));
 }
 
+// A surprise strike is that side's only submarine roll for the round.
+// The general step still rolls every other living unit. Subs roll there
+// only when they did not strike (an enemy destroyer, or a later round).
+export function unitsForGeneralCombat(units, subsAlreadyStruck) {
+  if (!subsAlreadyStruck) return units || [];
+  return (units || []).filter((u) => u?.type !== 'submarine');
+}
+
 // Aircraft can hit a submarine only while their own side still has a destroyer.
 // Re-checked every round from living quantity, including after a surprise strike.
 export function sideHasDestroyer(units) {

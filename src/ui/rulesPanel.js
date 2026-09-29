@@ -94,7 +94,7 @@ export class RulesPanel {
                 <tr><td>Fighter</td><td>10</td><td>3</td><td>4</td><td>4</td><td>Air unit, can land on carriers</td></tr>
                 <tr data-rules-tactical hidden><td>Tactical Bomber</td><td>11</td><td>3</td><td>3</td><td>4</td><td>Attacks at 4 when paired with a fighter or tank in the same battle. Can land on a carrier.</td></tr>
                 <tr><td>Bomber</td><td>12</td><td>4</td><td>1</td><td>6</td><td>Cannot capture. Strategic bombing raids are not yet available.</td></tr>
-                <tr><td>Submarine</td><td>6</td><td>2</td><td>1</td><td>2</td><td>First strike, can submerge</td></tr>
+                <tr><td>Submarine</td><td>6</td><td>2</td><td>1</td><td>2</td><td>Surprise strike replaces that round's roll. Can submerge</td></tr>
                 <tr><td>Destroyer</td><td>8</td><td>2</td><td>2</td><td>2</td><td>Blocks sub first strike</td></tr>
                 <tr><td>Cruiser</td><td>12</td><td>3</td><td>3</td><td>2</td><td>Shore bombardment</td></tr>
                 <tr><td>Carrier</td><td>14</td><td>1</td><td>2</td><td>2</td><td data-rules-carrier-table>Carries 2 fighters</td></tr>
