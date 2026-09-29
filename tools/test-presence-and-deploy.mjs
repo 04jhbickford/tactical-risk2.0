@@ -189,7 +189,7 @@ const unitDefs = {
 };
 
 console.log('=== Version stamps ===');
-check('GAME_VERSION is V2.81.57-unified.24', GAME_VERSION === 'V2.81.57-unified.24');
+check('GAME_VERSION is V2.81.57-unified.25', GAME_VERSION === 'V2.81.57-unified.25');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== Presence: background must not delete or go offline ===');
@@ -1737,7 +1737,7 @@ console.log('=== V2.81.42 My Games hygiene + presence comments ===');
     && shouldStartHostFailover({ hostPresence: 'offline', offlineForMs: 90000 }) === true);
 }
 
-console.log('=== V2.81.57-unified.24 Bastion same-match rejoin ===');
+console.log('=== V2.81.57-unified.25 Bastion same-match rejoin ===');
 {
   const seated = [{
     id: 'game_a29',

@@ -1,6 +1,9 @@
 #!/usr/bin/env node
-// Three AI-only Pacific 1940 games, 10 rounds each.
-// Not part of tools/test-*.mjs. Run: node tools/run-pacific-ai.mjs
+// Three easy AI games, 10 rounds each. Not part of tools/test-*.mjs.
+// Default (no flags) is Pacific 1940 with tactical bombers off:
+//   node tools/run-pacific-ai.mjs
+// Classic random, option on:
+//   node tools/run-pacific-ai.mjs --map classic --setup random --tactical-bombers --steps 2000
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -30,9 +33,32 @@ AIController.prototype._initAIPlayers = function initWithoutTimer() {
   try { originalInit.call(this); } finally { globalThis.setTimeout = real; }
 };
 
-const setup = read('data/maps/pacific/setup.json');
-const territories = read('data/maps/pacific/territories.json');
-const continents = read('data/maps/pacific/continents.json');
+function argValue(flag, fallback) {
+  const index = process.argv.indexOf(flag);
+  if (index < 0 || !process.argv[index + 1]) return fallback;
+  return process.argv[index + 1];
+}
+
+const mapId = argValue('--map', 'pacific');
+const setupMode = argValue('--setup', mapId === 'pacific' ? 'pacific1940' : 'random');
+const tacticalBombers = process.argv.includes('--tactical-bombers');
+const stepCap = Number(argValue('--steps', '800')) || 800;
+const seedArg = argValue('--seed', '');
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function random() {
+    a |= 0;
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const dataRoot = mapId === 'classic' ? 'data' : 'data/maps/pacific';
+const setup = read(`${dataRoot}/setup.json`);
+const territories = read(`${dataRoot}/territories.json`);
+const continents = read(`${dataRoot}/continents.json`);
 const unitDefs = read('data/units.json');
 const players = setup.risk.factions.map((faction) => ({
   ...faction,
@@ -48,17 +74,28 @@ console.error = (...args) => {
 };
 
 function fingerprint(gs) {
-  return `${gs.round}|${gs.currentPlayerIndex}|${gs.phase}|${gs.turnPhase}|${gs.gameOver ? 1 : 0}`;
+  const pool = (gs.players || []).reduce((sum, player) => (
+    sum + (gs.getTotalUnitsToPlace?.(player.id) || 0)
+  ), 0);
+  return `${gs.round}|${gs.currentPlayerIndex}|${gs.phase}|${gs.turnPhase}|${gs.gameOver ? 1 : 0}|${gs.unitsPlacedThisRound || 0}|${pool}`;
 }
 
 async function playOne(index) {
+  if (seedArg !== '') Math.random = mulberry32((Number(seedArg) || 1) + index * 997);
   const started = Date.now();
   const gs = new GameState(setup, territories, continents);
   gs.unitDefs = unitDefs;
   gs.initGame('risk', players, {
-    mapId: 'pacific',
-    gameOptions: { territorySetup: 'pacific1940', tacticalBombers: false },
+    mapId,
+    gameOptions: { territorySetup: setupMode, tacticalBombers },
   });
+  let tacBought = 0;
+  const purchaseUnit = gs.purchaseUnit.bind(gs);
+  gs.purchaseUnit = function countTac(type, ...rest) {
+    const ok = purchaseUnit(type, ...rest);
+    if (ok && type === 'tacticalBomber') tacBought += 1;
+    return ok;
+  };
   const ai = new AIController();
   ai.unitDefs = unitDefs;
   ai.gameState = gs;
@@ -67,7 +104,7 @@ async function playOne(index) {
   let steps = 0;
   let stuck = 0;
   const beforeErrors = errors.length;
-  while (gs.round <= 10 && !gs.gameOver && steps < 800) {
+  while (gs.round <= 10 && !gs.gameOver && steps < stepCap) {
     const before = fingerprint(gs);
     try {
       await ai.checkAndProcessAI();
@@ -91,6 +128,7 @@ async function playOne(index) {
     steps,
     stalls,
     errors: errors.length - beforeErrors,
+    tacBought,
     ms: Date.now() - started,
     phase: `${gs.phase}/${gs.turnPhase}`,
     player: gs.currentPlayer?.id || '',

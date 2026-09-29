@@ -4,6 +4,7 @@
 import { AIPlayer } from './aiPlayer.js';
 import { GAME_PHASES, TURN_PHASES } from '../state/gameState.js';
 import { DIRECT_TECH_IPC_COST } from '../gameOptions.js';
+import { tacticalBombersEnabled } from '../state/tacticalPairing.js';
 import { capitalChoicePool, pickCapitalFromPool } from './capitalSpacing.js';
 import {
   adjacentSeas,
@@ -536,8 +537,12 @@ export class AIController {
     for (const { unitType, maxCount } of priorities) {
       const def = this.unitDefs[unitType];
       if (!def || def.cost > remaining) continue;
-      // R5: the AI does not buy tactical bombers. Off also hides the unit.
-      if (unitType === 'tacticalBomber') continue;
+      // Off never lists this unit. On buys one only when a fighter or tank
+      // is already on the board or was just purchased this phase.
+      if (unitType === 'tacticalBomber') {
+        if (!tacticalBombersEnabled(this.gameState?.gameOptions)) continue;
+        if (this._pairingPartnerCount(player.id) < 1) continue;
+      }
 
       // Buy units up to max count
       let count = Math.min(maxCount, Math.floor(remaining / def.cost));
@@ -546,6 +551,21 @@ export class AIController {
         this.gameState.purchaseUnit(unitType, capital, this.unitDefs);
         remaining -= def.cost;
         purchased.push(unitType);
+      }
+    }
+
+    // Island starts skip the land list. One tactical bomber from what the
+    // navy plan left, and only when a fighter or tank is already owned.
+    if (tacticalBombersEnabled(this.gameState?.gameOptions)
+      && islandStart
+      && !strategy.threatenedCapital
+      && this._pairingPartnerCount(player.id) > 0) {
+      const tac = this.unitDefs.tacticalBomber;
+      if (tac && remaining >= tac.cost) {
+        if (this.gameState.purchaseUnit('tacticalBomber', capital, this.unitDefs)) {
+          remaining -= tac.cost;
+          purchased.push('tacticalBomber');
+        }
       }
     }
 
@@ -598,7 +618,39 @@ export class AIController {
       }
     }
 
+    this._insertTacticalBomberPriority(priorities);
     return priorities;
+  }
+
+  // One tactical bomber, next to the fighter or tank it pairs with.
+  // No-op while the option is off, so the purchase list stays today's.
+  _insertTacticalBomberPriority(priorities) {
+    if (!tacticalBombersEnabled(this.gameState?.gameOptions)) return;
+    const fighterAt = priorities.findIndex((row) => row.unitType === 'fighter');
+    const armourAt = priorities.findIndex((row) => row.unitType === 'armour');
+    const anchor = fighterAt >= 0 ? fighterAt : armourAt;
+    if (anchor < 0) return;
+    priorities.splice(anchor + 1, 0, { unitType: 'tacticalBomber', maxCount: 1 });
+  }
+
+  // Fighters and tanks (catalog id armour), including cargo and carrier air.
+  _pairingPartnerCount(playerId) {
+    let total = 0;
+    const add = (unit) => {
+      if (!unit || unit.owner !== playerId) return;
+      if (unit.type !== 'fighter' && unit.type !== 'armour') return;
+      const raw = unit.quantity;
+      const qty = raw == null ? 1 : Number(raw);
+      if (qty > 0) total += qty;
+    };
+    for (const stack of Object.values(this.gameState?.units || {})) {
+      for (const unit of stack || []) {
+        add(unit);
+        for (const air of unit.aircraft || []) add(air);
+        for (const cargo of unit.cargo || []) add(cargo);
+      }
+    }
+    return total;
   }
 
   // ============================================
