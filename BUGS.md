@@ -10,6 +10,8 @@ Robert, 29 Sep 2026: the large green bottom control only advances the phase. A s
 
 James: Classic can seat the seven powers that already have flags. The cap choices are 2 through 7. The default stays 5, and a 5-player Classic game keeps today's owners, including China American and Australia and New Zealand British. Six seats add Chinese on China only (printed IPC 1). Seven also seat ANZAC on Australia and New Zealand only (printed IPC 1 + 1). Pacific stays its five powers. Schema stays 11.
 
+Robert, 29 Sep 2026: the strategic-bombing damage number sits in the upper left of the factory icon. The separate square beside the factory is gone. Raid rules, the damage cap, repair, and placement are unchanged.
+
 ## 9.29.26 — unified.31 restores the in-game panel
 
 Stamp `V2.81.57-unified.31`. Schema stays 11. A `V2.82-unified.30` doc is older than this tab and does not prompt. A `V2.82-unified.32` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.31`).

@@ -3,6 +3,23 @@
 import { getUnitIconPath, unitIconForOwner, NEUTRAL_UNIT_COLOR } from '../utils/unitIcons.js';
 import { isMobileShell, phoneUnitIconSize, phoneMapStackOffsets, shouldHideUnitsAtZoom } from '../ui/mobileShell.js';
 
+/** Damage digits sit inside the factory icon, upper left. No separate chip. */
+export function factoryDamageLabelOrigin(iconX, iconY, iconSize) {
+  const bg = Number(iconSize) + 4;
+  const inset = bg * 0.08;
+  return {
+    x: iconX - bg / 2 + inset,
+    y: iconY - bg / 2 + inset,
+  };
+}
+
+/** World-pixel size. Caps at a readable screen size and stays inside the icon. */
+export function factoryDamageFontWorld(iconSize, zoom) {
+  const bg = Number(iconSize) + 4;
+  const z = Math.max(0.08, Number(zoom) || 1);
+  return Math.min(13 / z, bg * 0.4);
+}
+
 export class UnitRenderer {
   constructor(gameState, territories, unitDefs) {
     this.gameState = gameState;
@@ -60,10 +77,7 @@ export class UnitRenderer {
 
   render(ctx, zoom) {
     const mobile = isMobileShell();
-    if (shouldHideUnitsAtZoom(zoom, { mobile })) {
-      this._drawFactoryDamageBadges(ctx, zoom, mobile);
-      return;
-    }
+    if (shouldHideUnitsAtZoom(zoom, { mobile })) return;
 
     const iconSize = phoneUnitIconSize(zoom, { mobile });
     const spacingX = iconSize + 4;
@@ -105,59 +119,30 @@ export class UnitRenderer {
         this._renderSeaZoneUnits(ctx, cx, cy, grouped, iconSize, spacingX, spacingY, zoom);
       } else {
         // Land territory: render all units in flat grid
-        this._renderUnitGrid(ctx, cx, cy, types, grouped, maxPerRow, iconSize, spacingX, spacingY, zoom);
+        this._renderUnitGrid(ctx, cx, cy, types, grouped, maxPerRow, iconSize, spacingX, spacingY, zoom, territory);
       }
-    }
-    this._drawFactoryDamageBadges(ctx, zoom, mobile);
-  }
-
-  // Damage chip on the territory, drawn with the unit overlay. The number is
-  // sized in screen pixels so it stays readable at phone width.
-  _drawFactoryDamageBadges(ctx, zoom, mobile) {
-    const damage = this.gameState?.factoryDamage || {};
-    for (const [territory, points] of Object.entries(damage)) {
-      const n = Math.floor(Number(points) || 0);
-      if (n <= 0) continue;
-      const t = this.territoryByName[territory];
-      if (!t || t.isWater) continue;
-      let [cx, cy] = this._getTerritoryCenter(t);
-      if (cx === null) continue;
-      const landOffset = UnitRenderer.TERRITORY_CENTER_OFFSETS[territory];
-      if (landOffset) {
-        cx += landOffset.x;
-        cy += landOffset.y;
-      }
-      const { unitDy } = phoneMapStackOffsets(zoom, { mobile });
-      const iconSize = phoneUnitIconSize(zoom, { mobile });
-      this._drawFactoryDamageBadge(ctx, cx + iconSize, cy + unitDy, n, zoom, mobile);
     }
   }
 
-  _drawFactoryDamageBadge(ctx, x, y, damage, zoom, mobile) {
+  // Digits on the factory icon, upper left. No chip beside the stack.
+  _drawFactoryDamageOnIcon(ctx, x, y, iconSize, damage, zoom) {
+    const n = Math.floor(Number(damage) || 0);
+    if (n <= 0) return;
+    const text = String(n);
+    const origin = factoryDamageLabelOrigin(x, y, iconSize);
+    const fontPx = factoryDamageFontWorld(iconSize, zoom);
     const z = Math.max(0.08, Number(zoom) || 1);
-    const fontPx = (mobile ? 16 : 12) / z;
-    const text = String(damage);
     ctx.save();
     ctx.font = `bold ${fontPx}px sans-serif`;
-    const metrics = ctx.measureText(text);
-    const pad = 4 / z;
-    const width = Math.max(metrics.width + pad * 2, fontPx + pad * 2);
-    const height = fontPx + pad * 2;
-    ctx.fillStyle = 'rgba(0,0,0,0.85)';
-    ctx.beginPath();
-    if (typeof ctx.roundRect === 'function') {
-      ctx.roundRect(x - width / 2, y - height / 2, width, height, 4 / z);
-    } else {
-      ctx.rect(x - width / 2, y - height / 2, width, height);
-    }
-    ctx.fill();
-    ctx.strokeStyle = '#fde68a';
-    ctx.lineWidth = Math.max(1, 1 / z);
-    ctx.stroke();
-    ctx.fillStyle = '#fde68a';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, x, y);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.lineJoin = 'round';
+    ctx.miterLimit = 2;
+    ctx.lineWidth = Math.max(1 / z, fontPx * 0.18);
+    ctx.strokeStyle = 'rgba(0,0,0,0.92)';
+    ctx.strokeText(text, origin.x, origin.y);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(text, origin.x, origin.y);
     ctx.restore();
   }
 
@@ -251,7 +236,7 @@ export class UnitRenderer {
   }
 
   // Render units in a flat grid (for land territories)
-  _renderUnitGrid(ctx, cx, cy, types, grouped, maxPerRow, iconSize, spacingX, spacingY, zoom) {
+  _renderUnitGrid(ctx, cx, cy, types, grouped, maxPerRow, iconSize, spacingX, spacingY, zoom, territoryName) {
     const numRows = Math.ceil(types.length / maxPerRow);
     const { unitDy } = phoneMapStackOffsets(zoom, { mobile: isMobileShell() });
     const baseY = cy + unitDy;
@@ -271,6 +256,11 @@ export class UnitRenderer {
 
         this._drawUnitIcon(ctx, x, rowY, iconSize, unitType, color, presented.known ? owner : null, isOnCarrier, isOnTransport, damaged, false,
                           this.highlightUnitType === unitType);
+
+        if (unitType === 'factory') {
+          const raid = this.gameState?.getFactoryDamage?.(territoryName) || 0;
+          if (raid > 0) this._drawFactoryDamageOnIcon(ctx, x, rowY, iconSize, raid, zoom);
+        }
 
         if (total > 1) {
           this._drawBadge(ctx, x + iconSize / 2 - 2, rowY - iconSize / 2 + 2, total, zoom);
