@@ -6,6 +6,7 @@ import {
   prepareClassicSoloState,
   seedClassicPlayerTechs,
 } from '../state/classicCapitals.js';
+import { DEFAULT_GAME_OPTIONS } from '../gameOptions.js';
 
 export const DEFAULT_HUMAN_SEAT = 'Russians';
 export const DEFAULT_AI_DIFFICULTY = 'medium';
@@ -13,10 +14,15 @@ export const DEFAULT_AI_DIFFICULTY = 'medium';
 export function buildClassicSoloPlayers(setup, {
   humanSeat = DEFAULT_HUMAN_SEAT,
   aiDifficulty = DEFAULT_AI_DIFFICULTY,
+  maxPlayers = DEFAULT_GAME_OPTIONS.maxPlayers,
 } = {}) {
   const factions = setup?.classic?.factions || setup?.factions || [];
+  // Default stays the original five. Chinese and ANZAC join only at 6 and 7.
+  const cap = Number(maxPlayers);
+  const limit = Number.isFinite(cap) && cap >= 2 ? cap : DEFAULT_GAME_OPTIONS.maxPlayers;
+  const roster = factions.slice(0, limit);
   const humanId = humanSeat || DEFAULT_HUMAN_SEAT;
-  const players = factions.map((faction) => {
+  const players = roster.map((faction) => {
     const human = faction.id === humanId;
     return {
       ...faction,

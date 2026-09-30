@@ -45,6 +45,9 @@ export const CLASSIC_NATION_NAMES = Object.freeze({
   american: { name: 'US', adj: 'American' },
   us: { name: 'US', adj: 'American' },
   usa: { name: 'US', adj: 'American' },
+  chinese: { name: 'China', adj: 'Chinese' },
+  china: { name: 'China', adj: 'Chinese' },
+  anzac: { name: 'ANZAC', adj: 'ANZAC' },
 });
 
 // Phone Fit homes and inspect-only lands. Same names mobileShell used.
@@ -54,6 +57,8 @@ export const CLASSIC_FACTION_HOMES = Object.freeze({
   British: 'United Kingdom',
   Japanese: 'Japan',
   Americans: 'East US',
+  Chinese: 'China',
+  ANZAC: 'Australia',
 });
 
 export const CLASSIC_PHONE_INSPECT_LANDS = Object.freeze([

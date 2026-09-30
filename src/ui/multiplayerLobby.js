@@ -80,6 +80,8 @@ const FACTIONS = [
   { id: 'British', name: 'British', flag: 'British.png', color: '#B8860B' },
   { id: 'Japanese', name: 'Japanese', flag: 'Japanese.png', color: '#FF8C00' },
   { id: 'Americans', name: 'Americans', flag: 'Americans.png', color: '#556B2F' },
+  { id: 'Chinese', name: 'Chinese', flag: 'Chinese.png', color: '#8B008B' },
+  { id: 'ANZAC', name: 'ANZAC', flag: 'ANZAC.png', color: '#008B8B' },
 ];
 
 const FACTION_COLORS = [
@@ -1039,7 +1041,8 @@ export class MultiplayerLobby {
     const takenColors = new Set(lobby.players.map(p => p.color).filter(Boolean));
     const seatedCount = lobby.players.length;
     const roomOptions = optionsFromSettings(lobby.settings);
-    const seatMax = clampMaxPlayers(roomOptions.maxPlayers, seatedCount);
+    const seatCeiling = this._activeMapId() === 'pacific' ? 5 : undefined;
+    const seatMax = clampMaxPlayers(roomOptions.maxPlayers, seatedCount, seatCeiling);
     if (isHost && seatMax !== roomOptions.maxPlayers && !this._maxClampFlight) {
       this._maxClampFlight = true;
       Promise.resolve(this._commitGameOptions({ ...roomOptions, maxPlayers: seatMax }))

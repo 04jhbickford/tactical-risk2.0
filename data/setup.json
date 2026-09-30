@@ -63,6 +63,22 @@
       "lightColor": "#6B8E23",
       "flag": "Americans.png",
       "alliance": "Allies"
+    },
+    {
+      "id": "Chinese",
+      "name": "Chinese",
+      "color": "#8B008B",
+      "lightColor": "#9932CC",
+      "flag": "Chinese.png",
+      "alliance": "Allies"
+    },
+    {
+      "id": "ANZAC",
+      "name": "ANZAC",
+      "color": "#008B8B",
+      "lightColor": "#20B2AA",
+      "flag": "ANZAC.png",
+      "alliance": "Allies"
     }
   ],
   "alliances": {
@@ -80,7 +96,9 @@
       "members": [
         "Russians",
         "British",
-        "Americans"
+        "Americans",
+        "Chinese",
+        "ANZAC"
       ]
     }
   },
@@ -130,6 +148,24 @@
         "flag": "Americans.png",
         "alliance": "Allies",
         "startingPUs": 36
+      },
+      {
+        "id": "Chinese",
+        "name": "Chinese",
+        "color": "#8B008B",
+        "lightColor": "#9932CC",
+        "flag": "Chinese.png",
+        "alliance": "Allies",
+        "startingPUs": 1
+      },
+      {
+        "id": "ANZAC",
+        "name": "ANZAC",
+        "color": "#008B8B",
+        "lightColor": "#20B2AA",
+        "flag": "ANZAC.png",
+        "alliance": "Allies",
+        "startingPUs": 2
       }
     ],
     "territoryOwners": {
@@ -893,7 +929,9 @@
       "Germans",
       "British",
       "Japanese",
-      "Americans"
+      "Americans",
+      "Chinese",
+      "ANZAC"
     ]
   },
   "risk": {
@@ -937,6 +975,22 @@
         "lightColor": "#6B8E23",
         "flag": "Americans.png",
         "alliance": "Allies"
+      },
+      {
+        "id": "Chinese",
+        "name": "Chinese",
+        "color": "#8B008B",
+        "lightColor": "#9932CC",
+        "flag": "Chinese.png",
+        "alliance": "Allies"
+      },
+      {
+        "id": "ANZAC",
+        "name": "ANZAC",
+        "color": "#008B8B",
+        "lightColor": "#20B2AA",
+        "flag": "ANZAC.png",
+        "alliance": "Allies"
       }
     ],
     "startingIPCs": 80,
@@ -945,7 +999,7 @@
       "factory",
       "aaGun"
     ],
-    "maxPlayers": 5,
+    "maxPlayers": 7,
     "minPlayers": 2
   }
 }

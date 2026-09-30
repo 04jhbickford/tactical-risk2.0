@@ -8,6 +8,8 @@ Stamp `V2.81.57-unified.32`. Schema stays 11. A `V2.82-unified.31` doc is older 
 
 Robert, 29 Sep 2026: the large green bottom control only advances the phase. A smaller blue button confirms Move, Attack, Capital, Deploy, Mobilize, Purchase, air landing, and tech, and only while that confirm is available. Green stays on screen beside it. Unresolved combat, unplaced purchases, and unnamed air landings leave green disabled. Air landing confirm is the blue button; End Phase advances only after those landings are confirmed. Undo is unchanged.
 
+James: Classic can seat the seven powers that already have flags. The cap choices are 2 through 7. The default stays 5, and a 5-player Classic game keeps today's owners, including China American and Australia and New Zealand British. Six seats add Chinese on China only (printed IPC 1). Seven also seat ANZAC on Australia and New Zealand only (printed IPC 1 + 1). Pacific stays its five powers. Schema stays 11.
+
 ## 9.29.26 — unified.31 restores the in-game panel
 
 Stamp `V2.81.57-unified.31`. Schema stays 11. A `V2.82-unified.30` doc is older than this tab and does not prompt. A `V2.82-unified.32` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.31`).

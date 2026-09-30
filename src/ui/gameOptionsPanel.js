@@ -86,8 +86,9 @@ function mapSelectHtml(mapId, editable) {
 function rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMode, seatedCount, mapId }) {
   const o = normalizeGameOptions(options);
   const draft = draftMode || draftModeSource(null);
-  const maxChoices = maxPlayerChoices(seatedCount);
-  const maxSelected = clampMaxPlayers(o.maxPlayers, seatedCount);
+  const seatCeiling = mapId === 'pacific' ? 5 : undefined;
+  const maxChoices = maxPlayerChoices(seatedCount, seatCeiling);
+  const maxSelected = clampMaxPlayers(o.maxPlayers, seatedCount, seatCeiling);
   const territoryChoices = [
     ['random', 'Random deal'],
     ['draft', draft.name || 'Draft'],
@@ -161,7 +162,7 @@ function rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMod
           pressed: true,
         }), o.teams ? 'On' : 'Off')}
       </div>
-      <div class="go-row" title="Seat cap. Stays at 5.">
+      <div class="go-row" title="Seat cap. Default is 5. Classic can seat 7.">
         <span class="go-label">Max players</span>
         ${shownValue(editable, selectHtml('maxPlayers', maxChoices, maxSelected, { editable, label: 'Max players' }), String(maxSelected))}
       </div>

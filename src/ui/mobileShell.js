@@ -836,6 +836,8 @@ export const PHONE_FACTION_HOME_LAND = {
   British: 'United Kingdom',
   Japanese: 'Japan',
   Americans: 'East US',
+  Chinese: 'China',
+  ANZAC: 'Australia',
 };
 
 /** Skeptic probe lands. A 2p deal often assigns China to the human;

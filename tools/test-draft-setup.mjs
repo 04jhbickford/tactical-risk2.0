@@ -92,7 +92,7 @@ check('option label comes from the draft stub', draftRow.name === 'Territory Dra
 const panel = renderGameOptionsPanel(null, { editable: true, draftMode: draftRow, seatedCount: 3 });
 check('panel offers Random deal and the draft stub', panel.includes('Random deal') && panel.includes('Territory Draft'));
 check('waiting room hides a max below the seats', !panel.includes('value="2"') && panel.includes('value="3"'));
-check('max choices clamp to seated players', JSON.stringify(maxPlayerChoices(3)) === JSON.stringify([3, 4, 5]));
+check('max choices clamp to seated players', JSON.stringify(maxPlayerChoices(3)) === JSON.stringify([3, 4, 5, 6, 7]));
 check('stored 2 with 3 seated becomes 3', clampMaxPlayers(2, 3) === 3);
 check('stored 5 with 3 seated stays 5', clampMaxPlayers(5, 3) === 5);
 check('empty room still allows 2', clampMaxPlayers(2, 0) === 2);

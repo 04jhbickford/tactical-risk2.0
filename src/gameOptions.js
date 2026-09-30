@@ -1,5 +1,5 @@
 // Host-selected game options. Every default matches the game as it plays
-// today: 80 IPCs, teams off, 5 seats, 6 units a setup round, the standard
+// today: 80 IPCs, teams off, 5 seats (Classic can open to 7), 6 units a setup round, the standard
 // army, one tech pick per research roll, land bridges on.
 // Old saves omit `gameOptions` and load these defaults. SCHEMA stays 11.
 
@@ -21,7 +21,7 @@ export const DEFAULT_GAME_OPTIONS = Object.freeze({
 });
 
 export const STARTING_IPC_VALUES = Object.freeze([40, 60, 80, 100, 120, 150]);
-export const MAX_PLAYER_VALUES = Object.freeze([2, 3, 4, 5]);
+export const MAX_PLAYER_VALUES = Object.freeze([2, 3, 4, 5, 6, 7]);
 export const UNITS_PER_ROUND_VALUES = Object.freeze([3, 4, 5, 6, 7, 8, 9, 10]);
 export const STARTING_ARMY_VALUES = Object.freeze(['standard', 'light', 'heavy']);
 export const TERRITORY_SETUP_VALUES = Object.freeze(['random', 'draft']);
@@ -59,15 +59,17 @@ export function territorySetupLabel(value, draftName = 'Draft') {
   return 'Random deal';
 }
 
-/** Choices at or above the number of players already seated. */
-export function maxPlayerChoices(seated = 0) {
+/** Choices at or above the number of players already seated.
+ *  `ceiling` keeps Pacific at its five powers. Classic omits it and can seat 7. */
+export function maxPlayerChoices(seated = 0, ceiling) {
   const floor = Math.max(0, Number(seated) || 0);
-  const choices = MAX_PLAYER_VALUES.filter((n) => n >= floor);
+  const cap = Number(ceiling);
+  const choices = MAX_PLAYER_VALUES.filter((n) => n >= floor && (!Number.isFinite(cap) || n <= cap));
   return choices.length ? choices : [DEFAULT_GAME_OPTIONS.maxPlayers];
 }
 
-export function clampMaxPlayers(value, seated = 0) {
-  const choices = maxPlayerChoices(seated);
+export function clampMaxPlayers(value, seated = 0, ceiling) {
+  const choices = maxPlayerChoices(seated, ceiling);
   const n = Number(value);
   if (choices.includes(n)) return n;
   return choices[0];
