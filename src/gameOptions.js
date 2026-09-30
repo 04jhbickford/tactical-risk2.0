@@ -72,6 +72,7 @@ export function clampMaxPlayers(value, seated = 0, ceiling) {
   const choices = maxPlayerChoices(seated, ceiling);
   const n = Number(value);
   if (choices.includes(n)) return n;
+  if (Number.isFinite(n) && n > choices[choices.length - 1]) return choices[choices.length - 1];
   return choices[0];
 }
 

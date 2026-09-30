@@ -40,6 +40,15 @@ export function classicExtraLands(playerId) {
   return CLASSIC_EXTRA_SEATS[playerId]?.lands || null;
 }
 
+/** Powers a Classic game may seat.
+ *  Five or fewer keeps today's five. Six adds Chinese. Seven adds ANZAC. */
+export function classicPowersForCap(factions, maxPlayers) {
+  const list = Array.isArray(factions) ? factions : [];
+  const cap = Number(maxPlayers);
+  const limit = Number.isFinite(cap) && cap > 5 ? cap : 5;
+  return list.slice(0, Math.min(limit, list.length));
+}
+
 export function sumPrintedIpc(landNames, territories) {
   const byName = new Map((territories || []).map((territory) => [territory?.name, territory]));
   let sum = 0;

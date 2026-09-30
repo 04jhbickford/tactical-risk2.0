@@ -21,6 +21,7 @@ const { GameState } = await import(pathToFileURL(join(root, 'src/state/gameState
 const {
   DEFAULT_GAME_OPTIONS,
   MAX_PLAYER_VALUES,
+  clampMaxPlayers,
   maxPlayerChoices,
 } = await import(pathToFileURL(join(root, 'src/gameOptions.js')));
 const {
@@ -28,7 +29,7 @@ const {
   CLASSIC_NATION_NAMES,
   getMap,
 } = await import(pathToFileURL(join(root, 'src/map/mapRegistry.js')));
-const { sumPrintedIpc } = await import(pathToFileURL(join(root, 'src/state/classicSeats.js')));
+const { classicPowersForCap, sumPrintedIpc } = await import(pathToFileURL(join(root, 'src/state/classicSeats.js')));
 const { startClassicSolo } = await import(pathToFileURL(join(root, 'src/map/threeSoloMatch.js')));
 
 let failures = 0;
@@ -65,8 +66,18 @@ check('default max stays 5', DEFAULT_GAME_OPTIONS.maxPlayers === 5);
 check('choices are 2 through 7', JSON.stringify(MAX_PLAYER_VALUES) === JSON.stringify([2, 3, 4, 5, 6, 7]));
 check('8 is not a choice', !MAX_PLAYER_VALUES.includes(8) && !maxPlayerChoices(0).includes(8));
 check('Pacific choices stay at five', JSON.stringify(maxPlayerChoices(0, 5)) === JSON.stringify([2, 3, 4, 5]));
+check('a Classic cap of 7 becomes 5 on Pacific', clampMaxPlayers(7, 0, 5) === 5);
 check('no eighth power', setup.risk.factions.length === 7
   && !setup.risk.factions.some((faction) => ['Egypt', 'India', 'Australia'].includes(faction.id)));
+check('a cap of 5 offers today\'s five powers',
+  classicPowersForCap(setup.risk.factions, 5).map((faction) => faction.id).join(',')
+    === 'Russians,Germans,British,Japanese,Americans');
+check('a cap of 6 offers Chinese and not ANZAC',
+  classicPowersForCap(setup.risk.factions, 6).map((faction) => faction.id).join(',')
+    === 'Russians,Germans,British,Japanese,Americans,Chinese');
+check('a cap of 7 offers ANZAC',
+  classicPowersForCap(setup.risk.factions, 7).map((faction) => faction.id).join(',')
+    === 'Russians,Germans,British,Japanese,Americans,Chinese,ANZAC');
 check('Pacific stays its five powers',
   pacific.risk.factions.map((faction) => faction.id).join(',') === 'Japanese,Americans,Chinese,British,ANZAC'
   && !pacific.risk.factions.some((faction) => faction.id === 'Germans' || faction.id === 'Russians'));
