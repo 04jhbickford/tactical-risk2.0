@@ -2,6 +2,12 @@
 
 ---
 
+## 9.30.26 — unified.32 green advances, blue confirms
+
+Stamp `V2.81.57-unified.32`. Schema stays 11. A `V2.82-unified.31` doc is older than this tab and does not prompt. A `V2.82-unified.33` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.32`).
+
+Robert, 29 Sep 2026: the large green bottom control only advances the phase. A smaller blue button confirms Move, Attack, Capital, Deploy, Mobilize, Purchase, air landing, and tech, and only while that confirm is available. Green stays on screen beside it. Unresolved combat, unplaced purchases, and unnamed air landings leave green disabled. Air landing confirm is the blue button; End Phase advances only after those landings are confirmed. Undo is unchanged.
+
 ## 9.29.26 — unified.31 restores the in-game panel
 
 Stamp `V2.81.57-unified.31`. Schema stays 11. A `V2.82-unified.30` doc is older than this tab and does not prompt. A `V2.82-unified.32` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.31`).

@@ -7124,6 +7124,24 @@ html.mobile-shell .pp-battle-row,
   box-shadow: 0 4px 12px rgba(30, 144, 255, 0.4);
 }
 
+.pp-confirm-btn.pp-context-confirm {
+  padding: 8px 12px;
+  min-height: 44px;
+  font-size: 13px;
+  background: linear-gradient(135deg, #1e90ff, #1565c0);
+  border-color: #1e90ff;
+  box-shadow: 0 2px 8px rgba(30, 144, 255, 0.3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pp-confirm-btn.pp-context-confirm:hover:not(:disabled) {
+  background: linear-gradient(135deg, #42a5f5, #1e90ff);
+  border-color: #42a5f5;
+  box-shadow: 0 4px 12px rgba(30, 144, 255, 0.4);
+}
+
 .pp-confirm-btn.disabled,
 .pp-confirm-btn:disabled {
   background: rgba(80, 80, 80, 0.6);
@@ -18629,6 +18647,25 @@ html.mobile-shell .player-panel--expanded.player-panel--mobilize .pp-inline-mobi
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
     box-shadow: inset 0 1px 0 rgba(255, 248, 230, 0.28), 0 0 0 3px rgba(196, 163, 90, 0.28);
+  }
+
+  html.mobile-shell .pp-peek-primary-slot .pp-confirm-btn.pp-context-confirm:not(:disabled):not(.disabled):not(.pp-select-units),
+  html.mobile-shell .pp-peek-cta-row .pp-confirm-btn.pp-context-confirm:not(:disabled):not(.disabled):not(.pp-select-units) {
+    flex: 0 1 46%;
+    min-height: 44px;
+    font-size: 12px;
+    padding: 0 8px;
+    background: #1e90ff;
+    color: #fff;
+    border-color: transparent;
+    box-shadow: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  html.mobile-shell .pp-peek-primary-slot .pp-confirm-btn.pp-phase-advance {
+    flex: 1 1 54%;
   }
 
   .pp-confirm-btn.disabled,

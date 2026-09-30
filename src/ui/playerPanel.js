@@ -14,7 +14,6 @@ import { possessivePhrase } from '../utils/possessive.js';
 import {
   isMobileShell,
   syncPacificPhoneSheetInset,
-  pickMobilePrimaryButtons,
   shouldPeekPhoneTray,
   shouldShowPhoneChromeTabs,
   shouldShowPhonePanelBody,
@@ -32,7 +31,6 @@ import {
   remainingEligibleOfType,
   shouldCommitPhoneIconTap,
   shouldClearPhoneIconAfterExhausted,
-  shouldHidePhonePairConfirm,
   phoneIconCommitCount,
   canNamePhoneMoveDest,
   shouldStagePhoneMoveIcon,
@@ -59,6 +57,7 @@ import {
   isQueuedConfirmAction,
   confirmChromeClass,
 } from './confirmChrome.js';
+import { resolvePhaseConfirmSplit } from './phaseConfirmSplit.js';
 import { resolvePresenceState } from '../multiplayer/presencePolicy.js';
 import { resolveHostReconnectCopy } from '../multiplayer/lastMatch.js';
 import {
@@ -421,8 +420,8 @@ export function resolvePhoneMoveCta({ destName, isAttack = false, selectedSummar
   const ready = !!selectedSummary;
   return {
     action: 'confirm-move',
-    // Experimental: ready attack is "Confirm Attack"; move is "Confirm: Move to X".
-    label: isAttack ? 'Confirm Attack' : `Confirm: Move to ${destName}`,
+    // Ready attack names the land. Move keeps the one-line Confirm: Move to X.
+    label: isAttack ? `Attack ${destName}` : `Confirm: Move to ${destName}`,
     disabled: !ready,
     selectUnits: !ready,
     primary: true,
@@ -1939,36 +1938,24 @@ export class PlayerPanel {
       return '';
     }
 
-    let buttons = [];
     let warningHtml = '';
+    let confirmCandidate = null;
 
-    // Air landing confirm — stays up while dests are unnamed. At 0 remaining
-    // End Phase / Done is the commit+advance path (Robert 19 Sep NCM stuck).
+    // Blue confirms the named action. Green only advances, and stays up
+    // beside that confirm. Unnamed air landings disable green; they do not
+    // turn green into the landing confirm.
     const airLandingsRemaining = this._airLandingsRemaining();
-    const airLandingReady = this.isAirLandingActive() && airLandingsRemaining === 0;
-    if (this.isAirLandingActive() && !airLandingReady) {
-      buttons.push({
-        action: 'confirm-air-landing',
-        label: 'Confirm: All Landings',
-        disabled: true,
-        primary: true
-      });
-    } else if (airLandingReady) {
-      // Named dests are done — End Phase / Done below commits them.
-    }
-    // Movement confirm — desktop always. Phone Combat / Fortify use the
-    // same named Confirm (Move to X / Attack X). Deploy still icon-commits.
-    else if (phaseOwnsMovementConfirm(turnPhase) && this.movePendingDest && (this.activeTab === 'actions' || isMobileShell())
-      && !shouldHidePhonePairConfirm({
-        mobile: isMobileShell(),
-        pairGrammar: shouldUsePhonePairGrammar({
-          mobile: isMobileShell(),
-          phase,
-          turnPhase,
-        }),
-        phase,
-        turnPhase,
-      })) {
+    const airLandingActive = this.isAirLandingActive();
+    const airLandingReady = airLandingActive && airLandingsRemaining === 0;
+    if (airLandingActive) {
+      if (airLandingReady) {
+        confirmCandidate = {
+          action: 'confirm-air-landing',
+          label: 'Confirm: All Landings',
+          disabled: false,
+        };
+      }
+    } else if (phaseOwnsMovementConfirm(turnPhase) && this.movePendingDest && (this.activeTab === 'actions' || isMobileShell())) {
       const destOwner = this.gameState.getOwner(this.movePendingDest);
       const destWater = !!this.territories?.[this.movePendingDest]?.isWater;
       const seaAttack = destWater && seaZoneHasEnemyForAirAttack(
@@ -1983,26 +1970,21 @@ export class PlayerPanel {
         isAttack,
         selectedSummary,
       });
-      if (named) buttons.push(named);
-    }
-    // Capital placement — 22d4b13 tray. Own-land tap peeks; Confirm is
-    // the only commit. Mount from selected land or the peeked name.
-    else if (phase === GAME_PHASES.TERRITORY_DRAFT && isMobileShell()) {
+      if (named && !named.disabled && !named.selectUnits) confirmCandidate = named;
+    } else if (phase === GAME_PHASES.TERRITORY_DRAFT && isMobileShell()) {
       const name = this.selectedTerritory && !this.selectedTerritory.isWater
         ? this.selectedTerritory.name
         : '';
       const open = !!(name && !this.gameState.getOwner?.(name));
       warningHtml = `<div class="pp-bottom-warning draft-turn-banner">${possessivePhrase(player.name, 'pick')}</div>`;
       if (open) {
-        buttons.push({
+        confirmCandidate = {
           action: 'pick-territory',
           label: 'Pick',
           disabled: false,
-          primary: true,
-        });
+        };
       }
-    }
-    else if (phase === GAME_PHASES.CAPITAL_PLACEMENT) {
+    } else if (phase === GAME_PHASES.CAPITAL_PLACEMENT) {
       const peekName = this._phoneCapitalLandName;
       const isOwnedLand = !!(peekName && this.gameState.getOwner?.(peekName) === player.id);
       const capitalCta = resolvePhoneCapitalCta({
@@ -2011,27 +1993,13 @@ export class PlayerPanel {
         isOwnedLand,
         currentPlayerId: player.id,
       });
-      if (capitalCta) buttons.push(capitalCta);
-    }
-    // Initial unit placement — Deploy stays on the peek CTA (not clipped
-    // in the tray body). Done only after the queue is empty.
-    else if (phase === GAME_PHASES.UNIT_PLACEMENT) {
+      if (capitalCta) confirmCandidate = capitalCta;
+    } else if (phase === GAME_PHASES.UNIT_PLACEMENT) {
       const { ux, totalQueued, isValidPlacement } = this._getInitialPlacementUX(player);
-      const hidePairConfirm = shouldHidePhonePairConfirm({
-        mobile: isMobileShell(),
-        pairGrammar: shouldUsePhonePairGrammar({
-          mobile: isMobileShell(),
-          phase,
-          turnPhase,
-        }),
-        phase,
-        turnPhase,
-      });
-
-      if (totalQueued > 0 && isValidPlacement && !hidePairConfirm) {
+      if (totalQueued > 0 && isValidPlacement) {
         const dest = this._phoneDeployDest();
         const unitType = Object.entries(this.placementQueue || {}).find(([, n]) => Number(n) > 0)?.[0];
-        buttons.push({
+        confirmCandidate = {
           action: 'confirm-placement',
           label: resolvePhoneDeployCtaLabel({
             count: totalQueued,
@@ -2039,19 +2007,9 @@ export class PlayerPanel {
             landName: dest?.name || this._phoneDeployLandName,
           }),
           disabled: false,
-          primary: true
-        });
-      } else if (ux.showDone && !shouldUsePhonePlacementTray({ mobile: isMobileShell(), phase })) {
-        buttons.push({
-          action: 'finish-placement',
-          label: ux.canSkipNaval ? 'Done — skip leftover ships →' : 'Done - Next Player →',
-          disabled: false,
-          primary: true
-        });
-        if (ux.needSeaHint && ux.hint) {
-          warningHtml = `<div class="pp-bottom-warning">${ux.hint}</div>`;
-        }
-      } else if (ux.needSeaHint && ux.hint) {
+        };
+      }
+      if (ux.needSeaHint && ux.hint) {
         warningHtml = `<div class="pp-bottom-warning">${ux.hint}</div>`;
       }
     } else if (phase === GAME_PHASES.PLAYING && shouldShowTechResearch(phase, turnPhase)
@@ -2064,23 +2022,24 @@ export class PlayerPanel {
       if (techCta && this.techDiceCount <= 0 && carried > 0) {
         techCta.label = `Roll ${carried} carried`;
       }
-      if (techCta) buttons.push(techCta);
-    } else if (phase === GAME_PHASES.PLAYING && turnPhase === TURN_PHASES.MOBILIZE
-      && isMobileShell()
-      && !shouldHidePhonePairConfirm({
-        mobile: true,
-        pairGrammar: shouldUsePhonePairGrammar({
-          mobile: true, phase, turnPhase,
-        }),
-        phase,
-        turnPhase,
-      })) {
+      if (techCta) confirmCandidate = techCta;
+    } else if (phase === GAME_PHASES.PLAYING && turnPhase === TURN_PHASES.PURCHASE) {
+      const pending = this.gameState.getPendingPurchases?.() || [];
+      const totalUnits = pending.reduce((sum, p) => sum + (Number(p.quantity) || 0), 0);
+      if (totalUnits > 0) {
+        confirmCandidate = {
+          action: 'confirm-purchase',
+          label: `Buy ${totalUnits} Unit${totalUnits > 1 ? 's' : ''}`,
+          disabled: false,
+        };
+      }
+    } else if (phase === GAME_PHASES.PLAYING && turnPhase === TURN_PHASES.MOBILIZE) {
       const dest = this._phoneDeployDest();
       const unitType = this.selectedUnitType
         || Object.entries(this.placementQueue || {}).find(([, n]) => Number(n) > 0)?.[0];
       const totalQueued = queuedCount(this.placementQueue || {});
       if (totalQueued > 0 && dest && this._isValidMobilizeLocation(dest, player)) {
-        buttons.push({
+        confirmCandidate = {
           action: 'confirm-mobilize',
           label: resolvePhoneDeployCtaLabel({
             count: totalQueued,
@@ -2088,35 +2047,21 @@ export class PlayerPanel {
             landName: dest.name,
           }),
           disabled: false,
-          primary: true,
-        });
+        };
       }
     }
 
-    // End Phase stays up unless Combat / Fortify already named a dest
-    // (ghost Select-units or ready Move to X owns the thumb).
-    const phonePairHidesMoveConfirm = shouldHidePhonePairConfirm({
-      mobile: isMobileShell(),
-      pairGrammar: shouldUsePhonePairGrammar({
-        mobile: isMobileShell(), phase, turnPhase,
-      }),
-      phase,
-      turnPhase,
-    });
-    const offerEndPhase = shouldOfferEndPhaseDuringMove({
-      airLandingActive: this.isAirLandingActive(),
-      airLandingsRemaining,
-      movePendingDest: this.movePendingDest,
-      selectedMoveCount: selectedMoveCount(this.moveSelectedUnits),
-      hideMoveConfirm: phonePairHidesMoveConfirm,
-    });
-    if (phase === GAME_PHASES.PLAYING && offerEndPhase) {
-      const hasUnresolvedCombats = shouldDisableEndPhaseForCombat({
-        hasCombatQueue: turnPhase === TURN_PHASES.COMBAT
-          && ((this.gameState.combatQueue?.length || 0) + (this.gameState.raidQueue?.length || 0)) > 0,
-        airLandingReady,
-      });
-
+    let advanceCandidate = null;
+    if (phase === GAME_PHASES.UNIT_PLACEMENT) {
+      const { ux } = this._getInitialPlacementUX(player);
+      advanceCandidate = {
+        action: 'finish-placement',
+        label: ux.canSkipNaval ? 'Done — skip leftover ships →' : 'Done - Next Player →',
+        disabled: !ux.showDone,
+      };
+    } else if (phase === GAME_PHASES.PLAYING) {
+      const hasUnresolvedCombats = turnPhase === TURN_PHASES.COMBAT
+        && ((this.gameState.combatQueue?.length || 0) + (this.gameState.raidQueue?.length || 0)) > 0;
       const pendingPurchases = this.gameState.getPendingPurchases?.() || [];
       const unplacedUnits = pendingPurchases.reduce((sum, p) => sum + p.quantity, 0);
       const hasUnplacedUnits = turnPhase === TURN_PHASES.MOBILIZE && unplacedUnits > 0;
@@ -2128,30 +2073,33 @@ export class PlayerPanel {
         warningHtml = `<div class="pp-bottom-warning">⚠️ Place all ${unplacedUnits} purchased ${unitWord} first — click a factory (or adjacent sea zone) on the map, then use + / All in the Actions tab</div>`;
       }
 
-      buttons.push({
+      advanceCandidate = {
         action: 'next-phase',
-        label: airLandingReady
-          ? 'Done →'
-          : turnPhase === TURN_PHASES.DEVELOP_TECH
-            ? 'Develop technology'
-            : `End Phase · ${TURN_PHASE_NAMES[turnPhase] || 'Phase'}`,
-        disabled: hasUnresolvedCombats || hasUnplacedUnits,
-        primary: true
-      });
+        label: turnPhase === TURN_PHASES.DEVELOP_TECH
+          ? 'Develop technology'
+          : `End Phase · ${TURN_PHASE_NAMES[turnPhase] || 'Phase'}`,
+        disabled: hasUnresolvedCombats || hasUnplacedUnits || airLandingActive,
+      };
+    } else if (phase === GAME_PHASES.CAPITAL_PLACEMENT
+      || (phase === GAME_PHASES.TERRITORY_DRAFT && isMobileShell())) {
+      advanceCandidate = {
+        action: 'next-phase',
+        label: 'End Phase',
+        disabled: true,
+      };
     }
 
-    // Phone: one enabled primary CTA. End Turn and Done never coexist;
-    // illegal/disabled actions stay hidden (not greyed over another green).
-    // Peek stack: phase hint (own row) + unit/action chips + thumb-zone CTA.
+    const split = resolvePhaseConfirmSplit({
+      confirm: confirmCandidate,
+      advance: advanceCandidate,
+    });
+    let buttons = [split.confirm, split.advance].filter(Boolean);
+
+    // Peek stack: phase hint (own row) + unit/action chips + both bottom controls.
     const mobile = isMobileShell();
     let peekHint = '';
     let peekRow = '';
     if (mobile) {
-      const pendingGhost = buttons.find(b => b.selectUnits
-        || (b.action === 'confirm-placement' && b.disabled));
-      buttons = pickMobilePrimaryButtons(buttons.filter(b => !b.selectUnits
-        && !(b.action === 'confirm-placement' && b.disabled)));
-      if (pendingGhost && buttons.length === 0) buttons = [pendingGhost];
       const warningText = warningHtml ? warningHtml.replace(/<[^>]+>/g, '').trim() : '';
       const trayOwnsHint = shouldUsePhonePlacementTray({ mobile: true, phase })
         && !buttons.some(b => b && !b.disabled);
@@ -2289,8 +2237,8 @@ export class PlayerPanel {
 
     for (const btn of buttons) {
       const disabledClass = btn.disabled ? 'disabled' : '';
-      const attackClass = btn.isAttack ? 'attack' : '';
-      const undoableClass = btn.undoable ? 'undoable' : '';
+      const roleClass = btn.role === 'confirm' ? 'pp-context-confirm' : 'pp-phase-advance';
+      const undoableClass = btn.role === 'advance' && btn.undoable ? 'undoable' : '';
       const selectUnitsClass = btn.selectUnits ? 'pp-select-units' : '';
       const dataAttrs = btn.territory ? `data-territory="${btn.territory}"` : '';
       const chrome = resolveConfirmChrome({
@@ -2300,8 +2248,8 @@ export class PlayerPanel {
       });
 
       html += `
-        <button class="pp-confirm-btn pp-confirm-edge ${disabledClass} ${attackClass} ${undoableClass} ${selectUnitsClass} ${confirmChromeClass(chrome)}"
-                data-action="${btn.action}" data-chrome="${chrome}" ${dataAttrs} ${btn.disabled ? 'disabled' : ''}>
+        <button class="pp-confirm-btn pp-confirm-edge ${roleClass} ${disabledClass} ${undoableClass} ${selectUnitsClass} ${confirmChromeClass(chrome)}"
+                data-action="${btn.action}" data-role="${btn.role || 'advance'}" data-chrome="${chrome}" ${dataAttrs} ${btn.disabled ? 'disabled' : ''}>
           ${btn.label}
         </button>`;
     }
@@ -3298,7 +3246,6 @@ export class PlayerPanel {
         <div class="pp-purchase-actions">
           <button class="pp-action-btn secondary" data-action="undo-purchase">↩ Undo</button>
           <button class="pp-action-btn secondary" data-action="clear-purchases">Clear All</button>
-          <button class="pp-action-btn primary" data-action="confirm-purchase">Buy ${totalUnits} Unit${totalUnits > 1 ? 's' : ''}</button>
         </div>`;
     }
 
@@ -5405,9 +5352,8 @@ export class PlayerPanel {
 
         // Handle confirm purchase
         if (action === 'confirm-purchase') {
-          if (this.onAction) {
-            this.onAction('next-phase', {});
-          }
+          // Units are already in the pending cart from +/−. Confirm does not
+          // leave the phase; End Phase is the only advance.
           return;
         }
 
@@ -5565,7 +5511,6 @@ export class PlayerPanel {
         }
 
         if (action === 'next-phase') {
-          this.commitAirLandingsIfReady();
           const stillCombat = this.gameState?.turnPhase === TURN_PHASES.COMBAT
             && (this.gameState?.combatQueue?.length || 0) > 0;
           if (stillCombat) {
