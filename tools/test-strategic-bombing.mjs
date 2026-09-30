@@ -1,4 +1,4 @@
-// V2.81.57-unified.31 — strategic bombing raids.
+// V2.81.57-unified.32 — strategic bombing raids.
 // AA, damage cap, placement limit, repair, the bomber-only prompt,
 // save round-trip, and the online snapshot of factory damage.
 // Run: node tools/test-strategic-bombing.mjs
@@ -32,6 +32,10 @@ const {
   undamagedPlacement,
 } = await import('../src/state/strategicBombing.js');
 const { destroyIllegalAir, listIllegalAir } = await import('../src/state/ncmAirCheck.js');
+const {
+  factoryDamageLabelOrigin,
+  factoryDamageFontWorld,
+} = await import('../src/map/unitRenderer.js');
 const { bindGameEventLog, unbindGameEventLog } = await import('../src/multiplayer/gameEventLog.js');
 
 let failures = 0;
@@ -49,8 +53,8 @@ const unitDefs = {
 };
 
 console.log('=== stamp ===');
-check('display stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.31');
-check('compat stamp is V2.82-unified.31', compatClientVersion() === 'V2.82-unified.31');
+check('display stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.32');
+check('compat stamp is V2.82-unified.32', compatClientVersion() === 'V2.82-unified.32');
 check('schema stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== pure dice and cap ===');
@@ -411,6 +415,30 @@ console.log('=== rules panel ===');
   const rules = readFileSync(join(root, 'src/ui/rulesPanel.js'), 'utf8');
   check('the not-yet wording is gone', !rules.includes('raids are not yet available') && !rules.includes('Strategic bombing raids are not yet available'));
   check('rules panel has the raid entry', rules.includes('<strong>Strategic bombing:</strong>'));
+}
+
+console.log('=== damage number sits on the factory icon ===');
+{
+  const iconX = 100;
+  const iconY = 200;
+  const iconSize = 20;
+  const origin = factoryDamageLabelOrigin(iconX, iconY, iconSize);
+  const bg = iconSize + 4;
+  const left = iconX - bg / 2;
+  const top = iconY - bg / 2;
+  const right = iconX + bg / 2;
+  const bottom = iconY + bg / 2;
+  check('digits start inside the factory icon',
+    origin.x > left && origin.x < iconX && origin.y > top && origin.y < iconY);
+  check('digits are in the upper left, not beside the icon',
+    origin.x < iconX && origin.y < iconY && origin.x < right && origin.y < bottom);
+  const font = factoryDamageFontWorld(iconSize, 1);
+  check('digits fit the icon at normal zoom', font > 0 && font <= bg * 0.4);
+  const src = readFileSync(join(root, 'src/map/unitRenderer.js'), 'utf8');
+  check('the separate damage square is gone',
+    !src.includes('_drawFactoryDamageBadge')
+    && !src.includes('cx + iconSize')
+    && src.includes('_drawFactoryDamageOnIcon'));
 }
 
 if (failures) {

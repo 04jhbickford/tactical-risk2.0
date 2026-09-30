@@ -11,6 +11,11 @@ import {
 } from './placementPass.js';
 import { resolveDeployedThisRoundAfterLoad } from './placeQueue.js';
 import {
+  applyClassicSeatOwners,
+  classicExtraStartingPUs,
+  orderClassicPlayers,
+} from './classicSeats.js';
+import {
   applyAirLandingPlan,
   buildLandingPlan,
   clearPendingLandingDestinations,
@@ -627,8 +632,9 @@ export class GameState {
 
   _initClassicMode(selectedPlayers) {
     const classicData = this.setup.classic;
+    const ordered = orderClassicPlayers(selectedPlayers, classicData.turnOrder);
 
-    this.players = selectedPlayers.map((p, i) => ({
+    this.players = ordered.map((p, i) => ({
       ...p,
       turnOrder: i,
     }));
@@ -646,11 +652,19 @@ export class GameState {
       this.units[territory] = placements.map(p => ({ ...p }));
     }
 
+    // Chinese and ANZAC take only their listed lands, and only when seated.
+    applyClassicSeatOwners(
+      this.territoryState,
+      this.units,
+      this.players.map((player) => player.id),
+    );
+
     // Initialize player state with starting PUs
     for (const p of this.players) {
       const factionData = classicData.factions.find(f => f.id === p.id);
+      const extraIpc = classicExtraStartingPUs(p.id, this.territories);
       this.playerState[p.id] = {
-        ipcs: factionData?.startingPUs || 0,
+        ipcs: extraIpc == null ? (factionData?.startingPUs || 0) : extraIpc,
         hasPlacedCapital: true,
         capitalTerritory: null,
       };

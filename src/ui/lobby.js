@@ -9,9 +9,10 @@
 import { GAME_VERSION } from '../version.js';
 import { isMobileShell } from './mobileShell.js';
 import { captureLobbyScroll, restoreLobbyScroll } from './lobbyScroll.js';
-import { draftModeSource, normalizeGameOptions } from '../gameOptions.js';
+import { clampMaxPlayers, draftModeSource, normalizeGameOptions } from '../gameOptions.js';
 import { bindGameOptions, renderGameOptionsPanel } from './gameOptionsPanel.js';
 import { CLASSIC_MAP_ID, markMapChrome } from '../map/mapRegistry.js';
+import { classicPowersForCap } from '../state/classicSeats.js';
 import { getBoard } from '../map/boardCatalog.js';
 import { bindLobbyDice, lobbyDiceEntryMarkup, renderDiceStatsMarkup } from './diceStatsPanel.js';
 export { GAME_VERSION };
@@ -240,6 +241,8 @@ export class Lobby {
     this.teamsEnabled = options.teams;
     this.startingIPCs = options.startingIPCs;
     if (!this.teamsEnabled) this.playerTeams = {};
+    const offered = new Set(this._offeredFactions().map((faction) => faction.id));
+    this.selectedPlayers = this.selectedPlayers.filter((id) => offered.has(id));
     if (this.selectedPlayers.length > options.maxPlayers) {
       const keep = new Set(this.selectedPlayers.slice(0, options.maxPlayers));
       this.selectedPlayers = this.selectedPlayers.filter((id) => keep.has(id));
@@ -247,8 +250,14 @@ export class Lobby {
     this._render();
   }
 
+  _offeredFactions() {
+    const factions = this.setup?.risk?.factions || [];
+    if ((this.mapId || CLASSIC_MAP_ID) === 'pacific') return factions;
+    return classicPowersForCap(factions, this.gameOptions?.maxPlayers);
+  }
+
   _initFactionDefaults() {
-    const factions = this.setup.risk.factions;
+    const factions = this._offeredFactions();
     factions.forEach((p, i) => {
       const defaultColor = FACTION_COLORS[i % FACTION_COLORS.length];
       if (!this.playerColors[p.id]) {
@@ -712,6 +721,11 @@ export class Lobby {
         const apply = () => {
           const board = getBoard(this.mapId);
           if (board?.setup) this.setSetup(board.setup);
+          const ceiling = this.mapId === 'pacific' ? 5 : undefined;
+          const capped = clampMaxPlayers(this.gameOptions?.maxPlayers, this.selectedPlayers.length, ceiling);
+          if (capped !== this.gameOptions.maxPlayers) {
+            this.gameOptions = { ...this.gameOptions, maxPlayers: capped };
+          }
           this._render();
         };
         if (getBoard(this.mapId) || typeof this.loadBoard !== 'function') apply();
@@ -759,8 +773,9 @@ export class Lobby {
   }
 
   _togglePlayer(playerId) {
-    const factions = this.setup.risk.factions;
+    const factions = this._offeredFactions();
     const faction = factions.find(p => p.id === playerId);
+    if (!faction) return;
     const idx = this.selectedPlayers.indexOf(playerId);
 
     if (idx >= 0) {

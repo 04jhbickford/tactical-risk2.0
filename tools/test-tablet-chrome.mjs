@@ -202,7 +202,7 @@ const check = (label, cond) => {
 };
 
 console.log('=== Version stamps ===');
-check('GAME_VERSION is V2.81.57-unified.31', GAME_VERSION === 'V2.81.57-unified.31');
+check('GAME_VERSION is V2.81.57-unified.32', GAME_VERSION === 'V2.81.57-unified.32');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== resolveMapRightEdge ===');
@@ -1213,7 +1213,7 @@ check('phone placement hints say Tap, desktop stay Click',
       && /x-vercel-skip-toolbar/.test(vercel));
     check('Deploy icon path commits immediately; Confirm is not required',
       /_commitPhoneIconDeploy/.test(panelSrc)
-      && /shouldHidePhonePairConfirm/.test(panelSrc)
+      && /resolvePhaseConfirmSplit/.test(panelSrc)
       && /phone-peek-pair-hint/.test(panelSrc)
       && !/label: 'Deploy',\s*disabled: true/.test(panelSrc));
   }
@@ -1653,7 +1653,7 @@ console.log('=== V2.81.17 James lock — one grammar across land+unit phases ===
     }) === 'Tap each unit to move · West Russia'
     && /_commitPhoneIconMobilize/.test(panelSrc)
     && /_commitPhoneIconMove/.test(panelSrc)
-    && /shouldHidePhonePairConfirm/.test(panelSrc)
+    && /resolvePhaseConfirmSplit/.test(panelSrc)
     && /shouldStagePhoneMoveIcon/.test(panelSrc));
   check('peek tiles / steppers / CTA accept touch without eating named-land taps',
     /player-panel--peek \.phone-peek-tile[\s\S]*?pointer-events:\s*auto/.test(phoneBlock)
@@ -2209,7 +2209,7 @@ console.log('=== V2.81.36 sea hairline + tech Confirm + mixed-stack select ===')
       destName: 'West Russia',
       isAttack: true,
       selectedSummary: '4 infantry · 2 tank · 1 fighter',
-    })?.label === 'Confirm Attack'
+    })?.label === 'Attack West Russia'
     && resolvePhonePeekHint(GAME_PHASES.PLAYING, TURN_PHASES.COMBAT_MOVE, 'infantry', {
       territoryName: 'Ukraine S.S.R.',
       destName: 'West Russia',
@@ -2384,7 +2384,7 @@ console.log('=== V2.81.51 combat / fortify purchase-class Confirm ===');
     && remainingUnstagedOfType({ available: 2, staged: 2 }) === 0
     && nextStagedCount({ current: 0, available: 3 }) === 1
     && nextStagedCount({ current: 2, available: 3 }) === 3);
-  check('named Confirm is Confirm: Move to / Confirm Attack; ghost until units stage',
+  check('named Confirm is Confirm: Move to / Attack X; ghost until units stage',
     resolvePhoneMoveCta({ destName: 'West Russia' })?.label === 'Confirm: Move to West Russia'
     && resolvePhoneMoveCta({ destName: 'West Russia' })?.selectUnits === true
     && resolvePhoneMoveCta({ destName: 'West Russia' })?.disabled === true
@@ -2400,13 +2400,13 @@ console.log('=== V2.81.51 combat / fortify purchase-class Confirm ===');
       destName: 'West Russia',
       isAttack: true,
       selectedSummary: '2 infantry · 1 tank',
-    })?.label === 'Confirm Attack'
+    })?.label === 'Attack West Russia'
     && resolvePhoneMoveCta({}) === null);
   check('phone move icon path stages instead of execute-move',
     /shouldStagePhoneMoveIcon/.test(panelSrc)
     && /remainingUnstagedOfType/.test(panelSrc)
     && /Confirm: Move to \$\{destName\}/.test(panelSrc)
-    && /Confirm Attack/.test(panelSrc));
+    && /Attack \$\{destName\}/.test(panelSrc));
 }
 
 if (failures) {

@@ -49,6 +49,7 @@ import {
 } from '../gameOptions.js';
 import { bindGameOptions, readGameOptionsFrom, readMapIdFrom, renderGameOptionsPanel } from './gameOptionsPanel.js';
 import { CLASSIC_MAP_ID, markMapChrome, UNKNOWN_MAP_MESSAGE } from '../map/mapRegistry.js';
+import { classicPowersForCap } from '../state/classicSeats.js';
 import { getBoard } from '../map/boardCatalog.js';
 import { bindLobbyDice, lobbyDiceEntryMarkup, renderDiceStatsMarkup } from './diceStatsPanel.js';
 import { isMobileShell } from './mobileShell.js';
@@ -80,6 +81,8 @@ const FACTIONS = [
   { id: 'British', name: 'British', flag: 'British.png', color: '#B8860B' },
   { id: 'Japanese', name: 'Japanese', flag: 'Japanese.png', color: '#FF8C00' },
   { id: 'Americans', name: 'Americans', flag: 'Americans.png', color: '#556B2F' },
+  { id: 'Chinese', name: 'Chinese', flag: 'Chinese.png', color: '#8B008B' },
+  { id: 'ANZAC', name: 'ANZAC', flag: 'ANZAC.png', color: '#008B8B' },
 ];
 
 const FACTION_COLORS = [
@@ -1032,14 +1035,14 @@ export class MultiplayerLobby {
       ? (listing.buttons.find((b) => b.action === 'publish') || null)
       : null;
     const unlistBtn = listing.buttons.find((b) => b.action === 'unlist') || null;
-    const factions = this._factionsForActiveMap();
-
     // Get taken factions and colors
     const takenFactions = new Set(lobby.players.map(p => p.factionId).filter(Boolean));
     const takenColors = new Set(lobby.players.map(p => p.color).filter(Boolean));
     const seatedCount = lobby.players.length;
     const roomOptions = optionsFromSettings(lobby.settings);
-    const seatMax = clampMaxPlayers(roomOptions.maxPlayers, seatedCount);
+    const seatCeiling = this._activeMapId() === 'pacific' ? 5 : undefined;
+    const seatMax = clampMaxPlayers(roomOptions.maxPlayers, seatedCount, seatCeiling);
+    const factions = this._factionsForActiveMap(seatMax);
     if (isHost && seatMax !== roomOptions.maxPlayers && !this._maxClampFlight) {
       this._maxClampFlight = true;
       Promise.resolve(this._commitGameOptions({ ...roomOptions, maxPlayers: seatMax }))
@@ -1487,9 +1490,13 @@ export class MultiplayerLobby {
     return this.lobby?.settings?.mapId || this._draftMapId || CLASSIC_MAP_ID;
   }
 
-  _factionsForActiveMap() {
-    const setup = getBoard(this._activeMapId())?.setup || this.setup;
-    return setup?.risk?.factions || FACTIONS;
+  _factionsForActiveMap(maxPlayers) {
+    const mapId = this._activeMapId();
+    const setup = getBoard(mapId)?.setup || this.setup;
+    const factions = setup?.risk?.factions || FACTIONS;
+    if (mapId === 'pacific') return factions;
+    const cap = maxPlayers ?? this.lobby?.settings?.maxPlayers ?? this._draftOptions?.maxPlayers ?? 5;
+    return classicPowersForCap(factions, cap);
   }
 
   async _commitMapId(mapId) {

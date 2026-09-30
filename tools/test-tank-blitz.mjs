@@ -1,4 +1,4 @@
-// V2.81.57-unified.31 — tank blitz regression.
+// V2.81.57-unified.32 — tank blitz regression.
 // A tank may pass through an empty enemy land territory. Run: node tools/test-tank-blitz.mjs
 
 import { readFileSync } from 'node:fs';
