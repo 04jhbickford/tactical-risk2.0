@@ -89,7 +89,7 @@ Example (land battle and capture):
 -South Africa Lost - Bastion UK
 ```
 
-The live ping does not post that raw summary. `bindDiscordTurnPing` calls `formatRecipientLossSummary` for the **next human** since their previous turn ended. That keeps units they lost (place + who hit them) and territories taken from them. It drops opponent casualties and territories they themselves captured. A quiet stretch still sends both "no losses" lines.
+The live ping does not post that raw summary. `bindDiscordTurnPing` calls `formatRecipientLossSummary` for the **next human** since their previous turn ended. A combat that human fought keeps both sides' unit losses. Each line names the place and who inflicted the loss. Territories taken from them stay. Territories they themselves captured stay out. Combats they were not in stay out. A quiet stretch still sends both "no losses" lines.
 
 ### Recipient header
 

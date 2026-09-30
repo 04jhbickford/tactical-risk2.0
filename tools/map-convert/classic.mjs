@@ -14,7 +14,6 @@ export const classicConvertConfig = {
   merges: [
     { from: 'Sinkiang', into: 'China' },
     { from: 'Yakut S.S.R.', into: 'Soviet Far East' },
-    { from: 'Afghanistan', into: 'India' },
     { from: 'Caucasus', into: 'Ukraine S.S.R.' },
     { from: 'Libya', into: 'Anglo Sudan Egypt' },
     { from: 'Rio del Oro', into: 'French West Africa' },
@@ -26,7 +25,7 @@ export const classicConvertConfig = {
     { name: 'North America', territories: ['East US', 'West US', 'East Canada', 'West Canada', 'Mexico', 'Alaska', 'Cuba', 'Panama'] },
     { name: 'South America', territories: ['Brazil', 'Argentina-Chile', 'Peru', 'Columbia'] },
     { name: 'Europe', territories: ['United Kingdom', 'West Europe', 'Germany', 'South Europe', 'East Europe', 'Eire', 'Spain', 'Sweden', 'Switzerland', 'Finland Norway'] },
-    { name: 'Middle East', territories: ['Turkey', 'Syria Jordan', 'Saudi Arabia', 'Persia', 'India', 'Kazakh S.S.R.'] },
+    { name: 'Middle East', territories: ['Turkey', 'Syria Jordan', 'Saudi Arabia', 'Persia', 'Afghanistan', 'India', 'Kazakh S.S.R.'] },
     { name: 'Africa', territories: ['Algeria', 'Anglo Sudan Egypt', 'French West Africa', 'French Equatorial Africa', 'Congo', 'Kenya-Rhodesia', 'South Africa', 'Italian East Africa', 'Madagascar'] },
     { name: 'Asia', territories: ['Russia', 'Karelia S.S.R.', 'Ukraine S.S.R.', 'Novosibirsk', 'Evenki National Okrug', 'Soviet Far East', 'Mongolia', 'Manchuria', 'China', 'Kwangtung', 'French Indo China'] },
     { name: 'Oceania', territories: ['Japan', 'Borneo Celebes', 'East Indies', 'Philippines', 'Okinawa', 'Australia', 'New Zealand', 'New Guinea', 'Solomon Islands', 'Caroline Islands', 'Hawaiian Islands', 'Midway', 'Wake Island'] },

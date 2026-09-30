@@ -1,4 +1,4 @@
-// V2.81.57-unified.32 — turn ping header is the human being pinged.
+// V2.81.57-unified.33 — turn ping header is the human being pinged.
 // TXVKJB-like: Rob = Germans, Bastion = Russians, AIs = UK / Japan / USA.
 // Run: node tools/test-turn-ping-recipient.mjs
 
@@ -15,7 +15,7 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-check('stamp is unified.14', GAME_VERSION === 'V2.81.57-unified.32');
+check('stamp is unified.14', GAME_VERSION === 'V2.81.57-unified.33');
 
 const players = [
   { id: 'Germans', name: 'Robfox007', isAI: false, discordUserId: '600101834727620620' },
@@ -169,13 +169,14 @@ check('Bastion losses accumulate across UK and USA turns', bastion === [
   '<@261711980526567428>',
   'Bastion - Russia Initial Deployment Phase',
   '-1x Infantry lost Caucasus - British Easy AI',
+  '-4x Infantry lost Caucasus - Bastion Russia',
   '-3x Infantry lost Ukraine - American Easy AI',
   '-Caucasus Lost - British Easy AI',
   '-Ukraine Lost - American Easy AI',
   'https://tactical-risk20.vercel.app/?code=TXVKJB',
 ].join('\n'));
-check('Bastion summary omits German losses and British casualties',
-  !bastion.includes('France') && !bastion.includes('Poland') && !bastion.includes('4x'));
+check('Bastion summary omits combats he was not in',
+  !bastion.includes('France') && !bastion.includes('Poland'));
 
 gs.phase = 'playing';
 seat(players[0], 0, 2);
@@ -188,12 +189,13 @@ check('Rob losses accumulate across UK and Japan', rob === [
   '<@600101834727620620>',
   'Robfox007 - Germany Develop Tech Phase',
   '-2x Infantry lost France - British Easy AI',
+  '-1x Infantry lost France - Robfox007 Germany',
   '-1x Tank lost Poland - Japanese Easy AI',
   '-France Lost - British Easy AI',
   '-Poland Lost - Japanese Easy AI',
   'https://tactical-risk20.vercel.app/?code=TXVKJB',
 ].join('\n'));
-check('Rob summary omits Russian losses', !rob.includes('Ukraine') && !rob.includes('Caucasus'));
+check('Rob summary omits combats he was not in', !rob.includes('Ukraine') && !rob.includes('Caucasus'));
 check('no ping header is an AI seat',
   posts.every((content) => !(content.split('\n')[1] || '').includes('Easy AI')));
 
@@ -214,6 +216,20 @@ check('client replay never called fetch', fetchCalls.length === 0);
 check('direct quiet summary',
   formatRecipientLossSummary([], { recipientId: 'Germans', players })
   === '-No units lost\n-No territories lost');
+
+const tankPing = formatRecipientLossSummary([
+  {
+    type: 'combat',
+    territory: 'Ukraine',
+    attackerId: 'Russians',
+    defenderId: 'Germans',
+    attackerLosses: { armour: 4 },
+    defenderLosses: { infantry: 1 },
+  },
+], { recipientId: 'Germans', players });
+check('Robfox ping names the 4 tanks Bastion lost to him',
+  tankPing.includes('-4x Tanks lost Ukraine - Robfox007 Germany')
+  && tankPing.includes('-1x Infantry lost Ukraine - Bastion Russia'));
 
 const require = createRequire(import.meta.url);
 const prevWebhook = process.env.DISCORD_TURN_WEBHOOK_URL;
