@@ -2148,7 +2148,7 @@ export class PlayerPanel {
     // A movement / air-landing Undo (n) is enough to keep the bar.
     if (buttons.length === 0 && !warningHtml && !peekHint && !this._looksBrokenReason && !mobile && !showUndoBar) return '';
 
-    let html = `<div class="pp-bottom-actions${mobile ? ' pp-tray-peek' : ''}">`;
+    let html = `<div class="pp-bottom-actions${mobile ? ' pp-tray-peek' : ''}${split.confirm ? ' pp-has-context-confirm' : ''}">`;
     if (shouldShowPhonePlaceMeta({ mobile, phase, peek: mobile && this.el.classList.contains('player-panel--peek') })) {
       const placeUX = this._getInitialPlacementUX(player);
       const budget = placementBudgetCopy({
@@ -2238,6 +2238,9 @@ export class PlayerPanel {
     for (const btn of buttons) {
       const disabledClass = btn.disabled ? 'disabled' : '';
       const roleClass = btn.role === 'confirm' ? 'pp-context-confirm' : 'pp-phase-advance';
+      // The one-line land name stays on the bottom edge. That edge is the
+      // blue confirm. Green stays in the panel so the two do not share a hit target.
+      const edgeClass = (btn.role === 'confirm' || !split.confirm) ? 'pp-confirm-edge' : '';
       const undoableClass = btn.role === 'advance' && btn.undoable ? 'undoable' : '';
       const selectUnitsClass = btn.selectUnits ? 'pp-select-units' : '';
       const dataAttrs = btn.territory ? `data-territory="${btn.territory}"` : '';
@@ -2248,7 +2251,7 @@ export class PlayerPanel {
       });
 
       html += `
-        <button class="pp-confirm-btn pp-confirm-edge ${roleClass} ${disabledClass} ${undoableClass} ${selectUnitsClass} ${confirmChromeClass(chrome)}"
+        <button class="pp-confirm-btn ${edgeClass} ${roleClass} ${disabledClass} ${undoableClass} ${selectUnitsClass} ${confirmChromeClass(chrome)}"
                 data-action="${btn.action}" data-role="${btn.role || 'advance'}" data-chrome="${chrome}" ${dataAttrs} ${btn.disabled ? 'disabled' : ''}>
           ${btn.label}
         </button>`;

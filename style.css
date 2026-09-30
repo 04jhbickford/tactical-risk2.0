@@ -7136,6 +7136,11 @@ html.mobile-shell .pp-battle-row,
   text-overflow: ellipsis;
 }
 
+/* Blue sits on the bottom edge. Green stays in the panel, above that line. */
+.pp-bottom-actions.pp-has-context-confirm {
+  padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+}
+
 .pp-confirm-btn.pp-context-confirm:hover:not(:disabled) {
   background: linear-gradient(135deg, #42a5f5, #1e90ff);
   border-color: #42a5f5;
@@ -21649,4 +21654,11 @@ html.mobile-shell .pp-peek-cta-row .pp-confirm-btn.pp-confirm-edge:not(:disabled
   overflow: hidden;
   text-overflow: clip;
   font-size: clamp(11px, 3.5vw, 16px);
+}
+
+/* The edge line is the blue confirm. Keep it blue when it is pinned to the bottom. */
+.pp-confirm-btn.pp-confirm-edge.pp-context-confirm:not(:disabled):not(.disabled) {
+  background: linear-gradient(135deg, #1e90ff, #1565c0);
+  border-color: #1e90ff;
+  color: #fff;
 }
