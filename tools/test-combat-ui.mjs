@@ -69,6 +69,7 @@ const {
   resolvePhoneCombatStep,
   phoneCombatStepIndex,
   shouldCompactPhoneCombatHero,
+  paneOwnsCombatPhaseAdvance,
   PHONE_COMBAT_STEPS,
 } = await import(pathToFileURL(join(root, 'src/ui/combatUI.js')));
 
@@ -133,7 +134,7 @@ function makeUI(game) {
 }
 
 console.log('=== Version stamps ===');
-check('GAME_VERSION is V2.81.57-unified.32', GAME_VERSION === 'V2.81.57-unified.32');
+check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 check('AA result auto-pause is readable (not a 150ms blip)', AA_RESULT_AUTO_PAUSE_MS >= 400);
 
@@ -496,7 +497,15 @@ console.log('=== V2.81.55 AA wipe fail-close + telemetry ===');
     ui.combatState.phase === 'resolved'
     && ui.combatState.winner === 'defender'
     && !/data-action="roll"/.test(ui.el.innerHTML)
-    && /End Combat Phase|Next Battle/.test(ui.el.innerHTML));
+    && !/End Combat Phase/.test(ui.el.innerHTML)
+    && /holds /.test(ui.el.innerHTML));
+  check('a resolved last battle gives End Phase to the side pane',
+    paneOwnsCombatPhaseAdvance({ phase: 'resolved', combatQueueLength: 1, raidQueueLength: 0, mobile: false }) === true
+    && paneOwnsCombatPhaseAdvance({ phase: 'resolved', combatQueueLength: 2, raidQueueLength: 0, mobile: false }) === false
+    && paneOwnsCombatPhaseAdvance({ phase: 'ready', combatQueueLength: 1, raidQueueLength: 0, mobile: false }) === false
+    && paneOwnsCombatPhaseAdvance({ phase: 'resolved', combatQueueLength: 1, raidQueueLength: 1, mobile: false }) === false
+    && paneOwnsCombatPhaseAdvance({ phase: 'resolved', combatQueueLength: 1, raidQueueLength: 0, mobile: true }) === false
+    && game.combatPhaseAdvanceInPane === true);
   check('Continue after AA wipe finalizes so reload cannot reopen the fight',
     ui.combatState._finalized === true
     && game.combatQueue.length === 0

@@ -1061,6 +1061,9 @@ async function init() {
         break;
 
       case 'next-phase':
+        if (gameState.combatPhaseAdvanceInPane) {
+          combatUI.finishResolvedForPhaseAdvance();
+        }
         if (gameState.turnPhase === TURN_PHASES.COMBAT
           && (gameState.combatQueue?.length || 0) > 0) {
           camera.dirty = true;
@@ -2226,6 +2229,9 @@ async function init() {
     combatUI.setOnComplete(() => {
       camera.dirty = true;
     });
+    combatUI.onPhaseAdvanceOwnerChange = () => {
+      playerPanel.flushRender?.();
+    };
     combatUI.setOnCombatStart((territory) => {
       // Center camera on the combat territory
       const t = territoryRenderer.territoryByName[territory];

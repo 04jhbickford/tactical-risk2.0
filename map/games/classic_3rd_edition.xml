@@ -1054,6 +1054,7 @@
   </attachmentList>
   <initialize>
     <ownerInitialize>
+      <territoryOwner territory="Afghanistan" owner="British"/>
       <territoryOwner territory="Alaska" owner="Americans"/>
       <territoryOwner territory="Algeria" owner="Germans"/>
       <territoryOwner territory="Anglo Sudan Egypt" owner="British"/>

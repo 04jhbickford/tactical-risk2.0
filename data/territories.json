@@ -17712,6 +17712,7 @@
     "continent": "Asia",
     "originalOwner": "Americans",
     "connections": [
+      "Afghanistan",
       "French Indo China",
       "India",
       "Kazakh S.S.R.",
@@ -51807,10 +51808,10 @@
     "continent": "Middle East",
     "originalOwner": "British",
     "connections": [
+      "Afghanistan",
       "China",
       "French Indo China",
       "Indian Ocean Sea Zone",
-      "Kazakh S.S.R.",
       "Persia"
     ],
     "polygons": [
@@ -54579,7 +54580,26 @@
           1831,
           825
         ]
-      ],
+      ]
+    ],
+    "center": [
+      1801,
+      990
+    ]
+  },
+  {
+    "name": "Afghanistan",
+    "isWater": false,
+    "production": 1,
+    "continent": "Middle East",
+    "originalOwner": "British",
+    "connections": [
+      "China",
+      "India",
+      "Kazakh S.S.R.",
+      "Persia"
+    ],
+    "polygons": [
       [
         [
           1749,
@@ -55424,8 +55444,8 @@
       ]
     ],
     "center": [
-      1801,
-      990
+      1708,
+      781
     ]
   },
   {
@@ -63356,9 +63376,9 @@
     "continent": "Middle East",
     "originalOwner": "Russians",
     "connections": [
+      "Afghanistan",
       "Caspian Sea Zone",
       "China",
-      "India",
       "Novosibirsk",
       "Persia",
       "Russia"
@@ -84621,6 +84641,7 @@
     "continent": "Middle East",
     "originalOwner": "British",
     "connections": [
+      "Afghanistan",
       "Caspian Sea Zone",
       "India",
       "Kazakh S.S.R.",

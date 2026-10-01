@@ -1,4 +1,4 @@
-// V2.81.57-unified.32 — territory draft deals every land once, then capitals.
+// V2.81.57-unified.33 — territory draft deals every land once, then capitals.
 // Run: node tools/test-draft-setup.mjs
 
 import { readFileSync } from 'fs';
@@ -17,7 +17,7 @@ if (typeof globalThis.localStorage === 'undefined') {
 }
 
 const { GAME_VERSION, SCHEMA_VERSION } = await import(pathToFileURL(join(root, 'src/version.js')));
-const { GameState, GAME_PHASES } = await import(pathToFileURL(join(root, 'src/state/gameState.js')));
+const { GameState, GAME_PHASES, territorySkipsStartingUnits } = await import(pathToFileURL(join(root, 'src/state/gameState.js')));
 const {
   buildSnakeDraftOrder,
   draftOpenRefusal,
@@ -79,8 +79,8 @@ function stepDraft(gs) {
   return choice ? gs.pickDraftTerritory(choice) === true : false;
 }
 
-console.log('=== V2.81.57-unified.32 territory draft ===');
-check('GAME_VERSION is V2.81.57-unified.32', GAME_VERSION === 'V2.81.57-unified.32');
+console.log('=== V2.81.57-unified.33 territory draft ===');
+check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 const enabled = (setup.gameModes || []).filter((mode) => mode.enabled).map((mode) => mode.id);
@@ -170,8 +170,15 @@ for (const id of owners) counts[id] = (counts[id] || 0) + 1;
 check('all five seats received land', drafted.players.every((p) => counts[p.id] > 0));
 check('drafted land has its starting infantry', lands.every((name) => {
   const stack = drafted.units[name] || [];
+  if (territorySkipsStartingUnits(name)) {
+    return stack.length === 0 && !stack.some((unit) => unit.type === 'factory');
+  }
   return stack.some((unit) => unit.type === 'infantry' && unit.quantity === 1 && unit.owner === drafted.getOwner(name));
 }));
+check('Afghanistan starts empty in a draft',
+  territorySkipsStartingUnits('Afghanistan')
+  && drafted.getOwner('Afghanistan')
+  && !(drafted.units.Afghanistan || []).length);
 const firstLand = drafted.getPlayerTerritories(drafted.currentPlayer.id)
   .find((name) => !drafted.territoryByName[name]?.isWater);
 check('capital placement still accepts an owned land', drafted.placeCapital(firstLand) === true);
@@ -196,6 +203,8 @@ check('capital placement still accepts an owned land', drafted.placeCapital(firs
   check('old save keeps random deal and dice tokens',
     loaded.gameOptions.territorySetup === 'random' && loaded.gameOptions.techAcquisition === 'dice');
   check('old save is still in capital placement', loaded.phase === GAME_PHASES.CAPITAL_PLACEMENT);
+  check('a random deal leaves Afghanistan empty',
+    !(loaded.units.Afghanistan || []).some((unit) => unit.type === 'infantry' || unit.type === 'factory'));
   const land = loaded.getPlayerTerritories(loaded.currentPlayer.id)
     .find((name) => !loaded.territoryByName[name]?.isWater);
   check('old save can place a capital', loaded.placeCapital(land) === true);

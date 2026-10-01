@@ -80,6 +80,21 @@ export function formatAttackerCombatLine(units, { enabled = true } = {}) {
   return parts.join(' · ');
 }
 
+// Desktop Conduct Combat: once the open battle is resolved and nothing
+// else is queued, End Phase lives in the side pane. The battle window
+// keeps Next Battle only while another fight is still waiting.
+export function paneOwnsCombatPhaseAdvance({
+  phase = null,
+  combatQueueLength = 0,
+  raidQueueLength = 0,
+  mobile = false,
+} = {}) {
+  if (mobile) return false;
+  if (phase !== 'resolved') return false;
+  if ((Number(raidQueueLength) || 0) > 0) return false;
+  return (Number(combatQueueLength) || 0) <= 1;
+}
+
 export function resolveCombatNextLine(phase, { winner = null } = {}) {
   if (phase === 'resolved') {
     return winner === 'attacker' ? 'Attacker wins' : 'Defender holds';
@@ -368,6 +383,7 @@ export class CombatUI {
     flushDiceBuffer(this.gameState);
     this.el.classList.add('hidden');
     this._syncCombatChromeFlag();
+    this._setPanePhaseAdvance(false);
     this._airLandingDelegatedTerritory = null;
     this.currentTerritory = null;
     this.combatState = null;
@@ -382,6 +398,42 @@ export class CombatUI {
     const visible = !!this.el && !this.el.classList.contains('hidden');
     setShellFlag('combat-active', visible);
     syncBottomSurfaces();
+  }
+
+  phaseAdvanceOwnedByPane() {
+    if (!this.combatState || !this.gameState) return false;
+    if (this.el?.classList?.contains('hidden')) return false;
+    return paneOwnsCombatPhaseAdvance({
+      phase: this.combatState.phase,
+      combatQueueLength: this.gameState.combatQueue?.length || 0,
+      raidQueueLength: this.gameState.raidQueue?.length || 0,
+      mobile: isMobileShell(),
+    });
+  }
+
+  _setPanePhaseAdvance(owns) {
+    if (!this.gameState) return;
+    const next = owns === true;
+    const prev = this.gameState.combatPhaseAdvanceInPane === true;
+    this.gameState.combatPhaseAdvanceInPane = next;
+    if (prev !== next && this.onPhaseAdvanceOwnerChange) this.onPhaseAdvanceOwnerChange();
+  }
+
+  _syncPanePhaseAdvance() {
+    this._setPanePhaseAdvance(this.phaseAdvanceOwnedByPane());
+  }
+
+  // The side pane End Phase button. Finalizes the open resolved battle,
+  // closes the window, then the caller advances the turn phase.
+  finishResolvedForPhaseAdvance() {
+    if (!this.phaseAdvanceOwnedByPane()) return false;
+    this._finalizeCombat();
+    this.hide();
+    if (!this.hasCombats()) {
+      if (this.onAllCombatsResolved) this.onAllCombatsResolved();
+      if (this.onCombatComplete) this.onCombatComplete();
+    }
+    return true;
   }
 
   _initCombatState() {
@@ -2478,6 +2530,7 @@ export class CombatUI {
     this.el.classList.toggle('combat-popup--phone', phoneSummary);
     if (phoneSummary) {
       this._renderPhoneCombatSheet(player, defenderPlayer, phase, winner);
+      this._syncPanePhaseAdvance();
       return;
     }
 
@@ -3011,17 +3064,26 @@ export class CombatUI {
         </button>
       `;
     } else if (phase === 'resolved') {
-      html += `
-        <button class="combat-btn next" data-action="next">
-          ${this.gameState.combatQueue.length > 1 ? 'Next Battle' : 'End Combat Phase'}
-        </button>
-      `;
+      const paneOwns = paneOwnsCombatPhaseAdvance({
+        phase,
+        combatQueueLength: this.gameState.combatQueue?.length || 0,
+        raidQueueLength: this.gameState.raidQueue?.length || 0,
+        mobile: false,
+      });
+      if (!paneOwns) {
+        html += `
+          <button class="combat-btn next" data-action="next">
+            ${this.gameState.combatQueue.length > 1 ? 'Next Battle' : 'End Combat Phase'}
+          </button>
+        `;
+      }
     }
 
     html += `</div></div>`;
 
     this.el.innerHTML = html;
     this._bindEvents();
+    this._syncPanePhaseAdvance();
   }
 
   _phoneCombatStep(phase) {

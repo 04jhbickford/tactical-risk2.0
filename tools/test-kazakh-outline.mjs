@@ -94,7 +94,7 @@ const kazakh = data.find((row) => row.name === 'Kazakh S.S.R.');
 const txt = parsePolygonsLine(readFileSync(join(root, 'map/polygons.txt'), 'utf8'), 'Kazakh S.S.R.');
 const ring = kazakh?.polygons?.[0] || [];
 
-check('stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.32');
+check('stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.33');
 check('Kazakh is one ring', kazakh && kazakh.polygons.length === 1 && !kazakh.isWater);
 check('map polygons.txt matches territories.json',
   txt && JSON.stringify(txt) === JSON.stringify(ring));
@@ -105,15 +105,29 @@ check('the south stub vertices are gone',
   !ring.some((p) => (p[0] === 1619 && p[1] === 728) || (p[0] === 1620 && p[1] === 727)));
 check('the south border still joins',
   JSON.stringify(ring.slice(186, 190)) === JSON.stringify([[1621, 748], [1619, 746], [1618, 747], [1617, 747]]));
-check('Kazakh name, owner, IPC, and neighbors are unchanged',
+check('Kazakh name, owner, and IPC stay; it borders Afghanistan',
   kazakh.name === 'Kazakh S.S.R.'
   && kazakh.production === 1
   && kazakh.originalOwner === 'Russians'
   && kazakh.continent === 'Middle East'
   && JSON.stringify(kazakh.connections) === JSON.stringify([
-    'Caspian Sea Zone', 'China', 'India', 'Novosibirsk', 'Persia', 'Russia',
+    'Afghanistan', 'Caspian Sea Zone', 'China', 'Novosibirsk', 'Persia', 'Russia',
   ]));
-check('Afghanistan stays merged into India', !data.some((row) => row.name === 'Afghanistan'));
+const afghanistan = data.find((row) => row.name === 'Afghanistan');
+const india = data.find((row) => row.name === 'India');
+check('Afghanistan is its own territory north of India',
+  afghanistan
+  && !afghanistan.isWater
+  && afghanistan.originalOwner === 'British'
+  && afghanistan.production === 1
+  && afghanistan.continent === 'Middle East'
+  && afghanistan.polygons.length === 1
+  && afghanistan.polygons[0].length === 210
+  && india.polygons.length === 1
+  && india.connections.includes('Afghanistan')
+  && !india.connections.includes('Kazakh S.S.R.')
+  && kazakh.connections.includes('Afghanistan')
+  && !kazakh.connections.includes('India'));
 
 if (failures) {
   console.error(`${failures} failed`);

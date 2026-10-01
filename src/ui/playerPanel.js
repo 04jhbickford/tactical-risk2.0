@@ -576,6 +576,16 @@ export function shouldShowPhoneSetupUndo({
   return resolved.show && (resolved.action === 'undo-placement' || resolved.action === 'undo-capital');
 }
 
+// The pane is ~296px wide. Shrink the confirm so the full land name stays
+// one line. The phone edge is the full viewport and keeps its own size.
+function confirmLineFontSize(label) {
+  const n = String(label || '').length;
+  if (n <= 28) return '';
+  if (n <= 36) return '12px';
+  if (n <= 44) return '11px';
+  return '10px';
+}
+
 export class PlayerPanel {
   constructor() {
     this.gameState = null;
@@ -2012,7 +2022,7 @@ export class PlayerPanel {
       if (ux.needSeaHint && ux.hint) {
         warningHtml = `<div class="pp-bottom-warning">${ux.hint}</div>`;
       }
-    } else if (phase === GAME_PHASES.PLAYING && shouldShowTechResearch(phase, turnPhase)
+    } else if (isMobileShell() && phase === GAME_PHASES.PLAYING && shouldShowTechResearch(phase, turnPhase)
       && this._techAcquisition() !== 'buy'
       && (this.techDiceCount > 0 || this._carriedTechTokens(player) > 0)) {
       const carried = this._carriedTechTokens(player);
@@ -2060,7 +2070,10 @@ export class PlayerPanel {
         disabled: !ux.showDone,
       };
     } else if (phase === GAME_PHASES.PLAYING) {
+      const paneOwnsCombatEnd = turnPhase === TURN_PHASES.COMBAT
+        && this.gameState.combatPhaseAdvanceInPane === true;
       const hasUnresolvedCombats = turnPhase === TURN_PHASES.COMBAT
+        && !paneOwnsCombatEnd
         && ((this.gameState.combatQueue?.length || 0) + (this.gameState.raidQueue?.length || 0)) > 0;
       const pendingPurchases = this.gameState.getPendingPurchases?.() || [];
       const unplacedUnits = pendingPurchases.reduce((sum, p) => sum + p.quantity, 0);
@@ -2235,6 +2248,14 @@ export class PlayerPanel {
         </button>`;
     }
 
+    if (!mobile && phase === GAME_PHASES.PLAYING && turnPhase === TURN_PHASES.MOBILIZE) {
+      const canUndoMob = (this.gameState.mobilizationHistory || []).some((row) => row.owner === player.id);
+      html += `
+        <button type="button" class="pp-confirm-btn pp-undo-bar" data-action="undo-mobilize"${canUndoMob ? '' : ' disabled'}>
+          ↩ Undo
+        </button>`;
+    }
+
     for (const btn of buttons) {
       const disabledClass = btn.disabled ? 'disabled' : '';
       const roleClass = btn.role === 'confirm' ? 'pp-context-confirm' : 'pp-phase-advance';
@@ -2250,9 +2271,11 @@ export class PlayerPanel {
         selectUnits: !!btn.selectUnits,
       });
 
+      const labelSize = (!mobile && btn.role === 'confirm') ? confirmLineFontSize(btn.label) : '';
+      const sizeAttr = labelSize ? ` style="font-size:${labelSize}"` : '';
       html += `
         <button class="pp-confirm-btn ${edgeClass} ${roleClass} ${disabledClass} ${undoableClass} ${selectUnitsClass} ${confirmChromeClass(chrome)}"
-                data-action="${btn.action}" data-role="${btn.role || 'advance'}" data-chrome="${chrome}" ${dataAttrs} ${btn.disabled ? 'disabled' : ''}>
+                data-action="${btn.action}" data-role="${btn.role || 'advance'}" data-chrome="${chrome}" ${dataAttrs}${sizeAttr} ${btn.disabled ? 'disabled' : ''}>
           ${btn.label}
         </button>`;
     }
@@ -4956,17 +4979,14 @@ export class PlayerPanel {
     // Remaining units indicator
     html += `<div class="pp-mobilize-remaining">${totalPending} unit${totalPending !== 1 ? 's' : ''} remaining</div>`;
 
-    // Undo button (if there are any placements to undo)
-    const canUndo = this.gameState.mobilizationHistory && this.gameState.mobilizationHistory.length > 0;
-    if (canUndo) {
-      html += `
-        <div class="pp-mobilize-undo">
-          <button class="pp-undo-btn" data-action="undo-mobilize">
-            <span class="undo-icon">↩</span>
-            <span class="undo-text">Undo Last</span>
-          </button>
-        </div>`;
-    }
+    const canUndo = (this.gameState.mobilizationHistory || []).some((row) => row.owner === player.id);
+    html += `
+      <div class="pp-mobilize-undo">
+        <button class="pp-undo-btn" data-action="undo-mobilize"${canUndo ? '' : ' disabled'}>
+          <span class="undo-icon">↩</span>
+          <span class="undo-text">Undo Last</span>
+        </button>
+      </div>`;
 
     // Territory type hint
     if (this.selectedTerritory && !isValidPlacement) {
@@ -5514,8 +5534,10 @@ export class PlayerPanel {
         }
 
         if (action === 'next-phase') {
+          const paneEndsCombat = this.gameState?.combatPhaseAdvanceInPane === true;
           const stillCombat = this.gameState?.turnPhase === TURN_PHASES.COMBAT
-            && (this.gameState?.combatQueue?.length || 0) > 0;
+            && (this.gameState?.combatQueue?.length || 0) > 0
+            && !paneEndsCombat;
           if (stillCombat) {
             this._scheduleRender();
             return;

@@ -7136,8 +7136,9 @@ html.mobile-shell .pp-battle-row,
   text-overflow: ellipsis;
 }
 
-/* Blue sits on the bottom edge. Green stays in the panel, above that line. */
-.pp-bottom-actions.pp-has-context-confirm {
+/* Phone pins the blue confirm to the screen edge, so the pane clears it.
+   Desktop keeps both controls inside the side pane. */
+html.mobile-shell .pp-bottom-actions.pp-has-context-confirm {
   padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
 }
 
@@ -21612,9 +21613,9 @@ html.mobile-shell .hud-live-money {
   white-space: nowrap;
 }
 
-/* Confirm is one full line on the bottom edge. The land name stays one line.
-   The sidebar still reaches the screen bottom so this line sits inside it. */
-.pp-confirm-btn.pp-confirm-edge:not(:disabled):not(.disabled) {
+/* Phone: the confirm is one full line on the bottom edge. The land name
+   stays one line. Desktop leaves that button in the side pane. */
+html.mobile-shell .pp-confirm-btn.pp-confirm-edge:not(:disabled):not(.disabled) {
   position: fixed;
   left: 0;
   right: 0;
@@ -21638,6 +21639,19 @@ html.mobile-shell .hud-live-money {
   letter-spacing: 0;
   font-size: clamp(11px, 3.5vw, 16px);
   line-height: 1;
+}
+html:not(.mobile-shell) .pp-confirm-btn.pp-confirm-edge,
+html:not(.mobile-shell) .pp-confirm-btn.pp-context-confirm {
+  position: static;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+  letter-spacing: 0;
 }
 html.mobile-shell .pp-peek-primary-slot .pp-confirm-btn.pp-confirm-edge:not(:disabled):not(.disabled),
 html.mobile-shell .pp-peek-cta-row .pp-confirm-btn.pp-confirm-edge:not(:disabled):not(.disabled) {

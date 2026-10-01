@@ -1,4 +1,4 @@
-// V2.81.57-unified.32 — Discord playtest: turn save, phase CTA, naval drag,
+// V2.81.57-unified.33 — Discord playtest: turn save, phase CTA, naval drag,
 // one landing prompt, AA combat-move, lobby lock, Kazakh stem, turn ping
 // after a confirmed push, remaining movement, return to base.
 // Run: node tools/test-unified-18-discord.mjs
@@ -60,8 +60,8 @@ const check = (label, cond, extra) => {
   } else console.log('ok  :', label);
 };
 
-console.log('=== V2.81.57-unified.32 discord playtest ===');
-check('GAME_VERSION is V2.81.57-unified.32', GAME_VERSION === 'V2.81.57-unified.32');
+console.log('=== V2.81.57-unified.33 discord playtest ===');
+check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 const mainSrc = readFileSync(join(root, 'src/main.js'), 'utf8');
@@ -307,8 +307,10 @@ function verticalOverlaps(pts) {
     txt.length === 411
     && kazakh.polygons[0].length === 411
     && verticalOverlaps(txt) === 0
-    && verticalOverlaps(kazakh.polygons[0]) === 0
-    && !data.some((row) => row.name === 'Afghanistan'));
+    && verticalOverlaps(kazakh.polygons[0]) === 0);
+  check('Afghanistan is its own territory, not a second India ring',
+    data.some((row) => row.name === 'Afghanistan' && row.polygons.length === 1)
+    && data.find((row) => row.name === 'India').polygons.length === 1);
 }
 
 function pingGame(id) {

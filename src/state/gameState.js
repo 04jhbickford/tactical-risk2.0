@@ -235,6 +235,13 @@ export const STARTING_IPCS_BY_PLAYER_COUNT = {
   7: 12,
 };
 
+// The outline north of India is its own land. It does not inherit a
+// starting infantry from the random deal or the draft, and it has no
+// factory in the classic placement list. India keeps its own stack.
+export function territorySkipsStartingUnits(name) {
+  return name === 'Afghanistan';
+}
+
 // Starting units for Risk mode (per player)
 // Note: Fighters and carriers are placed independently - no auto-assignment
 export const RISK_STARTING_UNITS = {
@@ -896,11 +903,13 @@ export class GameState {
       owner: expectedId,
       isCapital: false,
     };
-    this.units[territoryName] = [{
-      type: 'infantry',
-      quantity: 1,
-      owner: expectedId,
-    }];
+    if (!territorySkipsStartingUnits(territoryName)) {
+      this.units[territoryName] = [{
+        type: 'infantry',
+        quantity: 1,
+        owner: expectedId,
+      }];
+    }
     this.draft.picks.push({ playerId: expectedId, territory: territoryName });
     this.draft.pickIndex += 1;
 
@@ -941,6 +950,7 @@ export class GameState {
 
   _placeStartingInfantry() {
     for (const [territoryName, state] of Object.entries(this.territoryState)) {
+      if (territorySkipsStartingUnits(territoryName)) continue;
       this.units[territoryName] = [{
         type: 'infantry',
         quantity: 1,
@@ -3200,8 +3210,8 @@ export class GameState {
     const fromUnits = this.units[fromTerritory] || [];
 
     // Separate units by type for different validation
-    const airUnits = unitsToMove.filter(u => unitDefs[u.type]?.isAir);
-    const landUnits = unitsToMove.filter(u => unitDefs[u.type]?.isLand);
+    let airUnits = unitsToMove.filter(u => unitDefs[u.type]?.isAir);
+    let landUnits = unitsToMove.filter(u => unitDefs[u.type]?.isLand);
     const seaUnits = unitsToMove.filter(u => unitDefs[u.type]?.isSea);
 
     // Classic: AA guns move in non-combat only. Rockets fires at industry;
@@ -3245,6 +3255,38 @@ export class GameState {
       ));
       if (landOnlySeaAttackIllegal(profile, true) && !hasFriendlyTransport) {
         return { success: false, error: 'Land units cannot attack a sea zone' };
+      }
+    }
+
+    // Air that can reach is not blocked by land sitting in the same stack
+    // that cannot make the trip. Those land units stay put. An air-only
+    // request never enters this branch, so air range is unchanged.
+    if (isCombatMove && !toT?.isWater && airUnits.length > 0 && landUnits.length > 0) {
+      const longRange = this.hasTech(player.id, 'longRangeAircraft');
+      const airCanReach = airUnits.every((airUnit) => {
+        const unitDef = unitDefs[airUnit.type];
+        if (!unitDef) return false;
+        const movementRange = (unitDef.movement || 4) + (longRange ? 2 : 0);
+        if (!this.canAirUnitReach(fromTerritory, toTerritory, movementRange)) return false;
+        const airRemaining = movementRange - this._calculateAirDistance(fromTerritory, toTerritory);
+        const bombingThis = raid && airUnit.type === 'bomber' && enemyFactoryAt(this, toTerritory, player.id);
+        if (!airCombatMoveMayOccupy(this, toTerritory, player.id) && !bombingThis) return false;
+        return hasLegalAirLandingFrom(
+          this, toTerritory, airRemaining, airUnit.type, unitDefs, player.id,
+        );
+      });
+      const landBlocked = landUnits.some((landUnit) => {
+        const movementRange = unitDefs[landUnit.type]?.movement || 1;
+        if (movementRange > 1) {
+          return !this.canLandUnitReach(fromTerritory, toTerritory, movementRange, player.id, true);
+        }
+        return !isAdjacent && !isLandBridge;
+      });
+      if (airCanReach && landBlocked) {
+        for (let i = unitsToMove.length - 1; i >= 0; i -= 1) {
+          if (unitDefs[unitsToMove[i].type]?.isLand) unitsToMove.splice(i, 1);
+        }
+        landUnits = [];
       }
     }
 

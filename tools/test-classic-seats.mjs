@@ -97,6 +97,12 @@ console.log('=== five players unchanged ===');
   check('5-player owners match today', sameOwners && gs.getOwner('China') === 'Americans'
     && gs.getOwner('Australia') === 'British' && gs.getOwner('New Zealand') === 'British');
   check('5-player units match today', sameUnits);
+  check('Afghanistan starts empty and India keeps its stack',
+    !(gs.units.Afghanistan || []).length
+    && (gs.units.India || []).some((unit) => unit.type === 'infantry' && unit.quantity === 2 && unit.owner === 'British')
+    && (gs.units.India || []).some((unit) => unit.type === 'fighter' && unit.quantity === 1 && unit.owner === 'British')
+    && !(gs.units.India || []).some((unit) => unit.type === 'factory')
+    && !(gs.units.Afghanistan || []).some((unit) => unit.type === 'factory'));
   check('5-player roster is the original five',
     gs.players.map((player) => player.id).join(',') === 'Russians,Germans,British,Japanese,Americans');
   check('5-player banks stay the stored numbers',

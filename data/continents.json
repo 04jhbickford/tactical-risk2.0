@@ -44,12 +44,13 @@
   },
   {
     "name": "Middle East",
-    "bonus": 18,
+    "bonus": 21,
     "territories": [
       "Turkey",
       "Syria Jordan",
       "Saudi Arabia",
       "Persia",
+      "Afghanistan",
       "India",
       "Kazakh S.S.R."
     ],

@@ -1,4 +1,4 @@
-// V2.81.57-unified.32 — playtest P0s: single-row undo, transport load,
+// V2.81.57-unified.33 — playtest P0s: single-row undo, transport load,
 // amphibious assault, empty-land air, desktop right-click / unit drag.
 // Run: node tools/test-unified-3-playtest.mjs
 
@@ -95,9 +95,9 @@ const html = readFileSync(join(root, 'index.html'), 'utf8');
 const mainSrc = readFileSync(join(root, 'src/main.js'), 'utf8');
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-unified.32', GAME_VERSION === 'V2.81.57-unified.32');
+check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
-check('index.html stamp is unified.5', html.includes('content="V2.81.57-unified.32"'));
+check('index.html stamp is unified.5', html.includes('content="V2.81.57-unified.33"'));
 
 console.log('=== 9.22.26.04 one undo row ===');
 {
@@ -175,6 +175,86 @@ console.log('=== 9.22.26.07 aircraft cannot occupy empty land ===');
   check('occupied enemy land is a legal air attack', attack.success === true);
   const catalog = combatMoveReachableDests(board(), 'Britain', { fighter: 1 }, unitDefs);
   check('catalog omits empty Germany', !catalog.some((d) => d.name === 'Germany'));
+}
+
+console.log('=== air attack ignores land that cannot reach ===');
+{
+  const territories = [
+    { name: 'Persia', isWater: false, connections: ['India'] },
+    { name: 'India', isWater: false, connections: ['Persia', 'French Indo China'] },
+    { name: 'French Indo China', isWater: false, connections: ['India', 'Far'] },
+    { name: 'Far', isWater: false, connections: ['French Indo China', 'Beyond'] },
+    { name: 'Beyond', isWater: false, connections: ['Far'] },
+  ];
+  const gs = new GameState({ risk: { factions: [] } }, territories, []);
+  gs.players = [
+    { id: 'uk', name: 'British', alliance: 'allies' },
+    { id: 'jap', name: 'Japanese', alliance: 'axis' },
+  ];
+  gs.currentPlayerIndex = 0;
+  gs.alliancesEnabled = true;
+  gs.phase = GAME_PHASES.PLAYING;
+  gs.turnPhase = TURN_PHASES.COMBAT_MOVE;
+  gs.territoryState = {
+    Persia: { owner: 'uk' },
+    India: { owner: 'uk' },
+    'French Indo China': { owner: 'jap' },
+    Far: { owner: 'jap' },
+    Beyond: { owner: 'jap' },
+  };
+  gs.playerState = {
+    uk: { ipcs: 30, hasPlacedCapital: true, capitalTerritory: 'Persia' },
+    jap: { ipcs: 20, hasPlacedCapital: true, capitalTerritory: 'Far' },
+  };
+  gs.friendlyTerritoriesAtTurnStart = new Set(['Persia', 'India']);
+  gs.units = {
+    Persia: [
+      { type: 'infantry', quantity: 2, owner: 'uk' },
+      { type: 'fighter', quantity: 1, owner: 'uk' },
+    ],
+    'French Indo China': [{ type: 'infantry', quantity: 1, owner: 'jap' }],
+    Beyond: [{ type: 'infantry', quantity: 1, owner: 'jap' }],
+  };
+  const requested = [
+    { type: 'infantry', quantity: 2 },
+    { type: 'fighter', quantity: 1 },
+  ];
+  const attack = gs.moveUnits('Persia', 'French Indo China', requested, unitDefs);
+  check('mixed Persia attack moves the fighter', attack.success === true);
+  check('the request drops the infantry that cannot reach',
+    requested.length === 1 && requested[0].type === 'fighter');
+  check('infantry stayed in Persia',
+    (gs.units.Persia || []).some((u) => u.type === 'infantry' && u.quantity === 2 && u.owner === 'uk')
+    && !(gs.units['French Indo China'] || []).some((u) => u.type === 'infantry' && u.owner === 'uk'));
+  check('fighter reached French Indo China',
+    (gs.units['French Indo China'] || []).some((u) => u.type === 'fighter' && u.owner === 'uk'));
+
+  const airOnly = new GameState({ risk: { factions: [] } }, territories, []);
+  airOnly.players = gs.players;
+  airOnly.currentPlayerIndex = 0;
+  airOnly.alliancesEnabled = true;
+  airOnly.phase = GAME_PHASES.PLAYING;
+  airOnly.turnPhase = TURN_PHASES.COMBAT_MOVE;
+  airOnly.territoryState = {
+    Persia: { owner: 'uk' },
+    India: { owner: 'uk' },
+    'French Indo China': { owner: 'jap' },
+    Far: { owner: 'jap' },
+    Beyond: { owner: 'jap' },
+  };
+  airOnly.playerState = gs.playerState;
+  airOnly.friendlyTerritoriesAtTurnStart = new Set(['Persia', 'India']);
+  airOnly.units = {
+    Persia: [{ type: 'fighter', quantity: 1, owner: 'uk' }],
+    'French Indo China': [{ type: 'infantry', quantity: 1, owner: 'jap' }],
+    Beyond: [{ type: 'infantry', quantity: 1, owner: 'jap' }],
+  };
+  const tooFar = [{ type: 'fighter', quantity: 1 }];
+  const missed = airOnly.moveUnits('Persia', 'Beyond', tooFar, unitDefs);
+  check('air-only range is unchanged', missed.success === false && tooFar.length === 1);
+  const planes = [{ type: 'fighter', quantity: 1 }];
+  const reached = airOnly.moveUnits('Persia', 'French Indo China', planes, unitDefs);
+  check('air-only Persia to French Indo China still works', reached.success === true);
 }
 
 console.log('=== 9.22.26.03 sea confirm still commits ===');

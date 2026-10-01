@@ -1,4 +1,4 @@
-// V2.81.57-unified.32 — strategic bombing raids.
+// V2.81.57-unified.33 — strategic bombing raids.
 // AA, damage cap, placement limit, repair, the bomber-only prompt,
 // save round-trip, and the online snapshot of factory damage.
 // Run: node tools/test-strategic-bombing.mjs
@@ -37,6 +37,7 @@ const {
   factoryDamageFontWorld,
 } = await import('../src/map/unitRenderer.js');
 const { bindGameEventLog, unbindGameEventLog } = await import('../src/multiplayer/gameEventLog.js');
+const { applyTerritoryCapture } = await import('../src/state/combatFinalize.js');
 
 let failures = 0;
 const check = (label, cond) => {
@@ -53,8 +54,8 @@ const unitDefs = {
 };
 
 console.log('=== stamp ===');
-check('display stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.32');
-check('compat stamp is V2.82-unified.32', compatClientVersion() === 'V2.82-unified.32');
+check('display stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.33');
+check('compat stamp is V2.82-unified.33', compatClientVersion() === 'V2.82-unified.33');
 check('schema stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== pure dice and cap ===');
@@ -352,6 +353,21 @@ console.log('=== save, old save, capture, online snapshot ===');
   ));
   check('captured factory keeps its damage', loaded.getFactoryDamage('Germany') === 17);
   check('the new owner places from their own output minus that damage', loaded.getFactoryPlacementLimit('Germany', 'usa') === 0);
+  const live = makeState();
+  live.factoryDamage.France = 4;
+  live.units.France.push({ type: 'factory', quantity: 1, owner: 'germans' });
+  const captured = applyTerritoryCapture(live, 'France', {
+    playerId: 'usa',
+    previousOwner: 'germans',
+    unitDefs,
+  });
+  const factory = (live.units.France || []).find((unit) => unit.type === 'factory');
+  check('capture hands the complex over with its damage',
+    captured.captured === true
+    && live.getOwner('France') === 'usa'
+    && factory?.owner === 'usa'
+    && live.getFactoryDamage('France') === 4
+    && live.getFactoryPlacementLimit('France', 'usa') === 1);
   const round = loaded.toJSON();
   const peer = makeState();
   peer.loadFromJSON(JSON.parse(JSON.stringify(round)));
