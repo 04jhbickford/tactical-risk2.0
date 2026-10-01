@@ -259,6 +259,15 @@ export function convertMap(mapId, { log = console.log } = {}) {
     if (a.isWater !== b.isWater) return a.isWater ? 1 : -1;
     return a.name.localeCompare(b.name);
   });
+  // Afghanistan used to be India's second ring. Keep it immediately after
+  // India so a convert does not reorder the rest of territories.json.
+  const afgIdx = territoryList.findIndex((row) => row.name === 'Afghanistan');
+  const indiaIdx = territoryList.findIndex((row) => row.name === 'India');
+  if (afgIdx >= 0 && indiaIdx >= 0 && afgIdx !== indiaIdx + 1) {
+    const [afg] = territoryList.splice(afgIdx, 1);
+    const indiaNow = territoryList.findIndex((row) => row.name === 'India');
+    territoryList.splice(indiaNow + 1, 0, afg);
+  }
 
   const continents = config.continents.map((c) => ({
     name: c.name,
