@@ -231,6 +231,84 @@ check('Robfox ping names the 4 tanks Bastion lost to him',
   tankPing.includes('-4x Tanks lost Ukraine - Robfox007 Germany')
   && tankPing.includes('-1x Infantry lost Ukraine - Bastion Russia'));
 
+// The posted Discord body for that fight. Both sides, Ukraine, and the
+// opponent are already on the lines. Lock the text; do not reword it.
+const tankListeners = [];
+const tankGs = {
+  players,
+  currentPlayer: players[0],
+  currentPlayerIndex: 0,
+  round: 1,
+  phase: 'playing',
+  turnPhase: 'purchase',
+  turnEvents: [],
+  getTurnPhaseName() { return 'Purchase'; },
+  getTurnEventsSince(i) { return this.turnEvents.slice(i); },
+  getTurnEventsLastIndex() { return this.turnEvents.length; },
+  subscribe(fn) { tankListeners.push(fn); return () => {}; },
+};
+const tankPosts = [];
+const tankStorage = {
+  _d: {},
+  getItem(k) { return Object.prototype.hasOwnProperty.call(this._d, k) ? this._d[k] : null; },
+  setItem(k, v) { this._d[k] = String(v); },
+};
+bindDiscordTurnPing(tankGs, {
+  getGameId: () => 'TXVKJB',
+  getUxMode: () => 'classic',
+  getOrigin: () => 'https://tactical-risk20.vercel.app/',
+  isApplyingRemote: () => false,
+  storage: tankStorage,
+  post: (_url, content) => {
+    tankPosts.push(content);
+    return { ok: true };
+  },
+});
+function tankSeat(player, index, round = tankGs.round) {
+  tankGs.currentPlayer = player;
+  tankGs.currentPlayerIndex = index;
+  tankGs.round = round;
+  tankListeners[0]();
+}
+tankSeat(players[1], 1);
+tankSeat(players[2], 2);
+tankSeat(players[3], 3);
+check('Ukraine stretch does not ping the AI seats', tankPosts.length === 0);
+tankSeat(players[4], 4);
+check('Bastion is not pinged for a fight that has not happened yet', tankPosts.length === 1
+  && tankPosts[0] === [
+    '<@261711980526567428>',
+    'Bastion - Russia Purchase Phase',
+    '-No units lost',
+    '-No territories lost',
+    'https://tactical-risk20.vercel.app/?code=TXVKJB',
+  ].join('\n'));
+tankGs.turnEvents.push({
+  type: 'combat',
+  territory: 'Ukraine',
+  playerId: 'Russians',
+  attackerId: 'Russians',
+  defenderId: 'Germans',
+  attacker: 'Bastion',
+  defender: 'Robfox007',
+  attackerLosses: { armour: 4 },
+  defenderLosses: { infantry: 1 },
+});
+tankSeat(players[0], 0, 2);
+const robTanks = tankPosts[1] || '';
+check('posted body lists both sides of the Ukraine fight', robTanks === [
+  '<@600101834727620620>',
+  'Robfox007 - Germany Purchase Phase',
+  '-1x Infantry lost Ukraine - Bastion Russia',
+  '-4x Tanks lost Ukraine - Robfox007 Germany',
+  '-No territories lost',
+  'https://tactical-risk20.vercel.app/?code=TXVKJB',
+].join('\n'));
+tankSeat(players[1], 1, 2);
+tankSeat(players[2], 2, 2);
+tankSeat(players[3], 3, 2);
+check('later AI seats still are not pinged', tankPosts.length === 2);
+
 const require = createRequire(import.meta.url);
 const prevWebhook = process.env.DISCORD_TURN_WEBHOOK_URL;
 process.env.DISCORD_TURN_WEBHOOK_URL = 'https://example.test/discord-hook';
@@ -283,6 +361,30 @@ check('api header is the recipient even when actorName is the AI',
   && apiContent.includes('-Poland Lost - Japanese Easy AI')
   && apiContent.endsWith('https://tactical-risk20.vercel.app/?code=TXVKJB')
   && !apiContent.includes('British Easy AI - UK'));
+
+const tankApiRes = mockRes();
+await handler({
+  method: 'POST',
+  body: {
+    gameId: 'TXVKJB',
+    seatId: 'Germans',
+    turnIndex: 129,
+    displayName: 'Robfox007',
+    faction: 'Germans',
+    phase: 'Purchase',
+    discordUserId: '600101834727620620',
+    summary: [
+      '-1x Infantry lost Ukraine - Bastion Russia',
+      '-4x Tanks lost Ukraine - Robfox007 Germany',
+      '-No territories lost',
+    ].join('\n'),
+    deepLink: 'https://tactical-risk20.vercel.app/?code=TXVKJB',
+  },
+}, tankApiRes);
+const tankApiContent = JSON.parse(postedBody).content;
+check('api posts the same Ukraine body', tankApiRes.body.includes('"ok":true')
+  && tankApiContent === robTanks
+  && !postedUrl.includes('discord.com'));
 
 if (prevWebhook === undefined) delete process.env.DISCORD_TURN_WEBHOOK_URL;
 else process.env.DISCORD_TURN_WEBHOOK_URL = prevWebhook;
