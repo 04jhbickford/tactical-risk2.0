@@ -2070,7 +2070,10 @@ export class PlayerPanel {
         disabled: !ux.showDone,
       };
     } else if (phase === GAME_PHASES.PLAYING) {
+      const paneOwnsCombatEnd = turnPhase === TURN_PHASES.COMBAT
+        && this.gameState.combatPhaseAdvanceInPane === true;
       const hasUnresolvedCombats = turnPhase === TURN_PHASES.COMBAT
+        && !paneOwnsCombatEnd
         && ((this.gameState.combatQueue?.length || 0) + (this.gameState.raidQueue?.length || 0)) > 0;
       const pendingPurchases = this.gameState.getPendingPurchases?.() || [];
       const unplacedUnits = pendingPurchases.reduce((sum, p) => sum + p.quantity, 0);
@@ -5531,8 +5534,10 @@ export class PlayerPanel {
         }
 
         if (action === 'next-phase') {
+          const paneEndsCombat = this.gameState?.combatPhaseAdvanceInPane === true;
           const stillCombat = this.gameState?.turnPhase === TURN_PHASES.COMBAT
-            && (this.gameState?.combatQueue?.length || 0) > 0;
+            && (this.gameState?.combatQueue?.length || 0) > 0
+            && !paneEndsCombat;
           if (stillCombat) {
             this._scheduleRender();
             return;

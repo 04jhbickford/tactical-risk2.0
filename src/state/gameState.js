@@ -235,6 +235,13 @@ export const STARTING_IPCS_BY_PLAYER_COUNT = {
   7: 12,
 };
 
+// The outline north of India is its own land. It does not inherit a
+// starting infantry from the random deal or the draft, and it has no
+// factory in the classic placement list. India keeps its own stack.
+export function territorySkipsStartingUnits(name) {
+  return name === 'Afghanistan';
+}
+
 // Starting units for Risk mode (per player)
 // Note: Fighters and carriers are placed independently - no auto-assignment
 export const RISK_STARTING_UNITS = {
@@ -896,11 +903,13 @@ export class GameState {
       owner: expectedId,
       isCapital: false,
     };
-    this.units[territoryName] = [{
-      type: 'infantry',
-      quantity: 1,
-      owner: expectedId,
-    }];
+    if (!territorySkipsStartingUnits(territoryName)) {
+      this.units[territoryName] = [{
+        type: 'infantry',
+        quantity: 1,
+        owner: expectedId,
+      }];
+    }
     this.draft.picks.push({ playerId: expectedId, territory: territoryName });
     this.draft.pickIndex += 1;
 
@@ -941,6 +950,7 @@ export class GameState {
 
   _placeStartingInfantry() {
     for (const [territoryName, state] of Object.entries(this.territoryState)) {
+      if (territorySkipsStartingUnits(territoryName)) continue;
       this.units[territoryName] = [{
         type: 'infantry',
         quantity: 1,
