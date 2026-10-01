@@ -22,7 +22,7 @@ import {
   confirmedSeatFromPlayer,
   evaluateAuthoritativePush,
   newSyncSessionId,
-  recoverStalePush,
+  planRejectedSave,
   shouldPreserveLocalTurn,
 } from './syncAuthority.js';
 import {
@@ -635,16 +635,18 @@ export class SyncManager {
     return this._pushQueue.enqueue();
   }
 
-  // Retry transient transaction failures with small backoff. On exhaustion we
-  // reload the authoritative doc so this client never proceeds on (or hands the
-  // turn off from) un-persisted local state — the root cause of the V2.55
-  // "playing ahead / playing another player's turn" bug: local state advanced
-  // optimistically, the push silently failed, and the game marched on.
+  // Retry transient transaction failures with small backoff. A stale save
+  // and a failed save keep the local turn and push that same state again.
+  // They do not force-reload the remote doc over it.
   async _runPushWithRetry() {
     const MAX_ATTEMPTS = 3;
     let lastError = null;
+    let attempt = 0;
+    let pushedLocalAgain = false;
 
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    while (attempt < MAX_ATTEMPTS || !pushedLocalAgain) {
+      if (attempt >= MAX_ATTEMPTS) pushedLocalAgain = true;
+      attempt += 1;
       try {
         const outcome = await this._pushOnce();
 
@@ -652,24 +654,25 @@ export class SyncManager {
         if (outcome.status === 'stale') {
           const details = this._staleBlock || { localVersion: this.localVersion };
           this._staleBlock = null;
-          const recovery = recoverStalePush({
+          const plan = planRejectedSave({
+            kind: 'stale',
+            attempt,
+            maxAttempts: MAX_ATTEMPTS,
             confirmedSeatId: this._confirmedSeat?.userId ?? null,
             remoteSeatId: details.remoteSeat ?? null,
             remoteVersion: details.remoteVersion,
             localVersion: this.localVersion,
+            alreadyPushedAgain: attempt > MAX_ATTEMPTS,
           });
-          if (recovery.action === 'retry' && attempt < MAX_ATTEMPTS) {
-            this.localVersion = recovery.localVersion;
-            continue;
-          }
+          this.localVersion = plan.localVersion;
+          if (plan.action === 'push-local') continue;
           this._notifyListeners('push_stale_blocked', details);
           this._notifyListeners('push_stale', { localVersion: this.localVersion });
-          // The winning update's snapshot may have been skipped while isPushing
-          // was set. Force the reload: a higher per-client seq must not refuse
-          // the doc we just declined to overwrite.
-          await this._reloadRemoteState({ force: true });
-          if (recovery.notice) {
-            this._notifyListeners('turn_save_blocked', { notice: recovery.notice });
+          if (plan.forceReload) {
+            await this._reloadRemoteState({ force: true });
+          }
+          if (plan.notice) {
+            this._notifyListeners('turn_save_blocked', { notice: plan.notice });
           }
           return false;
         }
@@ -693,31 +696,39 @@ export class SyncManager {
         lastError = error;
         // Capture the attempted PAYLOAD, not just the raw error — blind
         // "push_failed: <error>" logging is what stalled the V2.55 diagnosis.
+        const plan = planRejectedSave({
+          kind: 'error',
+          attempt,
+          maxAttempts: MAX_ATTEMPTS,
+          localVersion: this.localVersion,
+          alreadyPushedAgain: attempt > MAX_ATTEMPTS,
+        });
         const currentPlayer = this.gameState?.currentPlayer;
         this._notifyListeners('push_failed', {
           attemptedVersion: this.localVersion + 1,
           currentPlayerId: currentPlayer?.oderId ?? null,
           phase: this.gameState?.turnPhase ?? null,
           attempt,
-          willRetry: attempt < MAX_ATTEMPTS,
+          willRetry: plan.action !== 'keep-local',
           error: error?.message || String(error)
         });
         console.error(`SyncManager: Push failed (attempt ${attempt}/${MAX_ATTEMPTS})`, error);
-        if (attempt < MAX_ATTEMPTS) {
+        if (plan.action === 'retry') {
           await this._delay(this._backoffMs(attempt));
+          continue;
         }
+        if (plan.action === 'push-local') continue;
+        if (plan.forceReload) {
+          await this._reloadRemoteState({ force: true });
+        }
+        this._notifyListeners('push_exhausted', {
+          attemptedVersion: this.localVersion + 1,
+          error: lastError?.message || String(lastError)
+        });
+        return false;
       }
     }
 
-    // Retries exhausted. Snap local state back to the last confirmed truth so a
-    // never-committed local advance can't diverge the game. Reload FIRST so
-    // listeners see the restored doc (force=true: versions are usually equal
-    // after a failed write, and the un-forced path would no-op).
-    await this._reloadRemoteState({ force: true });
-    this._notifyListeners('push_exhausted', {
-      attemptedVersion: this.localVersion + 1,
-      error: lastError?.message || String(lastError)
-    });
     return false;
   }
 
