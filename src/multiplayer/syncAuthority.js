@@ -100,6 +100,48 @@ export function recoverStalePush({
   };
 }
 
+// A stale or failed save keeps the local turn and pushes that same state
+// again. Version-behind on our seat adopts the server version first.
+// forceReload stays false so the remote doc cannot replace the turn.
+export function planRejectedSave({
+  kind = 'stale',
+  attempt = 1,
+  maxAttempts = 3,
+  confirmedSeatId = null,
+  remoteSeatId = null,
+  remoteVersion = 0,
+  localVersion = 0,
+  alreadyPushedAgain = false,
+} = {}) {
+  const local = Number(localVersion) || 0;
+  if (kind === 'error') {
+    if (attempt < maxAttempts) {
+      return { action: 'retry', forceReload: false, localVersion: local, notice: '' };
+    }
+    if (!alreadyPushedAgain) {
+      return { action: 'push-local', forceReload: false, localVersion: local, notice: '' };
+    }
+    return { action: 'keep-local', forceReload: false, localVersion: local, notice: '' };
+  }
+
+  const recovery = recoverStalePush({
+    confirmedSeatId,
+    remoteSeatId,
+    remoteVersion,
+    localVersion: local,
+  });
+  const version = recovery.action === 'retry' ? recovery.localVersion : local;
+  if (attempt < maxAttempts || !alreadyPushedAgain) {
+    return { action: 'push-local', forceReload: false, localVersion: version, notice: '' };
+  }
+  return {
+    action: 'keep-local',
+    forceReload: false,
+    localVersion: version,
+    notice: recovery.notice || '',
+  };
+}
+
 // Local nextPhase already handed the seat off, and the server still shows
 // our seat. Keep that turn and rebase the version. A forced reload is the
 // give-up path and must apply the doc.
