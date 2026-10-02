@@ -22,13 +22,15 @@ export function isContextConfirmAction(action) {
 }
 
 // Phone: the blue confirm is the screen-edge bar, or End phase when it is
-// the only control. Desktop: the green End phase is the screen-edge bar.
-// Blue confirms stay the smaller button in the right pane.
-export function bottomActionEdgeClass({ mobile = false, role = 'advance', hasConfirm = false } = {}) {
+// the only control. Tablet: the green End phase is the screen-edge bar.
+// Desktop: both stay in the right pane. The green control sits at the
+// bottom of that pane. Blue confirms stay the smaller button there.
+export function bottomActionEdgeClass({ mobile = false, desktop = false, role = 'advance', hasConfirm = false } = {}) {
   if (mobile) {
     if (role === 'confirm' || !hasConfirm) return 'pp-confirm-edge';
     return '';
   }
+  if (desktop) return '';
   if (role === 'advance') return 'pp-confirm-edge';
   return '';
 }

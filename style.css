@@ -7162,8 +7162,14 @@ html.mobile-shell .pp-battle-row,
 }
 
 /* The screen-edge control is position:fixed, so the in-pane button needs
-   room above it. Phone that edge is the blue confirm. Desktop it is End phase. */
-.pp-bottom-actions.pp-has-context-confirm {
+   room above it. Phone that edge is the blue confirm. Tablet it is End phase.
+   Desktop keeps both buttons in the right pane, so this clearance stays off. */
+@media (max-width: 900px) {
+  .pp-bottom-actions.pp-has-context-confirm {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
+}
+html.mobile-shell .pp-bottom-actions.pp-has-context-confirm {
   padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
 }
 
@@ -21639,7 +21645,7 @@ html.mobile-shell .hud-live-money {
 }
 
 /* The edge control is one full line on the screen bottom. Phone puts the
-   blue confirm here. Desktop puts the green End phase here. */
+   blue confirm here. Tablet puts the green End phase here. Desktop does not. */
 .pp-confirm-btn.pp-confirm-edge:not(:disabled):not(.disabled) {
   position: fixed;
   left: 0;
@@ -21687,4 +21693,29 @@ html.mobile-shell .pp-peek-cta-row .pp-confirm-btn.pp-confirm-edge:not(:disabled
   background: linear-gradient(135deg, #1e90ff, #1565c0);
   border-color: #1e90ff;
   color: #fff;
+}
+
+/* Desktop (≥901, not the phone shell): the green phase control sits in the
+   right pane, the same width as that pane. A leftover edge class must not
+   stretch it across the screen. Phone and tablet keep the edge bar. */
+@media (min-width: 901px) {
+  html:not(.mobile-shell) .pp-confirm-btn.pp-confirm-edge.pp-phase-advance:not(:disabled):not(.disabled) {
+    position: static;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    z-index: auto;
+    width: 100%;
+    max-width: none;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    margin: 0;
+    padding: 14px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    line-height: normal;
+    letter-spacing: normal;
+    white-space: normal;
+  }
 }
