@@ -1485,11 +1485,33 @@ export class GameState {
     return info?.blitzedTerritories || [];
   }
 
-  // Check if two territories are connected by land bridge
-  // Land bridges on (today) or off. Off drops all 16 pairs from movement.
+  // The map's own land bridges, plus Classic's optional Pacific crossings.
+  // Land bridges off drops that map's own pairs and nothing else.
+  // Extra Pacific bridges is a separate Classic switch, off unless the
+  // host turns it on. Each added pair is one step, the same as the
+  // existing bridges. A Pacific pair is added only when both territories
+  // exist on this board. Pacific's own list is not changed.
   activeLandBridges() {
-    if (this.gameOptions?.landBridges === false) return [];
-    return getMap(this.mapId)?.landBridges || LAND_BRIDGES;
+    const own = this.gameOptions?.landBridges === false
+      ? []
+      : (getMap(this.mapId)?.landBridges || LAND_BRIDGES);
+    if ((this.mapId || CLASSIC_MAP_ID) !== CLASSIC_MAP_ID) return own;
+    if (this.gameOptions?.extraPacificBridges !== true) return own;
+    const pacific = getMap('pacific')?.landBridges;
+    if (!pacific?.length) return own;
+    const extras = [];
+    for (const pair of pacific) {
+      const left = this.territoryByName?.[pair[0]];
+      const right = this.territoryByName?.[pair[1]];
+      if (!left || !right || left.isWater || right.isWater) continue;
+      const already = own.some((row) => (
+        (row[0] === pair[0] && row[1] === pair[1])
+        || (row[0] === pair[1] && row[1] === pair[0])
+      ));
+      if (already) continue;
+      extras.push(pair);
+    }
+    return extras.length ? own.concat(extras) : own;
   }
 
   hasLandBridge(t1Name, t2Name) {

@@ -2,6 +2,16 @@
 
 ---
 
+## 10.2.26 — unified.39 optional Classic extra Pacific bridges
+
+Stamp `V2.81.57-unified.39`. Schema stays 11. The flag is an optional field inside the existing `gameOptions` object. A save that omits it loads off. A `V2.82-unified.38` doc is older than this tab and does not prompt. A `V2.82-unified.40` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.39`).
+
+Rob (robfox007), 2 Oct 2026 2:06pm PT, Discord 1555687556874510429: the fourteen Pacific land bridges as an optional Classic rule. Lobby name is Extra Pacific bridges. It is off unless the host turns it on. Land bridges is unchanged. Pacific's own links are unchanged. Classic movement is unchanged while the option is off. While it is on, Classic land movement can step a Pacific pair only when both territories exist on Classic, one step, the same as the existing bridges.
+
+Classic pairs added: Japan–Midway, Philippines–Caroline Islands, Philippines–Solomon Islands, Philippines–New Guinea, Philippines–French Indo China, Wake Island–Hawaiian Islands, Hawaiian Islands–Midway, Hawaiian Islands–Mexico.
+
+Left out because the territory is not on Classic: Japan–Iwo Jima, Iwo Jima–Wake Island, Iwo Jima–Philippines (Iwo Jima), Solomon Islands–Queensland (Queensland), Solomon Islands–New Britain (New Britain), Wake Island–Western United States (Western United States). West US is not used as a stand-in.
+
 ## 10.2.26 — unified.33 turn ping lists both sides
 
 Stamp `V2.81.57-unified.33`. Schema stays 11. A `V2.82-unified.32` doc is older than this tab and does not prompt. A `V2.82-unified.34` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.33`).
