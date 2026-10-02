@@ -1,6 +1,7 @@
 // Host-selected game options. Every default matches the game as it plays
 // today: 80 IPCs, teams off, 5 seats (Classic can open to 7), 6 units a setup round, the standard
-// army, one tech pick per research roll, land bridges on.
+// army, one tech pick per research roll, land bridges on,
+// extra Pacific bridges off.
 // Old saves omit `gameOptions` and load these defaults. SCHEMA stays 11.
 
 export const DEFAULT_GAME_OPTIONS = Object.freeze({
@@ -21,6 +22,9 @@ export const DEFAULT_GAME_OPTIONS = Object.freeze({
   // Mechanized infantry is off until the host turns it on. Same shape
   // as tactical bombers: a missing field loads off. Schema stays 11.
   mechanizedInfantry: false,
+  // Extra Pacific bridges are off until the host turns them on. This is
+  // not the Land bridges switch. A missing field loads off. Schema stays 11.
+  extraPacificBridges: false,
 });
 
 export const STARTING_IPC_VALUES = Object.freeze([40, 60, 80, 100, 120, 150]);
@@ -109,6 +113,7 @@ export function normalizeGameOptions(raw, legacy = {}) {
   const multiRaw = src.multipleTech !== undefined ? src.multipleTech : old.multipleTech;
   const tacRaw = src.tacticalBombers !== undefined ? src.tacticalBombers : old.tacticalBombers;
   const mechRaw = src.mechanizedInfantry !== undefined ? src.mechanizedInfantry : old.mechanizedInfantry;
+  const extraRaw = src.extraPacificBridges !== undefined ? src.extraPacificBridges : old.extraPacificBridges;
   return {
     startingIPCs: pickNumber(
       src.startingIPCs ?? old.startingIPCs,
@@ -140,6 +145,9 @@ export function normalizeGameOptions(raw, legacy = {}) {
     tacticalBombers: tacRaw === true,
     // Default OFF. Only an explicit true adds mechanized infantry.
     mechanizedInfantry: mechRaw === true,
+    // Default OFF. Only an explicit true adds the extra Pacific crossings
+    // on Classic. The Land bridges switch is unchanged.
+    extraPacificBridges: extraRaw === true,
   };
 }
 
@@ -155,7 +163,8 @@ export function isStandardRules(raw, legacy) {
     && o.territorySetup === DEFAULT_GAME_OPTIONS.territorySetup
     && o.techAcquisition === DEFAULT_GAME_OPTIONS.techAcquisition
     && o.tacticalBombers === DEFAULT_GAME_OPTIONS.tacticalBombers
-    && o.mechanizedInfantry === DEFAULT_GAME_OPTIONS.mechanizedInfantry;
+    && o.mechanizedInfantry === DEFAULT_GAME_OPTIONS.mechanizedInfantry
+    && o.extraPacificBridges === DEFAULT_GAME_OPTIONS.extraPacificBridges;
 }
 
 /** Live summary. Standard rules, or "Custom: Heavy army, 8 per round, no land bridges". */
@@ -180,6 +189,7 @@ export function describe(raw, legacy) {
   if (o.techAcquisition === 'buy') parts.push(`buy tech (${DIRECT_TECH_IPC_COST})`);
   if (o.tacticalBombers) parts.push('tactical bombers');
   if (o.mechanizedInfantry) parts.push('mechanized infantry');
+  if (o.extraPacificBridges) parts.push('extra Pacific bridges');
   if (parts.length === 0) return 'Standard rules';
   return `Custom: ${parts.join(', ')}`;
 }
@@ -223,6 +233,7 @@ export const PROTECTED_OPTION_KEYS = Object.freeze([
   'techAcquisition',
   'tacticalBombers',
   'mechanizedInfantry',
+  'extraPacificBridges',
 ]);
 
 export function protectedGameOptions(raw) {
@@ -295,6 +306,7 @@ export function optionRows(raw, legacy) {
     ['Multiple tech breakthroughs', o.multipleTech ? 'On' : 'Off'],
     ['Tech', techAcquisitionLabel(o.techAcquisition)],
     ['Land bridges', o.landBridges ? 'On' : 'Off'],
+    ['Extra Pacific bridges', o.extraPacificBridges ? 'On' : 'Off'],
     ['Tactical bombers', o.tacticalBombers ? 'On' : 'Off'],
     ['Mechanized infantry', o.mechanizedInfantry ? 'On' : 'Off'],
   ];

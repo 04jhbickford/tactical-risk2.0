@@ -143,6 +143,11 @@ function rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMod
         <span class="go-label">Land bridges</span>
         ${shownValue(editable, toggleHtml('landBridges', o.landBridges, { editable }), o.landBridges ? 'On' : 'Off')}
       </div>
+      ${mapId === 'pacific' ? '' : `
+      <div class="go-row" title="Classic only. Adds the Pacific land crossings that exist on this map, one step each, the same as Land bridges. Off leaves Classic movement unchanged.">
+        <span class="go-label">Extra Pacific bridges</span>
+        ${shownValue(editable, toggleHtml('extraPacificBridges', o.extraPacificBridges, { editable }), o.extraPacificBridges ? 'On' : 'Off')}
+      </div>`}
     </div>
     <div class="go-group">
       <h3 class="go-group-label">Units</h3>
@@ -192,7 +197,7 @@ export function renderGameOptionsPanel(raw, {
   const rows = rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMode, seatedCount, mapId });
   if (chrome === 'more') {
     return `
-    <section class="go-panel go-panel--more${open ? ' is-open' : ''}" data-game-options="1" data-editable="${editable ? '1' : '0'}">
+    <section class="go-panel go-panel--more${open ? ' is-open' : ''}" data-game-options="1" data-editable="${editable ? '1' : '0'}" data-kept-extra="${options.extraPacificBridges ? '1' : '0'}">
       <button type="button" class="go-more" data-action="go-toggle" aria-expanded="${open ? 'true' : 'false'}">
         <span>More</span>
         <span class="go-summary-text">${esc(summary)}</span>
@@ -207,7 +212,7 @@ export function renderGameOptionsPanel(raw, {
   `;
   }
   return `
-    <section class="go-panel${open ? ' is-open' : ''}${sheet ? ' is-sheet' : ''}" data-game-options="1" data-editable="${editable ? '1' : '0'}">
+    <section class="go-panel${open ? ' is-open' : ''}${sheet ? ' is-sheet' : ''}" data-game-options="1" data-editable="${editable ? '1' : '0'}" data-kept-extra="${options.extraPacificBridges ? '1' : '0'}">
       <button type="button" class="go-collapsed" data-action="go-toggle" aria-expanded="${open ? 'true' : 'false'}">
         <span>Game options</span>
         <span class="go-dot" aria-hidden="true">·</span>
@@ -251,6 +256,16 @@ export function readGameOptionsFrom(root) {
     if (el.hasAttribute('aria-pressed')) return el.getAttribute('aria-pressed') === 'true';
     return el.getAttribute('aria-checked') === 'true';
   };
+  // Classic shows the switch. Pacific hides it and keeps the stored value
+  // so a map change does not turn the Classic option off.
+  const keptFlag = (name, dataKey) => {
+    const live = flag(name);
+    if (live !== undefined) return live;
+    const kept = panel?.dataset?.[dataKey];
+    if (kept === '1') return true;
+    if (kept === '0') return false;
+    return undefined;
+  };
   return normalizeGameOptions({
     startingIPCs: ipc ? Number(ipc.value) : undefined,
     startingArmy: army ? army.value : undefined,
@@ -261,6 +276,7 @@ export function readGameOptionsFrom(root) {
     teams: flag('teams'),
     tacticalBombers: flag('tacticalBombers'),
     mechanizedInfantry: flag('mechanizedInfantry'),
+    extraPacificBridges: keptFlag('extraPacificBridges', 'keptExtra'),
     territorySetup: valueOf('territorySetup')?.value,
     techAcquisition: valueOf('techAcquisition')?.value,
   });
@@ -384,7 +400,7 @@ export function bindGameOptions(root, { onChange, onToggle, onMapChange } = {}) 
         mapSelect.value = CLASSIC_MAP_ID;
         if (typeof onMapChange === 'function') onMapChange(CLASSIC_MAP_ID);
       }
-      for (const name of ['multipleTech', 'landBridges', 'teams', 'tacticalBombers', 'mechanizedInfantry']) {
+      for (const name of ['multipleTech', 'landBridges', 'teams', 'tacticalBombers', 'mechanizedInfantry', 'extraPacificBridges']) {
         const el = panel.querySelector(`[data-go="${name}"]`);
         if (!el) continue;
         const on = !!next[name];
