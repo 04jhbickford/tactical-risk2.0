@@ -3,7 +3,6 @@
 // save round-trip, and the online snapshot of factory damage.
 // Run: node tools/test-strategic-bombing.mjs
 
-import { gameVersionFromSource } from './game-version.mjs';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -58,8 +57,8 @@ const unitDefs = {
 };
 
 console.log('=== stamp ===');
-check('display stamp is unified.21', GAME_VERSION === gameVersionFromSource());
-check('compat stamp is V2.82-unified.33', compatClientVersion() === compatClientVersion(gameVersionFromSource()));
+check('display stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.33');
+check('compat stamp is V2.82-unified.33', compatClientVersion() === 'V2.82-unified.33');
 check('schema stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== pure dice and cap ===');

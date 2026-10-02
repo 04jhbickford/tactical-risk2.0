@@ -2,7 +2,6 @@
 // and the bottom dock is not a dest-tap dead zone @390.
 // Run: node tools/test-confirm-attack-cta.mjs
 
-import { gameVersionFromSource } from './game-version.mjs';
 import { readFileSync } from 'node:fs';
 import { chromeHitRectsFrom } from '../src/map/threeChromeEvents.js';
 import {
@@ -45,7 +44,7 @@ function assert(cond, msg) {
   }
 }
 
-assert(GAME_VERSION === gameVersionFromSource(), 'stamp is unified.2');
+assert(GAME_VERSION === 'V2.81.57-unified.33', 'stamp is unified.2');
 
 const hiddenZoom = {
   hidden: true,

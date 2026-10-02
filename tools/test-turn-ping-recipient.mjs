@@ -2,7 +2,6 @@
 // TXVKJB-like: Rob = Germans, Bastion = Russians, AIs = UK / Japan / USA.
 // Run: node tools/test-turn-ping-recipient.mjs
 
-import { gameVersionFromSource } from './game-version.mjs';
 import { createRequire } from 'node:module';
 import { GAME_VERSION } from '../src/version.js';
 import {
@@ -16,7 +15,7 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-check('stamp is unified.14', GAME_VERSION === gameVersionFromSource());
+check('stamp is unified.14', GAME_VERSION === 'V2.81.57-unified.33');
 
 const players = [
   { id: 'Germans', name: 'Robfox007', isAI: false, discordUserId: '600101834727620620' },

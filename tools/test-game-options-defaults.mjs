@@ -4,7 +4,6 @@
 // field loads and can still place a unit. Schema stays 11.
 // Run: node tools/test-game-options-defaults.mjs
 
-import { gameVersionFromSource } from './game-version.mjs';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -103,7 +102,7 @@ function strip(json) {
 }
 
 console.log('=== V2.81.57-unified.33 game option defaults ===');
-check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === gameVersionFromSource());
+check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 const without = play({

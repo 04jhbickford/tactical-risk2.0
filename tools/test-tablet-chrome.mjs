@@ -4,7 +4,6 @@
 // tablet band (no height) and desktop windows stay on their existing trees.
 // Run: node tools/test-tablet-chrome.mjs
 
-import { gameVersionFromSource } from './game-version.mjs';
 import { readFileSync } from 'fs';
 import { pathToFileURL } from 'url';
 import { dirname, join } from 'path';
@@ -203,7 +202,7 @@ const check = (label, cond) => {
 };
 
 console.log('=== Version stamps ===');
-check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === gameVersionFromSource());
+check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== resolveMapRightEdge ===');

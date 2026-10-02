@@ -1,7 +1,6 @@
 // Unit checks for V2.58 multiplayer turn-bar + auto-battle sync fixes.
 // Run: node tools/test-mp-turn-sync.mjs
 
-import { gameVersionFromSource } from './game-version.mjs';
 import { pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -167,7 +166,7 @@ function makePlacementTable({
 
 console.log('=== V2.72 version + leftover-unit pass predicate ===');
 {
-  check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === gameVersionFromSource());
+  check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
   check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
   check('round cap allows Done with leftovers still in the pool',
     canFinishPlacementRound({

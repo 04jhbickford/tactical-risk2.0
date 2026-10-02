@@ -2,7 +2,6 @@
 // Host unlisted, host listed, joiner, and a snapshot flip from another client.
 // Run: node tools/test-lobby-list-unlist.mjs
 
-import { gameVersionFromSource } from './game-version.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -29,7 +28,7 @@ const check = (label, cond, extra) => {
   } else console.log('ok  :', label);
 };
 
-check('stamp is unified.21', GAME_VERSION === gameVersionFromSource());
+check('stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.33');
 
 function names(snapshot, isHost) {
   return lobbyListingButtons({

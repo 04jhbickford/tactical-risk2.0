@@ -1,6 +1,5 @@
 // V2.81.57-unified.33 — green advances the phase; blue confirms the action.
 
-import { gameVersionFromSource } from './game-version.mjs';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -24,7 +23,7 @@ const check = (label, cond) => {
   }
 };
 
-check('stamp is V2.81.57-unified.33', GAME_VERSION === gameVersionFromSource());
+check('stamp is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
 
 console.log('=== pending named move keeps blue confirm and green advance ===');
 {

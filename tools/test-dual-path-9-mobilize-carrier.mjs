@@ -2,7 +2,6 @@
 // Shared eligibility + Classic chrome scan + Experimental dests / sea-first.
 // Run: node tools/test-dual-path-9-mobilize-carrier.mjs
 
-import { gameVersionFromSource } from './game-version.mjs';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'url';
 import { dirname, join } from 'path';
@@ -85,7 +84,7 @@ function makeTheater() {
 }
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === gameVersionFromSource());
+check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== 9.20.26.07 shared canPlace / capacity ===');

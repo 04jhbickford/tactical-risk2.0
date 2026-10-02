@@ -1,7 +1,6 @@
 // V2.81.43 Settlecoast-pattern polish (2D only): loader, Confirm chrome,
 // phase guides, guest Rules. Run: node tools/test-settlecoast-polish.mjs
 
-import { gameVersionFromSource } from './game-version.mjs';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -82,7 +81,7 @@ const check = (label, cond) => {
 };
 
 console.log('=== Version + schema ===');
-check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === gameVersionFromSource());
+check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== B — paint-first loader ===');

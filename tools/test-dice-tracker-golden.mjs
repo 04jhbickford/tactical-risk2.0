@@ -3,7 +3,6 @@
 // Cosmetic spinning dice are not recorded.
 // Run: node tools/test-dice-tracker-golden.mjs
 
-import { gameVersionFromSource } from './game-version.mjs';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -420,7 +419,7 @@ console.log('=== old saves and menu ===');
   const loaded = makeGs();
   loaded.loadFromJSON(saved);
   check('old save loads', loaded.round === gs.round && loaded.players.length === 2);
-  check('stamp is unified.14', GAME_VERSION === gameVersionFromSource());
+  check('stamp is unified.14', GAME_VERSION === 'V2.81.57-unified.33');
   const menu = phoneMenuHomeActions();
   const logAt = menu.findIndex((row) => row.tab === 'log');
   const diceAt = menu.findIndex((row) => row.label === 'Dice stats' && row.tab === 'dice');

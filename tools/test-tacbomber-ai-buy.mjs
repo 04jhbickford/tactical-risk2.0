@@ -3,7 +3,6 @@
 // recorded at 30d1515 (unified.24) before this change.
 // Run: node tools/test-tacbomber-ai-buy.mjs
 
-import { gameVersionFromSource } from './game-version.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -162,7 +161,7 @@ async function buy(name, opts, difficulty, tacticalBombers) {
 }
 
 console.log('=== tactical bomber AI buy ===');
-check('stamp is unified.26', GAME_VERSION === gameVersionFromSource());
+check('stamp is unified.26', GAME_VERSION === 'V2.81.57-unified.33');
 
 const offRuns = [];
 for (const [name, opts, difficulty] of CASES) {

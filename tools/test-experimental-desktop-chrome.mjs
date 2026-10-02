@@ -3,14 +3,13 @@
 // Classic Canvas path is not rewritten. Rules / dual-fork stay .10.
 // Run: node tools/test-experimental-desktop-chrome.mjs
 
-import { gameVersionFromSource } from './game-version.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { GAME_VERSION } from '../src/version.js';
 import { UX_LABEL_EXPERIMENTAL, resolveUxMode, UX_CLASSIC, UX_THREE } from '../src/map/presentationMode.js';
 import { injectThreeChrome, syncThreeShellWidth, resizeThreeMapCanvas } from '../src/map/threeMapChrome.js';
 
-assert.equal(GAME_VERSION, gameVersionFromSource(), 'stamp is unified.2');
+assert.equal(GAME_VERSION, 'V2.81.57-unified.33', 'stamp is unified.2');
 assert.equal(UX_LABEL_EXPERIMENTAL, 'Experimental UX');
 assert.equal(resolveUxMode(''), UX_CLASSIC, 'queryless is unified Classic');
 assert.equal(resolveUxMode('?ux=classic'), UX_CLASSIC, 'classic remains a deep link');

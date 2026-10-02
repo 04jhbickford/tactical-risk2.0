@@ -1,7 +1,6 @@
 // V2.81.57-unified.33 — Classic mobile UX borrow from Experimental.
 // Static checks only: stamp, SCHEMA freeze, mobile-gated CSS, peek tiles.
 
-import { gameVersionFromSource } from './game-version.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -10,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const { GAME_VERSION, SCHEMA_VERSION } = await import(pathToFileURL(join(root, 'src/version.js')));
 
-assert.equal(GAME_VERSION, gameVersionFromSource(), 'stamp is unified.2');
+assert.equal(GAME_VERSION, 'V2.81.57-unified.33', 'stamp is unified.2');
 assert.equal(SCHEMA_VERSION, 11, 'SCHEMA stays 11');
 
 const html = readFileSync(join(root, 'index.html'), 'utf8');

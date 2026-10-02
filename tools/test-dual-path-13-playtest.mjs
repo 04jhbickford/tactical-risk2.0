@@ -1,7 +1,6 @@
 // 9.21.26.01–.04 dual-fork: land-only sea attack, air land, prior-turn air, persist.
 // Run: node tools/test-dual-path-13-playtest.mjs
 
-import { gameVersionFromSource } from './game-version.mjs';
 import { pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -79,7 +78,7 @@ function board() {
 }
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === gameVersionFromSource());
+check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
 
 console.log('=== 9.21.26.01 land-only sea zone is not a combat attack ===');
 {

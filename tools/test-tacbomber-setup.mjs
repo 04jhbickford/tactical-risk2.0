@@ -1,7 +1,6 @@
 // V2.81.57-unified.33 — one tactical bomber in the setup tray when the option is on.
 // Run: node tools/test-tacbomber-setup.mjs
 
-import { gameVersionFromSource } from './game-version.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -109,7 +108,7 @@ function historicalTacCount(setup) {
 }
 
 console.log('=== tactical bomber setup ===');
-check('stamp is unified.26', GAME_VERSION === gameVersionFromSource());
+check('stamp is unified.26', GAME_VERSION === 'V2.81.57-unified.33');
 check('schema stays 11', SCHEMA_VERSION === 11);
 check('default starting defs still omit tactical bombers',
   ![...RISK_STARTING_UNITS.land, ...RISK_STARTING_UNITS.naval]

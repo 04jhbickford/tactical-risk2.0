@@ -3,7 +3,6 @@
 // and leaves the listed flag alone. Both forks share the helper.
 // Run: node tools/test-dual-path-17-playtest.mjs
 
-import { gameVersionFromSource } from './game-version.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -33,7 +32,7 @@ const mgr = readFileSync(join(root, 'src/multiplayer/lobbyManager.js'), 'utf8');
 const lobbySrc = readFileSync(join(root, 'src/ui/lobby.js'), 'utf8');
 const ping = readFileSync(join(root, 'src/multiplayer/discordTurnPing.js'), 'utf8');
 
-assert.equal(GAME_VERSION, gameVersionFromSource());
+assert.equal(GAME_VERSION, 'V2.81.57-unified.33');
 assert.equal(SCHEMA_VERSION, 11);
 assert.match(html, /content="V2\.81\.57-unified\.33"/);
 assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.33'/);

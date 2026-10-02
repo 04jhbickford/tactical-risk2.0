@@ -2,7 +2,6 @@
 // can persist the owner flip. Also: leftover NCM stack; purchase owner.
 // Run: node tools/test-territory-flip-persist.mjs
 
-import { gameVersionFromSource } from './game-version.mjs';
 import { pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -115,7 +114,7 @@ function makeUsTheater() {
 }
 
 console.log('=== Version ===');
-check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === gameVersionFromSource());
+check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== omitUndefinedDeep ===');

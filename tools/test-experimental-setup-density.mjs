@@ -3,7 +3,6 @@
 // Sticky Teams+Start stays outside MAIN. Classic Canvas path untouched.
 // Run: node tools/test-experimental-setup-density.mjs
 
-import { gameVersionFromSource } from './game-version.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { GAME_VERSION } from '../src/version.js';
@@ -11,7 +10,7 @@ import { UX_LABEL_EXPERIMENTAL } from '../src/map/presentationMode.js';
 import { createSoloLobby, applyLobbyAction, seatOccupantView } from '../src/map/threeSoloLobby.js';
 import { injectThreeChrome } from '../src/map/threeMapChrome.js';
 
-assert.equal(GAME_VERSION, gameVersionFromSource(), 'stamp is unified.2');
+assert.equal(GAME_VERSION, 'V2.81.57-unified.33', 'stamp is unified.2');
 assert.equal(UX_LABEL_EXPERIMENTAL, 'Experimental UX');
 
 const chromeSrc = readFileSync(new URL('../src/map/threeMapChrome.js', import.meta.url), 'utf8');

@@ -1,7 +1,6 @@
 // V2.81.57-unified.33 — lobby options: host-only edits, summary, card chip.
 // Run: node tools/test-game-options-lobby.mjs
 
-import { gameVersionFromSource } from './game-version.mjs';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -24,7 +23,7 @@ const check = (label, cond) => {
 };
 
 console.log('=== V2.81.57-unified.33 game option lobby ===');
-check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === gameVersionFromSource());
+check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 check('joiner cannot edit', settingsEditError({ isHost: false }) === 'Only host can update settings');

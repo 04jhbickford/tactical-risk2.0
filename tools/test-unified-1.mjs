@@ -1,6 +1,5 @@
 // V2.81.57-unified.33 — single shell; Experimental dual-path runtime killed.
 
-import { gameVersionFromSource } from './game-version.mjs';
 import assert from 'node:assert/strict';
 import {
   UX_CLASSIC,
@@ -36,7 +35,7 @@ assert.match(html, /name="tr-game-version" content="V2\.81\.57-unified\.33"/);
 assert.match(html, /lockStamp/);
 assert.match(html, /src="src\/main\.js\?v=V2\.81\.57-unified\.33"/);
 
-assert.equal(GAME_VERSION, gameVersionFromSource(), 'stamp is unified.2');
+assert.equal(GAME_VERSION, 'V2.81.57-unified.33', 'stamp is unified.2');
 assert.equal(SCHEMA_VERSION, 11, 'SCHEMA stays 11');
 assert.equal(UX_LABEL_EXPERIMENTAL, 'Experimental UX');
 

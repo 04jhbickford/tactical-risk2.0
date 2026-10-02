@@ -2,7 +2,6 @@
 // Classic | Experimental picker is restored in .17.
 // Run: node tools/test-dual-path-16-playtest.mjs
 
-import { gameVersionFromSource } from './game-version.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -45,7 +44,7 @@ const bootSrc = readFileSync(join(root, 'src/map/threeSoloBoot.js'), 'utf8');
 const playSrc = readFileSync(join(root, 'src/map/threeSoloPlay.js'), 'utf8');
 const lobbyScreens = readFileSync(join(root, 'src/map/threeSoloLobby.js'), 'utf8');
 
-assert.equal(GAME_VERSION, gameVersionFromSource());
+assert.equal(GAME_VERSION, 'V2.81.57-unified.33');
 assert.equal(SCHEMA_VERSION, 11);
 assert.match(html, /content="V2\.81\.57-unified\.33"/);
 assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.33'/);

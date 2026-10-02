@@ -2,7 +2,6 @@
 // Shared engine + both forks (Classic playerPanel/combatUI, Experimental ?ux=three).
 // Run: node tools/test-dual-path-15-playtest.mjs
 
-import { gameVersionFromSource } from './game-version.mjs';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'url';
 import { dirname, join } from 'path';
@@ -75,7 +74,7 @@ const theater = [
 ];
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === gameVersionFromSource());
+check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 check('Experimental query mode is three', UX_THREE === 'three');
 {

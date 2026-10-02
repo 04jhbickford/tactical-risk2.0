@@ -2,7 +2,6 @@
 // window.confirm is blocked in Discord and some iOS web views.
 // Run: node tools/test-resign-confirm.mjs
 
-import { gameVersionFromSource } from './game-version.mjs';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -264,7 +263,7 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-check('stamp is unified.14', GAME_VERSION === gameVersionFromSource());
+check('stamp is unified.14', GAME_VERSION === 'V2.81.57-unified.33');
 
 const hudSrc = readFileSync(join(root, 'src/ui/hud.js'), 'utf8');
 const paths = hudSrc.slice(hudSrc.indexOf('const exitItem'));

@@ -2,7 +2,6 @@
 // selected territory. Phone @390 pair grammar stays on the tapped land.
 // Run: node tools/test-unified-10-deploy-target.mjs
 
-import { gameVersionFromSource } from './game-version.mjs';
 import { pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -188,7 +187,7 @@ function attachPanel(gs) {
 }
 
 console.log('=== Version stamps ===');
-check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === gameVersionFromSource());
+check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== Desktop shell: setup Deploy follows the selected territory ===');

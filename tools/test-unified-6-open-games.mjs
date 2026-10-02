@@ -3,7 +3,6 @@
 // A bar click opens a waiting lobby. The map must not auto-enter.
 // Run: node tools/test-unified-6-open-games.mjs
 
-import { gameVersionFromSource } from './game-version.mjs';
 import { pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -28,7 +27,7 @@ const check = (label, cond) => {
 };
 
 console.log('=== V2.81.57-unified.33 Open Games list (9.23.26.01) ===');
-check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === gameVersionFromSource());
+check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 const html = readFileSync(join(root, 'index.html'), 'utf8');
