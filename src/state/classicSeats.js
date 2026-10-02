@@ -49,6 +49,14 @@ export function classicPowersForCap(factions, maxPlayers) {
   return list.slice(0, Math.min(limit, list.length));
 }
 
+/** Factions the Add AI dialog lists for this table.
+ *  Pacific keeps its own roster. Classic follows the seat cap. */
+export function addAiDialogFactions({ factions, maxPlayers, mapId } = {}) {
+  const list = Array.isArray(factions) ? factions : [];
+  if (mapId === 'pacific') return list;
+  return classicPowersForCap(list, maxPlayers);
+}
+
 export function sumPrintedIpc(landNames, territories) {
   const byName = new Map((territories || []).map((territory) => [territory?.name, territory]));
   let sum = 0;
