@@ -2,6 +2,17 @@
 
 ---
 
+## 10.2.26 — unified.42 corrected Extra Pacific bridges
+
+Stamp `V2.81.57-unified.42`. Schema stays 11. The flag is still the optional `gameOptions.extraPacificBridges` field. A save that omits it loads off. A `V2.82-unified.41` doc is older than this tab and does not prompt. A `V2.82-unified.43` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.42`).
+
+Rob (Discord, 2 Oct 2026) corrected the optional Classic set. Pacific's fourteen land links stay as they are. The original Classic land bridges stay as they are. The lobby option stays off unless the host turns it on, and it stays separate from Land bridges.
+
+Removed: Japan–Midway, Philippines–Solomon Islands.
+Added: Wake Island–Okinawa, Wake Island–Caroline Islands, Philippines–Okinawa, Borneo Celebes–Philippines, West US–Midway.
+Kept: Philippines–Caroline Islands, Philippines–New Guinea, Philippines–French Indo China, Wake Island–Hawaiian Islands, Hawaiian Islands–Midway, Hawaiian Islands–Mexico.
+None skipped. Every named territory is on Classic. West US is the territory's data name. East US is not a second coast link. Pacific-only names (Iwo Jima, Queensland, New Britain, Western United States) are not borrowed onto Classic.
+
 ## 10.2.26 — unified.40 seven-seat Add AI
 
 Stamp `V2.81.57-unified.40`. Schema stays 11. A `V2.82-unified.39` doc is older than this tab and does not prompt. A `V2.82-unified.41` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.40`).

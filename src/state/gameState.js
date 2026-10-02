@@ -52,6 +52,7 @@ import {
 } from '../gameOptions.js';
 import { GAME_VERSION } from '../version.js';
 import {
+  CLASSIC_EXTRA_PACIFIC_BRIDGES,
   CLASSIC_LAND_BRIDGES,
   CLASSIC_MAP_ID,
   getMap,
@@ -1488,19 +1489,18 @@ export class GameState {
   // The map's own land bridges, plus Classic's optional Pacific crossings.
   // Land bridges off drops that map's own pairs and nothing else.
   // Extra Pacific bridges is a separate Classic switch, off unless the
-  // host turns it on. Each added pair is one step, the same as the
-  // existing bridges. A Pacific pair is added only when both territories
-  // exist on this board. Pacific's own list is not changed.
+  // host turns it on. The added pairs are CLASSIC_EXTRA_PACIFIC_BRIDGES,
+  // not Pacific's own fourteen. Each added pair is one step, the same as
+  // the existing bridges. A pair is skipped when either territory is
+  // missing or water on this board. Pacific's own list is not changed.
   activeLandBridges() {
     const own = this.gameOptions?.landBridges === false
       ? []
       : (getMap(this.mapId)?.landBridges || LAND_BRIDGES);
     if ((this.mapId || CLASSIC_MAP_ID) !== CLASSIC_MAP_ID) return own;
     if (this.gameOptions?.extraPacificBridges !== true) return own;
-    const pacific = getMap('pacific')?.landBridges;
-    if (!pacific?.length) return own;
     const extras = [];
-    for (const pair of pacific) {
+    for (const pair of CLASSIC_EXTRA_PACIFIC_BRIDGES) {
       const left = this.territoryByName?.[pair[0]];
       const right = this.territoryByName?.[pair[1]];
       if (!left || !right || left.isWater || right.isWater) continue;
