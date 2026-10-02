@@ -135,11 +135,35 @@ const PACIFIC_FACTION_HOMES = Object.freeze({
   ANZAC: 'New South Wales',
 });
 
+// Pacific land bridges. Same one-step movement as Classic, and the
+// land-bridges option drops the whole list. There is no Australia
+// territory: the Solomon Islands line steps onto Queensland.
+const PACIFIC_LAND_BRIDGES = Object.freeze([
+  ['Japan', 'Iwo Jima'],
+  ['Japan', 'Midway'],
+  ['Iwo Jima', 'Wake Island'],
+  ['Iwo Jima', 'Philippines'],
+  ['Philippines', 'Caroline Islands'],
+  ['Philippines', 'Solomon Islands'],
+  ['Philippines', 'New Guinea'],
+  ['Philippines', 'French Indo China'],
+  ['Solomon Islands', 'Queensland'],
+  ['Solomon Islands', 'New Britain'],
+  ['Wake Island', 'Western United States'],
+  ['Wake Island', 'Hawaiian Islands'],
+  ['Hawaiian Islands', 'Midway'],
+  ['Hawaiian Islands', 'Mexico'],
+]);
+
 // Graph-derived. New South Wales borders Queensland, Victoria, and
-// South Australia, so it is not sea-locked. Japan and Hawaiian Islands are.
+// South Australia. Japan walks to Iwo Jima and Midway. Hawaiian Islands
+// walk to Midway, Wake Island, and Mexico. Okinawa has no land step.
 const PACIFIC_ISLAND_CAPITAL_HINTS = Object.freeze({
-  connected: Object.freeze(['New South Wales', 'India', 'Western United States', 'Szechwan']),
-  seaLocked: Object.freeze(['Japan', 'Hawaiian Islands']),
+  connected: Object.freeze([
+    'New South Wales', 'India', 'Western United States', 'Szechwan',
+    'Japan', 'Hawaiian Islands',
+  ]),
+  seaLocked: Object.freeze(['Okinawa']),
 });
 
 const PACIFIC = Object.freeze({
@@ -168,7 +192,7 @@ const PACIFIC = Object.freeze({
   width: 3773,
   height: 3213,
   scrollWrapX: false,
-  landBridges: Object.freeze([]),
+  landBridges: PACIFIC_LAND_BRIDGES,
   islandCapitalHints: PACIFIC_ISLAND_CAPITAL_HINTS,
   nationNames: PACIFIC_NATION_NAMES,
   factionHomes: PACIFIC_FACTION_HOMES,
