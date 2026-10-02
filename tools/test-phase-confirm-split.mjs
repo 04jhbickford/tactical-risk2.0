@@ -92,12 +92,14 @@ console.log('=== green is never a contextual confirm ===');
     && ghost.advance?.action === 'next-phase');
 }
 
-console.log('=== desktop keeps End phase in the pane; phone pins the blue confirm ===');
+console.log('=== desktop End phase is the screen edge; phone still pins the blue confirm ===');
 {
-  check('desktop confirm is not the long bar',
+  check('desktop blue confirm stays in the right pane',
     bottomActionEdgeClass({ mobile: false, role: 'confirm', hasConfirm: true }) === '');
-  check('desktop End phase is not the long bar',
-    bottomActionEdgeClass({ mobile: false, role: 'advance', hasConfirm: true }) === '');
+  check('desktop End phase is the screen-edge bar',
+    bottomActionEdgeClass({ mobile: false, role: 'advance', hasConfirm: true }) === 'pp-confirm-edge');
+  check('desktop End phase is the edge when it is the only button',
+    bottomActionEdgeClass({ mobile: false, role: 'advance', hasConfirm: false }) === 'pp-confirm-edge');
   check('phone confirm is the bottom edge',
     bottomActionEdgeClass({ mobile: true, role: 'confirm', hasConfirm: true }) === 'pp-confirm-edge');
   check('phone End phase stays in the pane beside a confirm',
@@ -108,8 +110,8 @@ console.log('=== desktop keeps End phase in the pane; phone pins the blue confir
   const css = readFileSync(join(root, 'style.css'), 'utf8');
   check('the panel uses the desktop edge split',
     panel.includes('bottomActionEdgeClass') && panel.includes('shouldOfferBottomTechRoll'));
-  check('the long confirm bar is phone-only',
-    css.includes('html.mobile-shell .pp-confirm-btn.pp-confirm-edge:not(:disabled):not(.disabled)'));
+  check('the edge bar is the shared screen-bottom rule',
+    css.includes('.pp-confirm-btn.pp-confirm-edge:not(:disabled):not(.disabled) {\n  position: fixed;'));
 }
 
 if (failures) {

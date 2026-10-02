@@ -7161,9 +7161,9 @@ html.mobile-shell .pp-battle-row,
   text-overflow: ellipsis;
 }
 
-/* Phone pins the blue confirm to the screen bottom. Desktop keeps both
-   buttons in the right pane, so it does not reserve a viewport-wide slot. */
-html.mobile-shell .pp-bottom-actions.pp-has-context-confirm {
+/* The screen-edge control is position:fixed, so the in-pane button needs
+   room above it. Phone that edge is the blue confirm. Desktop it is End phase. */
+.pp-bottom-actions.pp-has-context-confirm {
   padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
 }
 
@@ -21638,9 +21638,9 @@ html.mobile-shell .hud-live-money {
   white-space: nowrap;
 }
 
-/* Phone: confirm is one full line on the bottom edge. Desktop leaves the
-   button in the right pane (no viewport-wide bar). */
-html.mobile-shell .pp-confirm-btn.pp-confirm-edge:not(:disabled):not(.disabled) {
+/* The edge control is one full line on the screen bottom. Phone puts the
+   blue confirm here. Desktop puts the green End phase here. */
+.pp-confirm-btn.pp-confirm-edge:not(:disabled):not(.disabled) {
   position: fixed;
   left: 0;
   right: 0;

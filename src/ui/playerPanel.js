@@ -2241,8 +2241,8 @@ export class PlayerPanel {
     for (const btn of buttons) {
       const disabledClass = btn.disabled ? 'disabled' : '';
       const roleClass = btn.role === 'confirm' ? 'pp-context-confirm' : 'pp-phase-advance';
-      // Phone: the blue confirm is the bottom edge. Desktop: both buttons
-      // stay in the right pane, End phase after Continue.
+      // Phone: the blue confirm is the screen-edge bar. Desktop: the green
+      // End phase is that bar, and the blue confirm stays in the pane.
       const edgeClass = bottomActionEdgeClass({
         mobile,
         role: btn.role,

@@ -21,12 +21,15 @@ export function isContextConfirmAction(action) {
   return CONTEXT_CONFIRM_ACTIONS.includes(action);
 }
 
-// Phone pins the blue confirm (or the lone End phase) to the screen edge.
-// Desktop keeps Continue and End phase in the right pane. End phase is
-// rendered after Continue, so it sits at the bottom of that pane.
+// Phone: the blue confirm is the screen-edge bar, or End phase when it is
+// the only control. Desktop: the green End phase is the screen-edge bar.
+// Blue confirms stay the smaller button in the right pane.
 export function bottomActionEdgeClass({ mobile = false, role = 'advance', hasConfirm = false } = {}) {
-  if (!mobile) return '';
-  if (role === 'confirm' || !hasConfirm) return 'pp-confirm-edge';
+  if (mobile) {
+    if (role === 'confirm' || !hasConfirm) return 'pp-confirm-edge';
+    return '';
+  }
+  if (role === 'advance') return 'pp-confirm-edge';
   return '';
 }
 
