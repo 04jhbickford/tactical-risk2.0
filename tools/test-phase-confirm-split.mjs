@@ -1,10 +1,17 @@
-// V2.81.57-unified.32 — green advances the phase; blue confirms the action.
+// V2.81.57-unified.33 — green advances the phase; blue confirms the action.
 
+import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import { GAME_VERSION } from '../src/version.js';
 import {
   CONTEXT_CONFIRM_ACTIONS,
+  bottomActionEdgeClass,
   resolvePhaseConfirmSplit,
+  shouldOfferBottomTechRoll,
 } from '../src/ui/phaseConfirmSplit.js';
+
+const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
 let failures = 0;
 const check = (label, cond) => {
@@ -16,7 +23,7 @@ const check = (label, cond) => {
   }
 };
 
-check('stamp is V2.81.57-unified.32', GAME_VERSION === 'V2.81.57-unified.32');
+check('stamp is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
 
 console.log('=== pending named move keeps blue confirm and green advance ===');
 {
@@ -83,6 +90,28 @@ console.log('=== green is never a contextual confirm ===');
   });
   check('a confirm that is not available stays off the bar', ghost.confirm == null
     && ghost.advance?.action === 'next-phase');
+}
+
+console.log('=== desktop End phase is the screen edge; phone still pins the blue confirm ===');
+{
+  check('desktop blue confirm stays in the right pane',
+    bottomActionEdgeClass({ mobile: false, role: 'confirm', hasConfirm: true }) === '');
+  check('desktop End phase is the screen-edge bar',
+    bottomActionEdgeClass({ mobile: false, role: 'advance', hasConfirm: true }) === 'pp-confirm-edge');
+  check('desktop End phase is the edge when it is the only button',
+    bottomActionEdgeClass({ mobile: false, role: 'advance', hasConfirm: false }) === 'pp-confirm-edge');
+  check('phone confirm is the bottom edge',
+    bottomActionEdgeClass({ mobile: true, role: 'confirm', hasConfirm: true }) === 'pp-confirm-edge');
+  check('phone End phase stays in the pane beside a confirm',
+    bottomActionEdgeClass({ mobile: true, role: 'advance', hasConfirm: true }) === '');
+  check('desktop does not pin Roll carried to the bottom', shouldOfferBottomTechRoll(false) === false);
+  check('phone still offers the tech roll on the bottom', shouldOfferBottomTechRoll(true) === true);
+  const panel = readFileSync(join(root, 'src/ui/playerPanel.js'), 'utf8');
+  const css = readFileSync(join(root, 'style.css'), 'utf8');
+  check('the panel uses the desktop edge split',
+    panel.includes('bottomActionEdgeClass') && panel.includes('shouldOfferBottomTechRoll'));
+  check('the edge bar is the shared screen-bottom rule',
+    css.includes('.pp-confirm-btn.pp-confirm-edge:not(:disabled):not(.disabled) {\n  position: fixed;'));
 }
 
 if (failures) {

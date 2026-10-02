@@ -1,4 +1,4 @@
-// V2.81.57-unified.32 — AI sea battles roll and count aircraft on carriers.
+// V2.81.57-unified.33 — AI sea battles roll and count aircraft on carriers.
 // Run: node tools/test-ai-carrier-aircraft.mjs
 
 import { readFileSync } from 'fs';

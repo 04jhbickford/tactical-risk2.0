@@ -162,17 +162,44 @@ export function factoryPlacementLabel({ placed = 0, limit = 0, damage = 0 } = {}
   return `${used}/${cap} units`;
 }
 
-export function renderFactoryRepairHtml(rows, { ipcs = 0 } = {}) {
+// Repair spends 1 IPC per point. The stepper picks how many; Repair all
+// spends every point the owner can afford. Cost stays 1 IPC per point.
+export function clampRepairPoints(points, damage, ipcs) {
+  const cap = Math.min(
+    Math.max(0, Math.floor(Number(damage) || 0)),
+    Math.max(0, Math.floor(Number(ipcs) || 0)),
+  );
+  if (cap <= 0) return 0;
+  const n = Math.floor(Number(points) || 0);
+  return Math.min(cap, Math.max(1, n));
+}
+
+export function stepRepairPoints(current, delta, damage, ipcs) {
+  const step = Math.floor(Number(delta) || 0);
+  return clampRepairPoints((Math.floor(Number(current) || 1) + step), damage, ipcs);
+}
+
+export function renderFactoryRepairHtml(rows, { ipcs = 0, pointsByTerritory = {} } = {}) {
   const list = Array.isArray(rows) ? rows : [];
   if (!list.length) return '';
   const money = Math.max(0, Math.floor(Number(ipcs) || 0));
   const items = list.map((row) => {
-    const afford = money >= REPAIR_IPC_PER_POINT;
+    const cap = Math.min(row.damage, money);
+    const chosen = clampRepairPoints(pointsByTerritory[row.name] ?? 1, row.damage, money);
+    const afford = cap > 0 && chosen > 0;
     return `
       <div class="pp-factory-limit" data-factory-repair="${row.name}">
         <span class="pp-factory-type">${row.name}</span>
         <span class="pp-factory-capacity">${row.damage} damage · place ${row.placeable}</span>
-        <button type="button" class="pp-action-btn" data-action="repair-factory" data-territory="${row.name}" data-points="1" ${afford ? '' : 'disabled'}>Repair 1 IPC</button>
+        <div class="pp-factory-repair-controls">
+          <div class="pp-factory-repair-step">
+            <button type="button" class="pp-qty-btn" data-action="repair-step" data-territory="${row.name}" data-delta="-1" ${chosen <= 1 ? 'disabled' : ''}>−</button>
+            <span class="pp-repair-count">${chosen}</span>
+            <button type="button" class="pp-qty-btn" data-action="repair-step" data-territory="${row.name}" data-delta="1" ${chosen >= cap ? 'disabled' : ''}>+</button>
+          </div>
+          <button type="button" class="pp-action-btn" data-action="repair-factory" data-territory="${row.name}" data-points="${chosen}" ${afford ? '' : 'disabled'}>Repair ${chosen} IPC</button>
+          <button type="button" class="pp-action-btn" data-action="repair-factory" data-territory="${row.name}" data-points="${cap}" data-repair-all="1" ${cap > 0 ? '' : 'disabled'}>Repair all</button>
+        </div>
       </div>`;
   }).join('');
   return `<div class="pp-raid-repair" data-raid-repair="1">${items}</div>`;

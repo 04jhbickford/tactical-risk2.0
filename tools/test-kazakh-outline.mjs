@@ -94,7 +94,7 @@ const kazakh = data.find((row) => row.name === 'Kazakh S.S.R.');
 const txt = parsePolygonsLine(readFileSync(join(root, 'map/polygons.txt'), 'utf8'), 'Kazakh S.S.R.');
 const ring = kazakh?.polygons?.[0] || [];
 
-check('stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.32');
+check('stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.33');
 check('Kazakh is one ring', kazakh && kazakh.polygons.length === 1 && !kazakh.isWater);
 check('map polygons.txt matches territories.json',
   txt && JSON.stringify(txt) === JSON.stringify(ring));
@@ -105,15 +105,55 @@ check('the south stub vertices are gone',
   !ring.some((p) => (p[0] === 1619 && p[1] === 728) || (p[0] === 1620 && p[1] === 727)));
 check('the south border still joins',
   JSON.stringify(ring.slice(186, 190)) === JSON.stringify([[1621, 748], [1619, 746], [1618, 747], [1617, 747]]));
-check('Kazakh name, owner, IPC, and neighbors are unchanged',
+check('Kazakh name, owner, and IPC are unchanged',
   kazakh.name === 'Kazakh S.S.R.'
   && kazakh.production === 1
   && kazakh.originalOwner === 'Russians'
-  && kazakh.continent === 'Middle East'
-  && JSON.stringify(kazakh.connections) === JSON.stringify([
-    'Caspian Sea Zone', 'China', 'India', 'Novosibirsk', 'Persia', 'Russia',
+  && kazakh.continent === 'Middle East');
+check('Kazakh connects to Afghanistan and keeps its other neighbors',
+  JSON.stringify(kazakh.connections) === JSON.stringify([
+    'Afghanistan', 'Caspian Sea Zone', 'China', 'India', 'Novosibirsk', 'Persia', 'Russia',
   ]));
-check('Afghanistan stays merged into India', !data.some((row) => row.name === 'Afghanistan'));
+{
+  const poly = readFileSync(join(root, 'map/polygons.txt'), 'utf8');
+  const afgTxt = parsePolygonsLine(poly, 'Afghanistan');
+  const afg = data.find((row) => row.name === 'Afghanistan');
+  const india = data.find((row) => row.name === 'India');
+  const china = data.find((row) => row.name === 'China');
+  const persia = data.find((row) => row.name === 'Persia');
+  const continents = JSON.parse(readFileSync(join(root, 'data/continents.json'), 'utf8'));
+  const middleEast = continents.find((row) => row.name === 'Middle East');
+  const setup = JSON.parse(readFileSync(join(root, 'data/setup.json'), 'utf8'));
+  const classicSrc = readFileSync(join(root, 'tools/map-convert/classic.mjs'), 'utf8');
+  check('Afghanistan is restored from the pre-merge row',
+    afg
+    && afg.isWater === false
+    && afg.production === 1
+    && afg.continent === 'Middle East'
+    && afg.originalOwner === 'Neutral'
+    && JSON.stringify(afg.center) === JSON.stringify([1708, 781])
+    && JSON.stringify(afg.connections) === JSON.stringify(['China', 'India', 'Kazakh S.S.R.', 'Persia'])
+    && afg.polygons.length === 1
+    && afg.polygons[0].length === 210
+    && afg.polygons[0][0][0] === 1749
+    && afg.polygons[0][0][1] === 739
+    && JSON.stringify(afg.polygons[0]) === JSON.stringify(afgTxt)
+    && india.polygons.length === 1
+    && JSON.stringify(india.polygons[0]) !== JSON.stringify(afg.polygons[0]));
+  check('India, China, and Persia connect back, and Sinkiang is gone',
+    india.connections.includes('Afghanistan')
+    && china.connections.includes('Afghanistan')
+    && persia.connections.includes('Afghanistan')
+    && !data.some((row) => (row.connections || []).includes('Sinkiang')));
+  check('Middle East lists Afghanistan and keeps bonus 18',
+    middleEast.bonus === 18 && middleEast.territories.includes('Afghanistan'));
+  check('setup places no Afghanistan units or owner',
+    setup.classic.territoryOwners.Afghanistan == null
+    && setup.classic.unitPlacements.Afghanistan == null);
+  check('convert recipe does not merge Afghanistan into India',
+    !/from:\s*'Afghanistan'/.test(classicSrc)
+    && classicSrc.includes("'Afghanistan'"));
+}
 
 if (failures) {
   console.error(`${failures} failed`);

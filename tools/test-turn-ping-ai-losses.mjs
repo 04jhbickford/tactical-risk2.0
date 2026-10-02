@@ -1,4 +1,4 @@
-// V2.81.57-unified.32 — AI battles and non-battle captures show on the turn ping.
+// V2.81.57-unified.33 — AI battles and non-battle captures show on the turn ping.
 // Replays the TXVKJB seat gap: British Easy AI fights through resolveCombat
 // (the aiController._handleCombat loop) and walks into empty Egypt.
 // Run: node tools/test-turn-ping-ai-losses.mjs
@@ -39,7 +39,7 @@ const check = (label, cond, extra) => {
   }
 };
 
-check('stamp is unified.15', GAME_VERSION === 'V2.81.57-unified.32');
+check('stamp is unified.15', GAME_VERSION === 'V2.81.57-unified.33');
 check('schema stays 11', SCHEMA_VERSION === 11);
 
 const landDefs = {
@@ -211,6 +211,7 @@ const EXPECTED_ROB = [
   '<@600101834727620620>',
   'Robert007 - Germany Develop Tech Phase',
   '-2x Infantry, 1x Tank lost Turkey - British Easy AI',
+  '-2x Infantry lost Turkey - Robert007 Germany',
   '-1x Infantry lost Kenya-Rhodesia - British Easy AI',
   '-Turkey Lost - British Easy AI',
   '-Kenya-Rhodesia Lost - British Easy AI',
@@ -252,9 +253,15 @@ check('Turkey losses are the sum', turkeyCombats[0]
   && turkeyCombats[0].defenderLosses?.infantry === 2
   && turkeyCombats[0].defenderLosses?.armour === 1);
 check('British casualties were recorded on the event', turkeyCombats[0]?.attackerLosses?.infantry === 2);
-check('British losses are absent from Rob\'s ping', rob === EXPECTED_ROB && !rob.includes('4x Infantry') && !rob.includes('Easy Bot'));
+check('British losses in the Turkey fight are on Rob\'s ping',
+  rob === EXPECTED_ROB
+  && rob.includes('-2x Infantry lost Turkey - Robert007 Germany')
+  && !rob.includes('4x Infantry')
+  && !rob.includes('Easy Bot'));
 const turkeyUnitLines = rob.split('\n').filter((line) => line.includes('lost Turkey'));
-check('one Turkey unit line', turkeyUnitLines.length === 1);
+check('both sides of Turkey are listed', turkeyUnitLines.length === 2
+  && turkeyUnitLines[0] === '-2x Infantry, 1x Tank lost Turkey - British Easy AI'
+  && turkeyUnitLines[1] === '-2x Infantry lost Turkey - Robert007 Germany');
 
 const combatBeforeCapture = logged.turnEvents.findIndex((ev) => ev.type === 'combat' && ev.territory === 'Turkey');
 const turkeyCaptureAt = logged.turnEvents.findIndex((ev) => ev.type === 'territory_captured' && ev.territory === 'Turkey');

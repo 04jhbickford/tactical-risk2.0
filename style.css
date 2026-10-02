@@ -6082,6 +6082,31 @@ html:not(.mobile-shell) .pp-inline-placement .pp-unit-list {
   margin-bottom: 0;
 }
 
+.pp-factory-repair-controls {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.pp-factory-repair-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pp-repair-count {
+  min-width: 2ch;
+  text-align: center;
+  font-weight: 600;
+  color: #ffc107;
+}
+
+.pp-raid-repair .pp-factory-repair-controls .pp-action-btn {
+  flex: 1 0 100%;
+}
+
 .pp-factory-type {
   font-size: 11px;
   color: #ffc107;
@@ -7136,7 +7161,8 @@ html.mobile-shell .pp-battle-row,
   text-overflow: ellipsis;
 }
 
-/* Blue sits on the bottom edge. Green stays in the panel, above that line. */
+/* The screen-edge control is position:fixed, so the in-pane button needs
+   room above it. Phone that edge is the blue confirm. Desktop it is End phase. */
 .pp-bottom-actions.pp-has-context-confirm {
   padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
 }
@@ -21612,8 +21638,8 @@ html.mobile-shell .hud-live-money {
   white-space: nowrap;
 }
 
-/* Confirm is one full line on the bottom edge. The land name stays one line.
-   The sidebar still reaches the screen bottom so this line sits inside it. */
+/* The edge control is one full line on the screen bottom. Phone puts the
+   blue confirm here. Desktop puts the green End phase here. */
 .pp-confirm-btn.pp-confirm-edge:not(:disabled):not(.disabled) {
   position: fixed;
   left: 0;

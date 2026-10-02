@@ -2,6 +2,12 @@
 
 ---
 
+## 10.2.26 — unified.33 turn ping lists both sides
+
+Stamp `V2.81.57-unified.33`. Schema stays 11. A `V2.82-unified.32` doc is older than this tab and does not prompt. A `V2.82-unified.34` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.33`).
+
+Rob, 30 Sep 2026 (Discord 1554948495603924993): a turn ping for a fight the recipient was in lists both sides' unit losses, the place, and who inflicted each loss. Combats that seat was not in still drop. Territories the recipient took still stay out. Quiet turns still send both empty lines. The header, the mention, and whether a ping is sent are unchanged.
+
 ## 9.30.26 — unified.32 green advances, blue confirms
 
 Stamp `V2.81.57-unified.32`. Schema stays 11. A `V2.82-unified.31` doc is older than this tab and does not prompt. A `V2.82-unified.33` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.32`).

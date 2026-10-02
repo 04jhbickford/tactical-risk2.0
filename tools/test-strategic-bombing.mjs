@@ -1,4 +1,4 @@
-// V2.81.57-unified.32 — strategic bombing raids.
+// V2.81.57-unified.33 — strategic bombing raids.
 // AA, damage cap, placement limit, repair, the bomber-only prompt,
 // save round-trip, and the online snapshot of factory damage.
 // Run: node tools/test-strategic-bombing.mjs
@@ -24,10 +24,13 @@ const {
   applyFactoryDamage,
   bomberDicePerSurvivor,
   countAaHits,
+  clampRepairPoints,
   factoryPlacementLabel,
   maxFactoryDamage,
   raidPromptApplies,
+  renderFactoryRepairHtml,
   repairCost,
+  stepRepairPoints,
   sumDice,
   undamagedPlacement,
 } = await import('../src/state/strategicBombing.js');
@@ -37,6 +40,7 @@ const {
   factoryDamageFontWorld,
 } = await import('../src/map/unitRenderer.js');
 const { bindGameEventLog, unbindGameEventLog } = await import('../src/multiplayer/gameEventLog.js');
+const { applyTerritoryCapture } = await import('../src/state/combatFinalize.js');
 
 let failures = 0;
 const check = (label, cond) => {
@@ -53,8 +57,8 @@ const unitDefs = {
 };
 
 console.log('=== stamp ===');
-check('display stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.32');
-check('compat stamp is V2.82-unified.32', compatClientVersion() === 'V2.82-unified.32');
+check('display stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.33');
+check('compat stamp is V2.82-unified.33', compatClientVersion() === 'V2.82-unified.33');
 check('schema stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== pure dice and cap ===');
@@ -439,6 +443,33 @@ console.log('=== damage number sits on the factory icon ===');
     !src.includes('_drawFactoryDamageBadge')
     && !src.includes('cx + iconSize')
     && src.includes('_drawFactoryDamageOnIcon'));
+}
+
+console.log('=== repair stepper and captured factory damage ===');
+{
+  const html = renderFactoryRepairHtml(
+    [{ name: 'Germany', output: 10, damage: 40, placeable: 0 }],
+    { ipcs: 40 },
+  );
+  check('repair offers up and down plus repair all',
+    html.includes('data-action="repair-step"')
+    && html.includes('Repair all')
+    && html.includes('data-points="40"')
+    && html.includes('data-repair-all="1"'));
+  check('the stepper moves one point at a time', stepRepairPoints(1, 1, 40, 40) === 2);
+  check('repair points cannot pass the IPCs on hand', clampRepairPoints(40, 40, 12) === 12);
+  const gs = makeState();
+  gs.factoryDamage.Germany = 9;
+  gs.units.Germany = [
+    { type: 'factory', quantity: 1, owner: 'germans' },
+    { type: 'infantry', quantity: 1, owner: 'usa' },
+  ];
+  const captured = applyTerritoryCapture(gs, 'Germany', { playerId: 'usa', unitDefs });
+  check('capture gives the factory to the attacker',
+    captured.captured === true
+    && gs.getOwner('Germany') === 'usa'
+    && gs.units.Germany.find((unit) => unit.type === 'factory')?.owner === 'usa');
+  check('a captured factory keeps its damage', gs.getFactoryDamage('Germany') === 9);
 }
 
 if (failures) {

@@ -4,9 +4,9 @@
 // Dedupe key: (gameId, turnIndex, seatId). Skip AI. Mention the next human
 // by snowflake (explicit id, else the alias map). The header is that human
 // (display name - power - phase), not the seat that just finished. The body
-// is Rob's multiline shape for what that human lost since their previous
-// turn ended: units lost (place + who inflicted), territories lost (who
-// took them), or the two quiet lines. Counts and places come from
+// is Rob's multiline shape since their previous turn ended: both sides'
+// unit losses from a fight that human was in (place + who inflicted each),
+// territories taken from them, or the two quiet lines. Counts and places come from
 // turnEvents only. Untagged fallback when no snowflake matches.
 // Probe and test payloads never post.
 
@@ -382,9 +382,9 @@ function formatTerritoryLine(territory, taker) {
   return who ? `-${name} Lost - ${who}` : `-${name} Lost`;
 }
 
-// Losses the ping recipient actually suffered. Opponent casualties and
-// territories the recipient took are left out. Quiet input still yields
-// the two Rob lines via formatTurnPingSummary.
+// A combat the recipient fought keeps both sides' unit losses. Combats that
+// seat was not in are dropped, and territories the recipient took stay out.
+// Quiet input still yields the two Rob lines via formatTurnPingSummary.
 export function formatRecipientLossSummary(events, { recipientId = '', players = [] } = {}) {
   const id = cleanBit(recipientId);
   const rows = Array.isArray(events)
@@ -411,10 +411,8 @@ export function formatRecipientLossSummary(events, { recipientId = '', players =
     const capture = place ? captureByTerritory.get(place) : null;
     const attackerId = cleanBit(ev.attackerId) || cleanBit(ev.playerId) || capture?.takerId || '';
     const defenderId = cleanBit(ev.defenderId) || capture?.fromId || '';
-    if (id && attackerId === id) {
-      filtered.push({ ...ev, attackerId, defenderId, defenderLosses: {} });
-    } else if (id && defenderId === id) {
-      filtered.push({ ...ev, attackerId, defenderId, attackerLosses: {} });
+    if (id && (attackerId === id || defenderId === id)) {
+      filtered.push({ ...ev, attackerId, defenderId });
     }
   }
   return formatTurnPingSummary(filtered, { actorId: id, players });

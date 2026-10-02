@@ -31,7 +31,9 @@ export function confirmChoice({
 
     const msg = doc.createElement('p');
     msg.className = 'tr-confirm-message';
-    msg.textContent = String(message ?? '');
+    const text = String(message ?? '');
+    if (text.includes('\n')) msg.style.whiteSpace = 'pre-line';
+    msg.textContent = text;
 
     const actions = doc.createElement('div');
     actions.className = 'tr-confirm-actions';

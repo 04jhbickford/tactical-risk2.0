@@ -78,7 +78,7 @@ function board() {
 }
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-unified.32', GAME_VERSION === 'V2.81.57-unified.32');
+check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
 
 console.log('=== 9.21.26.01 land-only sea zone is not a combat attack ===');
 {
