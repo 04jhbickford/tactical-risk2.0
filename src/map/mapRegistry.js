@@ -155,6 +155,26 @@ const PACIFIC_LAND_BRIDGES = Object.freeze([
   ['Hawaiian Islands', 'Mexico'],
 ]);
 
+// Optional Classic set only. Off unless the host turns Extra Pacific
+// bridges on. Pacific's fourteen above stay as they are. A pair is
+// used only when both territories are land on the Classic board.
+// Rob, 2 Oct 2026: drop Japan–Midway and Philippines–Solomon Islands;
+// add Wake Island–Okinawa, Wake Island–Caroline Islands,
+// Philippines–Okinawa, Borneo Celebes–Philippines, and West US–Midway.
+export const CLASSIC_EXTRA_PACIFIC_BRIDGES = Object.freeze([
+  ['Philippines', 'Caroline Islands'],
+  ['Philippines', 'New Guinea'],
+  ['Philippines', 'French Indo China'],
+  ['Wake Island', 'Hawaiian Islands'],
+  ['Hawaiian Islands', 'Midway'],
+  ['Hawaiian Islands', 'Mexico'],
+  ['Wake Island', 'Okinawa'],
+  ['Wake Island', 'Caroline Islands'],
+  ['Philippines', 'Okinawa'],
+  ['Borneo Celebes', 'Philippines'],
+  ['West US', 'Midway'],
+]);
+
 // Graph-derived. New South Wales borders Queensland, Victoria, and
 // South Australia. Japan walks to Iwo Jima and Midway. Hawaiian Islands
 // walk to Midway, Wake Island, and Mexico. Okinawa has no land step.

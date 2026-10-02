@@ -51,14 +51,22 @@ const PACIFIC_LINKS = [
 ];
 
 const ADDED = [
-  ['Japan', 'Midway'],
   ['Philippines', 'Caroline Islands'],
-  ['Philippines', 'Solomon Islands'],
   ['Philippines', 'New Guinea'],
   ['Philippines', 'French Indo China'],
   ['Wake Island', 'Hawaiian Islands'],
   ['Hawaiian Islands', 'Midway'],
   ['Hawaiian Islands', 'Mexico'],
+  ['Wake Island', 'Okinawa'],
+  ['Wake Island', 'Caroline Islands'],
+  ['Philippines', 'Okinawa'],
+  ['Borneo Celebes', 'Philippines'],
+  ['West US', 'Midway'],
+];
+
+const REMOVED = [
+  ['Japan', 'Midway'],
+  ['Philippines', 'Solomon Islands'],
 ];
 
 const LEFT_OUT = [
@@ -100,6 +108,7 @@ function playing(options) {
     'Japan', 'Midway', 'Hawaiian Islands', 'Wake Island', 'Mexico',
     'Philippines', 'Caroline Islands', 'Solomon Islands', 'New Guinea',
     'French Indo China', 'Alaska', 'Soviet Far East', 'West US',
+    'Okinawa', 'Borneo Celebes',
   ];
   gs.territoryState = Object.fromEntries(owned.map((name) => [name, { owner: 'Japanese' }]));
   gs.playerState = {
@@ -108,8 +117,14 @@ function playing(options) {
   gs.units = {
     Japan: [
       { type: 'infantry', quantity: 3, owner: 'Japanese' },
-      { type: 'armour', quantity: 1, owner: 'Japanese' },
+    ],
+    'West US': [
+      { type: 'infantry', quantity: 3, owner: 'Japanese' },
       { type: 'destroyer', quantity: 1, owner: 'Japanese' },
+    ],
+    'Wake Island': [
+      { type: 'infantry', quantity: 3, owner: 'Japanese' },
+      { type: 'armour', quantity: 1, owner: 'Japanese' },
     ],
   };
   return gs;
@@ -124,21 +139,21 @@ function qty(gs, territory, type) {
 console.log('=== stamp ===');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  check('display stamp is V2.81.57-unified.39', GAME_VERSION === 'V2.81.57-unified.39');
+  check('display stamp is V2.81.57-unified.42', GAME_VERSION === 'V2.81.57-unified.42');
   check('schema stays 11', SCHEMA_VERSION === 11);
-  check('game docs write V2.82-unified.39', compatClientVersion() === 'V2.82-unified.39');
-  check('a V2.82-unified.38 doc does not prompt this tab',
-    compareGameVersions('V2.82-unified.38', GAME_VERSION) < 0);
-  check('a V2.82-unified.40 doc prompts this tab',
-    compareGameVersions('V2.82-unified.40', GAME_VERSION) > 0);
-  check('our own V2.82-unified.39 doc does not prompt',
-    compareGameVersions('V2.82-unified.39', GAME_VERSION) === 0);
+  check('game docs write V2.82-unified.42', compatClientVersion() === 'V2.82-unified.42');
+  check('a V2.82-unified.41 doc does not prompt this tab',
+    compareGameVersions('V2.82-unified.41', GAME_VERSION) < 0);
+  check('a V2.82-unified.43 doc prompts this tab',
+    compareGameVersions('V2.82-unified.43', GAME_VERSION) > 0);
+  check('our own V2.82-unified.42 doc does not prompt',
+    compareGameVersions('V2.82-unified.42', GAME_VERSION) === 0);
   check('index.html carries the display stamp',
-    html.includes('content="V2.81.57-unified.39"')
-    && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.39'")
-    && html.includes("var LOCKED = 'V2.81.57-unified.39'")
-    && html.includes('style.css?v=V2.81.57-unified.39')
-    && html.includes('src/main.js?v=V2.81.57-unified.39'));
+    html.includes('content="V2.81.57-unified.42"')
+    && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.42'")
+    && html.includes("var LOCKED = 'V2.81.57-unified.42'")
+    && html.includes('style.css?v=V2.81.57-unified.42')
+    && html.includes('src/main.js?v=V2.81.57-unified.42'));
 }
 
 console.log('=== lobby ===');
@@ -198,19 +213,27 @@ console.log('=== pairs ===');
     off.activeLandBridges().length === 16
     && off.hasLandBridge('Alaska', 'Soviet Far East') === true
     && off.hasLandBridge('Japan', 'Midway') === false
-    && !off.getConnections('Japan').includes('Midway'));
+    && off.hasLandBridge('West US', 'Midway') === false
+    && !off.getConnections('Japan').includes('Midway')
+    && !off.getConnections('West US').includes('Midway'));
 
   const on = playing({ extraPacificBridges: true });
   const extras = on.activeLandBridges().slice(16);
-  check('on adds only the Classic pairs from the Pacific list',
-    on.activeLandBridges().length === 24 && samePairs(extras, ADDED));
+  check('on adds the corrected Classic set and nothing else',
+    on.activeLandBridges().length === 27 && samePairs(extras, ADDED));
   check('on still has the original Alaska bridge', on.hasLandBridge('Alaska', 'Soviet Far East') === true);
   for (const [left, right] of ADDED) {
     check(`on steps ${left}–${right}`, on.hasLandBridge(left, right) === true);
   }
+  for (const [left, right] of REMOVED) {
+    check(`on no longer steps ${left}–${right}`, on.hasLandBridge(left, right) === false);
+  }
   for (const [left, right] of LEFT_OUT) {
     check(`on does not invent ${left}–${right}`, on.hasLandBridge(left, right) === false);
   }
+  check('West US steps to Midway, and East US does not',
+    on.hasLandBridge('West US', 'Midway') === true
+    && on.hasLandBridge('East US', 'Midway') === false);
   check('Wake Island does not step to West US', on.hasLandBridge('Wake Island', 'West US') === false);
 
   const bridgesOff = playing({ landBridges: false, extraPacificBridges: false });
@@ -232,37 +255,40 @@ console.log('=== pairs ===');
 console.log('=== one step ===');
 {
   const off = playing({ extraPacificBridges: false });
-  const blocked = off.moveUnits('Japan', 'Midway', [{ type: 'infantry', quantity: 1 }], unitDefs);
-  check('off: infantry cannot step Japan–Midway',
-    blocked.success === false && qty(off, 'Japan', 'infantry') === 3 && qty(off, 'Midway', 'infantry') === 0);
+  const blocked = off.moveUnits('West US', 'Midway', [{ type: 'infantry', quantity: 1 }], unitDefs);
+  check('off: infantry cannot step West US–Midway',
+    blocked.success === false && qty(off, 'West US', 'infantry') === 3 && qty(off, 'Midway', 'infantry') === 0);
 
   const on = playing({ extraPacificBridges: true });
-  const step = on.moveUnits('Japan', 'Midway', [{ type: 'infantry', quantity: 1 }], unitDefs);
-  check('on: infantry steps Japan–Midway in one move',
-    step.success === true && qty(on, 'Midway', 'infantry') === 1 && qty(on, 'Japan', 'infantry') === 2);
+  const step = on.moveUnits('West US', 'Midway', [{ type: 'infantry', quantity: 1 }], unitDefs);
+  check('on: infantry steps West US–Midway in one move',
+    step.success === true && qty(on, 'Midway', 'infantry') === 1 && qty(on, 'West US', 'infantry') === 2);
+  const dropped = on.moveUnits('Japan', 'Midway', [{ type: 'infantry', quantity: 1 }], unitDefs);
+  check('on: infantry cannot step the removed Japan–Midway bridge',
+    dropped.success === false && qty(on, 'Japan', 'infantry') === 3 && qty(on, 'Midway', 'infantry') === 1);
 
   const two = playing({ extraPacificBridges: true });
-  const hop = two.moveUnits('Japan', 'Hawaiian Islands', [{ type: 'infantry', quantity: 1 }], unitDefs);
+  const hop = two.moveUnits('Wake Island', 'Midway', [{ type: 'infantry', quantity: 1 }], unitDefs);
   check('on: infantry cannot cross two bridges in one move',
-    hop.success === false && qty(two, 'Japan', 'infantry') === 3 && qty(two, 'Hawaiian Islands', 'infantry') === 0);
+    hop.success === false && qty(two, 'Wake Island', 'infantry') === 3 && qty(two, 'Midway', 'infantry') === 0);
 
   const tank = playing({ extraPacificBridges: true });
-  const reached = tank.getLandUnitPath('Japan', 'Hawaiian Islands', 2, 'Japanese', false);
-  check('on: a move of 2 crosses Japan–Midway–Hawaiian Islands as two steps',
-    reached?.path?.join(' > ') === 'Japan > Midway > Hawaiian Islands');
-  const tankMove = tank.moveUnits('Japan', 'Hawaiian Islands', [{ type: 'armour', quantity: 1 }], unitDefs);
+  const reached = tank.getLandUnitPath('Wake Island', 'Midway', 2, 'Japanese', false);
+  check('on: a move of 2 crosses Wake Island–Hawaiian Islands–Midway as two steps',
+    reached?.path?.join(' > ') === 'Wake Island > Hawaiian Islands > Midway');
+  const tankMove = tank.moveUnits('Wake Island', 'Midway', [{ type: 'armour', quantity: 1 }], unitDefs);
   check('on: armour can spend both steps in one move',
-    tankMove.success === true && qty(tank, 'Hawaiian Islands', 'armour') === 1);
+    tankMove.success === true && qty(tank, 'Midway', 'armour') === 1);
 
   const ship = playing({ extraPacificBridges: true });
-  const naval = ship.moveUnits('Japan', 'Midway', [{ type: 'destroyer', quantity: 1 }], unitDefs);
+  const naval = ship.moveUnits('West US', 'Midway', [{ type: 'destroyer', quantity: 1 }], unitDefs);
   ship.units.Alaska = [{ type: 'destroyer', quantity: 1, owner: 'Japanese' }];
   const existingNaval = ship.moveUnits('Alaska', 'Soviet Far East', [{ type: 'destroyer', quantity: 1 }], unitDefs);
   check('on: a naval unit is refused the same way as an existing bridge',
     naval.success === false
     && existingNaval.success === false
     && naval.error === existingNaval.error
-    && qty(ship, 'Japan', 'destroyer') === 1
+    && qty(ship, 'West US', 'destroyer') === 1
     && qty(ship, 'Alaska', 'destroyer') === 1,
     naval.error);
 
@@ -282,14 +308,18 @@ console.log('=== save ===');
   const kept = new GameState({ risk: { factions: [] } }, territories, []);
   kept.loadFromJSON(saved);
   check('a save with the option on loads on',
-    kept.gameOptions.extraPacificBridges === true && kept.hasLandBridge('Japan', 'Midway') === true);
+    kept.gameOptions.extraPacificBridges === true
+    && kept.hasLandBridge('West US', 'Midway') === true
+    && kept.hasLandBridge('Japan', 'Midway') === false);
 
   const omitted = structuredClone(saved);
   delete omitted.gameOptions.extraPacificBridges;
   const legacy = new GameState({ risk: { factions: [] } }, territories, []);
   legacy.loadFromJSON(omitted);
   check('a save that omits the field loads off',
-    legacy.gameOptions.extraPacificBridges === false && legacy.hasLandBridge('Japan', 'Midway') === false);
+    legacy.gameOptions.extraPacificBridges === false
+    && legacy.hasLandBridge('West US', 'Midway') === false
+    && legacy.hasLandBridge('Japan', 'Midway') === false);
 
   const restored = restoreProtectedGameOptions(
     { gameOptions: { landBridges: true } },
