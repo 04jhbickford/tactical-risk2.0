@@ -1,4 +1,4 @@
-// V2.81.57-unified.32 — default game options must not change a game.
+// V2.81.57-unified.33 — default game options must not change a game.
 // A scripted setup with the options object matches the same script that
 // never passes gameOptions (that field aside). An old save without the
 // field loads and can still place a unit. Schema stays 11.
@@ -101,8 +101,8 @@ function strip(json) {
   return copy;
 }
 
-console.log('=== V2.81.57-unified.32 game option defaults ===');
-check('GAME_VERSION is V2.81.57-unified.32', GAME_VERSION === 'V2.81.57-unified.32');
+console.log('=== V2.81.57-unified.33 game option defaults ===');
+check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 const without = play({

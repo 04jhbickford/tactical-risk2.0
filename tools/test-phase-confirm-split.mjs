@@ -1,4 +1,4 @@
-// V2.81.57-unified.32 — green advances the phase; blue confirms the action.
+// V2.81.57-unified.33 — green advances the phase; blue confirms the action.
 
 import { GAME_VERSION } from '../src/version.js';
 import {
@@ -16,7 +16,7 @@ const check = (label, cond) => {
   }
 };
 
-check('stamp is V2.81.57-unified.32', GAME_VERSION === 'V2.81.57-unified.32');
+check('stamp is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
 
 console.log('=== pending named move keeps blue confirm and green advance ===');
 {
