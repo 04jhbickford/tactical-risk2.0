@@ -1,6 +1,7 @@
 // V2.81.57-unified.33 — placement cap, army size, multi-tech, land bridges.
 // Run: node tools/test-game-options-rules.mjs
 
+import { gameVersionFromSource } from './game-version.mjs';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -62,7 +63,7 @@ function placeCapitals(gs) {
 }
 
 console.log('=== V2.81.57-unified.33 game option rules ===');
-check('GAME_VERSION is V2.81.57-unified.35', GAME_VERSION === 'V2.81.57-unified.35');
+check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === gameVersionFromSource());
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 {

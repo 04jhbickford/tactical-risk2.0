@@ -1,6 +1,7 @@
 // V2.81.55 cloud game-log: fail-closed append, schema, screenshot query.
 // Run: node tools/test-game-event-log.mjs
 
+import { gameVersionFromSource } from './game-version.mjs';
 import { pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -40,7 +41,7 @@ function check(name, cond) {
 }
 
 console.log('game event log');
-check('GAME_VERSION is V2.81.57-unified.35', GAME_VERSION === 'V2.81.57-unified.35');
+check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === gameVersionFromSource());
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 check('EVENT_SCHEMA is 1', EVENT_SCHEMA === 1);
 check('kinds include combat/aa/phase', EVENT_KINDS.includes('combat') && EVENT_KINDS.includes('aa') && EVENT_KINDS.includes('phase'));

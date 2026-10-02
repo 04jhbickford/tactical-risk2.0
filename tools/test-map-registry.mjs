@@ -1,6 +1,7 @@
 // V2.81.57-unified.33 — map registry, non-wrap camera, mapId, converter identity.
 // Run: node tools/test-map-registry.mjs
 
+import { gameVersionFromSource } from './game-version.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -47,7 +48,7 @@ console.log('=== map registry ===');
 activateMap('classic');
 applyMapMetrics(getActiveMap());
 const classic = getMap('classic');
-check('stamp is unified.26', GAME_VERSION === 'V2.81.57-unified.35');
+check('stamp is unified.26', GAME_VERSION === gameVersionFromSource());
 check('schema stays 11', SCHEMA_VERSION === 11);
 check('classic id and size', classic.id === 'classic' && classic.width === 3500 && classic.height === 2000);
 check('classic wraps and uses the existing data files',

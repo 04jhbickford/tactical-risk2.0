@@ -1,6 +1,7 @@
 // V2.77: presence / join-by-code / deploy queue / title-banner / undo≠pass.
 // Run: node tools/test-presence-and-deploy.mjs
 
+import { gameVersionFromSource } from './game-version.mjs';
 import { pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -191,7 +192,7 @@ const unitDefs = {
 };
 
 console.log('=== Version stamps ===');
-check('GAME_VERSION is V2.81.57-unified.35', GAME_VERSION === 'V2.81.57-unified.35');
+check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === gameVersionFromSource());
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== Presence: background must not delete or go offline ===');

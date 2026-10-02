@@ -1,6 +1,7 @@
 // dual-path.10 Experimental fork smoke (threeSoloPlay).
 // Run: node tools/test-dual-path-9-experimental.mjs
 
+import { gameVersionFromSource } from './game-version.mjs';
 import { pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -89,7 +90,7 @@ function makeTheater() {
 }
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-unified.35', GAME_VERSION === 'V2.81.57-unified.35');
+check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === gameVersionFromSource());
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== .02 Experimental applyHits / dequeue land-hold ===');

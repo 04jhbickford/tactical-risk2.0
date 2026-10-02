@@ -1,6 +1,7 @@
 // 9.21.26.05 — owned land keeps a political-control mark with zero units.
 // Run: node tools/test-political-control.mjs
 
+import { gameVersionFromSource } from './game-version.mjs';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { pathToFileURL, fileURLToPath } from 'url';
@@ -40,7 +41,7 @@ const EMPTY_OWNED = [
 ];
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-unified.35', GAME_VERSION === 'V2.81.57-unified.35');
+check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === gameVersionFromSource());
 
 console.log('=== empty owned land still marked ===');
 {

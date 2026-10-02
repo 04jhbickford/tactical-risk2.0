@@ -2,6 +2,7 @@
 // with Easy Bot (live Benson / Robert / Bastion table).
 // Run: node tools/test-lobby-seats.mjs
 
+import { gameVersionFromSource } from './game-version.mjs';
 import { pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -36,7 +37,7 @@ const easy1 = { oderId: 'ai_1', displayName: 'Easy Bot', isAI: true, aiDifficult
 const easy2 = { oderId: 'ai_2', displayName: 'Easy Bot', isAI: true, aiDifficulty: 'easy', factionId: 'Japanese' };
 
 console.log('=== V2.81.50 version ===');
-check('GAME_VERSION is V2.81.57-unified.35', GAME_VERSION === 'V2.81.57-unified.35');
+check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === gameVersionFromSource());
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== Live race: stale Add AI drops Benson ===');

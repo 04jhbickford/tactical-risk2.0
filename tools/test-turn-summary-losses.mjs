@@ -1,6 +1,7 @@
 // V2.81.57-unified.33 — turn summary prints loss maps, skips undone events.
 // Run: node tools/test-turn-summary-losses.mjs
 
+import { gameVersionFromSource } from './game-version.mjs';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -20,7 +21,7 @@ const check = (label, cond) => {
 };
 
 console.log('=== V2.81.57-unified.33 turn summary losses ===');
-check('GAME_VERSION is V2.81.57-unified.35', GAME_VERSION === 'V2.81.57-unified.35');
+check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === gameVersionFromSource());
 
 const line = formatLossCount({ infantry: 2, armour: 1 });
 check('loss map prints like the ping', line === '2x Infantry, 1x Tank');

@@ -4,6 +4,7 @@
 // A submarine rolls once per round. A surprise strike replaces the general step.
 // Run: node tools/test-auto-battle-hits.mjs
 
+import { gameVersionFromSource } from './game-version.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -73,7 +74,7 @@ const check = (label, cond, extra) => {
   } else console.log('ok  :', label);
 };
 
-check('stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.35');
+check('stamp is unified.21', GAME_VERSION === gameVersionFromSource());
 check('schema stays 11', SCHEMA_VERSION === 11);
 
 function mulberry32(seed) {

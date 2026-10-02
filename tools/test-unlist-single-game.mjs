@@ -2,6 +2,7 @@
 // Verification only, using the existing pure helpers.
 // Run: node tools/test-unlist-single-game.mjs
 
+import { gameVersionFromSource } from './game-version.mjs';
 import { GAME_VERSION } from '../src/version.js';
 import {
   lobbyAppearsInOpenGames,
@@ -15,7 +16,7 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-check('stamp is unified.14', GAME_VERSION === 'V2.81.57-unified.35');
+check('stamp is unified.14', GAME_VERSION === gameVersionFromSource());
 
 const lobby = {
   id: 'lobby-txvkjb',

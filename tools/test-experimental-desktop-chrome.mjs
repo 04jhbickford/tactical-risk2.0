@@ -3,13 +3,14 @@
 // Classic Canvas path is not rewritten. Rules / dual-fork stay .10.
 // Run: node tools/test-experimental-desktop-chrome.mjs
 
+import { gameVersionFromSource } from './game-version.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { GAME_VERSION } from '../src/version.js';
 import { UX_LABEL_EXPERIMENTAL, resolveUxMode, UX_CLASSIC, UX_THREE } from '../src/map/presentationMode.js';
 import { injectThreeChrome, syncThreeShellWidth, resizeThreeMapCanvas } from '../src/map/threeMapChrome.js';
 
-assert.equal(GAME_VERSION, 'V2.81.57-unified.35', 'stamp is unified.2');
+assert.equal(GAME_VERSION, gameVersionFromSource(), 'stamp is unified.2');
 assert.equal(UX_LABEL_EXPERIMENTAL, 'Experimental UX');
 assert.equal(resolveUxMode(''), UX_CLASSIC, 'queryless is unified Classic');
 assert.equal(resolveUxMode('?ux=classic'), UX_CLASSIC, 'classic remains a deep link');
@@ -25,9 +26,9 @@ const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const brief = readFileSync(new URL('../briefs/2026-09-20-main-art-three-ux/DESKTOP-EXPERIMENTAL-CHROME-BRIEF.md', import.meta.url), 'utf8');
 const checklist = readFileSync(new URL('../briefs/2026-09-20-main-art-three-ux/ADAPTIVE-LOBBY-CHECKLIST.md', import.meta.url), 'utf8');
 
-assert.match(html, /tr-game-version" content="V2\.81\.57-unified\.35"/);
-assert.match(html, /style\.css\?v=V2\.81\.57-unified\.35/);
-assert.match(html, /src\/main\.js\?v=V2\.81\.57-unified\.35/);
+assert.match(html, /tr-game-version" content="V2\.81\.57-unified\.33"/);
+assert.match(html, /style\.css\?v=V2\.81\.57-unified\.33/);
+assert.match(html, /src\/main\.js\?v=V2\.81\.57-unified\.33/);
 
 assert.match(brief, /map center \+ left context rail \+ right actions rail/);
 assert.match(brief, /fixed map scale grow frame/);

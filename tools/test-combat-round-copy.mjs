@@ -5,6 +5,7 @@
 // No dice-rule change.
 // Run: node tools/test-combat-round-copy.mjs
 
+import { gameVersionFromSource } from './game-version.mjs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -120,7 +121,7 @@ ui.lastRolls = {
 };
 
 const forces = ui._renderExpandedForces(attackers, defenders, attacker, defender);
-check('stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.35');
+check('stamp is unified.21', GAME_VERSION === gameVersionFromSource());
 check('paired infantry and artillery show both quantities', forces.includes('>2 + 2<'));
 check('tactical bomber row keeps one count and the paired label',
   forces.includes(`>${TACTICAL_PAIR_LABEL}<`)

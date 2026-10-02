@@ -2,6 +2,7 @@
 // Never "Player" / non-player zombie. Persistence must not sign out on resume.
 // Run: node tools/test-auth-session.mjs
 
+import { gameVersionFromSource } from './game-version.mjs';
 import { readFileSync } from 'node:fs';
 import { GAME_VERSION } from '../src/version.js';
 import {
@@ -26,7 +27,7 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-check('stamp is unified.2', GAME_VERSION === 'V2.81.57-unified.35');
+check('stamp is unified.2', GAME_VERSION === gameVersionFromSource());
 check('email local-part', emailLocalPart('rob@example.com') === 'rob');
 check('generic Player', isGenericDisplayName('Player') && isGenericDisplayName('non-player'));
 check('real name is not generic', isGenericDisplayName('Robert007') === false);

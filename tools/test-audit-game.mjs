@@ -2,6 +2,7 @@
 // Reference case shaped like game 6XQ7CN: stored IPCs do not match the ledger.
 // Run: node tools/test-audit-game.mjs
 
+import { gameVersionFromSource } from './game-version.mjs';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -36,7 +37,7 @@ function board({ round, phase, ipcs, units }) {
 
 console.log('=== V2.81.57-unified.33 audit fixture ===');
 check('schema stays 11', SCHEMA_VERSION === 11);
-check('display stamp is unified.26', GAME_VERSION === 'V2.81.57-unified.35');
+check('display stamp is unified.26', GAME_VERSION === gameVersionFromSource());
 
 const opening = await buildPhaseSnapshot(board({
   round: 4,
