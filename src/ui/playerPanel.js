@@ -2056,6 +2056,11 @@ export class PlayerPanel {
       }
     }
 
+    const mobile = isMobileShell();
+    const desktop = !mobile
+      && typeof window !== 'undefined'
+      && window.innerWidth >= DESKTOP_MIN_WIDTH;
+
     let advanceCandidate = null;
     if (phase === GAME_PHASES.UNIT_PLACEMENT) {
       const { ux } = this._getInitialPlacementUX(player);
@@ -2081,7 +2086,7 @@ export class PlayerPanel {
       advanceCandidate = {
         action: 'next-phase',
         label: turnPhase === TURN_PHASES.DEVELOP_TECH
-          ? 'Develop technology'
+          ? (desktop ? 'End Phase - Develop Technology' : 'Develop technology')
           : `End Phase · ${TURN_PHASE_NAMES[turnPhase] || 'Phase'}`,
         disabled: hasUnresolvedCombats || hasUnplacedUnits || airLandingActive,
       };
@@ -2101,10 +2106,6 @@ export class PlayerPanel {
     let buttons = [split.confirm, split.advance].filter(Boolean);
 
     // Peek stack: phase hint (own row) + unit/action chips + both bottom controls.
-    const mobile = isMobileShell();
-    const desktop = !mobile
-      && typeof window !== 'undefined'
-      && window.innerWidth >= DESKTOP_MIN_WIDTH;
     let peekHint = '';
     let peekRow = '';
     if (mobile) {
