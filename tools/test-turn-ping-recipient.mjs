@@ -169,13 +169,14 @@ check('Bastion losses accumulate across UK and USA turns', bastion === [
   '<@261711980526567428>',
   'Bastion - Russia Initial Deployment Phase',
   '-1x Infantry lost Caucasus - British Easy AI',
+  '-4x Infantry lost Caucasus - Bastion Russia',
   '-3x Infantry lost Ukraine - American Easy AI',
   '-Caucasus Lost - British Easy AI',
   '-Ukraine Lost - American Easy AI',
   'https://tactical-risk20.vercel.app/?code=TXVKJB',
 ].join('\n'));
-check('Bastion summary omits German losses and British casualties',
-  !bastion.includes('France') && !bastion.includes('Poland') && !bastion.includes('4x'));
+check('Bastion summary omits fights he was not in',
+  !bastion.includes('France') && !bastion.includes('Poland'));
 
 gs.phase = 'playing';
 seat(players[0], 0, 2);
@@ -188,6 +189,7 @@ check('Rob losses accumulate across UK and Japan', rob === [
   '<@600101834727620620>',
   'Robfox007 - Germany Develop Tech Phase',
   '-2x Infantry lost France - British Easy AI',
+  '-1x Infantry lost France - Robfox007 Germany',
   '-1x Tank lost Poland - Japanese Easy AI',
   '-France Lost - British Easy AI',
   '-Poland Lost - Japanese Easy AI',
@@ -214,6 +216,47 @@ check('client replay never called fetch', fetchCalls.length === 0);
 check('direct quiet summary',
   formatRecipientLossSummary([], { recipientId: 'Germans', players })
   === '-No units lost\n-No territories lost');
+
+// Robfox007 attacked; Bastion's tanks were the blanked defender bucket.
+const bothSides = [
+  {
+    type: 'combat',
+    territory: 'Poland',
+    attackerId: 'Germans',
+    defenderId: 'Russians',
+    attacker: 'Robfox007',
+    defender: 'Bastion',
+    attackerLosses: { infantry: 2 },
+    defenderLosses: { tank: 3 },
+  },
+  {
+    type: 'territory_captured',
+    territory: 'Poland',
+    fromPlayer: 'Russians',
+    toPlayer: 'Germans',
+    playerId: 'Germans',
+  },
+  {
+    type: 'combat',
+    territory: 'France',
+    attackerId: 'British',
+    defenderId: 'Americans',
+    attackerLosses: { infantry: 1 },
+    defenderLosses: { infantry: 1 },
+  },
+];
+check('a fight the recipient attacked lists both sides',
+  formatRecipientLossSummary(bothSides, { recipientId: 'Germans', players }) === [
+    '-2x Infantry lost Poland - Bastion Russia',
+    '-3x Tanks lost Poland - Robfox007 Germany',
+    '-No territories lost',
+  ].join('\n'));
+check('a fight the recipient defended lists both sides',
+  formatRecipientLossSummary(bothSides, { recipientId: 'Russians', players }) === [
+    '-3x Tanks lost Poland - Robfox007 Germany',
+    '-2x Infantry lost Poland - Bastion Russia',
+    '-Poland Lost - Robfox007 Germany',
+  ].join('\n'));
 
 const require = createRequire(import.meta.url);
 const prevWebhook = process.env.DISCORD_TURN_WEBHOOK_URL;
