@@ -2,6 +2,12 @@
 
 ---
 
+## 10.2.26 — unified.43 Develop Technology button
+
+Stamp `V2.81.57-unified.43`. Schema stays 11. A `V2.82-unified.42` doc is older than this tab and does not prompt. A `V2.82-unified.44` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.43`).
+
+Rob (Discord, 2 Oct 2026, 3:06pm PT): the Classic desktop green button at the bottom of the side panel, in Develop Technology, said Develop technology. It now says End Phase - Develop Technology. Phone and tablet keep Develop technology. Other phase buttons are unchanged.
+
 ## 10.2.26 — unified.42 corrected Extra Pacific bridges
 
 Stamp `V2.81.57-unified.42`. Schema stays 11. The flag is still the optional `gameOptions.extraPacificBridges` field. A save that omits it loads off. A `V2.82-unified.41` doc is older than this tab and does not prompt. A `V2.82-unified.43` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.42`).
