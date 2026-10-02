@@ -94,7 +94,7 @@ function research(gs, faces, { count = 3 } = {}) {
 }
 
 console.log('=== V2.81.57-unified.33 tech acquisition ===');
-check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
+check('GAME_VERSION is V2.81.57-unified.35', GAME_VERSION === 'V2.81.57-unified.35');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 check('direct tech cost is 20 IPCs', DIRECT_TECH_IPC_COST === 20);
 check('defaults are dice tokens and a random deal',

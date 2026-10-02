@@ -95,9 +95,9 @@ const html = readFileSync(join(root, 'index.html'), 'utf8');
 const mainSrc = readFileSync(join(root, 'src/main.js'), 'utf8');
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
+check('GAME_VERSION is V2.81.57-unified.35', GAME_VERSION === 'V2.81.57-unified.35');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
-check('index.html stamp is unified.5', html.includes('content="V2.81.57-unified.33"'));
+check('index.html stamp is unified.5', html.includes('content="V2.81.57-unified.35"'));
 
 console.log('=== 9.22.26.04 one undo row ===');
 {

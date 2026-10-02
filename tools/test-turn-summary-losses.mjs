@@ -20,7 +20,7 @@ const check = (label, cond) => {
 };
 
 console.log('=== V2.81.57-unified.33 turn summary losses ===');
-check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
+check('GAME_VERSION is V2.81.57-unified.35', GAME_VERSION === 'V2.81.57-unified.35');
 
 const line = formatLossCount({ infantry: 2, armour: 1 });
 check('loss map prints like the ping', line === '2x Infantry, 1x Tank');

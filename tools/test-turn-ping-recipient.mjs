@@ -15,7 +15,7 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-check('stamp is unified.14', GAME_VERSION === 'V2.81.57-unified.33');
+check('stamp is unified.14', GAME_VERSION === 'V2.81.57-unified.35');
 
 const players = [
   { id: 'Germans', name: 'Robfox007', isAI: false, discordUserId: '600101834727620620' },

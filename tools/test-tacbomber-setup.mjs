@@ -108,7 +108,7 @@ function historicalTacCount(setup) {
 }
 
 console.log('=== tactical bomber setup ===');
-check('stamp is unified.26', GAME_VERSION === 'V2.81.57-unified.33');
+check('stamp is unified.26', GAME_VERSION === 'V2.81.57-unified.35');
 check('schema stays 11', SCHEMA_VERSION === 11);
 check('default starting defs still omit tactical bombers',
   ![...RISK_STARTING_UNITS.land, ...RISK_STARTING_UNITS.naval]

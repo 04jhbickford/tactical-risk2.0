@@ -49,7 +49,7 @@ import {
 } from '../gameOptions.js';
 import { bindGameOptions, readGameOptionsFrom, readMapIdFrom, renderGameOptionsPanel } from './gameOptionsPanel.js';
 import { CLASSIC_MAP_ID, markMapChrome, UNKNOWN_MAP_MESSAGE } from '../map/mapRegistry.js';
-import { classicPowersForCap } from '../state/classicSeats.js';
+import { addAiDialogFactions } from '../state/classicSeats.js';
 import { getBoard } from '../map/boardCatalog.js';
 import { bindLobbyDice, lobbyDiceEntryMarkup, renderDiceStatsMarkup } from './diceStatsPanel.js';
 import { isMobileShell } from './mobileShell.js';
@@ -1040,8 +1040,7 @@ export class MultiplayerLobby {
     const takenColors = new Set(lobby.players.map(p => p.color).filter(Boolean));
     const seatedCount = lobby.players.length;
     const roomOptions = optionsFromSettings(lobby.settings);
-    const seatCeiling = this._activeMapId() === 'pacific' ? 5 : undefined;
-    const seatMax = clampMaxPlayers(roomOptions.maxPlayers, seatedCount, seatCeiling);
+    const seatMax = this._seatCap(lobby);
     const factions = this._factionsForActiveMap(seatMax);
     if (isHost && seatMax !== roomOptions.maxPlayers && !this._maxClampFlight) {
       this._maxClampFlight = true;
@@ -1490,13 +1489,24 @@ export class MultiplayerLobby {
     return this.lobby?.settings?.mapId || this._draftMapId || CLASSIC_MAP_ID;
   }
 
+  // Live room cap. `this.lobby` is never assigned, so a missing argument
+  // used to fall through to the create-form draft (default 5) and hide
+  // Chinese and ANZAC from Add AI on a 6- or 7-seat table.
+  _seatCap(lobby = this.lobbyManager?.getLobby?.() || null) {
+    const seatedCount = lobby?.players?.length || 0;
+    const ceiling = this._activeMapId() === 'pacific' ? 5 : undefined;
+    const raw = lobby
+      ? optionsFromSettings(lobby.settings).maxPlayers
+      : this._draftOptions?.maxPlayers;
+    return clampMaxPlayers(raw, seatedCount, ceiling);
+  }
+
   _factionsForActiveMap(maxPlayers) {
     const mapId = this._activeMapId();
     const setup = getBoard(mapId)?.setup || this.setup;
     const factions = setup?.risk?.factions || FACTIONS;
-    if (mapId === 'pacific') return factions;
-    const cap = maxPlayers ?? this.lobby?.settings?.maxPlayers ?? this._draftOptions?.maxPlayers ?? 5;
-    return classicPowersForCap(factions, cap);
+    const cap = maxPlayers ?? this._seatCap();
+    return addAiDialogFactions({ factions, maxPlayers: cap, mapId });
   }
 
   async _commitMapId(mapId) {
@@ -1543,8 +1553,8 @@ export class MultiplayerLobby {
   }
 
   _showAddAIDialog() {
-    const factions = this._factionsForActiveMap();
     const lobby = this.lobbyManager.getLobby();
+    const factions = this._factionsForActiveMap(this._seatCap(lobby));
     const takenFactions = new Set(lobby.players.map(p => p.factionId).filter(Boolean));
     const takenColors = new Set(lobby.players.map(p => p.color).filter(Boolean));
 
@@ -1586,7 +1596,7 @@ export class MultiplayerLobby {
         </div>
         <div class="mp-form-buttons">
           <button type="button" class="mp-cancel-btn" data-action="cancel-ai">Cancel</button>
-          <button type="button" class="mp-submit-btn" data-action="confirm-ai">Add AI</button>
+          <button type="button" class="mp-submit-btn" data-action="confirm-ai" ${availableFaction ? '' : 'disabled'}>Add AI</button>
         </div>
       </div>
     `;
@@ -1602,6 +1612,7 @@ export class MultiplayerLobby {
       const difficulty = dialog.querySelector('#ai-difficulty').value;
       const factionId = dialog.querySelector('#ai-faction').value;
       const color = dialog.querySelector('#ai-color').value;
+      if (!factionId || takenFactions.has(factionId)) return;
 
       await this.lobbyManager.addAIPlayer(difficulty, factionId, color);
       dialog.remove();

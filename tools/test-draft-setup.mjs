@@ -80,7 +80,7 @@ function stepDraft(gs) {
 }
 
 console.log('=== V2.81.57-unified.33 territory draft ===');
-check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
+check('GAME_VERSION is V2.81.57-unified.35', GAME_VERSION === 'V2.81.57-unified.35');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 const enabled = (setup.gameModes || []).filter((mode) => mode.enabled).map((mode) => mode.id);

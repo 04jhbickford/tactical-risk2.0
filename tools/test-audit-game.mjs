@@ -36,7 +36,7 @@ function board({ round, phase, ipcs, units }) {
 
 console.log('=== V2.81.57-unified.33 audit fixture ===');
 check('schema stays 11', SCHEMA_VERSION === 11);
-check('display stamp is unified.26', GAME_VERSION === 'V2.81.57-unified.33');
+check('display stamp is unified.26', GAME_VERSION === 'V2.81.57-unified.35');
 
 const opening = await buildPhaseSnapshot(board({
   round: 4,

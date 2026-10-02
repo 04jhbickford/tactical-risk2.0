@@ -57,8 +57,8 @@ const unitDefs = {
 };
 
 console.log('=== stamp ===');
-check('display stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.33');
-check('compat stamp is V2.82-unified.33', compatClientVersion() === 'V2.82-unified.33');
+check('display stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.35');
+check('compat stamp is V2.82-unified.35', compatClientVersion() === 'V2.82-unified.35');
 check('schema stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== pure dice and cap ===');

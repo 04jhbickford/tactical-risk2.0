@@ -47,7 +47,7 @@ console.log('=== map registry ===');
 activateMap('classic');
 applyMapMetrics(getActiveMap());
 const classic = getMap('classic');
-check('stamp is unified.26', GAME_VERSION === 'V2.81.57-unified.33');
+check('stamp is unified.26', GAME_VERSION === 'V2.81.57-unified.35');
 check('schema stays 11', SCHEMA_VERSION === 11);
 check('classic id and size', classic.id === 'classic' && classic.width === 3500 && classic.height === 2000);
 check('classic wraps and uses the existing data files',

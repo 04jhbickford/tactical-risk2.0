@@ -63,12 +63,12 @@ const hostUser = { id: 'rob', displayName: 'Robert007' };
 const guestUser = { id: 'bastion', displayName: 'Bastion' };
 
 console.log('=== V2.81.57-unified.33 stamp ===');
-check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
+check('GAME_VERSION is V2.81.57-unified.35', GAME_VERSION === 'V2.81.57-unified.35');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  check('index.html meta stamp', html.includes('content="V2.81.57-unified.33"'));
-  check('index.html lock stamp', html.includes("var LOCKED = 'V2.81.57-unified.33'"));
+  check('index.html meta stamp', html.includes('content="V2.81.57-unified.35"'));
+  check('index.html lock stamp', html.includes("var LOCKED = 'V2.81.57-unified.35'"));
 }
 
 console.log('=== Host seat renders the Discord field ===');

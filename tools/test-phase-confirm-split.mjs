@@ -23,7 +23,7 @@ const check = (label, cond) => {
   }
 };
 
-check('stamp is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
+check('stamp is V2.81.57-unified.35', GAME_VERSION === 'V2.81.57-unified.35');
 
 console.log('=== pending named move keeps blue confirm and green advance ===');
 {

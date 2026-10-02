@@ -61,7 +61,7 @@ const check = (label, cond, extra) => {
 };
 
 console.log('=== V2.81.57-unified.33 discord playtest ===');
-check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
+check('GAME_VERSION is V2.81.57-unified.35', GAME_VERSION === 'V2.81.57-unified.35');
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 const mainSrc = readFileSync(join(root, 'src/main.js'), 'utf8');

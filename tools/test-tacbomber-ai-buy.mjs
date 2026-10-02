@@ -161,7 +161,7 @@ async function buy(name, opts, difficulty, tacticalBombers) {
 }
 
 console.log('=== tactical bomber AI buy ===');
-check('stamp is unified.26', GAME_VERSION === 'V2.81.57-unified.33');
+check('stamp is unified.26', GAME_VERSION === 'V2.81.57-unified.35');
 
 const offRuns = [];
 for (const [name, opts, difficulty] of CASES) {
