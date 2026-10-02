@@ -18,6 +18,9 @@ export const DEFAULT_GAME_OPTIONS = Object.freeze({
   // Tactical bombers are off until the host turns them on. Old saves
   // omit the field and load as off. An explicit true or false is kept.
   tacticalBombers: false,
+  // Mechanized infantry is off until the host turns it on. Same shape
+  // as tactical bombers: a missing field loads off. Schema stays 11.
+  mechanizedInfantry: false,
 });
 
 export const STARTING_IPC_VALUES = Object.freeze([40, 60, 80, 100, 120, 150]);
@@ -105,6 +108,7 @@ export function normalizeGameOptions(raw, legacy = {}) {
   const bridgesRaw = src.landBridges !== undefined ? src.landBridges : old.landBridges;
   const multiRaw = src.multipleTech !== undefined ? src.multipleTech : old.multipleTech;
   const tacRaw = src.tacticalBombers !== undefined ? src.tacticalBombers : old.tacticalBombers;
+  const mechRaw = src.mechanizedInfantry !== undefined ? src.mechanizedInfantry : old.mechanizedInfantry;
   return {
     startingIPCs: pickNumber(
       src.startingIPCs ?? old.startingIPCs,
@@ -134,6 +138,8 @@ export function normalizeGameOptions(raw, legacy = {}) {
     ),
     // Default OFF. Only an explicit true adds tactical bombers.
     tacticalBombers: tacRaw === true,
+    // Default OFF. Only an explicit true adds mechanized infantry.
+    mechanizedInfantry: mechRaw === true,
   };
 }
 
@@ -148,7 +154,8 @@ export function isStandardRules(raw, legacy) {
     && o.landBridges === DEFAULT_GAME_OPTIONS.landBridges
     && o.territorySetup === DEFAULT_GAME_OPTIONS.territorySetup
     && o.techAcquisition === DEFAULT_GAME_OPTIONS.techAcquisition
-    && o.tacticalBombers === DEFAULT_GAME_OPTIONS.tacticalBombers;
+    && o.tacticalBombers === DEFAULT_GAME_OPTIONS.tacticalBombers
+    && o.mechanizedInfantry === DEFAULT_GAME_OPTIONS.mechanizedInfantry;
 }
 
 /** Live summary. Standard rules, or "Custom: Heavy army, 8 per round, no land bridges". */
@@ -172,6 +179,7 @@ export function describe(raw, legacy) {
   if (o.techAcquisition === 'keep') parts.push('keep tech tokens');
   if (o.techAcquisition === 'buy') parts.push(`buy tech (${DIRECT_TECH_IPC_COST})`);
   if (o.tacticalBombers) parts.push('tactical bombers');
+  if (o.mechanizedInfantry) parts.push('mechanized infantry');
   if (parts.length === 0) return 'Standard rules';
   return `Custom: ${parts.join(', ')}`;
 }
@@ -214,6 +222,7 @@ export const PROTECTED_OPTION_KEYS = Object.freeze([
   'territorySetup',
   'techAcquisition',
   'tacticalBombers',
+  'mechanizedInfantry',
 ]);
 
 export function protectedGameOptions(raw) {
@@ -287,6 +296,7 @@ export function optionRows(raw, legacy) {
     ['Tech', techAcquisitionLabel(o.techAcquisition)],
     ['Land bridges', o.landBridges ? 'On' : 'Off'],
     ['Tactical bombers', o.tacticalBombers ? 'On' : 'Off'],
+    ['Mechanized infantry', o.mechanizedInfantry ? 'On' : 'Off'],
   ];
 }
 

@@ -7,6 +7,14 @@
     "isLand": true,
     "image": "Infantry.png"
   },
+  "mechanizedInfantry": {
+    "cost": 4,
+    "attack": 1,
+    "defense": 2,
+    "movement": 2,
+    "isLand": true,
+    "image": "Mech.Inf.png"
+  },
   "armour": {
     "cost": 5,
     "attack": 3,
@@ -54,7 +62,7 @@
     "movement": 2,
     "isSea": true,
     "capacity": 2,
-    "canCarry": ["infantry", "armour", "artillery", "aaGun"],
+    "canCarry": ["infantry", "mechanizedInfantry", "armour", "artillery", "aaGun"],
     "image": "Transport.png"
   },
   "submarine": {

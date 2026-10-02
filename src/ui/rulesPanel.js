@@ -2,6 +2,7 @@
 
 import { describe, optionRows } from '../gameOptions.js';
 import { tacticalBombersEnabled } from '../state/tacticalPairing.js';
+import { mechanizedInfantryEnabled } from '../state/mechanizedInfantry.js';
 
 export const CARRIER_BULLET_ON = 'Can carry up to 2 air units (fighters or tactical bombers).';
 export const CARRIER_BULLET_OFF = 'Can carry up to 2 fighters.';
@@ -89,7 +90,8 @@ export class RulesPanel {
               </thead>
               <tbody>
                 <tr><td>Infantry</td><td>3</td><td>1</td><td>2</td><td>1</td><td>Cheap, good defense</td></tr>
-                <tr><td>Artillery</td><td>4</td><td>2</td><td>2</td><td>1</td><td>Boosts paired infantry</td></tr>
+                <tr data-rules-mechanized hidden><td>Mechanized Infantry</td><td>4</td><td>1</td><td>2</td><td>2</td><td>Attacks at 2 when paired with artillery, one for one. Stops on entering an enemy territory unless it moves with a tank.</td></tr>
+                <tr><td>Artillery</td><td>4</td><td>2</td><td>2</td><td>1</td><td data-rules-artillery-note>Boosts paired infantry</td></tr>
                 <tr><td>Armour (Tank)</td><td>6</td><td>3</td><td>3</td><td>2</td><td>Can blitz through friendly territory</td></tr>
                 <tr><td>Fighter</td><td>10</td><td>3</td><td>4</td><td>4</td><td>Air unit, can land on carriers</td></tr>
                 <tr data-rules-tactical hidden><td>Tactical Bomber</td><td>11</td><td>3</td><td>3</td><td>4</td><td>Attacks at 4 when paired with a fighter or tank in the same battle. Can land on a carrier.</td></tr>
@@ -143,6 +145,7 @@ export class RulesPanel {
             <ul>
               <li><strong>Multi-hop:</strong> Units with movement > 1 can move through friendly territories.</li>
               <li><strong>Tanks:</strong> Can "blitz" through empty enemy territories during combat movement.</li>
+              <li data-rules-mechanized hidden><strong>Mechanized infantry:</strong> Must stop when it enters an enemy territory. With a tank, during combat movement, it can enter an empty enemy territory, capture it, and continue. The next territory can be friendly, hostile, or the one it left. An antiaircraft gun or factory in the first territory stops the move.</li>
               <li><strong>Air Movement:</strong> Air units can fly over any terrain within their movement range.</li>
               <li><strong>Land Bridges:</strong> Some territories are connected across water (e.g., straits).</li>
             </ul>
@@ -178,8 +181,17 @@ export class RulesPanel {
 
   _paintUnitRules() {
     const on = tacticalBombersEnabled(this.gameState?.gameOptions);
+    const mech = mechanizedInfantryEnabled(this.gameState?.gameOptions);
     this.el?.querySelectorAll('[data-rules-tactical]').forEach((el) => {
       el.hidden = !on;
+    });
+    this.el?.querySelectorAll('[data-rules-mechanized]').forEach((el) => {
+      el.hidden = !mech;
+    });
+    this.el?.querySelectorAll('[data-rules-artillery-note]').forEach((el) => {
+      el.textContent = mech
+        ? 'Boosts one infantry or one mechanized infantry'
+        : 'Boosts paired infantry';
     });
     const table = on ? CARRIER_TABLE_ON : CARRIER_TABLE_OFF;
     const bullet = on ? CARRIER_BULLET_ON : CARRIER_BULLET_OFF;

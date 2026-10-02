@@ -1,6 +1,7 @@
 // Movement UI for selecting and moving units between territories
 
 import { TURN_PHASES } from '../state/gameState.js';
+import { landBlitzOptions } from '../state/mechanizedInfantry.js';
 import { getUnitIconPath } from '../utils/unitIcons.js';
 import { airCombatMoveMayOccupy, combatMoveReachableDests, maxMoveSelection, seaZoneHasEnemyForAirAttack } from '../state/combatMoveEligibility.js';
 import { hasLegalAirLandingFrom, wasFriendlyAtTurnStart } from '../state/airLanding.js';
@@ -241,8 +242,11 @@ export class MovementUI {
         this.selectedUnits,
         this.unitDefs,
       );
-      if (attackDests.some((d) => d.name === territory.name)) {
-        if (!territory.isWater && isFriendly) return false;
+      const attackHit = attackDests.find((d) => d.name === territory.name);
+      if (attackHit) {
+        // A paired mechanized-infantry blitz may end on friendly land,
+        // including the territory the move started from.
+        if (!territory.isWater && isFriendly) return !!attackHit.blitzed;
         if (!territory.isWater && isEnemy) return true;
       }
     }
@@ -336,7 +340,8 @@ export class MovementUI {
         territory.name,
         landMovementRange,
         player.id,
-        isCombatMove
+        isCombatMove,
+        landBlitzOptions(this.selectedUnits, { isCombatMove }),
       );
     }
 
@@ -606,7 +611,8 @@ export class MovementUI {
         this.selectedFrom.name,
         landMovementRange,
         player?.id,
-        isCombatMove
+        isCombatMove,
+        landBlitzOptions(this.selectedUnits, { isCombatMove }),
       );
 
       const landDestinations = Array.from(reachable.keys()).filter(destName => {

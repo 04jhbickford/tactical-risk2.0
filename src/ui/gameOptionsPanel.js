@@ -150,6 +150,10 @@ function rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMod
         <span class="go-label">Tactical bombers</span>
         ${shownValue(editable, toggleHtml('tacticalBombers', o.tacticalBombers, { editable }), o.tacticalBombers ? 'On' : 'Off')}
       </div>
+      <div class="go-row" title="Mechanized infantry can be purchased. Attack 1, or 2 with artillery. Move 2. Blitzes with a tank.">
+        <span class="go-label">Mechanized infantry</span>
+        ${shownValue(editable, toggleHtml('mechanizedInfantry', o.mechanizedInfantry, { editable }), o.mechanizedInfantry ? 'On' : 'Off')}
+      </div>
     </div>
     <div class="go-group">
       <h3 class="go-group-label">Players</h3>
@@ -256,6 +260,7 @@ export function readGameOptionsFrom(root) {
     landBridges: flag('landBridges'),
     teams: flag('teams'),
     tacticalBombers: flag('tacticalBombers'),
+    mechanizedInfantry: flag('mechanizedInfantry'),
     territorySetup: valueOf('territorySetup')?.value,
     techAcquisition: valueOf('techAcquisition')?.value,
   });
@@ -379,7 +384,7 @@ export function bindGameOptions(root, { onChange, onToggle, onMapChange } = {}) 
         mapSelect.value = CLASSIC_MAP_ID;
         if (typeof onMapChange === 'function') onMapChange(CLASSIC_MAP_ID);
       }
-      for (const name of ['multipleTech', 'landBridges', 'teams', 'tacticalBombers']) {
+      for (const name of ['multipleTech', 'landBridges', 'teams', 'tacticalBombers', 'mechanizedInfantry']) {
         const el = panel.querySelector(`[data-go="${name}"]`);
         if (!el) continue;
         const on = !!next[name];

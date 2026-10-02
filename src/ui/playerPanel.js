@@ -8,6 +8,7 @@ import { DIRECT_TECH_IPC_COST } from '../gameOptions.js';
 import { getMap } from '../map/mapRegistry.js';
 import { pacificVictoryLine } from '../map/pacificVictory.js';
 import { tacticalBombersEnabled } from '../state/tacticalPairing.js';
+import { landBlitzOptions, mechanizedInfantryEnabled } from '../state/mechanizedInfantry.js';
 import { getUnitIconPath } from '../utils/unitIcons.js';
 import { formatUnitName } from '../utils/unitNames.js';
 import { possessivePhrase } from '../utils/possessive.js';
@@ -3145,6 +3146,7 @@ export class PlayerPanel {
     const purchasableUnits = Object.entries(this.unitDefs || {})
       .filter(([type, def]) => {
         if (type === 'tacticalBomber' && !tacticalBombersEnabled(this.gameState?.gameOptions)) return false;
+        if (type === 'mechanizedInfantry' && !mechanizedInfantryEnabled(this.gameState?.gameOptions)) return false;
         // AA guns can now be purchased
         if ((def.isLand || def.isAir || def.isBuilding) && hasFactories) return true;
         if (def.isSea && hasSeaZones) return true;
@@ -3482,7 +3484,7 @@ export class PlayerPanel {
 
   _phonePeekShort(type) {
     const map = {
-      infantry: 'INF', armour: 'TNK', artillery: 'ART', fighter: 'FTR',
+      infantry: 'INF', mechanizedInfantry: 'MECH', armour: 'TNK', artillery: 'ART', fighter: 'FTR',
       bomber: 'BMB', tacticalBomber: 'TAC', transport: 'TRN', submarine: 'SUB',
       destroyer: 'DD', cruiser: 'CA', battleship: 'BB', carrier: 'CV',
       factory: 'FAC', aaGun: 'AA',
@@ -4234,8 +4236,9 @@ export class PlayerPanel {
     if (landUnits.length > 0 && !from.isWater) {
       // Use minimum movement of all land units (they move together)
       const minMovement = Math.min(...landUnits.map(u => u.def.movement || 1));
+      const landBlitz = landBlitzOptions(landUnits, { isCombatMove });
       const reachable = this.gameState.getReachableTerritoriesForLand(
-        fromTerritory.name, minMovement, player.id, isCombatMove
+        fromTerritory.name, minMovement, player.id, isCombatMove, landBlitz
       );
       for (const [terrName, info] of reachable) {
         const conn = this.territories[terrName];

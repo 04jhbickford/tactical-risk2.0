@@ -51,6 +51,7 @@ export const DISCORD_ALIAS_MAP = Object.freeze([
 // line is "8x Infantry, 5x tanks". Catalog order keeps that sequence.
 const UNIT_LINE_ORDER = [
   'infantry',
+  'mechanizedInfantry',
   'artillery',
   'armour',
   'tank',

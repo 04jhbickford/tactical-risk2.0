@@ -37,6 +37,12 @@ import {
   TACTICAL_PAIR_LABEL,
   tacticalBombersEnabled,
 } from '../state/tacticalPairing.js';
+import {
+  artillerySupportState,
+  consumeArtillerySupport,
+  MECHANIZED_INFANTRY,
+  MECHANIZED_SUPPORT_LABEL,
+} from '../state/mechanizedInfantry.js';
 
 export {
   getEnemyCombatUnits,
@@ -63,6 +69,7 @@ export function formatCombatForceLine(units, formatName = formatUnitName) {
 export function formatAttackerCombatLine(units, { enabled = true } = {}) {
   const pairing = countPairing(units, { enabled: enabled !== false });
   let pairedLeft = pairing.paired;
+  let mechLeft = artillerySupportState(units, { applyInfantry: true }).mechSupported;
   const parts = [];
   for (const { type, quantity } of summarizeCombatForce(units)) {
     const qty = Math.max(0, Number(quantity) || 0);
@@ -71,6 +78,14 @@ export function formatAttackerCombatLine(units, { enabled = true } = {}) {
       const boosted = Math.min(qty, pairedLeft);
       pairedLeft -= boosted;
       parts.push(`${boosted} ${TACTICAL_PAIR_LABEL}`);
+      const rest = qty - boosted;
+      if (rest > 0) parts.push(`${rest} ${formatUnitName(type).toLowerCase()}`);
+      continue;
+    }
+    if (type === MECHANIZED_INFANTRY && mechLeft > 0) {
+      const boosted = Math.min(qty, mechLeft);
+      mechLeft -= boosted;
+      parts.push(`${boosted} ${MECHANIZED_SUPPORT_LABEL}`);
       const rest = qty - boosted;
       if (rest > 0) parts.push(`${rest} ${formatUnitName(type).toLowerCase()}`);
       continue;
@@ -204,6 +219,7 @@ export function phoneCombatAttackerWinPercent({
 } = {}) {
   const pairing = countPairing(attackers, { enabled: tacticalBombers === true });
   let pairedLeft = pairing.paired;
+  let mechLeft = artillerySupportState(attackers, { applyInfantry: true }).mechSupported;
   let attackPower = 0;
   let attackUnits = 0;
   for (const unit of attackers || []) {
@@ -215,6 +231,11 @@ export function phoneCombatAttackerWinPercent({
         const boosted = Math.min(qty, pairedLeft);
         power = (4 / 6) * boosted + (def.attack / 6) * (qty - boosted);
         pairedLeft -= boosted;
+      }
+      if (unit.type === MECHANIZED_INFANTRY && mechLeft > 0) {
+        const boosted = Math.min(qty, mechLeft);
+        power = (2 / 6) * boosted + (def.attack / 6) * (qty - boosted);
+        mechLeft -= boosted;
       }
       attackPower += power;
       attackUnits += qty;
@@ -1183,10 +1204,9 @@ export class CombatUI {
     const attackRolls = [];
     let attackHits = 0;
 
-    // Artillery support: Count artillery for infantry bonus (1:1 ratio)
-    const artilleryCount = attackers.filter(u => u.type === 'artillery')
-      .reduce((sum, u) => sum + u.quantity, 0);
-    let supportedInfantry = artilleryCount; // Number of infantry that get +1 attack
+    // Artillery supports one infantry or one mechanized infantry. Infantry
+    // keeps the bonus it already had. Extra mechanized infantry stay at 1.
+    const artillerySupport = artillerySupportState(attackers, { applyInfantry: true });
     let pairedBombers = countPairing(attackers, {
       enabled: tacticalBombersEnabled(this.gameState?.gameOptions),
     }).paired;
@@ -1207,10 +1227,9 @@ export class CombatUI {
         for (let d = 0; d < dicePerUnit; d++) {
           let attackValue = def.attack;
 
-          // Artillery support: Infantry gets +1 attack when paired with artillery (1:1 ratio)
-          if (unit.type === 'infantry' && supportedInfantry > 0 && d === 0) {
-            attackValue += 1; // Infantry attack 1 -> 2
-            supportedInfantry--;
+          // Artillery support on the first die only. Defence is unchanged.
+          if (d === 0) {
+            attackValue = consumeArtillerySupport(unit.type, attackValue, artillerySupport);
           }
 
           // Jets technology: Fighters +1 attack
@@ -3382,6 +3401,9 @@ export class CombatUI {
         ? { paired: 0 }
         : countPairing(detailUnits, { enabled: tacticalBombersEnabled(this.gameState?.gameOptions) });
       let pairedLeft = pairing.paired;
+      let mechLeft = detail === 'defender'
+        ? 0
+        : artillerySupportState(detailUnits, { applyInfantry: true }).mechSupported;
       const detailLines = [];
       for (const { type, quantity } of rows) {
         const qty = Math.max(0, Number(quantity) || 0);
@@ -3389,6 +3411,14 @@ export class CombatUI {
           const boosted = Math.min(qty, pairedLeft);
           pairedLeft -= boosted;
           detailLines.push(`${boosted} ${TACTICAL_PAIR_LABEL}`);
+          const rest = qty - boosted;
+          if (rest > 0) detailLines.push(`${rest} ${formatUnitName(type)}`);
+          continue;
+        }
+        if (type === MECHANIZED_INFANTRY && mechLeft > 0) {
+          const boosted = Math.min(qty, mechLeft);
+          mechLeft -= boosted;
+          detailLines.push(`${boosted} ${MECHANIZED_SUPPORT_LABEL}`);
           const rest = qty - boosted;
           if (rest > 0) detailLines.push(`${rest} ${formatUnitName(type)}`);
           continue;
@@ -3486,6 +3516,9 @@ export class CombatUI {
     const pairedCount = Math.min(attackerArtillery, attackerInfantry);
     const extraInfantry = attackerInfantry - pairedCount;
     const extraArtillery = attackerArtillery - pairedCount;
+    const attackerMech = qtyOf(attackers, MECHANIZED_INFANTRY);
+    const pairedMech = Math.min(attackerMech, Math.max(0, attackerArtillery - pairedCount));
+    const extraMech = attackerMech - pairedMech;
     const tacPairing = countPairing(attackers, {
       enabled: tacticalBombersEnabled(this.gameState?.gameOptions),
     });
@@ -3546,6 +3579,28 @@ export class CombatUI {
         </div>`;
     }
 
+    if (pairedMech > 0) {
+      const mechIcon = attackerPlayer ? getUnitIconPath(MECHANIZED_INFANTRY, attackerPlayer.id) : null;
+      const pairedDice = showDice
+        ? (diceRolls.attackRolls || []).filter((r) => r.unitType === MECHANIZED_INFANTRY && r.attackValue === 2)
+        : [];
+      html += `
+        <div class="combat-unit-row ${showDice ? 'with-dice' : ''}">
+          <div class="combat-unit-side attacker ${showDice ? 'with-dice' : ''}">
+            ${showDice ? renderInlineDice(pairedDice) : ''}
+            <div class="combat-unit-icons" style="--player-color: ${attackerPlayer.color}">
+              <span class="combat-unit-qty">${pairedMech}</span>
+              ${mechIcon ? `<img src="${mechIcon}" class="combat-unit-icon" alt="Mechanized infantry">` : ''}
+            </div>
+            <span class="combat-unit-stat supported">A2</span>
+          </div>
+          <div class="combat-unit-type">
+            <span class="combat-type-name is-paired">${MECHANIZED_SUPPORT_LABEL}</span>
+          </div>
+          <div class="combat-unit-side defender empty"></div>
+        </div>`;
+    }
+
     // Sort remaining unit types by attack strength (highest probability on top)
     const sortedTypes = [...allUnitTypes].sort((a, b) => {
       const attackA = this.unitDefs[a]?.attack || 0;
@@ -3564,6 +3619,7 @@ export class CombatUI {
       // Don't skip if defender has these units - they need to be shown
       if (unitType === 'infantry' && extraInfantry <= 0 && pairedCount > 0 && defendQtyCheck === 0) continue;
       if (unitType === 'artillery' && extraArtillery <= 0 && pairedCount > 0 && defendQtyCheck === 0) continue;
+      if (unitType === MECHANIZED_INFANTRY && extraMech <= 0 && pairedMech > 0 && defendQtyCheck === 0) continue;
       const def = this.unitDefs[unitType];
 
       // Get faction-specific icons
@@ -3582,6 +3638,9 @@ export class CombatUI {
       if (unitType === 'artillery' && pairedCount > 0) {
         attackQty = extraArtillery;
       }
+      if (unitType === MECHANIZED_INFANTRY && pairedMech > 0) {
+        attackQty = extraMech;
+      }
       if (unitType === 'tacticalBomber' && pairedTac > 0) {
         attackQty = Math.max(0, attackQty - pairedTac);
       }
@@ -3593,6 +3652,8 @@ export class CombatUI {
         if (unitType === 'infantry' && pairedCount > 0) {
           // Only unsupported infantry dice (attack value 1)
           attackerDice = (diceRolls.attackRolls || []).filter(r => r.unitType === 'infantry' && r.attackValue === 1);
+        } else if (unitType === MECHANIZED_INFANTRY && pairedMech > 0) {
+          attackerDice = (diceRolls.attackRolls || []).filter(r => r.unitType === MECHANIZED_INFANTRY && r.attackValue === 1);
         } else if (unitType === 'tacticalBomber' && pairedTac > 0) {
           attackerDice = (diceRolls.attackRolls || []).filter(r => r.unitType === 'tacticalBomber' && r.attackValue !== 4);
         } else if (unitType === 'artillery' && pairedCount > 0) {
@@ -3627,12 +3688,14 @@ export class CombatUI {
       if (attackQty > 0 || defendQty > 0) {
         const rowLabel = unitType === 'infantry' && pairedCount > 0 && extraInfantry > 0 ? ' (unpaired)' : '';
         const artilleryLabel = unitType === 'artillery' && pairedCount > 0 && extraArtillery > 0 ? ' (unpaired)' : '';
+        const mechLabel = unitType === MECHANIZED_INFANTRY && pairedMech > 0 && extraMech > 0 ? ' (unpaired)' : '';
+        const typeLabel = unitType === MECHANIZED_INFANTRY ? formatUnitName(unitType) : unitType;
 
         html += `
           <div class="combat-unit-row ${showDice ? 'with-dice' : ''}">
             ${attackerHtml}
             <div class="combat-unit-type">
-              <span class="combat-type-name">${unitType}${rowLabel}${artilleryLabel}</span>
+              <span class="combat-type-name">${typeLabel}${rowLabel}${artilleryLabel}${mechLabel}</span>
             </div>
             <div class="combat-unit-side defender ${defendQty > 0 ? '' : 'empty'} ${showDice ? 'with-dice' : ''}">
               ${defendQty > 0 ? `

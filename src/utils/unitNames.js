@@ -2,6 +2,7 @@
 
 const UNIT_DISPLAY_NAMES = {
   infantry: 'Infantry',
+  mechanizedInfantry: 'Mechanized infantry',
   armour: 'Tank',
   artillery: 'Artillery',
   fighter: 'Fighter',
