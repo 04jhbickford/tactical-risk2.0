@@ -6,6 +6,7 @@ const UNIT_IMAGE_MAP = {
   // Default mapping (works for most factions)
   default: {
     infantry: 'Infantry.png',
+    mechanizedInfantry: 'Mech.Inf.png',
     armour: 'Tank.png',
     artillery: 'Artillery.png',
     fighter: 'Fighter.png',

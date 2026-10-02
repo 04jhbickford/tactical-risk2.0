@@ -93,6 +93,13 @@ import {
 import { destroyIllegalAir, previewNcmAirDestruction as previewNcmAir, ncmAirWarningCopy } from './ncmAirCheck.js';
 import { consumePairedAttack, countPairing, tacticalBombersEnabled } from './tacticalPairing.js';
 import {
+  artillerySupportState,
+  consumeArtillerySupport,
+  landBlitzOptions,
+  MECHANIZED_INFANTRY,
+  mechanizedInfantryEnabled,
+} from './mechanizedInfantry.js';
+import {
   applyCasualtySelection,
   airMayUseLandingOption,
   airVersusSubStalemate,
@@ -1368,7 +1375,9 @@ export class GameState {
   // In non-combat move, can only enter friendly/allied
   // BLITZ RULE: Units with movement > 1 can pass through UNDEFENDED enemy territories
   // (capturing them as they pass), allowing them to continue and attack
-  getReachableTerritoriesForLand(fromTerritory, movementRange, playerId, isCombatMove = false) {
+  getReachableTerritoriesForLand(fromTerritory, movementRange, playerId, isCombatMove = false, blitz = null) {
+    const canBlitz = !blitz || blitz.canBlitz !== false;
+    const allowReturn = blitz?.allowReturn === true;
     const reachable = new Map(); // territory -> { distance, path, blitzedTerritories }
     const visited = new Set();
     const queue = [{ territory: fromTerritory, distance: 0, path: [fromTerritory], blitzed: [] }];
@@ -1416,10 +1425,21 @@ export class GameState {
       // (movement must be > 1 for blitz, which is already implied by distance < movementRange)
       let canContinue = isFriendly || isAllied || !owner;
       let newBlitzed = [...blitzed];
-      if (!canContinue && isEnemy && isUndefended && isCombatMove && territory !== fromTerritory) {
-        // Blitz through this undefended enemy territory
+      if (!canContinue && isEnemy && isUndefended && isCombatMove && canBlitz && territory !== fromTerritory) {
+        // Blitz through this undefended enemy territory. Any enemy unit,
+        // including an AA gun or a factory, leaves isUndefended false.
         canContinue = true;
         newBlitzed.push(territory);
+        if (allowReturn && distance + 1 <= movementRange) {
+          const cameFrom = path.length >= 2 ? path[path.length - 2] : fromTerritory;
+          if (cameFrom && cameFrom !== territory && !reachable.has(cameFrom)) {
+            reachable.set(cameFrom, {
+              distance: distance + 1,
+              path: [...path, cameFrom],
+              blitzedTerritories: [...newBlitzed],
+            });
+          }
+        }
       }
       if (territory !== fromTerritory && !canContinue) continue;
 
@@ -1446,21 +1466,21 @@ export class GameState {
   }
 
   // Check if land unit can reach destination within movement range
-  canLandUnitReach(fromTerritory, toTerritory, movementRange, playerId, isCombatMove) {
-    const reachable = this.getReachableTerritoriesForLand(fromTerritory, movementRange, playerId, isCombatMove);
+  canLandUnitReach(fromTerritory, toTerritory, movementRange, playerId, isCombatMove, blitz = null) {
+    const reachable = this.getReachableTerritoriesForLand(fromTerritory, movementRange, playerId, isCombatMove, blitz);
     return reachable.has(toTerritory);
   }
 
   // Get land unit path for validation and display (includes blitzed territories)
-  getLandUnitPath(fromTerritory, toTerritory, movementRange, playerId, isCombatMove) {
-    const reachable = this.getReachableTerritoriesForLand(fromTerritory, movementRange, playerId, isCombatMove);
+  getLandUnitPath(fromTerritory, toTerritory, movementRange, playerId, isCombatMove, blitz = null) {
+    const reachable = this.getReachableTerritoriesForLand(fromTerritory, movementRange, playerId, isCombatMove, blitz);
     const info = reachable.get(toTerritory);
     return info ? { path: info.path, blitzedTerritories: info.blitzedTerritories || [] } : null;
   }
 
   // Get blitzed territories for a path
-  getBlitzedTerritories(fromTerritory, toTerritory, movementRange, playerId) {
-    const reachable = this.getReachableTerritoriesForLand(fromTerritory, movementRange, playerId, true);
+  getBlitzedTerritories(fromTerritory, toTerritory, movementRange, playerId, blitz = null) {
+    const reachable = this.getReachableTerritoriesForLand(fromTerritory, movementRange, playerId, true, blitz);
     const info = reachable.get(toTerritory);
     return info?.blitzedTerritories || [];
   }
@@ -2139,6 +2159,9 @@ export class GameState {
 
     const unitDef = unitDefs[unitType];
     if (!unitDef) return { success: false, error: 'Unknown unit type' };
+    if (unitType === MECHANIZED_INFANTRY && !mechanizedInfantryEnabled(this.gameOptions)) {
+      return { success: false, error: 'Mechanized infantry is not in this game' };
+    }
 
     // Check mobilization capacity - cannot buy more units than we can place
     const capacity = this.getMobilizationCapacity(player.id);
@@ -2772,6 +2795,7 @@ export class GameState {
     const unitDef = unitDefs[unitType];
     if (!unitDef) return false;
     if (unitType === 'tacticalBomber' && !tacticalBombersEnabled(this.gameOptions)) return false;
+    if (unitType === MECHANIZED_INFANTRY && !mechanizedInfantryEnabled(this.gameOptions)) return false;
 
     const cost = unitDef.cost;
     if (this.playerState[player.id].ipcs < cost) return false;
@@ -3106,6 +3130,7 @@ export class GameState {
     const unitDef = unitDefs[unitType];
     if (!unitDef) return false;
     if (unitType === 'tacticalBomber' && !tacticalBombersEnabled(this.gameOptions)) return false;
+    if (unitType === MECHANIZED_INFANTRY && !mechanizedInfantryEnabled(this.gameOptions)) return false;
 
     const totalCost = unitDef.cost * quantity;
     if (this.playerState[player.id].ipcs < totalCost) return false;
@@ -3203,6 +3228,7 @@ export class GameState {
     const airUnits = unitsToMove.filter(u => unitDefs[u.type]?.isAir);
     const landUnits = unitsToMove.filter(u => unitDefs[u.type]?.isLand);
     const seaUnits = unitsToMove.filter(u => unitDefs[u.type]?.isSea);
+    const landBlitz = landBlitzOptions(landUnits, { isCombatMove });
 
     // Classic: AA guns move in non-combat only. Rockets fires at industry;
     // it does not let an AA gun attack.
@@ -3277,7 +3303,7 @@ export class GameState {
               canReachSeaZone = true;
               break;
             }
-            if (this.canLandUnitReach(fromTerritory, adjTerr, movementRange - 1, player.id, isCombatMove)) {
+            if (this.canLandUnitReach(fromTerritory, adjTerr, movementRange - 1, player.id, isCombatMove, landBlitz)) {
               canReachSeaZone = true;
               break;
             }
@@ -3314,7 +3340,7 @@ export class GameState {
         }
       } else if (movementRange > 1) {
         // Units with movement > 1 (like tanks) can blitz through friendly territory
-        if (!this.canLandUnitReach(fromTerritory, toTerritory, movementRange, player.id, isCombatMove)) {
+        if (!this.canLandUnitReach(fromTerritory, toTerritory, movementRange, player.id, isCombatMove, landBlitz)) {
           return { success: false, error: `${landUnit.type} cannot reach ${toTerritory} (movement: ${movementRange})` };
         }
       } else {
@@ -3735,7 +3761,7 @@ export class GameState {
 
       // If we have tanks (movement > 1), check for blitzed territories
       if (maxLandMovement > 1) {
-        const blitzedTerritories = this.getBlitzedTerritories(fromTerritory, toTerritory, maxLandMovement, player.id);
+        const blitzedTerritories = this.getBlitzedTerritories(fromTerritory, toTerritory, maxLandMovement, player.id, landBlitz);
 
         // Capture each blitzed territory
         for (const blitzedTerrName of blitzedTerritories) {
@@ -5235,6 +5261,11 @@ export class GameState {
     let pairedLeft = type === 'attack'
       ? countPairing(units, { enabled: tacticalBombersEnabled(this.gameOptions) }).paired
       : 0;
+    // Mechanized infantry only. Infantry artillery support stays in the
+    // human combat step, where it already lives.
+    const mechSupport = type === 'attack'
+      ? artillerySupportState(units, { applyInfantry: false })
+      : null;
 
     for (const unit of units) {
       const def = unitDefs[unit.type];
@@ -5248,6 +5279,7 @@ export class GameState {
           const paired = consumePairedAttack(unit.type, hitValue, pairedLeft);
           need = paired.attack;
           pairedLeft = paired.pairedLeft;
+          need = consumeArtillerySupport(unit.type, need, mechSupport);
         }
         const roll = this._rollDie({
           context: contextLabel,

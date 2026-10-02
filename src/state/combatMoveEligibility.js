@@ -1,4 +1,5 @@
 import { hasLegalAirLandingFrom, wasFriendlyAtTurnStart } from './airLanding.js';
+import { landBlitzOptions } from './mechanizedInfantry.js';
 import { enemyFactoryAt } from './strategicBombing.js';
 
 // Shared combat-move eligibility. A&A: you may empty a territory during
@@ -128,9 +129,15 @@ export function combatMoveReachableDests(gameState, fromName, picked = {}, unitD
 
   if (landUnits.length && !fromT?.isWater && typeof gameState.getReachableTerritoriesForLand === 'function') {
     const minMovement = Math.min(...landUnits.map((u) => u.def.movement || 1));
-    const reachable = gameState.getReachableTerritoriesForLand(fromName, minMovement, playerId, true);
+    const landBlitz = landBlitzOptions(landUnits, { isCombatMove: true });
+    const reachable = gameState.getReachableTerritoriesForLand(fromName, minMovement, playerId, true, landBlitz);
     for (const [name, info] of reachable) {
-      dests.set(name, { name, distance: info.distance, via: 'land' });
+      dests.set(name, {
+        name,
+        distance: info.distance,
+        via: 'land',
+        blitzed: (info.blitzedTerritories || []).length > 0,
+      });
     }
     // Loading onto a friendly transport is a move, not a sea-zone attack.
     // A sea zone that still has enemies stays off this list (9.21.26.01).

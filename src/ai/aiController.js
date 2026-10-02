@@ -5,6 +5,7 @@ import { AIPlayer } from './aiPlayer.js';
 import { GAME_PHASES, TURN_PHASES } from '../state/gameState.js';
 import { DIRECT_TECH_IPC_COST } from '../gameOptions.js';
 import { tacticalBombersEnabled } from '../state/tacticalPairing.js';
+import { MECHANIZED_INFANTRY, mechanizedInfantryEnabled } from '../state/mechanizedInfantry.js';
 import { capitalChoicePool, pickCapitalFromPool } from './capitalSpacing.js';
 import {
   adjacentSeas,
@@ -543,6 +544,9 @@ export class AIController {
         if (!tacticalBombersEnabled(this.gameState?.gameOptions)) continue;
         if (this._pairingPartnerCount(player.id) < 1) continue;
       }
+      if (unitType === MECHANIZED_INFANTRY && !mechanizedInfantryEnabled(this.gameState?.gameOptions)) {
+        continue;
+      }
 
       // Buy units up to max count
       let count = Math.min(maxCount, Math.floor(remaining / def.cost));
@@ -619,7 +623,18 @@ export class AIController {
     }
 
     this._insertTacticalBomberPriority(priorities);
+    this._insertMechanizedInfantryPriority(priorities);
     return priorities;
+  }
+
+  // A few mechanized infantry, next to the infantry row. No-op while the
+  // option is off, so the purchase list stays today's.
+  _insertMechanizedInfantryPriority(priorities) {
+    if (!mechanizedInfantryEnabled(this.gameState?.gameOptions)) return;
+    if (!priorities.length) return;
+    const infantryAt = priorities.findIndex((row) => row.unitType === 'infantry');
+    const at = infantryAt >= 0 ? infantryAt + 1 : priorities.length;
+    priorities.splice(at, 0, { unitType: MECHANIZED_INFANTRY, maxCount: 2 });
   }
 
   // One tactical bomber, next to the fighter or tank it pairs with.
