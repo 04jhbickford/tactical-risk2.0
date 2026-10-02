@@ -12,6 +12,7 @@ import { getUnitIconPath } from '../utils/unitIcons.js';
 import { formatUnitName } from '../utils/unitNames.js';
 import { possessivePhrase } from '../utils/possessive.js';
 import {
+  DESKTOP_MIN_WIDTH,
   isMobileShell,
   syncPacificPhoneSheetInset,
   shouldPeekPhoneTray,
@@ -2100,6 +2101,9 @@ export class PlayerPanel {
 
     // Peek stack: phase hint (own row) + unit/action chips + both bottom controls.
     const mobile = isMobileShell();
+    const desktop = !mobile
+      && typeof window !== 'undefined'
+      && window.innerWidth >= DESKTOP_MIN_WIDTH;
     let peekHint = '';
     let peekRow = '';
     if (mobile) {
@@ -2241,10 +2245,11 @@ export class PlayerPanel {
     for (const btn of buttons) {
       const disabledClass = btn.disabled ? 'disabled' : '';
       const roleClass = btn.role === 'confirm' ? 'pp-context-confirm' : 'pp-phase-advance';
-      // Phone: the blue confirm is the screen-edge bar. Desktop: the green
-      // End phase is that bar, and the blue confirm stays in the pane.
+      // Phone: the blue confirm is the screen-edge bar. Tablet: the green
+      // End phase is that bar. Desktop: both stay in the right pane.
       const edgeClass = bottomActionEdgeClass({
         mobile,
+        desktop,
         role: btn.role,
         hasConfirm: !!split.confirm,
       });
