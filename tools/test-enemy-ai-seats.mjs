@@ -41,7 +41,7 @@ function offeredFor(settings, seated, factions, mapId) {
 }
 
 console.log('=== 7-seat enemy AI ===');
-check('stamp is V2.81.57-unified.35', GAME_VERSION === 'V2.81.57-unified.35');
+check('stamp is V2.81.57-unified.40', GAME_VERSION === 'V2.81.57-unified.40');
 
 {
   const settings = { maxPlayers: 7, gameOptions: { maxPlayers: 7 } };

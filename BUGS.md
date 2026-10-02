@@ -2,9 +2,9 @@
 
 ---
 
-## 10.2.26 — unified.35 seven-seat Add AI
+## 10.2.26 — unified.40 seven-seat Add AI
 
-Stamp `V2.81.57-unified.35`. Schema stays 11. A `V2.82-unified.34` doc is older than this tab and does not prompt. A `V2.82-unified.36` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.35`).
+Stamp `V2.81.57-unified.40`. Schema stays 11. A `V2.82-unified.39` doc is older than this tab and does not prompt. A `V2.82-unified.41` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.40`).
 
 Rob (robfox007), 2 Oct 2026, 10:19am PT, in #tactical-risk: a 7-seat game cannot be filled with enemy AI. Add AI Player listed only Russians, Germans, British, Japanese, and Americans, each marked Taken, and Add AI could not seat anyone else. Chinese and ANZAC were already the sixth and seventh Classic powers. The dialog was still using a five-seat cap, so those two never appeared. A 6-seat table now offers Chinese. A 7-seat table also offers ANZAC. A 5-seat table stays the original five. Pacific stays its own five.
 
