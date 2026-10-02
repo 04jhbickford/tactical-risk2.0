@@ -21,6 +21,21 @@ export function isContextConfirmAction(action) {
   return CONTEXT_CONFIRM_ACTIONS.includes(action);
 }
 
+// Phone pins the blue confirm (or the lone End phase) to the screen edge.
+// Desktop keeps Continue and End phase in the right pane. End phase is
+// rendered after Continue, so it sits at the bottom of that pane.
+export function bottomActionEdgeClass({ mobile = false, role = 'advance', hasConfirm = false } = {}) {
+  if (!mobile) return '';
+  if (role === 'confirm' || !hasConfirm) return 'pp-confirm-edge';
+  return '';
+}
+
+// Roll N carried stays in the tech panel. Phone still offers it as the
+// bottom confirm. Desktop does not duplicate it as a long blue bar.
+export function shouldOfferBottomTechRoll(mobile) {
+  return !!mobile;
+}
+
 function confirmIsAvailable(confirm) {
   if (!confirm || confirm.disabled || confirm.selectUnits) return false;
   if (isPhaseAdvanceAction(confirm.action)) return false;

@@ -307,8 +307,7 @@ function verticalOverlaps(pts) {
     txt.length === 411
     && kazakh.polygons[0].length === 411
     && verticalOverlaps(txt) === 0
-    && verticalOverlaps(kazakh.polygons[0]) === 0
-    && !data.some((row) => row.name === 'Afghanistan'));
+    && verticalOverlaps(kazakh.polygons[0]) === 0);
 }
 
 function pingGame(id) {

@@ -16,6 +16,82 @@ export function adjacentMobilizeSeas(gameState, territoryName, playerId) {
   return seas;
 }
 
+function pendingFor(gameState, playerId, pred) {
+  return (gameState?.getPendingPurchases?.() || []).filter((item) => (
+    item
+    && item.owner === playerId
+    && (Number(item.quantity) || 0) > 0
+    && pred(item)
+  ));
+}
+
+function factoriesWithRoom(gameState, playerId) {
+  const start = gameState?.factoriesAtTurnStart;
+  const names = start instanceof Set ? [...start] : [];
+  return names.filter((name) => {
+    if (gameState.getOwner?.(name) !== playerId) return false;
+    return (gameState.getFactoryPlacementLimit?.(name, playerId) || 0) > 0;
+  });
+}
+
+function seaZonesWithRoom(gameState, playerId) {
+  const zones = [];
+  for (const name of factoriesWithRoom(gameState, playerId)) {
+    const territory = gameState.territoryByName?.[name];
+    for (const conn of territory?.connections || []) {
+      if (!gameState.territoryByName?.[conn]?.isWater) continue;
+      if (!zones.includes(conn)) zones.push(conn);
+    }
+  }
+  return zones;
+}
+
+// One legal land territory prompts "deploy all units to X?". The same for
+// one legal sea. Two or more of either kind stay silent for that kind.
+// Both questions share one message when both apply.
+export function deployAllPrompt(gameState, unitDefs) {
+  const player = gameState?.currentPlayer;
+  if (!player || gameState.turnPhase !== 'mobilize') return null;
+  const landPending = pendingFor(gameState, player.id, (item) => unitDefs?.[item.type]?.isLand);
+  const seaPending = pendingFor(gameState, player.id, (item) => unitDefs?.[item.type]?.isSea);
+  const lines = [];
+  let land = null;
+  let sea = null;
+  if (landPending.length) {
+    const factories = factoriesWithRoom(gameState, player.id);
+    if (factories.length === 1) {
+      land = factories[0];
+      lines.push(`deploy all units to ${land}?`);
+    }
+  }
+  if (seaPending.length) {
+    const zones = seaZonesWithRoom(gameState, player.id);
+    if (zones.length === 1) {
+      sea = zones[0];
+      lines.push(`deploy all units to ${sea}?`);
+    }
+  }
+  if (!lines.length) return null;
+  return { lines, message: lines.join('\n'), land, sea };
+}
+
+export function applyDeployAllPrompt(gameState, unitDefs, plan) {
+  if (!plan) return { placed: [] };
+  const placed = [];
+  if (plan.land) {
+    const land = runMobilizeDeployAll(gameState, unitDefs, { territory: plan.land });
+    placed.push(...(land.placed || []));
+  }
+  if (plan.sea) {
+    const still = pendingFor(gameState, gameState.currentPlayer?.id, (item) => unitDefs?.[item.type]?.isSea);
+    if (still.length) {
+      const sea = runMobilizeDeployAll(gameState, unitDefs, { territory: plan.sea });
+      placed.push(...(sea.placed || []));
+    }
+  }
+  return { placed };
+}
+
 export function runMobilizeDeployAll(gameState, unitDefs, {
   territory,
   sourceFactory = null,

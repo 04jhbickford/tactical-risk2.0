@@ -48,7 +48,8 @@ import { PurchasePopup } from './ui/purchasePopup.js';
 import { MovementUI } from './ui/movementUI.js';
 import { pointerStartsUnitDrag, rightClickConfirmsMove } from './ui/mapPointer.js';
 import { CombatUI } from './ui/combatUI.js';
-import { runMobilizeDeployAll } from './ui/mobilizeDeployAll.js';
+import { applyDeployAllPrompt, deployAllPrompt, runMobilizeDeployAll } from './ui/mobilizeDeployAll.js';
+import { confirmChoice } from './ui/confirmChoice.js';
 import { TechUI } from './ui/techUI.js';
 import { PlacementUI } from './ui/placementUI.js';
 import { MobilizeUI } from './ui/mobilizeUI.js';
@@ -1091,6 +1092,17 @@ async function init() {
         }
 
         gameState.nextPhase();
+        if (gameState.turnPhase === TURN_PHASES.MOBILIZE && gameState.currentPlayer?.isAI !== true) {
+          const plan = deployAllPrompt(gameState, unitDefs);
+          if (plan) {
+            const yes = await confirmChoice({
+              message: plan.message,
+              confirmLabel: 'Deploy',
+              cancelLabel: 'Not now',
+            });
+            if (yes) applyDeployAllPrompt(gameState, unitDefs, plan);
+          }
+        }
         notifyTurnSwap(prevPlayer, gameState.currentPlayer);
         if (syncManager) {
           const pushed = await syncManager.pushStateNow();

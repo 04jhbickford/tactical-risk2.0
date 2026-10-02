@@ -3,7 +3,7 @@
 
 import { getUnitIconPath } from '../utils/unitIcons.js';
 import { shouldShowPurchase } from '../state/gameState.js';
-import { damagedFactoryRows, renderFactoryRepairHtml } from '../state/strategicBombing.js';
+import { damagedFactoryRows, renderFactoryRepairHtml, stepRepairPoints } from '../state/strategicBombing.js';
 import { setShellFlag } from './mobileShell.js';
 import { syncBottomSurfaces } from './bottomSurface.js';
 
@@ -15,6 +15,7 @@ export class PurchasePopup {
     this.onHighlightTerritory = null; // Callback for territory highlighting
     this.purchaseCart = {};
     this.cartCost = 0;
+    this.repairPoints = {};
     this.selectedTerritory = null; // Territory to place purchased units
     this.territories = null;
 
@@ -314,7 +315,10 @@ export class PurchasePopup {
       <div class="pp-instructions-small">
         Units will be placed during Mobilize phase
       </div>
-      ${renderFactoryRepairHtml(damagedFactoryRows(this.gameState, player.id), { ipcs: remaining })}
+      ${renderFactoryRepairHtml(damagedFactoryRows(this.gameState, player.id), {
+        ipcs: remaining,
+        pointsByTerritory: this.repairPoints || {},
+      })}
 
       <div class="pp-units">
     `;
@@ -447,12 +451,30 @@ export class PurchasePopup {
       }
     });
 
+    this.el.querySelectorAll('[data-action="repair-step"]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const territory = btn.dataset.territory;
+        const delta = parseInt(btn.dataset.delta, 10) || 0;
+        const playerId = this.gameState?.currentPlayer?.id;
+        const row = damagedFactoryRows(this.gameState, playerId).find((item) => item.name === territory);
+        if (!territory || !row || !playerId) return;
+        const ipcs = this.gameState.getIPCs(playerId);
+        const current = this.repairPoints?.[territory] ?? 1;
+        this.repairPoints = {
+          ...(this.repairPoints || {}),
+          [territory]: stepRepairPoints(current, delta, row.damage, ipcs),
+        };
+        this._render();
+      });
+    });
+
     this.el.querySelectorAll('[data-action="repair-factory"]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const territory = btn.dataset.territory;
         const points = parseInt(btn.dataset.points, 10) || 1;
         if (!territory) return;
         this.gameState.repairFactoryDamage?.(territory, points);
+        if (this.repairPoints) delete this.repairPoints[territory];
         this._render();
       });
     });

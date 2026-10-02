@@ -57,7 +57,7 @@ import {
   isQueuedConfirmAction,
   confirmChromeClass,
 } from './confirmChrome.js';
-import { resolvePhaseConfirmSplit } from './phaseConfirmSplit.js';
+import { bottomActionEdgeClass, resolvePhaseConfirmSplit, shouldOfferBottomTechRoll } from './phaseConfirmSplit.js';
 import { resolvePresenceState } from '../multiplayer/presencePolicy.js';
 import { resolveHostReconnectCopy } from '../multiplayer/lastMatch.js';
 import {
@@ -107,6 +107,7 @@ import {
   damagedFactoryRows,
   factoryPlacementLabel,
   renderFactoryRepairHtml,
+  stepRepairPoints,
 } from '../state/strategicBombing.js';
 import {
   canPlaceAirOnCarrierInSeaZone,
@@ -597,6 +598,7 @@ export class PlayerPanel {
     // Inline purchase state
     this.purchaseCart = {};
     this.purchaseCartCost = 0;
+    this.repairPoints = {};
 
     // Inline tech state
     this.techDiceCount = 0;
@@ -2014,6 +2016,7 @@ export class PlayerPanel {
       }
     } else if (phase === GAME_PHASES.PLAYING && shouldShowTechResearch(phase, turnPhase)
       && this._techAcquisition() !== 'buy'
+      && shouldOfferBottomTechRoll(isMobileShell())
       && (this.techDiceCount > 0 || this._carriedTechTokens(player) > 0)) {
       const carried = this._carriedTechTokens(player);
       const techCta = resolvePhoneTechCta({
@@ -2238,9 +2241,13 @@ export class PlayerPanel {
     for (const btn of buttons) {
       const disabledClass = btn.disabled ? 'disabled' : '';
       const roleClass = btn.role === 'confirm' ? 'pp-context-confirm' : 'pp-phase-advance';
-      // The one-line land name stays on the bottom edge. That edge is the
-      // blue confirm. Green stays in the panel so the two do not share a hit target.
-      const edgeClass = (btn.role === 'confirm' || !split.confirm) ? 'pp-confirm-edge' : '';
+      // Phone: the blue confirm is the bottom edge. Desktop: both buttons
+      // stay in the right pane, End phase after Continue.
+      const edgeClass = bottomActionEdgeClass({
+        mobile,
+        role: btn.role,
+        hasConfirm: !!split.confirm,
+      });
       const undoableClass = btn.role === 'advance' && btn.undoable ? 'undoable' : '';
       const selectUnitsClass = btn.selectUnits ? 'pp-select-units' : '';
       const dataAttrs = btn.territory ? `data-territory="${btn.territory}"` : '';
@@ -3154,7 +3161,10 @@ export class PlayerPanel {
           <span class="pp-budget-total">${totalBudget} IPCs</span>
         </div>`;
 
-    html += renderFactoryRepairHtml(damagedFactoryRows(this.gameState, player.id), { ipcs: remaining });
+    html += renderFactoryRepairHtml(damagedFactoryRows(this.gameState, player.id), {
+      ipcs: remaining,
+      pointsByTerritory: this.repairPoints || {},
+    });
 
     // Show Risk cards trade option if available
     if (riskCards.length > 0) {
@@ -4769,9 +4779,17 @@ export class PlayerPanel {
     let html = `<div class="pp-inline-mobilize">`;
 
     if (totalPending === 0) {
+      const canUndo = (this.gameState.mobilizationHistory || []).length > 0;
       html += `
         <div class="pp-mobilize-done">
           <div class="pp-mobilize-msg">✓ All units deployed!</div>
+          ${canUndo ? `
+          <div class="pp-mobilize-undo">
+            <button class="pp-undo-btn" data-action="undo-mobilize">
+              <span class="undo-icon">↩</span>
+              <span class="undo-text">Undo Last</span>
+            </button>
+          </div>` : ''}
         </div>
       </div>`;
       return html;
@@ -5131,11 +5149,29 @@ export class PlayerPanel {
           return;
         }
 
+        if (action === 'repair-step') {
+          const territory = btn.dataset.territory;
+          const delta = parseInt(btn.dataset.delta, 10) || 0;
+          const playerId = this.gameState?.currentPlayer?.id;
+          const row = damagedFactoryRows(this.gameState, playerId).find((item) => item.name === territory);
+          if (territory && row && playerId) {
+            const ipcs = this.gameState.getIPCs(playerId);
+            const current = this.repairPoints?.[territory] ?? 1;
+            this.repairPoints = {
+              ...(this.repairPoints || {}),
+              [territory]: stepRepairPoints(current, delta, row.damage, ipcs),
+            };
+            this._scheduleRender();
+          }
+          return;
+        }
+
         if (action === 'repair-factory') {
           const territory = btn.dataset.territory;
           const points = parseInt(btn.dataset.points, 10) || 1;
           if (this.onAction && territory) {
             this.onAction('repair-factory', { territory, points });
+            if (this.repairPoints) delete this.repairPoints[territory];
           }
           return;
         }

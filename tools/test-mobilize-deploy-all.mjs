@@ -25,7 +25,7 @@ globalThis.document ??= {
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const { GameState, GAME_PHASES, TURN_PHASES } = await import(pathToFileURL(join(root, 'src/state/gameState.js')).href);
 const { PlayerPanel } = await import(pathToFileURL(join(root, 'src/ui/playerPanel.js')).href);
-const { runMobilizeDeployAll } = await import(pathToFileURL(join(root, 'src/ui/mobilizeDeployAll.js')).href);
+const { deployAllPrompt, runMobilizeDeployAll } = await import(pathToFileURL(join(root, 'src/ui/mobilizeDeployAll.js')).href);
 const unitDefs = JSON.parse(readFileSync(join(root, 'data/units.json'), 'utf8'));
 
 let failures = 0;
@@ -147,6 +147,80 @@ function countNotify(gs, fn) {
   const remainAt = html.indexOf('remaining');
   check('Deploy all here sits above the remaining line', deployAt > 0 && deployAt < remainAt, html.slice(deployAt, remainAt + 20));
   check('button is enabled when a unit can be placed', html.includes('data-action="mobilize-deploy-all"') && !html.includes('mobilize-deploy-all" disabled') && !/mobilize-deploy-all"[^>]*disabled/.test(html));
+}
+
+{
+  const territories = [
+    T('Germany', false, ['Baltic Sea']),
+    T('Baltic Sea', true, ['Germany']),
+  ];
+  const gs = makeGs(territories);
+  gs.units = { Germany: [{ type: 'factory', owner: 'Germans', quantity: 1 }] };
+  gs.factoriesAtTurnStart = new Set(['Germany']);
+  gs.pendingPurchases = [{ type: 'infantry', quantity: 1, owner: 'Germans', cost: 3 }];
+  const placed = gs.mobilizeUnit('infantry', 'Germany', unitDefs);
+  const pp = Object.create(PlayerPanel.prototype);
+  pp.gameState = gs;
+  pp.unitDefs = unitDefs;
+  pp.selectedTerritory = gs.territoryByName.Germany;
+  pp.territories = gs.territoryByName;
+  const html = pp._renderInlineMobilize(gs.currentPlayer);
+  const undone = gs.undoMobilization(unitDefs);
+  const back = gs.pendingPurchases.find((item) => item.type === 'infantry');
+  check('one placement shows Undo Last', html.includes('Undo Last') && html.includes('data-action="undo-mobilize"'));
+  check('undo removes that placement and returns it to pending',
+    placed.success === true
+    && undone.success === true
+    && back?.quantity === 1
+    && !(gs.units.Germany || []).some((unit) => unit.type === 'infantry'));
+}
+
+{
+  const one = makeGs([
+    T('Germany', false, ['Baltic Sea']),
+    T('Baltic Sea', true, ['Germany']),
+  ]);
+  one.units = { Germany: [{ type: 'factory', owner: 'Germans', quantity: 1 }] };
+  one.factoriesAtTurnStart = new Set(['Germany']);
+  one.pendingPurchases = [
+    { type: 'infantry', quantity: 2, owner: 'Germans', cost: 3 },
+    { type: 'destroyer', quantity: 1, owner: 'Germans', cost: 12 },
+  ];
+  const both = deployAllPrompt(one, unitDefs);
+  check('one land and one sea share one prompt',
+    both?.message === 'deploy all units to Germany?\ndeploy all units to Baltic Sea?');
+
+  one.pendingPurchases = [{ type: 'infantry', quantity: 2, owner: 'Germans', cost: 3 }];
+  check('land only asks for the one factory',
+    deployAllPrompt(one, unitDefs)?.message === 'deploy all units to Germany?');
+
+  one.pendingPurchases = [{ type: 'destroyer', quantity: 1, owner: 'Germans', cost: 12 }];
+  check('sea only asks for the one sea zone',
+    deployAllPrompt(one, unitDefs)?.message === 'deploy all units to Baltic Sea?');
+
+  const twoLand = makeGs([
+    T('Germany', false, ['Baltic Sea']),
+    T('France', false, ['West Sea']),
+    T('Baltic Sea', true, ['Germany']),
+    T('West Sea', true, ['France']),
+  ]);
+  twoLand.units = {
+    Germany: [{ type: 'factory', owner: 'Germans', quantity: 1 }],
+    France: [{ type: 'factory', owner: 'Germans', quantity: 1 }],
+  };
+  twoLand.factoriesAtTurnStart = new Set(['Germany', 'France']);
+  twoLand.pendingPurchases = [{ type: 'infantry', quantity: 2, owner: 'Germans', cost: 3 }];
+  check('two legal land territories do not prompt', deployAllPrompt(twoLand, unitDefs) == null);
+
+  const twoSea = makeGs([
+    T('Germany', false, ['Baltic Sea', 'North Sea']),
+    T('Baltic Sea', true, ['Germany']),
+    T('North Sea', true, ['Germany']),
+  ]);
+  twoSea.units = { Germany: [{ type: 'factory', owner: 'Germans', quantity: 1 }] };
+  twoSea.factoriesAtTurnStart = new Set(['Germany']);
+  twoSea.pendingPurchases = [{ type: 'transport', quantity: 1, owner: 'Germans', cost: 7 }];
+  check('two legal sea zones do not prompt', deployAllPrompt(twoSea, unitDefs) == null);
 }
 
 if (failures) {

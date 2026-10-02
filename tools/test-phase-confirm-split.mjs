@@ -1,10 +1,17 @@
 // V2.81.57-unified.33 — green advances the phase; blue confirms the action.
 
+import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import { GAME_VERSION } from '../src/version.js';
 import {
   CONTEXT_CONFIRM_ACTIONS,
+  bottomActionEdgeClass,
   resolvePhaseConfirmSplit,
+  shouldOfferBottomTechRoll,
 } from '../src/ui/phaseConfirmSplit.js';
+
+const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
 let failures = 0;
 const check = (label, cond) => {
@@ -83,6 +90,26 @@ console.log('=== green is never a contextual confirm ===');
   });
   check('a confirm that is not available stays off the bar', ghost.confirm == null
     && ghost.advance?.action === 'next-phase');
+}
+
+console.log('=== desktop keeps End phase in the pane; phone pins the blue confirm ===');
+{
+  check('desktop confirm is not the long bar',
+    bottomActionEdgeClass({ mobile: false, role: 'confirm', hasConfirm: true }) === '');
+  check('desktop End phase is not the long bar',
+    bottomActionEdgeClass({ mobile: false, role: 'advance', hasConfirm: true }) === '');
+  check('phone confirm is the bottom edge',
+    bottomActionEdgeClass({ mobile: true, role: 'confirm', hasConfirm: true }) === 'pp-confirm-edge');
+  check('phone End phase stays in the pane beside a confirm',
+    bottomActionEdgeClass({ mobile: true, role: 'advance', hasConfirm: true }) === '');
+  check('desktop does not pin Roll carried to the bottom', shouldOfferBottomTechRoll(false) === false);
+  check('phone still offers the tech roll on the bottom', shouldOfferBottomTechRoll(true) === true);
+  const panel = readFileSync(join(root, 'src/ui/playerPanel.js'), 'utf8');
+  const css = readFileSync(join(root, 'style.css'), 'utf8');
+  check('the panel uses the desktop edge split',
+    panel.includes('bottomActionEdgeClass') && panel.includes('shouldOfferBottomTechRoll'));
+  check('the long confirm bar is phone-only',
+    css.includes('html.mobile-shell .pp-confirm-btn.pp-confirm-edge:not(:disabled):not(.disabled)'));
 }
 
 if (failures) {
