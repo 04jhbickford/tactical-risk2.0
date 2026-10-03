@@ -2,6 +2,17 @@
 // Tabs: Actions, Stats, Territory, Log
 
 import { GAME_PHASES, TURN_PHASES, TURN_PHASE_NAMES, TECHNOLOGIES, shouldShowTechResearch, shouldShowPurchase } from '../state/gameState.js';
+import {
+  DECEPTION_ILLUSION,
+  DECEPTION_OBFUSCATE,
+  DECEPTION_UNIT_CAP,
+  ILLUSION_LAND_TYPES,
+  RADIO_DECEPTION,
+  activePlacement,
+  expandedTechEnabled,
+  researchableTechIds,
+  resolveTechInfo,
+} from '../state/radioDeception.js';
 import { renderCombatBattleList } from './battleOrder.js';
 import { adjacentMobilizeSeas } from './mobilizeDeployAll.js';
 import { DIRECT_TECH_IPC_COST } from '../gameOptions.js';
@@ -625,6 +636,7 @@ export class PlayerPanel {
     this._peekTurnPhase = null;
     this.cardsCollapsed = false;
     this.validCardSets = [];
+    this._radio = null;
 
     // Inline purchase state
     this.purchaseCart = {};
@@ -987,6 +999,10 @@ export class PlayerPanel {
     this.syncManager = syncManager;
     this.localUserId = localUserId;
     if (gameCode) this.gameCode = gameCode;
+    if (this.gameState?.isMultiplayer) {
+      const seat = this.gameState.players?.find((p) => p.oderId === localUserId);
+      this.gameState.localSeatId = seat?.id || null;
+    }
   }
 
   // Set optimistic waiting state (called before nextPhase to lock UI immediately)
@@ -2598,6 +2614,8 @@ export class PlayerPanel {
       if (turnPhase === TURN_PHASES.COLLECT_INCOME) {
         html += `<div class="pp-hint">Income will be collected automatically</div>`;
       }
+
+      html += this._renderRadioDeception(player);
     }
 
     return html;
@@ -2771,7 +2789,7 @@ export class PlayerPanel {
             <div class="pp-stat-header">🔬 Your Technologies</div>
             <div class="pp-tech-list">`;
         for (const techId of techs) {
-          const tech = TECHNOLOGIES[techId];
+          const tech = resolveTechInfo(techId, TECHNOLOGIES, this.gameState?.gameOptions);
           if (tech) {
             html += `<div class="pp-tech-item"><span class="pp-tech-name">${tech.name}</span></div>`;
           }
@@ -3307,7 +3325,7 @@ export class PlayerPanel {
         html += `<div class="pp-tech-item-desc">All technologies owned.</div>`;
       }
       for (const techId of available) {
-        const tech = TECHNOLOGIES[techId];
+        const tech = resolveTechInfo(techId, TECHNOLOGIES, this.gameState?.gameOptions);
         const afford = this.gameState.getIPCs(player.id) >= DIRECT_TECH_IPC_COST;
         html += `
           <button class="pp-action-btn secondary" data-action="buy-tech" data-tech="${techId}" ${afford ? '' : 'disabled'}>
@@ -3327,8 +3345,7 @@ export class PlayerPanel {
     const maxDice = Math.floor(ipcs / 5);
     const techState = this.gameState.playerTechs?.[player.id] || { techTokens: 0, unlockedTechs: [] };
     const unlockedTechs = techState.unlockedTechs || [];
-    const availableTechs = Object.entries(TECHNOLOGIES)
-      .filter(([id, _]) => !unlockedTechs.includes(id));
+    const catalogIds = researchableTechIds(Object.keys(TECHNOLOGIES), this.gameState?.gameOptions);
 
     const mode = this._techAcquisition();
     const multi = this.gameState.gameOptions?.multipleTech === true;
@@ -3381,7 +3398,9 @@ export class PlayerPanel {
     html += `<div class="pp-tech-list">`;
     html += `<div class="pp-tech-list-header">Technologies</div>`;
 
-    for (const [id, tech] of Object.entries(TECHNOLOGIES)) {
+    for (const id of catalogIds) {
+      const tech = resolveTechInfo(id, TECHNOLOGIES, this.gameState?.gameOptions);
+      if (!tech) continue;
       const isOwned = unlockedTechs.includes(id);
       html += `
         <div class="pp-tech-item ${isOwned ? 'owned' : ''}">
@@ -3393,6 +3412,109 @@ export class PlayerPanel {
 
     html += `</div>`;
     return html;
+  }
+
+  _radioCatalog() {
+    return resolveTechInfo(RADIO_DECEPTION, TECHNOLOGIES, this.gameState?.gameOptions);
+  }
+
+  consumeRadioTerritoryClick(hit) {
+    if (!this._radio || this._radio.step !== 'territory') return false;
+    const player = this.gameState?.currentPlayer;
+    if (!player || !hit) return false;
+    if (hit.isWater || this.gameState.getOwner(hit.name) !== player.id) {
+      this._radio = { ...this._radio, error: 'Choose a territory you control.' };
+      this._scheduleRender();
+      return true;
+    }
+    this._radio = {
+      step: 'mode',
+      playerId: player.id,
+      territory: hit.name,
+      mode: null,
+      picks: {},
+      error: '',
+    };
+    this._scheduleRender();
+    return true;
+  }
+
+  _radioPickTotal(picks) {
+    return Object.values(picks || {}).reduce((sum, qty) => sum + (Number(qty) || 0), 0);
+  }
+
+  _renderRadioDeception(player) {
+    if (!player || player.isAI) return '';
+    if (!expandedTechEnabled(this.gameState?.gameOptions)) return '';
+    if (!this.gameState.hasTech(player.id, RADIO_DECEPTION)) return '';
+    if (this._radio && this._radio.playerId && this._radio.playerId !== player.id) this._radio = null;
+
+    const active = activePlacement(this.gameState, player.id);
+    const draft = this._radio;
+    const tech = this._radioCatalog();
+    let html = `<div class="pp-radio-section">`;
+    html += `<div class="pp-radio-header">${tech?.name || 'Radio Deception Networks'}</div>`;
+
+    if (active && (!draft || draft.step === 'idle')) {
+      const bits = (active.units || []).map((row) => `${row.quantity} ${formatUnitName(row.type)}`).join(', ');
+      const line = active.mode === DECEPTION_ILLUSION
+        ? `On ${active.territory}. Enemies see ${bits} that are not real.`
+        : `On ${active.territory}. Enemies cannot see ${bits}.`;
+      html += `<p class="pp-radio-hint">${line}</p>`;
+      html += `<button type="button" class="pp-action-btn secondary" data-action="radio-clear">Turn off</button>`;
+      html += `<button type="button" class="pp-action-btn secondary" data-action="radio-arm">Place somewhere else</button>`;
+    } else if (!draft) {
+      html += `<p class="pp-radio-hint">Place on one territory you control. Hide up to two real units, or show up to two illusory land units.</p>`;
+      html += `<button type="button" class="pp-action-btn secondary" data-action="radio-arm">Place</button>`;
+    } else if (draft.step === 'territory') {
+      html += `<p class="pp-radio-hint">Click a territory you control.</p>`;
+      if (draft.error) html += `<p class="pp-radio-hint">${draft.error}</p>`;
+      html += `<button type="button" class="pp-action-btn secondary" data-action="radio-cancel">Cancel</button>`;
+    } else if (draft.step === 'mode') {
+      html += `<p class="pp-radio-hint">${draft.territory}. Hide real units, or invent land units.</p>`;
+      html += `<button type="button" class="pp-action-btn secondary" data-action="radio-mode" data-mode="${DECEPTION_OBFUSCATE}">Obfuscate real units</button>`;
+      html += `<button type="button" class="pp-action-btn secondary" data-action="radio-mode" data-mode="${DECEPTION_ILLUSION}">Illusion land units</button>`;
+      html += `<button type="button" class="pp-action-btn secondary" data-action="radio-cancel">Cancel</button>`;
+    } else if (draft.step === 'units') {
+      const total = this._radioPickTotal(draft.picks);
+      html += `<p class="pp-radio-hint">${draft.territory}. ${total} of ${DECEPTION_UNIT_CAP}.</p>`;
+      if (draft.error) html += `<p class="pp-radio-hint">${draft.error}</p>`;
+      const rows = draft.mode === DECEPTION_ILLUSION
+        ? ILLUSION_LAND_TYPES.map((type) => ({ key: type, label: formatUnitName(type), max: DECEPTION_UNIT_CAP }))
+        : this._radioObfuscateRows(draft.territory);
+      for (const row of rows) {
+        const qty = Number(draft.picks?.[row.key]) || 0;
+        const room = total < DECEPTION_UNIT_CAP && qty < row.max;
+        html += `<div class="pp-radio-row">`;
+        html += `<span class="pp-radio-name">${row.label}</span>`;
+        html += `<button type="button" class="pp-qty-btn" data-action="radio-delta" data-pick="${row.key}" data-delta="-1" ${qty <= 0 ? 'disabled' : ''}>−</button>`;
+        html += `<span class="pp-radio-qty">${qty}</span>`;
+        html += `<button type="button" class="pp-qty-btn" data-action="radio-delta" data-pick="${row.key}" data-delta="1" ${room ? '' : 'disabled'}>+</button>`;
+        html += `</div>`;
+      }
+      html += `<button type="button" class="pp-action-btn primary" data-action="radio-confirm" ${total >= 1 && total <= DECEPTION_UNIT_CAP ? '' : 'disabled'}>Confirm</button>`;
+      html += `<button type="button" class="pp-action-btn secondary" data-action="radio-cancel">Cancel</button>`;
+    }
+
+    html += `</div>`;
+    return html;
+  }
+
+  _radioObfuscateRows(territory) {
+    const counts = new Map();
+    for (const unit of this.gameState.getUnitsAt(territory) || []) {
+      const qty = Math.max(0, Number(unit?.quantity) || 0);
+      if (!unit?.type || !unit.owner || qty <= 0) continue;
+      const key = `${unit.type}|${unit.owner}`;
+      const prev = counts.get(key) || { key, type: unit.type, owner: unit.owner, max: 0 };
+      prev.max += qty;
+      counts.set(key, prev);
+    }
+    return [...counts.values()].map((row) => ({
+      key: row.key,
+      label: formatUnitName(row.type),
+      max: row.max,
+    }));
   }
 
   // Rockets UI for launching rocket attacks during combat move
@@ -5516,6 +5638,77 @@ export class PlayerPanel {
           if (this.onAction && from && target) {
             this.onAction('launch-rocket', { from, target });
           }
+          return;
+        }
+
+        if (action === 'radio-arm') {
+          const player = this.gameState?.currentPlayer;
+          this._radio = { step: 'territory', playerId: player?.id || null, error: '' };
+          this._scheduleRender();
+          return;
+        }
+
+        if (action === 'radio-cancel') {
+          this._radio = null;
+          this._scheduleRender();
+          return;
+        }
+
+        if (action === 'radio-clear') {
+          this.gameState?.clearRadioDeception?.(this.gameState.currentPlayer?.id);
+          this._radio = null;
+          this._scheduleRender();
+          return;
+        }
+
+        if (action === 'radio-mode') {
+          const mode = btn.dataset.mode;
+          if (!this._radio?.territory) return;
+          this._radio = { ...this._radio, step: 'units', mode, picks: {}, error: '' };
+          this._scheduleRender();
+          return;
+        }
+
+        if (action === 'radio-delta') {
+          if (!this._radio || this._radio.step !== 'units') return;
+          const key = btn.dataset.pick;
+          const delta = parseInt(btn.dataset.delta, 10) || 0;
+          const picks = { ...(this._radio.picks || {}) };
+          const rows = this._radio.mode === DECEPTION_ILLUSION
+            ? ILLUSION_LAND_TYPES.map((type) => ({ key: type, max: DECEPTION_UNIT_CAP }))
+            : this._radioObfuscateRows(this._radio.territory);
+          const row = rows.find((item) => item.key === key);
+          if (!row) return;
+          const next = Math.max(0, (Number(picks[key]) || 0) + delta);
+          const others = this._radioPickTotal(picks) - (Number(picks[key]) || 0);
+          picks[key] = Math.min(row.max, DECEPTION_UNIT_CAP - others, next);
+          if (picks[key] <= 0) delete picks[key];
+          this._radio = { ...this._radio, picks, error: '' };
+          this._scheduleRender();
+          return;
+        }
+
+        if (action === 'radio-confirm') {
+          const draft = this._radio;
+          if (!draft || draft.step !== 'units') return;
+          const picks = Object.entries(draft.picks || {}).map(([key, quantity]) => {
+            if (draft.mode === DECEPTION_OBFUSCATE) {
+              const split = key.indexOf('|');
+              return {
+                type: key.slice(0, split),
+                owner: key.slice(split + 1),
+                quantity,
+              };
+            }
+            return { type: key, quantity };
+          });
+          const result = this.gameState.placeRadioDeception(draft.territory, draft.mode, picks);
+          if (!result?.success) {
+            this._radio = { ...draft, error: result?.error || 'Could not place' };
+          } else {
+            this._radio = null;
+          }
+          this._scheduleRender();
           return;
         }
 

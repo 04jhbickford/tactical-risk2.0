@@ -1,6 +1,7 @@
 // Tech Research UI - popup for developing technologies during DEVELOP_TECH phase
 
 import { TECHNOLOGIES, shouldShowTechResearch } from '../state/gameState.js';
+import { researchableTechIds, resolveTechInfo } from '../state/radioDeception.js';
 import { setShellFlag } from './mobileShell.js';
 import { syncBottomSurfaces } from './bottomSurface.js';
 
@@ -106,7 +107,7 @@ export class TechUI {
             <div class="tech-breakthrough-desc">${pickLine}</div>
             <div class="tech-options">
               ${availableTechs.map(techId => {
-                const tech = TECHNOLOGIES[techId];
+                const tech = resolveTechInfo(techId, TECHNOLOGIES, this.gameState?.gameOptions);
                 return `
                   <button class="tech-option" data-tech="${techId}">
                     <span class="tech-option-name">${tech.name}</span>
@@ -161,7 +162,8 @@ export class TechUI {
           <div class="tech-unlocked-label">Unlocked Technologies:</div>
           <div class="tech-unlocked-list">
             ${techState.unlockedTechs.map(techId => {
-              const tech = TECHNOLOGIES[techId];
+              const tech = resolveTechInfo(techId, TECHNOLOGIES, this.gameState?.gameOptions);
+              if (!tech) return '';
               return `<span class="tech-badge">${tech.name}</span>`;
             }).join('')}
           </div>
@@ -477,8 +479,10 @@ export class TechUI {
     // Get available techs
     const techState = this.gameState.playerTechs?.[playerId] || { unlockedTechs: [] };
     const unlockedTechs = techState.unlockedTechs || [];
-    const availableTechs = Object.entries(TECHNOLOGIES)
-      .filter(([id, _]) => !unlockedTechs.includes(id));
+    const availableTechs = researchableTechIds(Object.keys(TECHNOLOGIES), this.gameState?.gameOptions)
+      .filter((id) => !unlockedTechs.includes(id))
+      .map((id) => [id, resolveTechInfo(id, TECHNOLOGIES, this.gameState?.gameOptions)])
+      .filter(([, tech]) => tech);
 
     let html = `<div class="tech-dice-result-box breakthrough">
       <div class="tech-dice-result-title">🔬 BREAKTHROUGH!</div>

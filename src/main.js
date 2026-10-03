@@ -2160,6 +2160,7 @@ async function init() {
       });
 
       playerPanel.setMultiplayerState(syncManager, localUserId, currentGameCode);
+      gameState.localSeatId = localPlayer?.id || null;
     }
 
     tooltip.setGameState(gameState);
@@ -3308,6 +3309,13 @@ async function init() {
 
       // Initial placement now uses inline UI in player panel - don't intercept clicks
       // Just let the territory selection flow through to setSelectedTerritory
+
+      if (hit && gameState && playerPanel.consumeRadioTerritoryClick?.(hit)) {
+        selectedTerritory = hit;
+        playerPanel.setSelectedTerritory(hit);
+        camera.dirty = true;
+        return;
+      }
 
       // Check if we're in mobilize phase
       if (hit && gameState && mobilizeUI.isActive()) {

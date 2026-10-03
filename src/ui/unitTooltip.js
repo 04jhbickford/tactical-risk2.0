@@ -46,7 +46,8 @@ export class UnitTooltip {
     let defenseBonus = 0;
     let movementBonus = 0;
 
-    if (this.gameState && unitInfo.owner) {
+    const illusion = unitInfo.deceptionTone === 'illusion';
+    if (this.gameState && unitInfo.owner && !illusion) {
       const owner = unitInfo.owner;
 
       // Check for relevant tech upgrades using gameState.hasTech()
@@ -72,9 +73,9 @@ export class UnitTooltip {
     const baseDefense = def.defense || 0;
     const baseMovement = def.movement || 0;
 
-    const totalAttack = baseAttack + attackBonus;
-    const totalDefense = baseDefense + defenseBonus;
-    const totalMovement = baseMovement + movementBonus;
+    const totalAttack = illusion ? 0 : baseAttack + attackBonus;
+    const totalDefense = illusion ? 0 : baseDefense + defenseBonus;
+    const totalMovement = illusion ? 0 : baseMovement + movementBonus;
 
     // Get player info for color
     const presented = describeUnitOwner(unitInfo.owner, (id) => this.gameState?.getPlayer?.(id));
@@ -139,6 +140,8 @@ export class UnitTooltip {
     if (unitInfo.isOnTransport) specials.push('On Transport');
     if (unitInfo.isFlying) specials.push('✈ In Flight');
     if (unitInfo.damaged > 0) specials.push('⚠ Damaged');
+    if (illusion) specials.push('Illusion. Does not move, attack, or defend');
+    if (unitInfo.deceptionTone === 'hidden') specials.push('Hidden from enemies');
     // Heavy bombers tech indicator
     if (this.gameState && unitInfo.owner && unitType === 'bomber' && this.gameState.hasTech(unitInfo.owner, 'heavyBombers')) {
       specials.push('🎯 Heavy (2 dice)');

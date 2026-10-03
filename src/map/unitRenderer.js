@@ -2,6 +2,7 @@
 
 import { getUnitIconPath, unitIconForOwner, NEUTRAL_UNIT_COLOR } from '../utils/unitIcons.js';
 import { isMobileShell, phoneUnitIconSize, phoneMapStackOffsets, shouldHideUnitsAtZoom } from '../ui/mobileShell.js';
+import { presentTerritoryUnits } from '../state/radioDeception.js';
 
 /** Damage digits sit inside the factory icon, upper left. No separate chip. */
 export function factoryDamageLabelOrigin(iconX, iconY, iconSize) {
@@ -83,7 +84,8 @@ export class UnitRenderer {
     const spacingX = iconSize + 4;
     const spacingY = iconSize + 8;
 
-    for (const [territory, placements] of Object.entries(this.gameState.units)) {
+    for (const territory of this._unitTerritoryNames()) {
+      const placements = this.gameState.units[territory] || [];
       const t = this.territoryByName[territory];
       if (!t) continue;
 
@@ -105,10 +107,13 @@ export class UnitRenderer {
         cy = adjusted.y;
       }
 
+      const presented = t.isWater
+        ? { units: placements, showMark: false }
+        : presentTerritoryUnits(this.gameState, territory, placements);
       // Group by type - show ALL types including cargo
-      const grouped = this._groupUnits(placements, true);
+      const grouped = this._groupUnits(presented.units, true);
       const types = Object.keys(grouped);
-      if (types.length === 0) continue;
+      if (types.length === 0 && !presented.showMark) continue;
 
       // Use smaller maxPerRow for sea zones to prevent bleeding into land
       // Sea zones use 3 across, land uses 5
@@ -117,11 +122,47 @@ export class UnitRenderer {
       // For sea zones, separate into three categories
       if (t.isWater) {
         this._renderSeaZoneUnits(ctx, cx, cy, grouped, iconSize, spacingX, spacingY, zoom);
-      } else {
+      } else if (types.length > 0) {
         // Land territory: render all units in flat grid
         this._renderUnitGrid(ctx, cx, cy, types, grouped, maxPerRow, iconSize, spacingX, spacingY, zoom, territory);
       }
+      if (presented.showMark) {
+        const { unitDy } = phoneMapStackOffsets(zoom, { mobile });
+        this._drawRadioMark(ctx, cx, cy + unitDy - iconSize - 10, iconSize * 0.7);
+      }
     }
+  }
+
+  _unitTerritoryNames() {
+    const names = new Set(Object.keys(this.gameState?.units || {}));
+    for (const row of Object.values(this.gameState?.radioDeception || {})) {
+      if (row?.territory) names.add(row.territory);
+    }
+    return names;
+  }
+
+  // Code-drawn antenna. No image file. Friendly viewers only.
+  _drawRadioMark(ctx, x, y, size) {
+    const s = Math.max(8, Number(size) || 12);
+    ctx.save();
+    ctx.strokeStyle = '#bdbdbd';
+    ctx.fillStyle = '#d5d5d5';
+    ctx.lineWidth = Math.max(1.25, s * 0.08);
+    ctx.lineCap = 'round';
+    const mastTop = y - s * 0.2;
+    ctx.beginPath();
+    ctx.moveTo(x, y + s * 0.45);
+    ctx.lineTo(x, mastTop);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(x, y + s * 0.45, s * 0.1, 0, Math.PI * 2);
+    ctx.fill();
+    for (const scale of [0.28, 0.5]) {
+      ctx.beginPath();
+      ctx.arc(x, mastTop, s * scale, Math.PI * 1.15, Math.PI * 1.85);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   // Digits on the factory icon, upper left. No chip beside the stack.
@@ -249,13 +290,13 @@ export class UnitRenderer {
 
       for (let col = 0; col < typesInRow && typeIndex < types.length; col++) {
         const key = types[typeIndex];
-        const { total, owner, type: unitType, isOnCarrier, isOnTransport, damaged } = grouped[key];
+        const { total, owner, type: unitType, isOnCarrier, isOnTransport, damaged, deceptionTone } = grouped[key];
         const x = startX + col * spacingX;
         const presented = unitIconForOwner(unitType, owner, (id) => this.gameState.getPlayer(id));
         const color = presented.known ? this.gameState.getPlayerColor(owner) : NEUTRAL_UNIT_COLOR;
 
         this._drawUnitIcon(ctx, x, rowY, iconSize, unitType, color, presented.known ? owner : null, isOnCarrier, isOnTransport, damaged, false,
-                          this.highlightUnitType === unitType);
+                          this.highlightUnitType === unitType, deceptionTone);
 
         if (unitType === 'factory') {
           const raid = this.gameState?.getFactoryDamage?.(territoryName) || 0;
@@ -538,9 +579,10 @@ export class UnitRenderer {
     // Group by BOTH type AND owner to show units from different players separately
     const grouped = {};
     for (const p of placements) {
-      const key = `${p.type}_${p.owner}`;
+      const tone = p.deceptionTone || '';
+      const key = `${p.type}_${p.owner}_${tone}`;
       if (!grouped[key]) {
-        grouped[key] = { total: 0, owner: p.owner, type: p.type, damaged: 0 };
+        grouped[key] = { total: 0, owner: p.owner, type: p.type, damaged: 0, deceptionTone: p.deceptionTone || null };
       }
       grouped[key].total += p.quantity;
       // Track damaged battleships for visual indicator
@@ -577,14 +619,15 @@ export class UnitRenderer {
     return grouped;
   }
 
-  _drawUnitIcon(ctx, x, y, size, unitType, color, factionId, isOnCarrier = false, isOnTransport = false, damaged = 0, isFlying = false, highlight = false) {
+  _drawUnitIcon(ctx, x, y, size, unitType, color, factionId, isOnCarrier = false, isOnTransport = false, damaged = 0, isFlying = false, highlight = false, deceptionTone = null) {
     const img = this._getUnitImage(unitType, factionId);
+    const grey = deceptionTone === 'hidden' || deceptionTone === 'illusion';
 
     ctx.save();
 
     // Draw colored background circle/square
     const bgSize = size + 4;
-    ctx.fillStyle = color;
+    ctx.fillStyle = grey ? '#8d8d8d' : color;
 
     // Add indicator for units on carriers/transports
     if (isOnCarrier || isOnTransport) {
@@ -641,10 +684,14 @@ export class UnitRenderer {
     if (img && img.complete && img.naturalWidth > 0) {
       // Tint the image with the player color slightly
       ctx.globalCompositeOperation = 'source-over';
+      if (grey) ctx.filter = 'grayscale(1)';
       ctx.drawImage(img, x - size / 2, y - size / 2, size, size);
+      if (grey) ctx.filter = 'none';
     } else {
       // Fallback: draw simple shape
+      if (grey) ctx.filter = 'grayscale(1)';
       this._drawFallbackIcon(ctx, x, y, size * 0.4, unitType);
+      if (grey) ctx.filter = 'none';
     }
 
     // Damage slash sits on top of the icon so the picture does not cover it.
@@ -824,7 +871,8 @@ export class UnitRenderer {
     const spacingY = iconSize + 8;
     const hitRadius = (iconSize + 4) / 2;
 
-    for (const [territory, placements] of Object.entries(this.gameState.units)) {
+    for (const territory of this._unitTerritoryNames()) {
+      const placements = this.gameState.units[territory] || [];
       const t = this.territoryByName[territory];
       if (!t) continue;
 
@@ -844,7 +892,10 @@ export class UnitRenderer {
         cy = adjusted.y;
       }
 
-      const grouped = this._groupUnits(placements, true);
+      const presented = t.isWater
+        ? { units: placements, showMark: false }
+        : presentTerritoryUnits(this.gameState, territory, placements);
+      const grouped = this._groupUnits(presented.units, true);
       const types = Object.keys(grouped);
       if (types.length === 0) continue;
 
@@ -977,6 +1028,7 @@ export class UnitRenderer {
             isOnCarrier: unitInfo.isOnCarrier || false,
             isOnTransport: unitInfo.isOnTransport || false,
             damaged: unitInfo.damaged || 0,
+            deceptionTone: unitInfo.deceptionTone || null,
             unitDef: this.unitDefs[unitInfo.type]
           };
         }
