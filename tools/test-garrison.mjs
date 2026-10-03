@@ -81,21 +81,21 @@ function firstLand(gs) {
 console.log('=== stamp ===');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  check('display stamp is V2.81.57-unified.57', GAME_VERSION === 'V2.81.57-unified.57');
+  check('display stamp is V2.81.57-unified.59', GAME_VERSION === 'V2.81.57-unified.59');
   check('schema stays 11', SCHEMA_VERSION === 11);
-  check('game docs write V2.82-unified.57', compatClientVersion() === 'V2.82-unified.57');
+  check('game docs write V2.82-unified.59', compatClientVersion() === 'V2.82-unified.59');
   check('a V2.82-unified.50 doc does not prompt this tab',
     compareGameVersions('V2.82-unified.50', GAME_VERSION) < 0);
-  check('a V2.82-unified.58 doc prompts this tab',
-    compareGameVersions('V2.82-unified.58', GAME_VERSION) > 0);
-  check('our own V2.82-unified.57 doc does not prompt',
-    compareGameVersions('V2.82-unified.57', GAME_VERSION) === 0);
+  check('a V2.82-unified.60 doc prompts this tab',
+    compareGameVersions('V2.82-unified.60', GAME_VERSION) > 0);
+  check('our own V2.82-unified.59 doc does not prompt',
+    compareGameVersions('V2.82-unified.59', GAME_VERSION) === 0);
   check('index.html carries the display stamp',
-    html.includes('content="V2.81.57-unified.57"')
-    && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.57'")
-    && html.includes("var LOCKED = 'V2.81.57-unified.57'")
-    && html.includes('style.css?v=V2.81.57-unified.57')
-    && html.includes('src/main.js?v=V2.81.57-unified.57'));
+    html.includes('content="V2.81.57-unified.59"')
+    && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.59'")
+    && html.includes("var LOCKED = 'V2.81.57-unified.59'")
+    && html.includes('style.css?v=V2.81.57-unified.59')
+    && html.includes('src/main.js?v=V2.81.57-unified.59'));
 }
 
 console.log('=== lobby default off ===');

@@ -587,3 +587,106 @@ export function returnToBaseAssignments(units, originsByType, selections = {}) {
   });
   return { selections: next, unresolved };
 }
+
+const NON_COMBAT_MOVE = 'non_combat_move';
+
+function looseUnmovedAirQty(gameState, territory, type, playerId) {
+  return (gameState?.units?.[territory] || [])
+    .filter((unit) => (
+      unit
+      && unit.type === type
+      && unit.owner === playerId
+      && !unit.id
+      && !unit.moved
+    ))
+    .reduce((sum, unit) => sum + (Number(unit.quantity) || 0), 0);
+}
+
+// Classic non-combat. Each airborne stack with movement left and a recorded
+// origin that is already a legal landing (same rules as Return to base after
+// a Pacific battle). Friendly land the aircraft already occupies is not
+// airborne. Pacific stays on the post-combat landing sheet.
+export function listNcmReturnToBaseMoves(gameState, unitDefs = {}) {
+  if (!airLandsDuringNonCombat(gameState)) return [];
+  if (gameState?.turnPhase !== NON_COMBAT_MOVE) return [];
+  const player = gameState.currentPlayer;
+  if (!player || player.isAI) return [];
+  if (typeof gameState.getAirLandingOptions !== 'function') return [];
+
+  const moves = [];
+  for (const [from, stacks] of Object.entries(gameState.units || {})) {
+    const originsByType = gameState.airUnitOrigins?.[from];
+    if (!originsByType) continue;
+    const here = gameState.territoryByName?.[from];
+    if (here && !here.isWater && wasFriendlyAtTurnStart(gameState, from, player.id)) continue;
+
+    const rows = [];
+    for (const unit of stacks || []) {
+      if (!unit || unit.owner !== player.id || unit.id || unit.moved) continue;
+      const quantity = Number(unit.quantity) || 0;
+      if (quantity <= 0 || !isAirUnitType(unit.type, unitDefs)) continue;
+      if (!originsByType[unit.type]?.origin) continue;
+      const landingOptions = gameState.getAirLandingOptions(from, unit.type, unitDefs) || [];
+      rows.push({ type: unit.type, quantity, landingOptions });
+    }
+    if (!rows.length) continue;
+
+    const assigned = returnToBaseAssignments(rows, originsByType, {});
+    rows.forEach((row, index) => {
+      const to = assigned.selections[landingKeyFor(row, index)];
+      if (!to) return;
+      moves.push({ from, to, type: row.type, quantity: row.quantity });
+    });
+  }
+  return moves;
+}
+
+// Sends those stacks home through moveUnits, so range, carriers, allies,
+// move history, and airUnitOrigins match a manual non-combat hop. A stack
+// that cannot legally finish the hop stays put.
+export function applyNcmReturnToBase(gameState, unitDefs = {}) {
+  const playerId = gameState?.currentPlayer?.id;
+  const planned = listNcmReturnToBaseMoves(gameState, unitDefs);
+  const applied = [];
+  let moved = 0;
+  if (!playerId || typeof gameState?.moveUnits !== 'function') {
+    return { moved, applied };
+  }
+
+  for (const step of planned) {
+    const available = looseUnmovedAirQty(gameState, step.from, step.type, playerId);
+    const want = Math.min(step.quantity, available);
+    if (want <= 0) continue;
+
+    const full = gameState.moveUnits(
+      step.from,
+      step.to,
+      [{ type: step.type, quantity: want }],
+      unitDefs,
+    );
+    if (full?.success) {
+      moved += want;
+      applied.push({ ...step, quantity: want });
+      continue;
+    }
+
+    let got = 0;
+    while (got < want) {
+      const before = looseUnmovedAirQty(gameState, step.from, step.type, playerId);
+      const one = gameState.moveUnits(
+        step.from,
+        step.to,
+        [{ type: step.type, quantity: 1 }],
+        unitDefs,
+      );
+      const after = looseUnmovedAirQty(gameState, step.from, step.type, playerId);
+      if (!one?.success || after >= before) break;
+      got += before - after;
+    }
+    if (got > 0) {
+      moved += got;
+      applied.push({ ...step, quantity: got });
+    }
+  }
+  return { moved, applied };
+}

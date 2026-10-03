@@ -2,6 +2,12 @@
 
 ---
 
+## 10.3.26 — unified.59 Return to base in non-combat
+
+Stamp `V2.81.57-unified.59`. Schema stays 11. During non-combat, Classic solo and Classic multiplayer show Return to base when the current human has airborne aircraft that can still reach their recorded origin. One click sends those planes home under the same landing rules as a manual non-combat move. Planes that cannot legally reach that origin stay put. Pacific post-combat Return to base is unchanged. A `V2.82-unified.58` doc is older than this tab and does not prompt. A `V2.82-unified.60` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.59`).
+
+Bastion, Discord #tactical-risk-bug-report (1556062455627522059): single player had no way to send every airplane back to its origin.
+
 ## 10.3.26 — unified.57 air-only victory copy
 
 Stamp `V2.81.57-unified.57`. Schema stays 11. When an attack clears the enemy and only aircraft remain, the combat result says "Victory - but the territory remains under their control." A win that still has a land unit, or a sea unit in a sea zone, keeps the capture line. Ownership rules are unchanged. A `V2.82-unified.56` doc is older than this tab and does not prompt. A `V2.82-unified.58` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.57`).

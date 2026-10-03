@@ -4560,6 +4560,11 @@ iframe[title="Vercel Live Feedback"] {
   border: 1px solid rgba(255,255,255,0.15);
 }
 
+html.mobile-shell .pp-ncm-return-base {
+  min-height: 44px;
+  width: 100%;
+}
+
 .pp-action-btn.secondary:hover {
   background: rgba(255,255,255,0.12);
   transform: translateY(-1px);
