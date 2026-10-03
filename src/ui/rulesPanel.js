@@ -92,7 +92,7 @@ export class RulesPanel {
               <tbody>
                 <tr><td>Infantry</td><td>3</td><td>1</td><td>2</td><td>1</td><td>Cheap, good defense</td></tr>
                 <tr data-rules-mechanized hidden><td>Mechanized Infantry</td><td>4</td><td>1</td><td>2</td><td>2</td><td>Attacks at 2 when paired with artillery, one for one. Stops on entering an enemy territory unless it moves with a tank.</td></tr>
-                <tr data-rules-garrison hidden><td>Garrison</td><td>—</td><td>0</td><td>2</td><td>0</td><td>Original capital only. Cannot move or be purchased. Defends like infantry. Lost only after every other unit there is gone. Returns for free at the end of the original owner's turn if it is missing and they still hold that capital.</td></tr>
+                <tr data-rules-garrison hidden><td>Garrison</td><td>—</td><td>0</td><td>2</td><td>0</td><td>Placed on the original capital as soon as that capital is placed. Cannot move or be purchased. Defends like infantry. Lost only after every other unit there is gone. Returns for free at the end of the original owner's turn if it is missing and they still hold that capital.</td></tr>
                 <tr><td>Artillery</td><td>4</td><td>2</td><td>2</td><td>1</td><td data-rules-artillery-note>Boosts paired infantry</td></tr>
                 <tr><td>Armour (Tank)</td><td>6</td><td>3</td><td>3</td><td>2</td><td>Can blitz through friendly territory</td></tr>
                 <tr><td>Fighter</td><td>10</td><td>3</td><td>4</td><td>4</td><td>Air unit, can land on carriers</td></tr>
