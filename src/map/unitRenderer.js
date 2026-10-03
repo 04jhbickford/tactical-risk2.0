@@ -616,10 +616,13 @@ export class UnitRenderer {
     } else if (damaged > 0) {
       // Damaged battleship indicator - orange/red border and cross
       ctx.strokeStyle = 'rgba(255,100,0,0.9)';
+    } else if (unitType === 'garrison') {
+      // Same gold as the AA fire chrome (.aa-title).
+      ctx.strokeStyle = '#ffb74d';
     } else {
       ctx.strokeStyle = 'rgba(0,0,0,0.5)';
     }
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = unitType === 'garrison' ? 2.5 : 1.5;
 
     ctx.beginPath();
     ctx.roundRect(x - bgSize / 2, y - bgSize / 2, bgSize, bgSize, 4);
@@ -666,6 +669,15 @@ export class UnitRenderer {
     switch (unitType) {
       case 'infantry':
         ctx.arc(x, y, r, 0, Math.PI * 2);
+        break;
+      case 'garrison':
+        ctx.fillStyle = '#9aa0a6';
+        ctx.strokeStyle = '#ffb74d';
+        ctx.moveTo(x - r, y + r * 0.7);
+        ctx.lineTo(x - r * 0.35, y - r * 0.7);
+        ctx.lineTo(x + r * 0.35, y - r * 0.7);
+        ctx.lineTo(x + r, y + r * 0.7);
+        ctx.closePath();
         break;
       case 'armour':
         ctx.rect(x - r, y - r * 0.6, r * 2, r * 1.2);

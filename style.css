@@ -9673,6 +9673,13 @@ html.mobile-shell .pp-bottom-actions.pp-has-context-confirm {
   border-radius: 2px;
 }
 
+.combat-unit-icon.is-garrison,
+.casualty-icon.is-garrison,
+.dice-unit-icon.is-garrison {
+  box-shadow: 0 0 0 1px rgba(255, 152, 0, 0.95);
+  border-radius: 2px;
+}
+
 .combat-damage-mark {
   display: inline-flex;
   align-items: center;

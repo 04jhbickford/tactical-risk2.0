@@ -2,6 +2,12 @@
 
 ---
 
+## 10.3.26 — unified.44 optional garrisons
+
+Stamp `V2.81.57-unified.44`. Schema stays 11. The flag is `gameOptions.garrisons`. A save that omits it loads off. A `V2.82-unified.43` doc is older than this tab and does not prompt. A `V2.82-unified.45` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.44`).
+
+Bastion, Discord #tactical-risk-bug-report (1555726401116835861, 1555727058678845601, 1555728185281347585): a lobby option, off until the host turns it on, places one garrison on each power's original capital. It cannot move or be purchased. It only defends, at infantry defense (2). In combat it is lost only after every other unit on that territory is gone. If the original owner still holds that original capital at the end of their turn and the garrison is missing, it comes back for free. A captured capital does not grow one.
+
 ## 10.2.26 — unified.43 Develop Technology button
 
 Stamp `V2.81.57-unified.43`. Schema stays 11. A `V2.82-unified.42` doc is older than this tab and does not prompt. A `V2.82-unified.44` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.43`).

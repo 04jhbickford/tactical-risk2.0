@@ -129,6 +129,10 @@ export class UnitTooltip {
     const specials = [];
     if (def.hp && def.hp > 1) specials.push(`${def.hp} HP`);
     if (def.antiAir) specials.push('Anti-Air');
+    if (unitType === 'garrison' || def.defendOnly) {
+      specials.push('Defends only');
+      specials.push('Lost last');
+    }
     if (def.capacity) specials.push(`Capacity: ${def.capacity}`);
     if (def.aircraftCapacity) specials.push(`Aircraft: ${def.aircraftCapacity}`);
     if (unitInfo.isOnCarrier) specials.push('On Carrier');

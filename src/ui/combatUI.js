@@ -43,6 +43,11 @@ import {
   MECHANIZED_INFANTRY,
   MECHANIZED_SUPPORT_LABEL,
 } from '../state/mechanizedInfantry.js';
+import {
+  GARRISON,
+  clampGarrisonSelection,
+  garrisonHitAllowed,
+} from '../state/garrison.js';
 
 export {
   getEnemyCombatUnits,
@@ -712,7 +717,10 @@ export class CombatUI {
     // A&A Anniversary Rule: Bombardment casualties fire back in the first combat round
     // Store the selected casualties but don't remove them yet - they will be removed
     // after the first round of combat along with regular combat casualties
-    this.combatState.pendingBombardmentLosses = { ...selectedBombardmentCasualties };
+    this.combatState.pendingBombardmentLosses = clampGarrisonSelection(
+      this.combatState.defenders,
+      { ...selectedBombardmentCasualties },
+    );
 
     // Track total losses for battle summary (they will definitely die)
     for (const [type, count] of Object.entries(selectedBombardmentCasualties)) {
@@ -1219,6 +1227,7 @@ export class CombatUI {
     for (const unit of attackPool) {
       const def = this.unitDefs[unit.type];
       if (!def) continue;
+      if (unit.type === GARRISON || def.defendOnly) continue;
 
       // Heavy Bombers: Bombers roll 2 dice each
       const dicePerUnit = (unit.type === 'bomber' && hasHeavyBombers) ? 2 : 1;
@@ -1599,7 +1608,7 @@ export class CombatUI {
 
     const takeCheapest = () => {
       const sorted = [...units]
-        .filter(u => u.quantity > 0 && u.type !== 'transport' && u.type !== 'factory' && u.type !== 'battleship')
+        .filter(u => u.quantity > 0 && u.type !== 'transport' && u.type !== 'factory' && u.type !== 'battleship' && u.type !== GARRISON)
         .sort((a, b) => {
           const costA = this.unitDefs[a.type]?.cost || 999;
           const costB = this.unitDefs[b.type]?.cost || 999;
@@ -1672,6 +1681,17 @@ export class CombatUI {
         if (remaining <= 0) break;
         const take = Math.min(unit.quantity, remaining);
         selected.transport = (selected.transport || 0) + take;
+        remaining -= take;
+      }
+    }
+
+    // Garrison is lost only after every other unit has been taken.
+    if (remaining > 0) {
+      const garrisons = units.filter((unit) => unit.type === GARRISON && unit.quantity > 0);
+      for (const unit of garrisons) {
+        if (remaining <= 0) break;
+        const take = Math.min(unit.quantity, remaining);
+        selected[GARRISON] = (selected[GARRISON] || 0) + take;
         remaining -= take;
       }
     }
@@ -1974,9 +1994,14 @@ export class CombatUI {
 
     // Apply attacker casualties across every stack of the type, including
     // an explicit transport pick. Damage stays on the battleship hull.
+    this.combatState.selectedAttackerCasualties = clampGarrisonSelection(attackers, selectedAttackerCasualties);
+    this.combatState.selectedDefenderCasualties = clampGarrisonSelection(defenders, selectedDefenderCasualties);
+    const attackerPicks = this.combatState.selectedAttackerCasualties;
+    const defenderPicks = this.combatState.selectedDefenderCasualties;
+
     const attackerApplied = applyCasualtySelection(
       attackers,
-      selectedAttackerCasualties,
+      attackerPicks,
       this._casualtyContext(attackers),
     );
     for (const hit of attackerApplied.applied) {
@@ -1988,7 +2013,7 @@ export class CombatUI {
 
     const defenderApplied = applyCasualtySelection(
       defenders,
-      selectedDefenderCasualties,
+      defenderPicks,
       this._casualtyContext(defenders),
     );
     for (const hit of defenderApplied.applied) {
@@ -2014,8 +2039,8 @@ export class CombatUI {
       attackForce: this.combatState.preRollAttackForce || summarizeCombatForce(attackers),
       defenseForce: this.combatState.preRollDefenseForce || summarizeCombatForce(defenders),
       casualties: {
-        attacker: selectedAttackerCasualties,
-        defender: selectedDefenderCasualties,
+        attacker: attackerPicks,
+        defender: defenderPicks,
       },
     });
 
@@ -3676,7 +3701,7 @@ export class CombatUI {
             <div class="combat-unit-icons" style="--player-color: ${attackerPlayer.color}">
               <span class="combat-unit-qty">${attackQty}</span>
               ${damageMark(attackDamaged)}
-              ${attackerIcon ? `<img src="${attackerIcon}" class="combat-unit-icon${attackDamaged ? ' is-damaged' : ''}" alt="${unitType}">` : ''}
+              ${attackerIcon ? `<img src="${attackerIcon}" class="combat-unit-icon${attackDamaged ? ' is-damaged' : ''}${unitType === GARRISON ? ' is-garrison' : ''}" alt="${unitType === GARRISON ? formatUnitName(unitType) : unitType}">` : ''}
             </div>
             <span class="combat-unit-stat">A${attackValue}</span>
           </div>`;
@@ -3689,7 +3714,9 @@ export class CombatUI {
         const rowLabel = unitType === 'infantry' && pairedCount > 0 && extraInfantry > 0 ? ' (unpaired)' : '';
         const artilleryLabel = unitType === 'artillery' && pairedCount > 0 && extraArtillery > 0 ? ' (unpaired)' : '';
         const mechLabel = unitType === MECHANIZED_INFANTRY && pairedMech > 0 && extraMech > 0 ? ' (unpaired)' : '';
-        const typeLabel = unitType === MECHANIZED_INFANTRY ? formatUnitName(unitType) : unitType;
+        const typeLabel = unitType === MECHANIZED_INFANTRY || unitType === GARRISON
+          ? formatUnitName(unitType)
+          : unitType;
 
         html += `
           <div class="combat-unit-row ${showDice ? 'with-dice' : ''}">
@@ -3701,7 +3728,7 @@ export class CombatUI {
               ${defendQty > 0 ? `
                 <span class="combat-unit-stat">D${def?.defense || 0}</span>
                 <div class="combat-unit-icons" style="--player-color: ${defenderPlayer?.color || '#888'}">
-                  ${defenderIcon ? `<img src="${defenderIcon}" class="combat-unit-icon${defendDamaged ? ' is-damaged' : ''}" alt="${unitType}">` : ''}
+                  ${defenderIcon ? `<img src="${defenderIcon}" class="combat-unit-icon${defendDamaged ? ' is-damaged' : ''}${unitType === GARRISON ? ' is-garrison' : ''}" alt="${unitType === GARRISON ? formatUnitName(unitType) : unitType}">` : ''}
                   <span class="combat-unit-qty">${defendQty}</span>
                   ${damageMark(defendDamaged)}
                 </div>
@@ -3887,8 +3914,8 @@ export class CombatUI {
         return `
           <div class="dice-unit-row">
             <div class="dice-unit-info">
-              ${imageSrc ? `<img src="${imageSrc}" class="dice-unit-icon" alt="${unitType}">` : ''}
-              <span class="dice-unit-name">${unitType}</span>
+              ${imageSrc ? `<img src="${imageSrc}" class="dice-unit-icon${unitType === GARRISON ? ' is-garrison' : ''}" alt="${unitType === GARRISON ? formatUnitName(unitType) : unitType}">` : ''}
+              <span class="dice-unit-name">${unitType === GARRISON ? formatUnitName(unitType) : unitType}</span>
             </div>
             <div class="dice-unit-dice">
               ${data.rolls.slice(0, 6).map(r => `<span class="die-inline ${r.hit ? 'hit' : 'miss'}">${r.roll}</span>`).join('')}
@@ -4124,18 +4151,21 @@ export class CombatUI {
       } else {
         // Standard units
         const selectedCount = selected[u.type] || 0;
+        const garrisonHeld = u.type !== GARRISON && (Number(selected[GARRISON]) || 0) > 0;
+        const garrisonLocked = u.type === GARRISON && !garrisonHitAllowed(units, selected);
+        const casualtyName = u.type === GARRISON ? formatUnitName(u.type) : u.type;
         html += `
-          <div class="casualty-unit ${selectedCount > 0 ? 'has-casualties' : ''}">
+          <div class="casualty-unit ${selectedCount > 0 ? 'has-casualties' : ''}${u.type === GARRISON ? ' is-garrison' : ''}">
             <div class="casualty-unit-info">
-              ${imageSrc ? `<img src="${imageSrc}" class="casualty-icon" alt="${u.type}" title="${u.type}: Attack ${def?.attack || 0}, Defense ${def?.defense || 0}, Cost ${def?.cost || 0}">` : ''}
-              <span class="casualty-name">${u.type}</span>
+              ${imageSrc ? `<img src="${imageSrc}" class="casualty-icon${u.type === GARRISON ? ' is-garrison' : ''}" alt="${casualtyName}" title="${u.type === GARRISON ? 'Garrison: Defense 2. Lost last.' : `${u.type}: Attack ${def?.attack || 0}, Defense ${def?.defense || 0}, Cost ${def?.cost || 0}`}">` : ''}
+              <span class="casualty-name">${casualtyName}</span>
               <span class="casualty-avail">(${u.quantity})</span>
             </div>
             ${!readonly ? `
               <div class="casualty-controls">
-                <button class="casualty-btn minus" data-side="${side}" data-unit="${u.type}" ${selectedCount <= 0 ? 'disabled' : ''}>−</button>
+                <button class="casualty-btn minus" data-side="${side}" data-unit="${u.type}" ${selectedCount <= 0 || garrisonHeld ? 'disabled' : ''}>−</button>
                 <span class="casualty-selected">${selectedCount}</span>
-                <button class="casualty-btn plus" data-side="${side}" data-unit="${u.type}" ${selectedCount >= u.quantity || (u.type === 'submarine' && selectedCount >= this._maxLegalSubSelections(side)) ? 'disabled' : ''}>+</button>
+                <button class="casualty-btn plus" data-side="${side}" data-unit="${u.type}" ${selectedCount >= u.quantity || garrisonLocked || (u.type === 'submarine' && selectedCount >= this._maxLegalSubSelections(side)) ? 'disabled' : ''}>+</button>
               </div>
             ` : `
               <div class="casualty-controls readonly">
@@ -4189,18 +4219,21 @@ export class CombatUI {
       const def = this.unitDefs[u.type];
       const imageSrc = u.owner ? getUnitIconPath(u.type, u.owner) : (def?.image ? `assets/units/${def.image}` : null);
       const selectedCount = selectedBombardmentCasualties[u.type] || 0;
+      const garrisonHeld = u.type !== GARRISON && (Number(selectedBombardmentCasualties[GARRISON]) || 0) > 0;
+      const garrisonLocked = u.type === GARRISON && !garrisonHitAllowed(defenders, selectedBombardmentCasualties);
+      const casualtyName = u.type === GARRISON ? formatUnitName(u.type) : u.type;
 
       return `
-        <div class="casualty-unit ${selectedCount > 0 ? 'has-casualties' : ''}">
+        <div class="casualty-unit ${selectedCount > 0 ? 'has-casualties' : ''}${u.type === GARRISON ? ' is-garrison' : ''}">
           <div class="casualty-unit-info">
-            ${imageSrc ? `<img src="${imageSrc}" class="casualty-icon" alt="${u.type}" title="${u.type}: Attack ${def?.attack || 0}, Defense ${def?.defense || 0}, Cost ${def?.cost || 0}">` : ''}
-            <span class="casualty-name">${u.type}</span>
+            ${imageSrc ? `<img src="${imageSrc}" class="casualty-icon${u.type === GARRISON ? ' is-garrison' : ''}" alt="${casualtyName}" title="${u.type === GARRISON ? 'Garrison: Defense 2. Lost last.' : `${u.type}: Attack ${def?.attack || 0}, Defense ${def?.defense || 0}, Cost ${def?.cost || 0}`}">` : ''}
+            <span class="casualty-name">${casualtyName}</span>
             <span class="casualty-avail">(${u.quantity})</span>
           </div>
           <div class="casualty-controls">
-            <button class="casualty-btn minus" data-casualty-type="bombardment" data-unit="${u.type}" ${selectedCount <= 0 ? 'disabled' : ''}>−</button>
+            <button class="casualty-btn minus" data-casualty-type="bombardment" data-unit="${u.type}" ${selectedCount <= 0 || garrisonHeld ? 'disabled' : ''}>−</button>
             <span class="casualty-selected">${selectedCount}</span>
-            <button class="casualty-btn plus" data-casualty-type="bombardment" data-unit="${u.type}" ${selectedCount >= u.quantity ? 'disabled' : ''}>+</button>
+            <button class="casualty-btn plus" data-casualty-type="bombardment" data-unit="${u.type}" ${selectedCount >= u.quantity || garrisonLocked ? 'disabled' : ''}>+</button>
           </div>
         </div>
       `;
@@ -4363,6 +4396,8 @@ export class CombatUI {
 
     const unit = defenders.find(u => u.type === unitType);
     if (!unit) return;
+    if (delta > 0 && unitType === GARRISON && !garrisonHitAllowed(defenders, selectedBombardmentCasualties)) return;
+    if (delta < 0 && unitType !== GARRISON && (Number(selectedBombardmentCasualties[GARRISON]) || 0) > 0) return;
 
     const current = selectedBombardmentCasualties[unitType] || 0;
     const newValue = Math.max(0, Math.min(unit.quantity, current + delta));
@@ -4418,6 +4453,8 @@ export class CombatUI {
     const stacks = stacksOf(unitType);
     if (!stacks.length) return;
     if (unitType === 'transport' && this._sideShieldsTransports(units)) return;
+    if (delta > 0 && unitType === GARRISON && !garrisonHitAllowed(units, selectedCasualties)) return;
+    if (delta < 0 && unitType !== GARRISON && (Number(selectedCasualties[GARRISON]) || 0) > 0) return;
 
     // For battleship destruction, account for damage selections across stacks.
     let maxSelectable = stacks.reduce((sum, unit) => sum + (Number(unit.quantity) || 0), 0);
