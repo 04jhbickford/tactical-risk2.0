@@ -91,6 +91,7 @@ import { confirmNcmAirWarning } from './ui/ncmAirWarning.js';
 import { moveUnitsWithRaidPrompt, presentStrategicRaid } from './ui/raidPrompt.js';
 import { syncPushPhaseLabel } from './state/placementPass.js';
 import { VictoryScreen } from './ui/victoryScreen.js';
+import { recordLeaderboardGame } from './multiplayer/leaderboardStore.js';
 import { AIController } from './ai/aiController.js';
 import { normalizeAiDifficulty } from './ai/difficulty.js';
 import { ActionLog } from './ui/actionLog.js';
@@ -1199,6 +1200,13 @@ async function init() {
   // Initialize Firebase (if configured)
   initializeFirebase();
   const authManager = getAuthManager();
+  victoryScreen.setOnGameOver((gs) => {
+    if (!gs?.gameOver) return;
+    recordLeaderboardGame(gs, {
+      user: authManager.getUser(),
+      gameId: gs.isMultiplayer ? (gs.syncManager?.gameId || syncManager?.gameId || null) : null,
+    }).catch(() => {});
+  });
   const lobbyManager = getLobbyManager();
   presenceManager = getPresenceManager();
   setDiceSessionProvider(() => {
@@ -2649,6 +2657,7 @@ async function init() {
       requestAnimationFrame(fitPhoneCamera);
     }
   }, handlePlayOnline);
+  lobby.setLeaderboardUser(() => authManager.getUser());
   lobby.loadBoard = ensureBoard;
   lobby.setOnRulesToggle(() => {
     rulesPanel.show();

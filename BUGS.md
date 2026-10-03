@@ -2,6 +2,12 @@
 
 ---
 
+## 10.3.26 — unified.52 leaderboards
+
+Stamp `V2.81.57-unified.52`. Schema stays 11. Scores are not in the game-state save. A `V2.82-unified.51` doc is older than this tab and does not prompt. A `V2.82-unified.53` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.52`).
+
+Bastion, Discord #tactical-risk-bug-report (1555796100449829005): the main menu has a fourth option, Leaderboards. Each participating player is listed with wins, losses, and games played for Classic and Pacific, Local and Online. Preferences, opened from that board, has two controls: don't participate, and reset my scores. A signed-in human seat is written to `leaderboards/{uid}` when a game actually ends. Unsigned solo stays on this device. Hotseat without an account is not scored. Firestore rules for that collection are in the repo and are not deployed from this branch.
+
 ## 10.3.26 — unified.51 capital rectangle marker
 
 Stamp `V2.81.57-unified.51`. Schema stays 11. A `V2.82-unified.50` doc is older than this tab and does not prompt. A `V2.82-unified.52` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.51`).
