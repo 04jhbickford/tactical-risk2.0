@@ -22,6 +22,10 @@ import {
   setLeaderboardOptOut,
 } from '../multiplayer/leaderboardStore.js';
 import { AI_LEVELS, normalizeAiDifficulty } from '../ai/difficulty.js';
+import {
+  normalizeAiSpecialization,
+  specializationChoices,
+} from '../ai/specialization.js';
 export { GAME_VERSION };
 
 // Native <select> option taps land on the card under the popup.
@@ -80,6 +84,7 @@ export class Lobby {
     this.playerNames = {};
     this.playerColors = {};
     this.playerAI = {};
+    this.playerSpec = {};
     this.playerTeams = {};
     this.gameOptions = normalizeGameOptions(null);
     this.mapId = CLASSIC_MAP_ID;
@@ -393,7 +398,23 @@ export class Lobby {
               </div>
             ` : `<span class="lobby-phone-faction-meta">${meta}</span>`}
           </div>
+          ${isSelected && currentAI !== 'human' ? this._specSelect(faction.id) : ''}
         </div>
+      </div>
+    `;
+  }
+
+  _specSelect(factionId) {
+    const current = normalizeAiSpecialization(this.playerSpec?.[factionId], this.gameOptions);
+    const choices = specializationChoices(this.gameOptions);
+    const row = choices.find((item) => item.id === current) || choices[0];
+    return `
+      <div class="lobby-phone-spec">
+        <select class="ai-select spec-select modern" data-player="${factionId}" aria-label="Specialization" title="${row?.desc || ''}">
+          ${choices.map((item) => `
+            <option value="${item.id}" ${current === item.id ? 'selected' : ''} title="${item.desc}">${item.name}</option>
+          `).join('')}
+        </select>
       </div>
     `;
   }
@@ -512,6 +533,7 @@ export class Lobby {
               `).join('')}
             </select>
           </div>
+          ${isSelected && currentAI !== 'human' ? this._specSelect(faction.id) : ''}
           ${this.teamsEnabled && isSelected ? `
             <div class="team-selector">
               <button class="team-btn ${currentTeam === 1 ? 'active' : ''}" data-player="${faction.id}" data-team="1" style="--team-color: ${TEAM_COLORS[1].color}">1</button>
@@ -708,6 +730,7 @@ export class Lobby {
         e?.preventDefault?.();
         if (e.target.closest('.player-name-input')) return;
         if (e.target.closest('.ai-select')) return;
+        if (e.target.closest('.lobby-phone-spec')) return;
         if (e.target.closest('.color-picker')) return;
         if (e.target.closest('.team-btn')) return;
         if (e.target.closest('.lobby-phone-faction-tools')) return;
@@ -792,8 +815,16 @@ export class Lobby {
       });
       select.addEventListener('mousedown', (e) => e.stopPropagation());
       select.addEventListener('change', (e) => {
-        this.playerAI[e.target.dataset.player] = e.target.value;
+        const id = e.target.dataset.player;
+        if (e.target.classList.contains('spec-select')) {
+          this.playerSpec[id] = normalizeAiSpecialization(e.target.value, this.gameOptions);
+          lockCard();
+          return;
+        }
+        const prev = this.playerAI[id] || 'human';
+        this.playerAI[id] = e.target.value;
         lockCard();
+        if ((prev !== 'human') !== (e.target.value !== 'human')) this._render();
       });
       select.addEventListener('click', (e) => e.stopPropagation());
     });
@@ -909,6 +940,7 @@ export class Lobby {
         lightColor: customColor?.lightColor || factionDef.lightColor,
         isAI,
         aiDifficulty: isAI ? normalizeAiDifficulty(occupant) : null,
+        aiSpecialization: isAI ? normalizeAiSpecialization(this.playerSpec?.[id], this.gameOptions) : null,
         teamId: teamId,
       };
     });

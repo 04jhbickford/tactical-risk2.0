@@ -3255,9 +3255,10 @@ export class GameState {
     const isAllied = toOwner && toOwner !== player.id && this.areAllies(player.id, toOwner);
     const hostileSea = !!(toT?.isWater && seaZoneHasEnemyForAirAttack(this, toTerritory, player.id));
 
-    // The AI always makes a normal attack. A human moving strategic bombers
-    // onto an enemy factory must choose before the move is committed.
-    const raidChoice = player.isAI ? false : options.raid;
+    // Humans choose. The AI raids only when the caller passes raid: true
+    // (Bombadere factory raids). Every other AI move stays a normal attack
+    // and never sees the prompt.
+    const raidChoice = player.isAI ? options.raid === true : options.raid;
     const raid = raidChoice === true && enemyFactoryAt(this, toTerritory, player.id);
     if (raidPromptApplies({
       gameState: this,

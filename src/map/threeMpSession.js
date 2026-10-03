@@ -290,6 +290,7 @@ export function createThreeMpSession({ setup, territories, continents }) {
           lightColor: p.color || factionDef?.lightColor,
           isAI: p.isAI || false,
           aiDifficulty: p.aiDifficulty || null,
+          aiSpecialization: p.aiSpecialization || null,
           oderId: p.oderId,
           discordUserId: p.discordUserId || '',
           discordName: p.discordName || '',

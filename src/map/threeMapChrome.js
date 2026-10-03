@@ -16,6 +16,7 @@ import {
   lobbyCanStart,
   lobbyStartLabel,
   seatOccupantView,
+  specializationSelectHtml,
 } from './threeSoloLobby.js';
 import {
   SETUP_TUTORIAL_STEPS,
@@ -192,6 +193,7 @@ function compactLocalSeatHtml(faction, model) {
         <span class="three-lobby-seat-name">${faction.name || faction.id}</span>
       </button>
       ${occupantSelectHtml(faction, view)}
+      ${specializationSelectHtml(faction, model)}
       ${on && model.teamsEnabled ? `
         <select class="three-lobby-select three-lobby-team-select" data-lobby-select="team" data-seat="${faction.id}" aria-label="${faction.name || faction.id} team">
           <option value="0" ${!team ? 'selected' : ''}>—</option>
@@ -2569,6 +2571,7 @@ export function injectThreeChrome({ seat = 'Russians', ipc = 24, phase = 'PLACE'
     const seat = sel.dataset.seat;
     const value = sel.value;
     if (kind === 'occupant') api.onLobbyChange('occupant', `${seat}:${value}`);
+    else if (kind === 'spec') api.onLobbyChange('spec', `${seat}:${value}`);
     else if (kind === 'team') api.onLobbyChange('team', `${seat}:${value}`);
     else if (kind === 'mp-occupant') {
       if (value === 'empty' || value === 'human') api.onLobbyChange('mp-faction', seat);

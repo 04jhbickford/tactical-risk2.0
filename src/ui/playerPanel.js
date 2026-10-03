@@ -23,6 +23,7 @@ import { landBlitzOptions, mechanizedInfantryEnabled } from '../state/mechanized
 import { getUnitIconPath } from '../utils/unitIcons.js';
 import { formatUnitName } from '../utils/unitNames.js';
 import { aiLevelLabel } from '../ai/difficulty.js';
+import { aiSpecializationLabel, normalizeAiSpecialization } from '../ai/specialization.js';
 import { possessivePhrase } from '../utils/possessive.js';
 import {
   DESKTOP_MIN_WIDTH,
@@ -2332,7 +2333,11 @@ export class PlayerPanel {
   _renderHeader(player, isMultiplayer = false, isLocalPlayerTurn = true, isOwnSeat = isLocalPlayerTurn) {
     const ipcs = this.gameState.getIPCs(player.id);
     const territories = this.gameState.getPlayerTerritories(player.id).length;
-    const aiLabel = player.isAI ? `<span class="pp-ai-badge">${aiLevelLabel(player.aiDifficulty).toUpperCase() || 'AI'}</span>` : '';
+    const specId = player.isAI
+      ? normalizeAiSpecialization(player.aiSpecialization, this.gameState?.gameOptions)
+      : 'general';
+    const specBit = specId === 'general' ? '' : ` · ${aiSpecializationLabel(specId).toUpperCase()}`;
+    const aiLabel = player.isAI ? `<span class="pp-ai-badge">${aiLevelLabel(player.aiDifficulty).toUpperCase() || 'AI'}${specBit}</span>` : '';
     const textColor = this._getContrastColor(player.color);
 
     // Identity bar + WAITING badge follow the loaded seat, not the optimistic

@@ -19,6 +19,7 @@ import { getFirebaseDb } from './firebase.js';
 import { getAuthManager } from './auth.js';
 import { possessivePhrase } from '../utils/possessive.js';
 import { aiLevelLabel, normalizeAiDifficulty, DEFAULT_AI_DIFFICULTY } from '../ai/difficulty.js';
+import { normalizeAiSpecialization } from '../ai/specialization.js';
 import {
   mergeMyActiveGames,
   resolveJoinByCode,
@@ -865,7 +866,7 @@ export class LobbyManager {
   }
 
   // Add AI player (host only)
-  async addAIPlayer(difficulty, factionId, color) {
+  async addAIPlayer(difficulty, factionId, color, specialization) {
     if (!this.currentLobby) return { success: false, error: 'Not in lobby' };
 
     const user = this.authManager.getUser();
@@ -876,6 +877,7 @@ export class LobbyManager {
     const aiId = `ai_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const level = normalizeAiDifficulty(difficulty);
     const stored = level === 'human' ? DEFAULT_AI_DIFFICULTY : level;
+    const flavor = normalizeAiSpecialization(specialization, this.currentLobby?.settings?.gameOptions);
 
     const aiPlayer = {
       oderId: aiId,
@@ -886,6 +888,7 @@ export class LobbyManager {
       isHost: false,
       isAI: true,
       aiDifficulty: stored,
+      aiSpecialization: flavor,
       joinedAt: Date.now()
     };
 

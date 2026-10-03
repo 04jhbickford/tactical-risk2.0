@@ -5,6 +5,11 @@ import { getLobbyManager } from '../multiplayer/lobbyManager.js';
 import { getAuthManager } from '../multiplayer/auth.js';
 import { GAME_VERSION } from './lobby.js';
 import { AI_LEVELS, DEFAULT_AI_DIFFICULTY, aiLevelLabel } from '../ai/difficulty.js';
+import {
+  aiSpecializationLabel,
+  normalizeAiSpecialization,
+  specializationChoices,
+} from '../ai/specialization.js';
 import { captureLobbyScroll, restoreLobbyScroll } from './lobbyScroll.js';
 import { possessivePhrase } from '../utils/possessive.js';
 import {
@@ -1084,6 +1089,9 @@ export class MultiplayerLobby {
                     <div class="mp-player-badges">
                       ${player.isHost ? '<span class="badge host">HOST</span>' : ''}
                       ${isAI ? `<span class="badge ai">${aiLevelLabel(player.aiDifficulty).toUpperCase() || 'AI'}</span>` : ''}
+                      ${isAI && normalizeAiSpecialization(player.aiSpecialization, roomOptions) !== 'general'
+                        ? `<span class="badge ai">${aiSpecializationLabel(player.aiSpecialization, roomOptions).toUpperCase()}</span>`
+                        : ''}
                       ${!isAI && !player.isHost ? `<span class="badge ${player.isReady ? 'ready' : 'waiting'}">${player.isReady ? 'READY' : 'SELECTING'}</span>` : ''}
                     </div>
                     ${lobbyPlayerDiscordHtml({
@@ -1557,6 +1565,11 @@ export class MultiplayerLobby {
     const availableFaction = factions.find(f => !takenFactions.has(f.id));
     const availableColor = FACTION_COLORS.find(c => !takenColors.has(c.color));
 
+    const specOptions = this.mode === 'create'
+      ? this._draftOptions
+      : optionsFromSettings(lobby?.settings);
+    const specChoices = specializationChoices(specOptions);
+
     // Create dialog
     const dialog = document.createElement('div');
     dialog.className = 'mp-ai-dialog-overlay';
@@ -1567,6 +1580,12 @@ export class MultiplayerLobby {
           <label>Difficulty</label>
           <select id="ai-difficulty">
             ${AI_LEVELS.map(d => `<option value="${d.id}" ${d.id === DEFAULT_AI_DIFFICULTY ? 'selected' : ''}>${d.name}</option>`).join('')}
+          </select>
+        </div>
+        <div class="mp-field">
+          <label>Specialization</label>
+          <select id="ai-specialization">
+            ${specChoices.map((row) => `<option value="${row.id}" ${row.id === 'general' ? 'selected' : ''} title="${row.desc}">${row.name}</option>`).join('')}
           </select>
         </div>
         <div class="mp-field">
@@ -1605,11 +1624,12 @@ export class MultiplayerLobby {
 
     dialog.querySelector('[data-action="confirm-ai"]').addEventListener('click', async () => {
       const difficulty = dialog.querySelector('#ai-difficulty').value;
+      const specialization = dialog.querySelector('#ai-specialization').value;
       const factionId = dialog.querySelector('#ai-faction').value;
       const color = dialog.querySelector('#ai-color').value;
       if (!factionId || takenFactions.has(factionId)) return;
 
-      await this.lobbyManager.addAIPlayer(difficulty, factionId, color);
+      await this.lobbyManager.addAIPlayer(difficulty, factionId, color, specialization);
       dialog.remove();
     });
 
