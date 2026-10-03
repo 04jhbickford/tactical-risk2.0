@@ -2,6 +2,12 @@
 
 ---
 
+## 10.3.26 — unified.56 victory button label
+
+Stamp `V2.81.57-unified.56`. Schema stays 11. The victory overlay button says Quit game. It still reloads, which returns to the main menu. Solo and multiplayer share that overlay. A `V2.82-unified.55` doc is older than this tab and does not prompt. A `V2.82-unified.57` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.56`).
+
+Bastion, Discord #tactical-risk-bug-report (1556024894607724686): the victory button said New Game and then sent the player to the main menu.
+
 ## 10.3.26 — unified.55 AI specialization
 
 Stamp `V2.81.57-unified.55`. Schema stays 11. Each AI seat has a specialization beside difficulty. The default is General, which is today's AI. Admiral, Infantry Man, Blitzkrieg, Logistics Officer, and Bombadere are always listed. Rico is listed only while the host Nukes option is on. That option defaults off, does nothing to combat, and a save or lobby that omits it loads off. A missing specialization loads as General. A `V2.82-unified.54` doc is older than this tab and does not prompt. A `V2.82-unified.56` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.55`).

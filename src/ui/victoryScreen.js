@@ -51,7 +51,7 @@ export class VictoryScreen {
         <div class="victory-details">
           ${this._getVictoryDetails()}
         </div>
-        <button class="victory-btn" id="victoryNewGame">New Game</button>
+        <button class="victory-btn" id="victoryNewGame">Quit game</button>
       </div>
     `;
 
@@ -61,7 +61,7 @@ export class VictoryScreen {
       console.warn('[leaderboard] record failed', err);
     }
 
-    // Bind new game button
+    // Reload returns to the main menu. The label matches that.
     this.el.querySelector('#victoryNewGame').addEventListener('click', () => {
       window.location.reload();
     });
