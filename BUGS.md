@@ -2,6 +2,12 @@
 
 ---
 
+## 10.3.26 — unified.47 home screen painting
+
+Stamp `V2.81.57-unified.47`. Schema stays 11. A `V2.82-unified.46` doc is older than this tab and does not prompt. A `V2.82-unified.48` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.47`).
+
+The picture on the left of the first screen, on a window wider than 900px, is the supplied painting. It reads Tactical Risk and Grand Strategy over a world map with infantry, ships, and aircraft. The menu stays on the right. A window 900px or narrower still hides that half so the menu fits. The file is the supplied image, byte for byte.
+
 ## 10.3.26 — unified.45 four AI levels
 
 Stamp `V2.81.57-unified.45`. Schema stays 11. A `V2.82-unified.44` doc is older than this tab and does not prompt. A `V2.82-unified.46` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.45`).

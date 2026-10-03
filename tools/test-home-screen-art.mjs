@@ -1,0 +1,54 @@
+// Home-screen painting. The lobby left half uses this file as supplied.
+// Run: node tools/test-home-screen-art.mjs
+
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const { GAME_VERSION, SCHEMA_VERSION, compareGameVersions, compatClientVersion } =
+  await import(pathToFileURL(join(root, 'src/version.js')));
+
+const ART = 'assets/Pictures/grok-image-702f41b9-ce2d-4291-a3b2-4f29bd8e8695.png';
+const SHA256 = '236c6ecc7d279afa3abcd2c369dbb9e59debf03f739ec8840ffdf242ef6b74b4';
+const BYTES = 719848;
+
+let failures = 0;
+const check = (label, cond) => {
+  if (!cond) {
+    failures += 1;
+    console.error('FAIL:', label);
+  } else console.log('ok  :', label);
+};
+
+const css = readFileSync(join(root, 'style.css'), 'utf8');
+const html = readFileSync(join(root, 'index.html'), 'utf8');
+const bytes = readFileSync(join(root, ART));
+const hash = createHash('sha256').update(bytes).digest('hex');
+const url = `url('${ART}')`;
+
+check('display stamp is V2.81.57-unified.47', GAME_VERSION === 'V2.81.57-unified.47');
+check('schema stays 11', SCHEMA_VERSION === 11);
+check('game docs write V2.82-unified.47', compatClientVersion() === 'V2.82-unified.47');
+check('a V2.82-unified.46 doc does not prompt this tab',
+  compareGameVersions('V2.82-unified.46', GAME_VERSION) < 0);
+check('a V2.82-unified.48 doc prompts this tab',
+  compareGameVersions('V2.82-unified.48', GAME_VERSION) > 0);
+check('our own V2.82-unified.47 doc does not prompt',
+  compareGameVersions('V2.82-unified.47', GAME_VERSION) === 0);
+check('index.html carries the display stamp',
+  html.includes('content="V2.81.57-unified.47"')
+  && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.47'")
+  && html.includes("var LOCKED = 'V2.81.57-unified.47'")
+  && html.includes('style.css?v=V2.81.57-unified.47')
+  && html.includes('src/main.js?v=V2.81.57-unified.47'));
+check('both lobby backgrounds point at the painting',
+  css.split(url).length - 1 === 2);
+check('painting bytes are the supplied file', hash === SHA256 && bytes.length === BYTES);
+
+if (failures) {
+  console.error(`${failures} failed`);
+  process.exit(1);
+}
+console.log('home screen art ok');
