@@ -2,6 +2,12 @@
 
 ---
 
+## 10.3.26 — unified.57 air-only victory copy
+
+Stamp `V2.81.57-unified.57`. Schema stays 11. When an attack clears the enemy and only aircraft remain, the combat result says "Victory - but the territory remains under their control." A win that still has a land unit, or a sea unit in a sea zone, keeps the capture line. Ownership rules are unchanged. A `V2.82-unified.56` doc is older than this tab and does not prompt. A `V2.82-unified.58` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.57`).
+
+Bastion, Discord #tactical-risk-bug-report (1556023491898253363): wiping a territory with only aircraft left is a victory, and the territory stays with the defender. The result must not read as if the attacker took it.
+
 ## 10.3.26 — unified.56 victory button label
 
 Stamp `V2.81.57-unified.56`. Schema stays 11. The victory overlay button says Quit game. It still reloads, which returns to the main menu. Solo and multiplayer share that overlay. A `V2.82-unified.55` doc is older than this tab and does not prompt. A `V2.82-unified.57` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.56`).

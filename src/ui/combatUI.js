@@ -268,6 +268,38 @@ export function phoneCombatAttackerWinPercent({
   return Math.max(5, Math.min(95, probability));
 }
 
+// Land units take a land territory. A sea unit that clears a sea zone keeps
+// the existing "captures" line. Aircraft do not take either.
+export const AIR_ONLY_VICTORY_NOTE = 'Victory - but the territory remains under their control.';
+
+export function attackerSurvivorsCaptureTerritory(attackers, unitDefs) {
+  return (attackers || []).some((unit) => {
+    if (!unit || unit.type === 'aaGun') return false;
+    if ((Number(unit.quantity) || 0) <= 0) return false;
+    const def = unitDefs?.[unit.type];
+    return !!(def && def.isLand);
+  });
+}
+
+function attackerSurvivorsIncludeSea(attackers, unitDefs) {
+  return (attackers || []).some((unit) => {
+    if (!unit || (Number(unit.quantity) || 0) <= 0) return false;
+    return !!unitDefs?.[unit.type]?.isSea;
+  });
+}
+
+export function combatVictoryClaimsCapture({
+  winner = null,
+  attackers = [],
+  unitDefs = {},
+  isWater = false,
+} = {}) {
+  if (winner !== 'attacker') return false;
+  if (attackerSurvivorsCaptureTerritory(attackers, unitDefs)) return true;
+  if (isWater && attackerSurvivorsIncludeSea(attackers, unitDefs)) return true;
+  return false;
+}
+
 export function formatPhoneCombatHeroOdds({
   attackerWinPercent = 0,
   territoryName = '',
@@ -275,14 +307,18 @@ export function formatPhoneCombatHeroOdds({
   hasDefenders = false,
   phase = null,
   winner = null,
+  captured = true,
 } = {}) {
   const land = String(territoryName || '').trim();
   if (phase === 'resolved') {
     if (winner === 'attacker') {
+      const took = captured !== false;
       return {
         percent: 100,
         text: '100%',
-        label: land ? `Taken · ${land}` : 'Territory taken',
+        label: took
+          ? (land ? `Taken · ${land}` : 'Territory taken')
+          : (land ? `Not taken · ${land}` : 'Territory not taken'),
       };
     }
     return {
@@ -2359,10 +2395,10 @@ export class CombatUI {
     // Update territory ownership if attacker won AND has land units
     // Air units cannot capture territory - only land units can
     if (this.combatState.winner === 'attacker') {
-      const hasLandUnit = this.combatState.attackers.some(u => {
-        const def = this.unitDefs[u.type];
-        return def && def.isLand && u.quantity > 0 && u.type !== 'aaGun';
-      });
+      const hasLandUnit = attackerSurvivorsCaptureTerritory(
+        this.combatState.attackers,
+        this.unitDefs,
+      );
 
       if (hasLandUnit) {
         const capture = applyTerritoryCapture(this.gameState, this.currentTerritory, {
@@ -2723,10 +2759,7 @@ export class CombatUI {
       html += `
         <div class="combat-result ${winner}">
           <div class="result-message">
-            ${winner === 'attacker'
-              ? `<span style="color: ${player.color}">${player.name}</span> captures ${this.currentTerritory}!`
-              : `<span style="color: ${defenderPlayer?.color || '#888'}">${defenderPlayer?.name || 'Defender'}</span> holds ${this.currentTerritory}!`
-            }
+            ${this._renderResolvedResultMessage(player, defenderPlayer, winner)}
           </div>
         </div>
 
@@ -3243,9 +3276,7 @@ export class CombatUI {
       return `
         <div class="combat-result ${winner}">
           <div class="result-message">
-            ${winner === 'attacker'
-              ? `<span style="color: ${player.color}">${player.name}</span> captures ${this.currentTerritory}!`
-              : `<span style="color: ${defenderPlayer?.color || '#888'}">${defenderPlayer?.name || 'Defender'}</span> holds ${this.currentTerritory}!`}
+            ${this._renderResolvedResultMessage(player, defenderPlayer, winner)}
           </div>
         </div>
         <div class="battle-summary">
@@ -3417,6 +3448,20 @@ export class CombatUI {
     return html;
   }
 
+  _renderResolvedResultMessage(player, defenderPlayer, winner) {
+    const captured = combatVictoryClaimsCapture({
+      winner,
+      attackers: this.combatState?.attackers,
+      unitDefs: this.unitDefs,
+      isWater: this._currentTerritoryIsWater(),
+    });
+    if (winner === 'attacker' && !captured) return AIR_ONLY_VICTORY_NOTE;
+    if (winner === 'attacker') {
+      return `<span style="color: ${player.color}">${player.name}</span> captures ${this.currentTerritory}!`;
+    }
+    return `<span style="color: ${defenderPlayer?.color || '#888'}">${defenderPlayer?.name || 'Defender'}</span> holds ${this.currentTerritory}!`;
+  }
+
   _renderPhoneCombatSummary(attackerPlayer, defenderPlayer, phase, winner, { compact = false } = {}) {
     const { attackers, defenders } = this.combatState;
     const atk = formatAttackerCombatLine(attackers, {
@@ -3431,6 +3476,12 @@ export class CombatUI {
       hasDefenders: this._getTotalUnits(defenders) > 0,
       phase,
       winner,
+      captured: combatVictoryClaimsCapture({
+        winner,
+        attackers,
+        unitDefs: this.unitDefs,
+        isWater: this._currentTerritoryIsWater(),
+      }),
     });
     const detail = this.phoneCombatDetailSide;
     const detailUnits = detail === 'defender' ? defenders : attackers;
