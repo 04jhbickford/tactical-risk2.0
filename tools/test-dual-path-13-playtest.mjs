@@ -112,7 +112,7 @@ console.log('=== 9.21.26.01 land-only sea zone is not a combat attack ===');
     (gs.units['East US'] || []).some((u) => u.type === 'infantry' && u.quantity === 2));
 }
 
-console.log('=== 9.21.26.02 fighters cannot end combat over open water ===');
+console.log('=== 9.21.26.02 fighters cannot end non-combat over open water ===');
 {
   const gs = board();
   gs.turnPhase = TURN_PHASES.COMBAT;
@@ -123,11 +123,12 @@ console.log('=== 9.21.26.02 fighters cannot end combat over open water ===');
     looseAirOverWater(gs.units, gs.territoryByName, 'usa', unitDefs)
       .some((a) => a.territory === 'Caribbean Sea Zone' && a.type === 'fighter'));
   gs.nextPhase();
-  const still = looseAirOverWater(gs.units, gs.territoryByName, 'usa', unitDefs);
-  check('phase advance cleared loose fighters', still.length === 0);
-  const landed = (gs.units['East US'] || []).some((u) => u.type === 'fighter')
-    || (gs.units['East Canada'] || []).some((u) => u.type === 'fighter' && (u.quantity || 0) >= 1);
-  check('fighter landed on a friendly territory', landed);
+  check('non-combat starts with the fighter still over the sea',
+    gs.turnPhase === TURN_PHASES.NON_COMBAT_MOVE
+    && (gs.units['Caribbean Sea Zone'] || []).some((u) => u.type === 'fighter' && u.quantity === 1));
+  gs.nextPhase();
+  check('the fighter is lost at the end of non-combat with no legal landing',
+    !(gs.units['Caribbean Sea Zone'] || []).some((u) => u.type === 'fighter' && (u.quantity || 0) > 0));
 
   const blocked = board();
   blocked.turnPhase = TURN_PHASES.COMBAT;

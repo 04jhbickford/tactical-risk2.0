@@ -4,7 +4,7 @@ import { TURN_PHASES } from '../state/gameState.js';
 import { landBlitzOptions } from '../state/mechanizedInfantry.js';
 import { getUnitIconPath } from '../utils/unitIcons.js';
 import { airCombatMoveMayOccupy, combatMoveReachableDests, maxMoveSelection, seaZoneHasEnemyForAirAttack } from '../state/combatMoveEligibility.js';
-import { hasLegalAirLandingFrom, wasFriendlyAtTurnStart } from '../state/airLanding.js';
+import { combatAirReturnRange, hasLegalAirLandingFrom, wasFriendlyAtTurnStart } from '../state/airLanding.js';
 import { isLandingCarrier } from '../state/carrierPlacement.js';
 import { moveUnitsWithRaidPrompt } from './raidPrompt.js';
 import { raiderNcmMovementRange } from '../state/strategicBombing.js';
@@ -422,7 +422,9 @@ export class MovementUI {
 
   // Get the maximum movement range of selected air units.
   // A raiding bomber in Non-Combat Move keeps only the movement left
-  // after the flight to the factory. Other aircraft stay on catalog range.
+  // after the flight to the factory. Classic aircraft that already flew
+  // in combat keep that same remaining movement. Other aircraft stay on
+  // catalog range.
   _getMaxAirMovementRange() {
     let maxRange = 0;
     let sawAir = false;
@@ -435,8 +437,8 @@ export class MovementUI {
       if (!def?.isAir) continue;
       sawAir = true;
       let range = def.movement || 0;
+      const total = longRange ? range + 2 : range;
       if (nonCombat && type === 'bomber' && player && this.selectedFrom) {
-        const total = longRange ? range + 2 : range;
         const remaining = raiderNcmMovementRange(this.gameState, {
           fromTerritory: this.selectedFrom.name,
           quantity: qty,
@@ -444,6 +446,12 @@ export class MovementUI {
           totalMovement: total,
         });
         if (remaining != null) range = remaining;
+      }
+      if (nonCombat && player && this.selectedFrom) {
+        const returned = combatAirReturnRange(this.gameState, this.selectedFrom.name, type, total);
+        if (returned != null) {
+          range = range === (def.movement || 0) ? returned : Math.min(range, returned);
+        }
       }
       if (range > maxRange) maxRange = range;
     }

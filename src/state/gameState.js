@@ -16,9 +16,11 @@ import {
   orderClassicPlayers,
 } from './classicSeats.js';
 import {
+  airLandsDuringNonCombat,
   applyAirLandingPlan,
   buildLandingPlan,
   clearPendingLandingDestinations,
+  combatAirReturnRange,
   hasLegalAirLandingFrom,
   looseAirOverWater,
   isAirUnitType,
@@ -3075,6 +3077,12 @@ export class GameState {
         this._destroyNcmAirWithoutLanding(defs);
         return;
       }
+      // Classic air stays on the battle hex and flies home in non-combat.
+      // Pacific still lands or crashes on the way out of combat.
+      if (airLandsDuringNonCombat(this)) {
+        this._releaseAirForNonCombatLanding(defs);
+        return;
+      }
       this.relocateAirFromCapturedLand(defs);
       this.resolveLooseAirOverWater(defs);
     };
@@ -3404,6 +3412,7 @@ export class GameState {
       // Apply Long Range Aircraft tech bonus (+2 movement for fighters and bombers)
       const baseMovement = unitDef.movement || 4;
       let movementRange = hasLongRangeAircraft ? baseMovement + 2 : baseMovement;
+      const catalogRange = movementRange;
       // A raiding bomber returns with the movement it has not already spent.
       // The same gate covers a human click and an AI moveUnits call.
       if (isNonCombatMove && airUnit.type === 'bomber') {
@@ -3415,9 +3424,17 @@ export class GameState {
         });
         if (remaining != null) movementRange = remaining;
       }
+      // Classic aircraft that fought keep only the movement not already spent.
+      if (isNonCombatMove) {
+        const returned = combatAirReturnRange(this, fromTerritory, airUnit.type, catalogRange);
+        if (returned != null) movementRange = Math.min(movementRange, returned);
+      }
 
+      // A carrier in this sea zone is a landing. The reachability search
+      // does not list the hex the aircraft is already in.
+      const sameZoneCarrier = isNonCombatMove && fromTerritory === toTerritory && !!toT?.isWater;
       // Check if destination is reachable within air unit's movement range
-      if (!this.canAirUnitReach(fromTerritory, toTerritory, movementRange)) {
+      if (!sameZoneCarrier && !this.canAirUnitReach(fromTerritory, toTerritory, movementRange)) {
         return { success: false, error: `${airUnit.type} cannot reach ${toTerritory} (movement: ${movementRange})` };
       }
 
@@ -7381,6 +7398,78 @@ export class GameState {
     }
     if (landed > 0 || crashed > 0 || parked > 0) this._notify();
     return { landed, crashed, parked };
+  }
+
+  // Classic only. Aircraft that fought and are not already on a legal
+  // landing can fly during non-combat, using the movement already tracked
+  // on airUnitOrigins. Friendly land they reached in combat move stays put.
+  _releaseAirForNonCombatLanding(unitDefs = this._unitDefs || this.unitDefs || {}) {
+    const player = this.currentPlayer;
+    if (!player) return;
+    for (const [name, stacks] of Object.entries(this.units || {})) {
+      const territory = this.territoryByName?.[name];
+      if (!territory) continue;
+      if (!territory.isWater && wasFriendlyAtTurnStart(this, name, player.id)) continue;
+      for (const unit of stacks || []) {
+        if (unit?.owner !== player.id || !isAirUnitType(unit.type, unitDefs)) continue;
+        if (!unit.moved) continue;
+        delete unit.moved;
+      }
+    }
+  }
+
+  // Host AI turn: fly Classic aircraft that are still airborne to the
+  // nearest legal landing. No legal spot stays on the board until the
+  // end of non-combat destroys it. Pacific is unchanged.
+  landAirDuringNonCombat(unitDefs = this._unitDefs || this.unitDefs || {}) {
+    if (!airLandsDuringNonCombat(this)) return { landed: 0 };
+    const player = this.currentPlayer;
+    if (!player) return { landed: 0 };
+    let landed = 0;
+    for (const name of Object.keys(this.units || {})) {
+      const territory = this.territoryByName?.[name];
+      if (!territory) continue;
+      if (!territory.isWater && wasFriendlyAtTurnStart(this, name, player.id)) continue;
+      const groups = [];
+      for (const unit of this.units[name] || []) {
+        if (unit?.owner !== player.id || !isAirUnitType(unit.type, unitDefs)) continue;
+        const quantity = Number(unit.quantity) || 0;
+        if (quantity <= 0) continue;
+        groups.push({ type: unit.type, quantity });
+      }
+      for (const group of groups) {
+        let left = group.quantity;
+        let guard = 0;
+        while (left > 0 && guard++ < 80) {
+          const options = (this.getAirLandingOptions(name, group.type, unitDefs) || [])
+            .filter((opt) => opt?.territory && (opt.territory !== name || opt.isCarrier));
+          const choice = preferAirLandingOption(options);
+          if (!choice?.territory) break;
+          const applied = applyAirLandingPlan({
+            units: this.units,
+            territoryByName: this.territoryByName,
+            originTerritory: name,
+            owner: player.id,
+            plan: [{
+              id: `${group.type}_ncm_${guard}`,
+              type: group.type,
+              quantity: 1,
+              destination: choice.territory,
+            }],
+            unitDefs,
+            gameState: this,
+          });
+          const moved = (applied || []).reduce((sum, item) => (
+            sum + (item.stayed ? 0 : (item.quantity || 0))
+          ), 0);
+          if (moved <= 0) break;
+          landed += moved;
+          left -= moved;
+        }
+      }
+    }
+    if (landed > 0) this._notify();
+    return { landed };
   }
 
   // === PENDING AIR LANDINGS ===

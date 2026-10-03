@@ -352,10 +352,12 @@ console.log('=== end of non-combat move ===');
     'North Sea': [{ type: 'fighter', quantity: 1, owner: 'usa' }],
   };
   rescue.nextPhase();
-  check('ncm: leaving combat still flies a loose fighter home',
+  check('ncm: leaving combat leaves a loose fighter airborne',
     rescue.turnPhase === TURN_PHASES.NON_COMBAT_MOVE
-    && (rescue.units['North Sea'] || []).some((u) => u.type === 'fighter') === false
-    && (rescue.units['Eastern United States'] || []).some((u) => u.type === 'fighter'));
+    && (rescue.units['North Sea'] || []).some((u) => u.type === 'fighter'));
+  rescue.nextPhase();
+  check('ncm: that fighter is lost at the end of non-combat if it never lands',
+    !(rescue.units['North Sea'] || []).some((u) => u.type === 'fighter'));
 
   const aboard = makePlayingState();
   aboard.turnPhase = TURN_PHASES.NON_COMBAT_MOVE;

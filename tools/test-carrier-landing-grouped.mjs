@@ -1,4 +1,6 @@
-// V2.81.57-unified.33 — a fighter that lands on a grouped carrier survives finalize.
+// A fighter that lands on a grouped carrier survives.
+// Pacific still boards through the combat landing picker.
+// Classic boards during non-combat movement.
 // Run: node tools/test-carrier-landing-grouped.mjs
 
 import { readFileSync } from 'fs';
@@ -78,7 +80,7 @@ const MAP = [
   T('Egypt', false, ['Red Sea']),
 ];
 
-function landOnCarrier(carrierId) {
+function seaBoard(carrierId) {
   const gs = board(MAP);
   gs.territoryState = { Egypt: { owner: 'Germans' } };
   const carrier = { type: 'carrier', quantity: 1, owner: 'Germans', moved: true };
@@ -92,6 +94,14 @@ function landOnCarrier(carrierId) {
   };
   gs.units['Arabian Sea'] = [{ type: 'transport', quantity: 1, owner: 'Americans' }];
   gs.combatQueue = ['Red Sea'];
+  gs._unitDefs = unitDefs;
+  gs.unitDefs = unitDefs;
+  return gs;
+}
+
+function landOnCarrier(carrierId) {
+  const gs = seaBoard(carrierId);
+  gs.mapId = 'pacific';
   const ui = new CombatUI();
   ui.setGameState(gs);
   ui.setUnitDefs(unitDefs);
@@ -100,9 +110,32 @@ function landOnCarrier(carrierId) {
   ui.combatState.winner = 'attacker';
   ui._checkAirLanding();
   const air = ui.combatState.airUnitsToLand || [];
-  check(`${carrierId || 'grouped'} offers the battle-zone carrier`, (air[0]?.landingOptions || []).some((opt) => opt.territory === 'Red Sea' && opt.isCarrier));
+  const label = `pacific ${carrierId || 'grouped'}`;
+  check(`${label} offers the battle-zone carrier`, (air[0]?.landingOptions || []).some((opt) => opt.territory === 'Red Sea' && opt.isCarrier));
   ui.combatState.selectedLandings = { [air[0].id]: 'Red Sea' };
   ui._confirmAirLandings();
+  return gs;
+}
+
+function landClassicDuringNonCombat(carrierId) {
+  const gs = seaBoard(carrierId);
+  gs.mapId = 'classic';
+  const label = `classic ${carrierId || 'grouped'}`;
+  const ui = new CombatUI();
+  ui.setGameState(gs);
+  ui.setUnitDefs(unitDefs);
+  ui.showNextCombat();
+  ui.combatState.defenders = [];
+  ui.combatState.winner = 'attacker';
+  ui._checkAirLanding();
+  check(`${label} stays airborne when combat ends`,
+    ui.combatState.phase === 'resolved' && fightersAboard(gs) === 0 && !(ui.combatState.airUnitsToLand || []).length);
+  gs.combatQueue = [];
+  gs.nextPhase();
+  check(`${label} non-combat still has the loose fighter`,
+    gs.turnPhase === TURN_PHASES.NON_COMBAT_MOVE && fightersAboard(gs) === 0);
+  const moved = gs.moveUnits('Red Sea', 'Red Sea', [{ type: 'fighter', quantity: 1 }], unitDefs);
+  check(`${label} boards the carrier in non-combat`, moved.success === true, moved);
   return gs;
 }
 
@@ -114,24 +147,48 @@ function fightersAboard(gs) {
 
 for (const id of [null, 'carrier_Germans_1']) {
   const gs = landOnCarrier(id);
-  check(`${id || 'grouped'} fighter is on the carrier after finalize`, fightersAboard(gs) === 1, gs.units['Red Sea']);
+  const label = `pacific ${id || 'grouped'}`;
+  check(`${label} fighter is on the carrier after finalize`, fightersAboard(gs) === 1, gs.units['Red Sea']);
   const saved = gs.toJSON();
   const loaded = new GameState({ risk: { factions: [] } }, MAP, []);
   loaded.loadFromJSON(saved);
   const aboard = (loaded.units['Red Sea'] || [])
     .filter((unit) => unit.type === 'carrier')
     .reduce((sum, carrier) => sum + (carrier.aircraft?.length || 0), 0);
-  check(`${id || 'grouped'} fighter survives save/load`, aboard === 1);
+  check(`${label} fighter survives save/load`, aboard === 1);
   loaded.nextTurn();
   const afterOpponent = (loaded.units['Red Sea'] || [])
     .filter((unit) => unit.type === 'carrier')
     .reduce((sum, carrier) => sum + (carrier.aircraft?.length || 0), 0);
-  check(`${id || 'grouped'} fighter survives the opponent's turn`, afterOpponent === 1 && loaded.currentPlayer.id === 'Americans');
+  check(`${label} fighter survives the opponent's turn`, afterOpponent === 1 && loaded.currentPlayer.id === 'Americans');
   loaded.nextTurn();
   const afterReturn = (loaded.units['Red Sea'] || [])
     .filter((unit) => unit.type === 'carrier')
     .reduce((sum, carrier) => sum + (carrier.aircraft?.length || 0), 0);
-  check(`${id || 'grouped'} fighter is still aboard when the turn comes back`, afterReturn === 1 && loaded.currentPlayer.id === 'Germans');
+  check(`${label} fighter is still aboard when the turn comes back`, afterReturn === 1 && loaded.currentPlayer.id === 'Germans');
+}
+
+for (const id of [null, 'carrier_Germans_1']) {
+  const gs = landClassicDuringNonCombat(id);
+  const label = `classic ${id || 'grouped'}`;
+  check(`${label} fighter is on the carrier after non-combat`, fightersAboard(gs) === 1, gs.units['Red Sea']);
+  const saved = gs.toJSON();
+  const loaded = new GameState({ risk: { factions: [] } }, MAP, []);
+  loaded.loadFromJSON(saved);
+  const aboard = (loaded.units['Red Sea'] || [])
+    .filter((unit) => unit.type === 'carrier')
+    .reduce((sum, carrier) => sum + (carrier.aircraft?.length || 0), 0);
+  check(`${label} fighter survives save/load`, aboard === 1);
+  loaded.nextTurn();
+  const afterOpponent = (loaded.units['Red Sea'] || [])
+    .filter((unit) => unit.type === 'carrier')
+    .reduce((sum, carrier) => sum + (carrier.aircraft?.length || 0), 0);
+  check(`${label} fighter survives the opponent's turn`, afterOpponent === 1 && loaded.currentPlayer.id === 'Americans');
+  loaded.nextTurn();
+  const afterReturn = (loaded.units['Red Sea'] || [])
+    .filter((unit) => unit.type === 'carrier')
+    .reduce((sum, carrier) => sum + (carrier.aircraft?.length || 0), 0);
+  check(`${label} fighter is still aboard when the turn comes back`, afterReturn === 1 && loaded.currentPlayer.id === 'Germans');
 }
 
 {
