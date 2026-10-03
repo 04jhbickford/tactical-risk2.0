@@ -92,6 +92,7 @@ import { moveUnitsWithRaidPrompt, presentStrategicRaid } from './ui/raidPrompt.j
 import { syncPushPhaseLabel } from './state/placementPass.js';
 import { VictoryScreen } from './ui/victoryScreen.js';
 import { AIController } from './ai/aiController.js';
+import { normalizeAiDifficulty } from './ai/difficulty.js';
 import { ActionLog } from './ui/actionLog.js';
 import { BugTracker } from './ui/bugTracker.js';
 import { AirLandingUI } from './ui/airLandingUI.js';
@@ -1472,7 +1473,7 @@ async function init() {
           color: p.color || factionDef?.color,
           lightColor: p.color || factionDef?.lightColor,
           isAI: p.isAI || false,
-          aiDifficulty: p.aiDifficulty || null,
+          aiDifficulty: p.isAI ? normalizeAiDifficulty(p.aiDifficulty) : null,
           oderId: p.oderId, // Link to Firebase user ID
           discordUserId: p.discordUserId || '',
           discordName: p.discordName || '',

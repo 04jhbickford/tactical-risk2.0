@@ -15,6 +15,7 @@ import { CLASSIC_MAP_ID, markMapChrome } from '../map/mapRegistry.js';
 import { classicPowersForCap } from '../state/classicSeats.js';
 import { getBoard } from '../map/boardCatalog.js';
 import { bindLobbyDice, lobbyDiceEntryMarkup, renderDiceStatsMarkup } from './diceStatsPanel.js';
+import { AI_LEVELS, normalizeAiDifficulty } from '../ai/difficulty.js';
 export { GAME_VERSION };
 
 // Native <select> option taps land on the card under the popup.
@@ -37,9 +38,7 @@ export function shouldSeatFactionOnPointerDown({ mobile } = {}) {
 // Shared with New UX Three lobby so option labels stay one source of truth.
 export const AI_DIFFICULTIES = [
   { id: 'human', name: 'Human', desc: 'Local player' },
-  { id: 'easy', name: 'Easy AI', desc: 'Basic strategy' },
-  { id: 'medium', name: 'Medium AI', desc: 'Balanced play' },
-  { id: 'hard', name: 'Hard AI', desc: 'Expert strategy' },
+  ...AI_LEVELS,
 ];
 
 // Available colors for faction selection
@@ -811,15 +810,16 @@ export class Lobby {
     const players = this.selectedPlayers.map(id => {
       const factionDef = factions.find(p => p.id === id);
       const customColor = this.playerColors[id];
-      const aiDifficulty = this.playerAI[id] || 'human';
+      const occupant = this.playerAI[id] || 'human';
+      const isAI = occupant !== 'human';
       const teamId = this.teamsEnabled ? (this.playerTeams[id] || null) : null;
       return {
         ...factionDef,
         name: this.playerNames[id]?.trim() || factionDef.name,
         color: customColor?.color || factionDef.color,
         lightColor: customColor?.lightColor || factionDef.lightColor,
-        isAI: aiDifficulty !== 'human',
-        aiDifficulty: aiDifficulty,
+        isAI,
+        aiDifficulty: isAI ? normalizeAiDifficulty(occupant) : null,
         teamId: teamId,
       };
     });

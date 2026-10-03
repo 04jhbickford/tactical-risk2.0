@@ -2,6 +2,12 @@
 
 ---
 
+## 10.3.26 — unified.45 four AI levels
+
+Stamp `V2.81.57-unified.45`. Schema stays 11. A `V2.82-unified.44` doc is older than this tab and does not prompt. A `V2.82-unified.46` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.45`).
+
+Each AI seat in Local Play and in the online Add AI dialog can be Easier, Medium, Harder, or Hardest. Medium is the default. A human seat has no AI level. A save that stored easy, medium, or hard still loads: easy is Easier, medium is Medium, hard is Harder. The live turn is still `aiController`. Easier attacks less and buys more infantry than Hardest. Hardest is the only level that may take a bad trade, and only when that capture wins: a Classic capital, or a Pacific city that closes the Pacific check.
+
 ## 10.3.26 — unified.44 optional garrisons
 
 Stamp `V2.81.57-unified.44`. Schema stays 11. The flag is `gameOptions.garrisons`. A save that omits it loads off. A `V2.82-unified.43` doc is older than this tab and does not prompt. A `V2.82-unified.45` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.44`).
