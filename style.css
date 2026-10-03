@@ -15295,6 +15295,55 @@ html.mobile-shell .pp-bottom-actions.pp-has-context-confirm {
   border-top: 1px solid rgba(255,255,255,0.1);
 }
 
+.tt-unit-icon--deception {
+  filter: grayscale(1);
+}
+
+.pp-radio-section {
+  margin-top: 12px;
+  padding: 10px;
+  background: rgba(180, 180, 180, 0.08);
+  border: 1px solid rgba(180, 180, 180, 0.35);
+  border-radius: 8px;
+}
+
+.pp-radio-header {
+  font-weight: 600;
+  font-size: 13px;
+  color: #d0d0d0;
+  margin-bottom: 4px;
+}
+
+.pp-radio-hint {
+  font-size: 12px;
+  line-height: 1.35;
+  color: #bdbdbd;
+  margin: 0 0 8px;
+}
+
+.pp-radio-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.pp-radio-name {
+  flex: 1;
+  font-size: 13px;
+}
+
+.pp-radio-qty {
+  min-width: 1.2em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.pp-radio-section .pp-action-btn {
+  min-height: 44px;
+  margin-top: 6px;
+}
+
 /* === Rockets Technology UI === */
 .pp-rockets-section {
   margin-top: 12px;

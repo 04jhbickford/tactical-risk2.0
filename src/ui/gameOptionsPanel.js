@@ -17,6 +17,7 @@ import {
   territorySetupLabel,
 } from '../gameOptions.js';
 import { CLASSIC_MAP_ID, getMap, listPickerMaps } from '../map/mapRegistry.js';
+import { TECH_SET_CLASSIC, TECH_SET_EXPANDED, techSetLabel } from '../state/radioDeception.js';
 
 function esc(value) {
   return String(value ?? '')
@@ -131,6 +132,17 @@ function rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMod
       <div class="go-row" title="When on, each 6 is its own breakthrough">
         <span class="go-label">Multiple breakthroughs</span>
         ${shownValue(editable, toggleHtml('multipleTech', o.multipleTech, { editable }), o.multipleTech ? 'On' : 'Off')}
+      </div>
+      <div class="go-row" title="Classic tech is today's research list. Expanded tech adds Radio Deception Networks.">
+        <span class="go-label">Tech tree</span>
+        ${shownValue(editable, enumSelect('techSet', [
+          [TECH_SET_CLASSIC, 'Classic tech'],
+          [TECH_SET_EXPANDED, 'Expanded tech'],
+        ], o.techSet, {
+          editable,
+          label: 'Tech tree',
+          title: 'Classic tech is today\'s research list. Expanded tech adds Radio Deception Networks.',
+        }), techSetLabel(o.techSet))}
       </div>
     </div>
     <div class="go-group">
@@ -284,6 +296,7 @@ export function readGameOptionsFrom(root) {
     garrisons: flag('garrisons'),
     territorySetup: valueOf('territorySetup')?.value,
     techAcquisition: valueOf('techAcquisition')?.value,
+    techSet: valueOf('techSet')?.value,
   });
 }
 
@@ -395,11 +408,13 @@ export function bindGameOptions(root, { onChange, onToggle, onMapChange } = {}) 
       const max = panel.querySelector('[data-go="maxPlayers"]');
       const territories = panel.querySelector('[data-go="territorySetup"]');
       const tech = panel.querySelector('[data-go="techAcquisition"]');
+      const techSet = panel.querySelector('[data-go="techSet"]');
       if (ipc) ipc.value = String(next.startingIPCs);
       if (army) army.value = next.startingArmy;
       if (max) max.value = String(next.maxPlayers);
       if (territories) territories.value = next.territorySetup;
       if (tech) tech.value = next.techAcquisition;
+      if (techSet) techSet.value = next.techSet;
       const mapSelect = panel.querySelector('[data-go="mapId"]');
       if (mapSelect) {
         mapSelect.value = CLASSIC_MAP_ID;

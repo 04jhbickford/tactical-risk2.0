@@ -2,6 +2,12 @@
 
 ---
 
+## 10.3.26 — unified.53 Radio Deception Networks
+
+Stamp `V2.81.57-unified.53`. Schema stays 11. The host lobby option `techSet` defaults to classic. Expanded tech adds one researchable technology, Radio Deception Networks, on the existing Develop Technology list. A save that omits `techSet` or `radioDeception` loads as classic with no placement. A `V2.82-unified.52` doc is older than this tab and does not prompt. A `V2.82-unified.54` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.53`).
+
+Bastion, Discord #tactical-risk-bug-report (1555803528575066203): lobby options can select Classic tech or Expanded tech. Classic is today's research list. Expanded adds Radio Deception Networks. After it is researched, that player places one mark on a territory they control, then either hides up to two real units there from unfriendly players, or shows up to two illusory land units. Illusions do not move, attack, or defend. The mark, the hidden units, and the illusions are grey for the owner and allies, and drawn apart from the real stacks. Enemies do not see the hidden units or the mark. Enemies see illusions as ordinary units. The placement ends when it is turned off, replaced, or the territory is lost.
+
 ## 10.3.26 — unified.52 leaderboards
 
 Stamp `V2.81.57-unified.52`. Schema stays 11. Scores are not in the game-state save. A `V2.82-unified.51` doc is older than this tab and does not prompt. A `V2.82-unified.53` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.52`).

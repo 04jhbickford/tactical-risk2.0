@@ -55,6 +55,7 @@ export function applyTerritoryCapture(gameState, territoryName, {
   if (prev === playerId) return { captured: false, reason: 'already_owned' };
 
   state.owner = playerId;
+  gameState._sweepRadioDeception?.();
 
   const stacks = unitsAt(gameState, territoryName);
   for (const unit of stacks) {

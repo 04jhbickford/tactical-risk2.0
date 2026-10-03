@@ -3,6 +3,7 @@
 import { getUnitIconPath } from '../utils/unitIcons.js';
 import { isMobileShell, readableFactionTextColor, isPhoneCapitalInspectOnlyLand } from './mobileShell.js';
 import { GAME_PHASES } from '../state/gameState.js';
+import { presentTerritoryUnits } from '../state/radioDeception.js';
 import { isPhaseGuideChromeTarget } from './phaseGuide.js';
 
 // Phone tooltip sits under #hud (70) so the full-screen menu sheet covers it.
@@ -477,7 +478,11 @@ export class TerritoryTooltip {
       if (this.gameState.isCapital(t.name)) {
         indicators.push(`<span class="tt-indicator capital">★ Capital</span>`);
       }
-      const units = this.gameState.getUnitsAt(t.name);
+      const units = presentTerritoryUnits(
+        this.gameState,
+        t.name,
+        this.gameState.getUnitsAt(t.name),
+      ).units;
       const hasFactory = units.some(u => u.type === 'factory');
       if (hasFactory) {
         const damage = this.gameState.getFactoryDamage?.(t.name) || 0;
@@ -489,7 +494,7 @@ export class TerritoryTooltip {
           indicators.push(`<span class="tt-indicator factory" data-factory-damage="0">🏭 Factory (${capacity} units/turn)</span>`);
         }
       }
-      const hasAA = units.some(u => u.type === 'aaGun');
+      const hasAA = units.some(u => u.type === 'aaGun' && u.deceptionTone !== 'illusion');
       if (hasAA) {
         indicators.push(`<span class="tt-indicator aa">⚙ AA Gun</span>`);
       }
@@ -511,9 +516,13 @@ export class TerritoryTooltip {
       html += `<div class="tt-type">🌊 Sea Zone</div>`;
     }
 
-    // Units section - grouped by owner
+    // Units section - grouped by owner. Fog and illusions use the same view as the map.
     if (this.gameState) {
-      const units = this.gameState.getUnitsAt(t.name);
+      const units = presentTerritoryUnits(
+        this.gameState,
+        t.name,
+        this.gameState.getUnitsAt(t.name),
+      ).units;
       if (units && units.length > 0) {
         // Group units by owner, and collect cargo/aircraft for sea zones
         const unitsByOwner = {};
@@ -570,7 +579,7 @@ export class TerritoryTooltip {
             const iconPath = getUnitIconPath(u.type, u.owner);
 
             // Accumulate power totals
-            if (def) {
+            if (def && u.deceptionTone !== 'illusion') {
               totalAttack += (def.attack || 0) * u.quantity;
               totalDefense += (def.defense || 0) * u.quantity;
             }
@@ -586,14 +595,18 @@ export class TerritoryTooltip {
 
             // Capitalize unit type name
             const unitTypeName = u.type.charAt(0).toUpperCase() + u.type.slice(1);
+            const deceptionTag = u.deceptionTone === 'hidden'
+              ? ' (hidden)'
+              : (u.deceptionTone === 'illusion' ? ' (illusion)' : '');
+            const greyIcon = u.deceptionTone ? ' tt-unit-icon--deception' : '';
 
             html += `<div class="tt-unit-icon-row" title="${unitTooltip}">`;
             if (iconPath) {
-              html += `<img src="${iconPath}" class="tt-unit-icon" style="border-color:${color}" alt="${u.type}">`;
+              html += `<img src="${iconPath}" class="tt-unit-icon${greyIcon}" style="border-color:${u.deceptionTone ? '#8d8d8d' : color}" alt="${u.type}">`;
             } else {
               html += `<span class="tt-unit-badge" style="background:${color}"></span>`;
             }
-            html += `<span class="tt-unit-name">${unitTypeName}</span>`;
+            html += `<span class="tt-unit-name">${unitTypeName}${deceptionTag}</span>`;
             html += `<span class="tt-unit-qty">×${u.quantity}</span>`;
             html += `</div>`;
           }

@@ -108,6 +108,14 @@ import {
   respawnOriginalGarrison,
 } from './garrison.js';
 import {
+  RADIO_DECEPTION,
+  expandedTechEnabled,
+  normalizeRadioBook,
+  researchableTechIds,
+  sweepRadioDeception,
+  validateRadioPlacement,
+} from './radioDeception.js';
+import {
   applyCasualtySelection,
   airMayUseLandingOption,
   airVersusSubStalemate,
@@ -234,6 +242,8 @@ export const TECHNOLOGIES = {
   industrialTech: { name: 'Industrial Technology', description: 'Units cost -1 IPC (min 1)' },
 };
 
+export { RADIO_DECEPTION };
+
 // RISK card trade values (escalating)
 export const RISK_CARD_VALUES = [12, 18, 24, 30, 36, 45, 60, 75];
 
@@ -357,6 +367,10 @@ export class GameState {
 
     // Tech research state: { playerId: { techTokens: n, unlockedTechs: [] } }
     this.playerTechs = {};
+    // Additive. One Radio Deception placement per player. Omitted when empty.
+    this.radioDeception = {};
+    // Client-only. The seat this screen views as. Not serialized.
+    this.localSeatId = null;
 
     // RISK cards: { playerId: [ 'infantry', 'cavalry', 'artillery', 'wild' ] }
     this.riskCards = {};
@@ -3828,6 +3842,7 @@ export class GameState {
           if (blitzedOwner && blitzedOwner !== player.id) {
             // Capture the territory, then record it so a turn ping can list it.
             this.territoryState[blitzedTerrName].owner = player.id;
+            this._sweepRadioDeception();
             const blitzed = {
               territory: blitzedTerrName,
               previousOwner: blitzedOwner,
@@ -3853,6 +3868,7 @@ export class GameState {
       if (enemyUnits.length === 0) {
         // Capture the territory immediately
         this.territoryState[toTerritory].owner = player.id;
+        this._sweepRadioDeception();
         captured = true;
         captureEventIdx = this._recordTerritoryCapture(toTerritory, toOwner, player.id);
 
@@ -4115,6 +4131,7 @@ export class GameState {
       }
       if (lastMove.captured && lastMove.previousOwner && this.territoryState[lastMove.to]) {
         this.territoryState[lastMove.to].owner = lastMove.previousOwner;
+        this._sweepRadioDeception();
         this._markCaptureEventUndone(lastMove.captureEventIdx, lastMove.to, lastMove.player);
       }
       return { success: true };
@@ -4254,6 +4271,7 @@ export class GameState {
     // If territory was captured by this move, restore previous owner
     if (lastMove.captured && lastMove.previousOwner) {
       this.territoryState[lastMove.to].owner = lastMove.previousOwner;
+      this._sweepRadioDeception();
       this._markCaptureEventUndone(lastMove.captureEventIdx, lastMove.to, lastMove.player);
     }
 
@@ -4263,6 +4281,7 @@ export class GameState {
         this.territoryState[blitzed.territory].owner = blitzed.previousOwner;
         this._markCaptureEventUndone(blitzed.captureEventIdx, blitzed.territory, lastMove.player);
       }
+      this._sweepRadioDeception();
     }
 
     // Restore air unit origins - remove tracking for destination, could restore to source
@@ -5112,6 +5131,7 @@ export class GameState {
         // Land battle won - capture territory
         const defender = allDefenders[0]?.owner;
         this.territoryState[territory].owner = player.id;
+        this._sweepRadioDeception();
 
         // Log territory capture for turn summary modal (multiplayer)
         this.logTerritoryCapture(territory, defender, player.id);
@@ -6298,7 +6318,7 @@ export class GameState {
     if (this.phase !== GAME_PHASES.PLAYING || this.turnPhase !== TURN_PHASES.PURCHASE) return false;
     const pState = this.playerState[playerId];
     if (!pState || pState.ipcs < DIRECT_TECH_IPC_COST) return false;
-    if (!TECHNOLOGIES[techId]) return false;
+    if (!this._techIsResearchable(techId)) return false;
     if (!this.playerTechs[playerId]) {
       this.playerTechs[playerId] = { techTokens: 0, unlockedTechs: [] };
     }
@@ -6323,7 +6343,7 @@ export class GameState {
     const techState = this.playerTechs[playerId];
     if (!techState) return false;
 
-    if (!TECHNOLOGIES[techId]) return false;
+    if (!this._techIsResearchable(techId)) return false;
     if (techState.unlockedTechs.includes(techId)) return false;
 
     techState.unlockedTechs.push(techId);
@@ -6336,10 +6356,50 @@ export class GameState {
     return this.playerTechs[playerId]?.unlockedTechs.includes(techId) || false;
   }
 
+  _techIsResearchable(techId) {
+    return researchableTechIds(Object.keys(TECHNOLOGIES), this.gameOptions).includes(techId);
+  }
+
+  _sweepRadioDeception() {
+    sweepRadioDeception(this);
+  }
+
+  // One active Radio Deception placement. A new placement replaces the old.
+  placeRadioDeception(territory, mode, units) {
+    const player = this.currentPlayer;
+    if (!player) return { success: false, error: 'No current player' };
+    const verdict = validateRadioPlacement(this, player.id, territory, mode, units);
+    if (!verdict.ok) return { success: false, error: verdict.error };
+    this.radioDeception = {
+      ...(this.radioDeception || {}),
+      [player.id]: verdict.placement,
+    };
+    this._notify();
+    return { success: true, placement: verdict.placement };
+  }
+
+  clearRadioDeception(playerId) {
+    const id = playerId || this.currentPlayer?.id;
+    if (!id) return { success: false, error: 'No player' };
+    if (this.currentPlayer && this.currentPlayer.id !== id) {
+      return { success: false, error: 'Not your turn' };
+    }
+    if (!expandedTechEnabled(this.gameOptions)) {
+      return { success: false, error: 'Expanded tech is off' };
+    }
+    if (!this.radioDeception?.[id]) return { success: true };
+    const next = { ...(this.radioDeception || {}) };
+    delete next[id];
+    this.radioDeception = next;
+    this._notify();
+    return { success: true };
+  }
+
   // Get available techs for player (ones they don't have yet)
   getAvailableTechs(playerId) {
     const unlocked = this.playerTechs[playerId]?.unlockedTechs || [];
-    return Object.keys(TECHNOLOGIES).filter(t => !unlocked.includes(t));
+    return researchableTechIds(Object.keys(TECHNOLOGIES), this.gameOptions)
+      .filter((techId) => !unlocked.includes(techId));
   }
 
   // --- RISK Cards System ---
@@ -6546,6 +6606,7 @@ export class GameState {
     if (defenders) return null;
     if (!this.territoryState[territoryName]) this.territoryState[territoryName] = {};
     this.territoryState[territoryName].owner = player.id;
+    this._sweepRadioDeception();
     if (!(this.capturedThisTurn instanceof Set)) this.capturedThisTurn = new Set();
     this.capturedThisTurn.add(territoryName);
     let cardAwarded = null;
@@ -7657,6 +7718,14 @@ export class GameState {
       winner: this.winner,
       winCondition: this.winCondition,
       playerTechs: this.playerTechs,
+      // Additive (no schema bump). One placement per player. Omitted when
+      // empty so an old save stays quiet. Lost territories are dropped first.
+      radioDeception: (() => {
+        this._sweepRadioDeception();
+        const book = normalizeRadioBook(this.radioDeception);
+        this.radioDeception = book;
+        return Object.keys(book).length ? book : undefined;
+      })(),
       riskCards: this.riskCards,
       cardTradeCount: this.cardTradeCount,
       unitsToPlace: cloneUnitsToPlace(this.unitsToPlace),
@@ -7767,6 +7836,8 @@ export class GameState {
     this.winner = data.winner || null;
     this.winCondition = data.winCondition || null;
     this.playerTechs = data.playerTechs || {};
+    this.radioDeception = normalizeRadioBook(data.radioDeception);
+    this._sweepRadioDeception();
     this.riskCards = data.riskCards || {};
     this.cardTradeCount = data.cardTradeCount || {};
     this.unitsToPlace = cloneUnitsToPlace(data.unitsToPlace || {});

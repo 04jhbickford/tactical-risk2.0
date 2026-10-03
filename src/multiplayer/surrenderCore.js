@@ -57,6 +57,15 @@ export function applySurrenderToState(state, oderId) {
     state.units[territory] = remaining;
   }
 
+  if (state.radioDeception && typeof state.radioDeception === 'object') {
+    const next = {};
+    for (const [id, row] of Object.entries(state.radioDeception)) {
+      const owner = state.territoryState?.[row?.territory]?.owner;
+      if (id !== player.id && row?.territory && owner === id) next[id] = row;
+    }
+    state.radioDeception = next;
+  }
+
   // Nothing left to deploy
   if (state.unitsToPlace) {
     state.unitsToPlace[player.id] = [];

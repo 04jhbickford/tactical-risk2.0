@@ -1,8 +1,10 @@
 // Host-selected game options. Every default matches the game as it plays
 // today: 80 IPCs, teams off, 5 seats (Classic can open to 7), 6 units a setup round, the standard
-// army, one tech pick per research roll, land bridges on,
+// army, one tech pick per research roll, classic tech, land bridges on,
 // extra Pacific bridges off.
 // Old saves omit `gameOptions` and load these defaults. SCHEMA stays 11.
+
+import { TECH_SET_CLASSIC, TECH_SET_EXPANDED, TECH_SET_VALUES } from './state/radioDeception.js';
 
 export const DEFAULT_GAME_OPTIONS = Object.freeze({
   startingIPCs: 80,
@@ -16,6 +18,9 @@ export const DEFAULT_GAME_OPTIONS = Object.freeze({
   territorySetup: 'random',
   // Dice tokens are spent on the roll, hit or miss. Today's research.
   techAcquisition: 'dice',
+  // Classic tech is today's research list. Expanded adds Radio Deception
+  // Networks. A missing field loads as classic. Schema stays 11.
+  techSet: TECH_SET_CLASSIC,
   // Tactical bombers are off until the host turns them on. Old saves
   // omit the field and load as off. An explicit true or false is kept.
   tacticalBombers: false,
@@ -118,6 +123,7 @@ export function normalizeGameOptions(raw, legacy = {}) {
   const mechRaw = src.mechanizedInfantry !== undefined ? src.mechanizedInfantry : old.mechanizedInfantry;
   const extraRaw = src.extraPacificBridges !== undefined ? src.extraPacificBridges : old.extraPacificBridges;
   const garrisonRaw = src.garrisons !== undefined ? src.garrisons : old.garrisons;
+  const techSetRaw = src.techSet !== undefined ? src.techSet : old.techSet;
   return {
     startingIPCs: pickNumber(
       src.startingIPCs ?? old.startingIPCs,
@@ -154,6 +160,8 @@ export function normalizeGameOptions(raw, legacy = {}) {
     extraPacificBridges: extraRaw === true,
     // Default OFF. Only an explicit true places garrisons.
     garrisons: garrisonRaw === true,
+    // Default classic. Only an explicit expanded unlocks the extra tech.
+    techSet: pickEnum(techSetRaw, TECH_SET_VALUES, DEFAULT_GAME_OPTIONS.techSet),
   };
 }
 
@@ -171,7 +179,8 @@ export function isStandardRules(raw, legacy) {
     && o.tacticalBombers === DEFAULT_GAME_OPTIONS.tacticalBombers
     && o.mechanizedInfantry === DEFAULT_GAME_OPTIONS.mechanizedInfantry
     && o.extraPacificBridges === DEFAULT_GAME_OPTIONS.extraPacificBridges
-    && o.garrisons === DEFAULT_GAME_OPTIONS.garrisons;
+    && o.garrisons === DEFAULT_GAME_OPTIONS.garrisons
+    && o.techSet === DEFAULT_GAME_OPTIONS.techSet;
 }
 
 /** Live summary. Standard rules, or "Custom: Heavy army, 8 per round, no land bridges". */
@@ -198,6 +207,7 @@ export function describe(raw, legacy) {
   if (o.mechanizedInfantry) parts.push('mechanized infantry');
   if (o.extraPacificBridges) parts.push('extra Pacific bridges');
   if (o.garrisons) parts.push('garrisons');
+  if (o.techSet === TECH_SET_EXPANDED) parts.push('expanded tech');
   if (parts.length === 0) return 'Standard rules';
   return `Custom: ${parts.join(', ')}`;
 }
@@ -243,6 +253,7 @@ export const PROTECTED_OPTION_KEYS = Object.freeze([
   'mechanizedInfantry',
   'extraPacificBridges',
   'garrisons',
+  'techSet',
 ]);
 
 export function protectedGameOptions(raw) {
@@ -319,6 +330,7 @@ export function optionRows(raw, legacy) {
     ['Tactical bombers', o.tacticalBombers ? 'On' : 'Off'],
     ['Mechanized infantry', o.mechanizedInfantry ? 'On' : 'Off'],
     ['Garrisons', o.garrisons ? 'On' : 'Off'],
+    ['Tech tree', o.techSet === TECH_SET_EXPANDED ? 'Expanded tech' : 'Classic tech'],
   ];
 }
 

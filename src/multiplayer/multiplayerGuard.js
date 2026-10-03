@@ -56,6 +56,8 @@ export class MultiplayerGuard {
       'buyTech',
       'purchaseTechDice',
       'rollTechDice',
+      'placeRadioDeception',
+      'clearRadioDeception',
       // Risk cards
       'tradeRiskCards',
       'tradeSpecificCards',
