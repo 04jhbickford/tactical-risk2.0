@@ -18,6 +18,7 @@ import {
 import { getFirebaseDb } from './firebase.js';
 import { getAuthManager } from './auth.js';
 import { possessivePhrase } from '../utils/possessive.js';
+import { aiLevelLabel, normalizeAiDifficulty, DEFAULT_AI_DIFFICULTY } from '../ai/difficulty.js';
 import {
   mergeMyActiveGames,
   resolveJoinByCode,
@@ -873,17 +874,18 @@ export class LobbyManager {
     }
 
     const aiId = `ai_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const difficultyNames = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
+    const level = normalizeAiDifficulty(difficulty);
+    const stored = level === 'human' ? DEFAULT_AI_DIFFICULTY : level;
 
     const aiPlayer = {
       oderId: aiId,
-      displayName: `${difficultyNames[difficulty] || 'AI'} Bot`,
+      displayName: `${aiLevelLabel(stored)} Bot`,
       factionId,
       color,
       isReady: true, // AI is always ready
       isHost: false,
       isAI: true,
-      aiDifficulty: difficulty,
+      aiDifficulty: stored,
       joinedAt: Date.now()
     };
 

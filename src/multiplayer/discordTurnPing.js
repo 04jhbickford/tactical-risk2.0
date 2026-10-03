@@ -264,14 +264,15 @@ function powerAdj(factionId) {
 
 function difficultyWord(raw) {
   const key = cleanBit(raw).toLowerCase();
-  if (key === 'easy') return 'Easy';
+  if (key === 'easy' || key === 'easier') return 'Easy';
   if (key === 'medium') return 'Medium';
-  if (key === 'hard') return 'Hard';
+  if (key === 'hard' || key === 'harder') return 'Hard';
+  if (key === 'hardest') return 'Hardest';
   return '';
 }
 
 function isStockAiName(raw) {
-  return /^(easy|medium|hard|ai)\s+bot$/i.test(cleanBit(raw));
+  return /^(easy|easier|medium|hard|harder|hardest|ai)\s+bot$/i.test(cleanBit(raw));
 }
 
 function isBlankSideName(name, factionId) {

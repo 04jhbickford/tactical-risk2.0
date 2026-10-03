@@ -11,6 +11,7 @@ import { tacticalBombersEnabled } from '../state/tacticalPairing.js';
 import { landBlitzOptions, mechanizedInfantryEnabled } from '../state/mechanizedInfantry.js';
 import { getUnitIconPath } from '../utils/unitIcons.js';
 import { formatUnitName } from '../utils/unitNames.js';
+import { aiLevelLabel } from '../ai/difficulty.js';
 import { possessivePhrase } from '../utils/possessive.js';
 import {
   DESKTOP_MIN_WIDTH,
@@ -2287,7 +2288,7 @@ export class PlayerPanel {
   _renderHeader(player, isMultiplayer = false, isLocalPlayerTurn = true, isOwnSeat = isLocalPlayerTurn) {
     const ipcs = this.gameState.getIPCs(player.id);
     const territories = this.gameState.getPlayerTerritories(player.id).length;
-    const aiLabel = player.isAI ? `<span class="pp-ai-badge">${player.aiDifficulty?.toUpperCase() || 'AI'}</span>` : '';
+    const aiLabel = player.isAI ? `<span class="pp-ai-badge">${aiLevelLabel(player.aiDifficulty).toUpperCase() || 'AI'}</span>` : '';
     const textColor = this._getContrastColor(player.color);
 
     // Identity bar + WAITING badge follow the loaded seat, not the optimistic

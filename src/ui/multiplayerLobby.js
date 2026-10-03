@@ -4,6 +4,7 @@
 import { getLobbyManager } from '../multiplayer/lobbyManager.js';
 import { getAuthManager } from '../multiplayer/auth.js';
 import { GAME_VERSION } from './lobby.js';
+import { AI_LEVELS, DEFAULT_AI_DIFFICULTY, aiLevelLabel } from '../ai/difficulty.js';
 import { captureLobbyScroll, restoreLobbyScroll } from './lobbyScroll.js';
 import { possessivePhrase } from '../utils/possessive.js';
 import {
@@ -94,12 +95,6 @@ const FACTION_COLORS = [
   { id: 'gold', color: '#B8860B', name: 'Gold' },
   { id: 'gray', color: '#4A4A4A', name: 'Gray' },
   { id: 'teal', color: '#008B8B', name: 'Teal' },
-];
-
-const AI_DIFFICULTIES = [
-  { id: 'easy', name: 'Easy AI' },
-  { id: 'medium', name: 'Medium AI' },
-  { id: 'hard', name: 'Hard AI' },
 ];
 
 const DISCORD_SEAT_INPUT = 'input.mp-discord-input[data-action="discord-id"]';
@@ -1088,7 +1083,7 @@ export class MultiplayerLobby {
                     <span class="mp-player-id" style="font-size: 0.65em; color: #888; margin-left: 4px;">(${player.oderId ? '...' + player.oderId.slice(-6) : 'no-id'})</span>
                     <div class="mp-player-badges">
                       ${player.isHost ? '<span class="badge host">HOST</span>' : ''}
-                      ${isAI ? `<span class="badge ai">${player.aiDifficulty?.toUpperCase() || 'AI'}</span>` : ''}
+                      ${isAI ? `<span class="badge ai">${aiLevelLabel(player.aiDifficulty).toUpperCase() || 'AI'}</span>` : ''}
                       ${!isAI && !player.isHost ? `<span class="badge ${player.isReady ? 'ready' : 'waiting'}">${player.isReady ? 'READY' : 'SELECTING'}</span>` : ''}
                     </div>
                     ${lobbyPlayerDiscordHtml({
@@ -1571,7 +1566,7 @@ export class MultiplayerLobby {
         <div class="mp-field">
           <label>Difficulty</label>
           <select id="ai-difficulty">
-            ${AI_DIFFICULTIES.map(d => `<option value="${d.id}">${d.name}</option>`).join('')}
+            ${AI_LEVELS.map(d => `<option value="${d.id}" ${d.id === DEFAULT_AI_DIFFICULTY ? 'selected' : ''}>${d.name}</option>`).join('')}
           </select>
         </div>
         <div class="mp-field">

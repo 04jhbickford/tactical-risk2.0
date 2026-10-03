@@ -8,6 +8,12 @@ import { tacticalBombersEnabled } from '../state/tacticalPairing.js';
 import { MECHANIZED_INFANTRY, mechanizedInfantryEnabled } from '../state/mechanizedInfantry.js';
 import { capitalChoicePool, pickCapitalFromPool } from './capitalSpacing.js';
 import {
+  allowsLosingTrade,
+  captureWinsGame,
+  difficultyKnobs,
+  normalizeAiDifficulty,
+} from './difficulty.js';
+import {
   adjacentSeas,
   countOwned,
   isIslandCapital,
@@ -138,7 +144,7 @@ export class AIController {
         const aiPlayer = new AIPlayer(
           this.gameState,
           player.id,
-          player.aiDifficulty || 'medium'
+          this._seatLevel(player)
         );
         aiPlayer.unitDefs = this.unitDefs;
         this.aiPlayers[player.id] = aiPlayer;
@@ -171,7 +177,7 @@ export class AIController {
       const newAI = new AIPlayer(
         this.gameState,
         currentPlayer.id,
-        currentPlayer.aiDifficulty || 'medium'
+        this._seatLevel(currentPlayer)
       );
       newAI.unitDefs = this.unitDefs;
       this.aiPlayers[currentPlayer.id] = newAI;
@@ -256,7 +262,7 @@ export class AIController {
       existingCapitals,
       (name) => this.gameState.getConnections(name),
     );
-    const choice = pickCapitalFromPool(pool, aiPlayer.difficulty, {
+    const choice = pickCapitalFromPool(pool, this._placementTier(aiPlayer, player), {
       connectionCount: (territory) => this.gameState.getConnections(territory).length,
       friendlyNeighborCount: (territory) => this.gameState.getConnections(territory)
         .filter((neighbor) => this.gameState.getOwner(neighbor) === player.id).length,
@@ -330,7 +336,7 @@ export class AIController {
       if (isNaval && ownedSeas.length > 0) {
         territory = ownedSeas[Math.floor(Math.random() * ownedSeas.length)];
       } else if (ownedLand.length > 0) {
-        territory = this._pickPlacementTerritory(ownedLand, player.id, aiPlayer.difficulty);
+        territory = this._pickPlacementTerritory(ownedLand, player.id, this._placementTier(aiPlayer, player));
       } else {
         break;
       }
@@ -407,12 +413,13 @@ export class AIController {
 
     // Decide whether to research based on difficulty and resources
     let diceCount = 0;
+    const level = this._seatLevel(player, aiPlayer);
     if (availableTechs.length > 0 && ipcs >= 5) {
-      if (aiPlayer.difficulty === 'hard' && ipcs >= 15) {
+      if ((level === 'hard' || level === 'hardest') && ipcs >= 15) {
         diceCount = Math.min(3, Math.floor(ipcs / 5));
-      } else if (aiPlayer.difficulty === 'medium' && ipcs >= 20) {
+      } else if (level === 'medium' && ipcs >= 20) {
         diceCount = Math.min(2, Math.floor(ipcs / 5));
-      } else if (aiPlayer.difficulty === 'easy' && ipcs >= 30 && Math.random() > 0.5) {
+      } else if (level === 'easy' && ipcs >= 30 && Math.random() > 0.5) {
         diceCount = 1;
       }
     }
@@ -443,11 +450,12 @@ export class AIController {
   // ============================================
   _maybeBuyDirectTech(player) {
     if (this.gameState.gameOptions?.techAcquisition !== 'buy') return;
-    if (player?.aiDifficulty === 'easy') return;
+    const level = this._seatLevel(player);
+    if (level === 'easy') return;
     const available = this.gameState.getAvailableTechs?.(player.id) || [];
     if (!available.length) return;
     const ipcs = this.gameState.getIPCs(player.id);
-    const reserve = player.aiDifficulty === 'hard' ? 0 : 35;
+    const reserve = (level === 'hard' || level === 'hardest') ? 0 : 35;
     if (ipcs < DIRECT_TECH_IPC_COST + reserve) return;
     this.gameState.buyTech(player.id, available[0]);
   }
@@ -473,18 +481,25 @@ export class AIController {
     }
 
     // Get strategic analysis
-    const strategy = this._analyzeStrategicSituation(player.id, aiPlayer.difficulty);
+    const level = this._seatLevel(player, aiPlayer);
+    const knobs = difficultyKnobs(level);
+    const strategy = this._analyzeStrategicSituation(player.id, level);
 
     const capitalZone = this.gameState.territoryByName?.[capital];
     const landBridges = this.gameState.activeLandBridges?.();
     const islandStart = isIslandCapital(this.gameState.territoryByName, capital, landBridges);
+    const landPath = this._hasLandPathToEnemy(player.id);
+    // Harder and Hardest buy boats only when no land path reaches an enemy.
+    // Easier and Medium keep today's island navy.
+    const buyBoats = islandStart && !strategy.threatenedCapital && !!capitalZone
+      && !(knobs.boatsNeedNoLandPath && landPath);
     let remaining = ipcs;
     const purchased = [];
 
     // Island capitals (no land step, including land bridges) buy a
     // transport and an escort before a land army. Japan, the UK, and
     // Eire can walk, so they keep the normal purchase list.
-    if (islandStart && !strategy.threatenedCapital && capitalZone) {
+    if (buyBoats) {
       const sea = adjacentSeas(this.gameState.territoryByName, capital)[0];
       const owned = this.gameState.getPlayerTerritories?.(player.id) || [];
       const factoryCost = this.unitDefs.factory?.cost || 0;
@@ -527,13 +542,9 @@ export class AIController {
     // Determine purchase priorities based on strategic situation.
     // An island start already spent on navy; skip the continental list
     // unless the capital is threatened and the navy plan was skipped.
-    const priorities = (islandStart && !strategy.threatenedCapital)
+    const priorities = buyBoats
       ? []
-      : this._getStrategicPurchasePriorities(
-        aiPlayer.difficulty,
-        strategy,
-        player.id
-      );
+      : this._getStrategicPurchasePriorities(level, strategy, player.id);
 
     for (const { unitType, maxCount } of priorities) {
       const def = this.unitDefs[unitType];
@@ -588,6 +599,7 @@ export class AIController {
 
   // Get strategic purchase priorities based on game situation
   _getStrategicPurchasePriorities(difficulty, strategy, playerId) {
+    const level = normalizeAiDifficulty(difficulty);
     const priorities = [];
 
     if (strategy.threatenedCapital && strategy.capitalDefenseNeeded > 0) {
@@ -607,12 +619,12 @@ export class AIController {
       priorities.push({ unitType: 'fighter', maxCount: 1 });
     } else {
       // Normal situation - use difficulty-based priorities
-      if (difficulty === 'hard') {
+      if (level === 'hard' || level === 'hardest') {
         priorities.push({ unitType: 'armour', maxCount: 3 });
         priorities.push({ unitType: 'artillery', maxCount: 2 });
         priorities.push({ unitType: 'fighter', maxCount: 1 });
         priorities.push({ unitType: 'infantry', maxCount: 5 });
-      } else if (difficulty === 'easy') {
+      } else if (level === 'easy') {
         priorities.push({ unitType: 'infantry', maxCount: 4 });
         priorities.push({ unitType: 'armour', maxCount: 1 });
       } else {
@@ -675,25 +687,32 @@ export class AIController {
     this._updateStatus(`${player.name} planning attacks...`);
     await this._delay(this._getActionDelay());
 
-    // Get strategic analysis
-    const strategy = this._analyzeStrategicSituation(player.id, aiPlayer.difficulty);
+    // Get strategic analysis. The seat's stored level is the only input.
+    const level = this._seatLevel(player, aiPlayer);
+    const knobs = difficultyKnobs(level);
+    const strategy = this._analyzeStrategicSituation(player.id, level);
+    const denial = knobs.denyContinent ? this._denialTarget(player.id) : null;
 
     await this._projectIslandNavy(player, 'combat');
 
-    // Get all potential attack targets with priority scores
-    const attackTargets = this._evaluateAttackTargets(player.id, aiPlayer.difficulty, strategy);
+    // Adjacent land attacks only. Hardest does not search past this list.
+    const attackTargets = this._evaluateAttackTargets(player.id, level, strategy, denial);
 
     // Sort by priority (highest first)
     attackTargets.sort((a, b) => b.priority - a.priority);
 
     // Execute attacks starting with highest priority
     let attacksMade = 0;
-    const maxAttacks = aiPlayer.difficulty === 'hard' ? 5 :
-                       aiPlayer.difficulty === 'easy' ? 2 : 3;
+    let parkedDenial = false;
+    const maxAttacks = knobs.attackCap;
+    const myCapital = this.gameState.playerState[player.id]?.capitalTerritory;
 
     for (const target of attackTargets) {
       if (attacksMade >= maxAttacks) break;
       if (target.priority <= 0) continue;
+      if (parkedDenial && denial && denial.lands.includes(target.territory) && target.territory !== denial.territory) {
+        continue;
+      }
 
       // Check if we still have enough units to attack
       const currentUnits = this._getAvailableAttackers(target.source, player.id);
@@ -704,13 +723,14 @@ export class AIController {
 
       // Recalculate ratio in case units moved
       const ratio = attackPower / (defensePower || 0.5);
-      const threshold = aiPlayer.difficulty === 'hard' ? 1.2 :
-                       aiPlayer.difficulty === 'easy' ? 2.5 : 1.5;
+      const threshold = knobs.attackRatio;
 
       // Higher threshold if this would leave capital undefended
       const effectiveThreshold = target.leavesCapitalWeak ? threshold * 1.5 : threshold;
+      const winsGame = captureWinsGame(this.gameState, player.id, target.territory);
+      const takeFight = ratio >= effectiveThreshold || allowsLosingTrade(level, winsGame);
 
-      if (ratio >= effectiveThreshold) {
+      if (takeFight) {
         // Collect units to attack
         const unitsToMove = [];
         let unitsCommitted = 0;
@@ -718,9 +738,13 @@ export class AIController {
         for (const unit of currentUnits) {
           const def = this.unitDefs?.[unit.type];
           if (def && def.attack > 0) {
-            // Leave at least 1 unit behind unless this is a capital attack
-            const qtyToMove = target.isEnemyCapital ? unit.quantity :
+            // Leave at least 1 unit behind unless this is a capital attack.
+            // Easier never empties its own capital.
+            let qtyToMove = target.isEnemyCapital ? unit.quantity :
                              Math.max(1, unit.quantity - 1);
+            if (knobs.keepCapitalGarrison && target.source === myCapital) {
+              qtyToMove = Math.max(0, (unit.quantity || 0) - 1);
+            }
 
             if (qtyToMove > 0) {
               unitsToMove.push({ type: unit.type, quantity: qtyToMove });
@@ -743,6 +767,7 @@ export class AIController {
 
           if (moveResult && moveResult.success !== false) {
             attacksMade++;
+            if (denial && target.territory === denial.territory) parkedDenial = true;
             const unitStr = unitsToMove.map(u => `${u.quantity} ${u.type}`).join(', ');
             this._logAction('attack', {
               message: `${player.name} attacks ${target.territory} with ${unitStr}`,
@@ -803,12 +828,12 @@ export class AIController {
 
     strategy.myCapitals = capitalControl[playerId] || 0;
 
-    // Check if near victory (controlling 2+ capitals, need 3 to win)
+    // Purchase gear-up stays the existing signal. Hardest's losing trade
+    // uses the live win instead (Classic capitals, or a Pacific city).
     if (strategy.myCapitals >= 2) {
       strategy.nearVictory = true;
     }
 
-    // Check if any enemy is near victory
     for (const [enemyId, count] of Object.entries(capitalControl)) {
       if (enemyId !== playerId && count >= 2) {
         strategy.enemyNearVictory = enemyId;
@@ -820,19 +845,26 @@ export class AIController {
     if (myCapital) {
       const threats = this._getThreatsToTerritory(myCapital, playerId);
       strategy.threatenedCapital = threats.totalPower > 0;
+      strategy.adjacentThreat = threats.totalPower;
 
-      // Calculate how much defense we need
+      // Match the force next door. Harder uses 1x. Easier and Medium
+      // keep a 1.5x cushion. Neither is a fixed pile of units.
       const myDefenders = this._getTerritoryDefenders(myCapital, playerId);
       const myDefense = this._calculatePower(myDefenders, false);
-      strategy.capitalDefenseNeeded = Math.max(0, threats.totalPower * 1.5 - myDefense);
+      const multiplier = difficultyKnobs(difficulty).capitalThreatMultiplier;
+      strategy.capitalDefenseNeeded = Math.max(0, threats.totalPower * multiplier - myDefense);
     }
 
     return strategy;
   }
 
   // Evaluate all potential attack targets with priority scores
-  _evaluateAttackTargets(playerId, difficulty, strategy) {
+  _evaluateAttackTargets(playerId, difficulty, strategy, denial = null) {
     const targets = [];
+    const level = normalizeAiDifficulty(difficulty);
+    const finish = difficultyKnobs(level).walkContinent
+      ? this._finishableContinent(playerId, level)
+      : null;
 
     const owned = this.gameState.territories
       .filter(t => !t.isWater && this.gameState.getOwner(t.name) === playerId);
@@ -892,15 +924,16 @@ export class AIController {
           }
         }
 
-        // Difficulty adjustments
-        if (difficulty === 'easy') {
-          priority *= 0.7; // Less aggressive
-          priority += Math.random() * 20; // More random
-        } else if (difficulty === 'hard') {
-          // Hard AI is more calculating, less random
+        if (finish && finish.gap === targetName) priority += 40;
+        if (denial && !denial.ownedByUs && denial.territory === targetName) priority += 35;
+
+        // Easier is less aggressive and a bit random. Medium takes the
+        // best even fight with no jitter. Harder and Hardest do not roll.
+        if (level === 'easy') {
+          priority *= 0.7;
+          priority += Math.random() * 20;
+        } else if (level === 'hard' || level === 'hardest') {
           priority *= 1.2;
-        } else {
-          priority += Math.random() * 10; // Some randomness for medium
         }
 
         targets.push({
@@ -1021,21 +1054,33 @@ export class AIController {
     await this._delay(this._getActionDelay() / 2);
 
     // Get strategic analysis
-    const strategy = this._analyzeStrategicSituation(player.id, aiPlayer.difficulty);
+    const level = this._seatLevel(player, aiPlayer);
+    const knobs = difficultyKnobs(level);
+    const strategy = this._analyzeStrategicSituation(player.id, level);
     const myCapital = this.gameState.playerState[player.id]?.capitalTerritory;
+    const denial = knobs.denyContinent ? this._denialTarget(player.id) : null;
+    const hold = denial?.ownedByUs ? denial.territory : null;
 
     // Priority 1: Reinforce capital if threatened
     if (strategy.threatenedCapital && myCapital) {
-      await this._reinforceCapital(player.id, myCapital, strategy);
+      await this._reinforceCapital(player.id, myCapital, strategy, hold);
     }
 
-    // Priority 2: Move units toward enemy capitals if we're winning
-    if (strategy.nearVictory && strategy.enemyCapitals.length > 0) {
-      await this._advanceTowardCapitals(player.id, strategy);
+    // Harder and Hardest walk one step toward a continent they can finish.
+    if (knobs.walkContinent) {
+      await this._walkTowardContinent(player.id, level);
     }
 
-    // Priority 3: Reinforce frontline territories
-    await this._reinforceFrontlines(player.id, aiPlayer.difficulty);
+    // Priority 2: Move units toward enemy capitals if a real win is open
+    if (strategy.nearVictory && strategy.enemyCapitals.length > 0 && level !== 'easy') {
+      await this._advanceTowardCapitals(player.id, strategy, hold);
+    }
+
+    // Easier leaves the rest of the map thin. Medium and above still
+    // reinforce a front.
+    if (knobs.spreadToFront) {
+      await this._reinforceFrontlines(player.id, level, hold);
+    }
 
     // Island navy that still has cargo sails one sea toward an enemy coast.
     await this._projectIslandNavy(player, 'noncombat');
@@ -1046,7 +1091,7 @@ export class AIController {
   }
 
   // Reinforce capital with nearby units
-  async _reinforceCapital(playerId, capital, strategy) {
+  async _reinforceCapital(playerId, capital, strategy, hold = null) {
     const connections = this.gameState.getConnections(capital);
     const capitalDefense = this._calculatePower(
       this._getTerritoryDefenders(capital, playerId), false
@@ -1062,6 +1107,7 @@ export class AIController {
       if (this.gameState.getOwner(source) !== playerId) continue;
       if (reinforced >= needed) break;
 
+      if (source === hold) continue;
       const units = this.gameState.units[source] || [];
       const myUnits = units.filter(u => u.owner === playerId && !u.moved);
 
@@ -1091,7 +1137,7 @@ export class AIController {
   }
 
   // Advance units toward enemy capitals when winning
-  async _advanceTowardCapitals(playerId, strategy) {
+  async _advanceTowardCapitals(playerId, strategy, hold = null) {
     // Find closest enemy capital
     const targetCapital = strategy.enemyCapitals[0];
     if (!targetCapital) return;
@@ -1100,6 +1146,7 @@ export class AIController {
       .filter(t => !t.isWater && this.gameState.getOwner(t.name) === playerId);
 
     for (const territory of owned) {
+      if (territory.name === hold) continue;
       const units = this.gameState.units[territory.name];
       if (!units || units.length <= 1) continue;
 
@@ -1135,11 +1182,12 @@ export class AIController {
   }
 
   // Reinforce frontline territories
-  async _reinforceFrontlines(playerId, difficulty) {
+  async _reinforceFrontlines(playerId, difficulty, hold = null) {
     const owned = this.gameState.territories
       .filter(t => !t.isWater && this.gameState.getOwner(t.name) === playerId);
 
     for (const territory of owned) {
+      if (territory.name === hold) continue;
       const units = this.gameState.units[territory.name];
       if (!units || units.length === 0) continue;
 
@@ -1401,11 +1449,12 @@ export class AIController {
     // Sort by score descending
     scored.sort((a, b) => b.score - a.score);
 
-    if (difficulty === 'hard') {
+    const tier = normalizeAiDifficulty(difficulty);
+    if (tier === 'hard' || tier === 'hardest') {
       // Hard AI: always pick best or second best
       const topChoices = scored.slice(0, 2);
       return topChoices[Math.floor(Math.random() * topChoices.length)].territory;
-    } else if (difficulty === 'medium') {
+    } else if (tier === 'medium') {
       // Medium AI: pick from top 4
       const topChoices = scored.slice(0, Math.min(4, scored.length));
       return topChoices[Math.floor(Math.random() * topChoices.length)].territory;
@@ -1442,6 +1491,143 @@ export class AIController {
       if (friendlyNeighbors > bestScore) {
         bestScore = friendlyNeighbors;
         best = t;
+      }
+    }
+    return best;
+  }
+
+  // The seat field is the level. Saved easy / medium / hard stay those ids.
+  _seatLevel(player, aiPlayer = null) {
+    let level = normalizeAiDifficulty(player?.aiDifficulty ?? aiPlayer?.difficulty);
+    if (level === 'human') level = 'medium';
+    if (aiPlayer) aiPlayer.difficulty = level;
+    if (player?.isAI) player.aiDifficulty = level;
+    return level;
+  }
+
+  // Capital spacing only knows easy, medium, and hard. Hardest places like Harder.
+  _placementTier(aiPlayer, player) {
+    const level = this._seatLevel(player, aiPlayer);
+    return level === 'hardest' ? 'hard' : level;
+  }
+
+  _landNeighbors(name) {
+    return (this.gameState.getConnections(name) || []).filter((next) => {
+      const territory = this.gameState.territoryByName?.[next];
+      return !!(territory && !territory.isWater);
+    });
+  }
+
+  // True when owned land can step to enemy land. Water does not count.
+  _hasLandPathToEnemy(playerId) {
+    const queue = [];
+    for (const [name, state] of Object.entries(this.gameState.territoryState || {})) {
+      if (state?.owner !== playerId) continue;
+      if (this.gameState.territoryByName?.[name]?.isWater) continue;
+      queue.push(name);
+    }
+    const seen = new Set();
+    while (queue.length) {
+      const name = queue.shift();
+      if (seen.has(name)) continue;
+      seen.add(name);
+      for (const next of this._landNeighbors(name)) {
+        const owner = this.gameState.getOwner(next);
+        if (owner && owner !== playerId && !this.gameState.areAllies?.(playerId, owner)) return true;
+        if (owner === playerId) queue.push(next);
+      }
+    }
+    return false;
+  }
+
+  _continentLands(continent) {
+    return (continent?.territories || []).filter((name) => {
+      const territory = this.gameState.territoryByName?.[name];
+      return !!(territory && !territory.isWater);
+    });
+  }
+
+  // One continent we already own except a single enemy territory we can
+  // reach by land, and only when the force we have there beats our ratio.
+  _finishableContinent(playerId, level) {
+    const knobs = difficultyKnobs(level);
+    let best = null;
+    for (const continent of this.gameState.continents || []) {
+      const lands = this._continentLands(continent);
+      if (lands.length < 2) continue;
+      const missing = lands.filter((name) => this.gameState.getOwner(name) !== playerId);
+      if (missing.length !== 1) continue;
+      const gap = missing[0];
+      const owner = this.gameState.getOwner(gap);
+      if (!owner || owner === playerId || this.gameState.areAllies?.(playerId, owner)) continue;
+      const from = this._landNeighbors(gap).find((name) => this.gameState.getOwner(name) === playerId);
+      if (!from) continue;
+      let attack = 0;
+      for (const name of lands) {
+        if (this.gameState.getOwner(name) !== playerId) continue;
+        const mine = (this.gameState.units[name] || []).filter((unit) => unit.owner === playerId);
+        attack += this._calculatePower(mine, true);
+      }
+      const defense = this._calculatePower(this.gameState.units[gap] || [], false);
+      if (attack / (defense || 0.5) < knobs.attackRatio) continue;
+      const bonus = Number(continent.bonus) || 0;
+      if (!best || bonus > best.bonus) best = { gap, from, bonus, lands };
+    }
+    return best;
+  }
+
+  // One step toward that gap. Not a search of every friendly territory.
+  async _walkTowardContinent(playerId, level) {
+    const finish = this._finishableContinent(playerId, level);
+    if (!finish) return;
+    const sources = this._landNeighbors(finish.from).filter((name) => (
+      name !== finish.gap && this.gameState.getOwner(name) === playerId
+    ));
+    for (const source of sources) {
+      const orders = [];
+      for (const unit of this.gameState.units[source] || []) {
+        if (unit.owner !== playerId || unit.moved) continue;
+        const def = this.unitDefs?.[unit.type];
+        if (!def || !(def.attack > 0) || !(unit.quantity > 1)) continue;
+        const toMove = Math.floor(unit.quantity / 2);
+        if (toMove > 0) orders.push({ type: unit.type, quantity: toMove });
+      }
+      if (orders.length === 0) continue;
+      this.gameState.moveUnits(source, finish.from, orders, this.unitDefs);
+      return;
+    }
+  }
+
+  // One weak territory that blocks someone else's continent bonus.
+  _denialTarget(playerId) {
+    let best = null;
+    for (const continent of this.gameState.continents || []) {
+      const lands = this._continentLands(continent);
+      if (lands.length < 2) continue;
+      const byOwner = new Map();
+      for (const name of lands) {
+        const owner = this.gameState.getOwner(name) || '';
+        if (!byOwner.has(owner)) byOwner.set(owner, []);
+        byOwner.get(owner).push(name);
+      }
+      for (const [owner, held] of byOwner) {
+        if (!owner || owner === playerId) continue;
+        if (this.gameState.areAllies?.(playerId, owner)) continue;
+        if (held.length !== lands.length - 1) continue;
+        const gap = lands.find((name) => this.gameState.getOwner(name) !== owner);
+        if (!gap) continue;
+        const defense = this._calculatePower(
+          (this.gameState.units[gap] || []).filter((unit) => unit.owner && unit.owner !== playerId),
+          false,
+        );
+        if (defense > 2) continue;
+        const ownedByUs = this.gameState.getOwner(gap) === playerId;
+        const adjacent = this._landNeighbors(gap).some((name) => this.gameState.getOwner(name) === playerId);
+        if (!ownedByUs && !adjacent) continue;
+        const bonus = Number(continent.bonus) || 0;
+        if (!best || bonus > best.bonus) {
+          best = { territory: gap, lands, ownedByUs, bonus, continent: continent.name };
+        }
       }
     }
     return best;
