@@ -82,14 +82,14 @@ function board() {
 console.log('=== stamp ===');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  check('display stamp is V2.81.57-unified.53', GAME_VERSION === 'V2.81.57-unified.53');
+  check('display stamp is V2.81.57-unified.54', GAME_VERSION === 'V2.81.57-unified.54');
   check('schema stays 11', SCHEMA_VERSION === 11);
   check('index.html carries the display stamp',
-    html.includes('content="V2.81.57-unified.53"')
-    && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.53'")
-    && html.includes("var LOCKED = 'V2.81.57-unified.53'")
-    && html.includes('style.css?v=V2.81.57-unified.53')
-    && html.includes('src/main.js?v=V2.81.57-unified.53'));
+    html.includes('content="V2.81.57-unified.54"')
+    && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.54'")
+    && html.includes("var LOCKED = 'V2.81.57-unified.54'")
+    && html.includes('style.css?v=V2.81.57-unified.54')
+    && html.includes('src/main.js?v=V2.81.57-unified.54'));
 }
 
 console.log('=== lobby ===');
@@ -134,10 +134,11 @@ console.log('=== research gating ===');
   classic.phase = 'playing';
   classic.turnPhase = 'purchase';
   const expandedIds = classic.getAvailableTechs('Germans');
-  check('expanded adds radio deception and keeps the classic list',
+  check('expanded adds the extra techs and keeps the classic list',
     expandedIds.includes('radioDeception')
+    && expandedIds.includes('wasserfall')
     && classicIds.every((id) => expandedIds.includes(id))
-    && expandedIds.length === classicIds.length + 1);
+    && expandedIds.length === classicIds.length + 2);
   check('expanded can research it', classic.unlockTech('Germans', 'radioDeception') === true);
   check('it is not offered twice', !classic.getAvailableTechs('Germans').includes('radioDeception'));
   const buyer = board();

@@ -1,4 +1,4 @@
-// V2.81.57-unified.53 — leaderboards and participate/reset prefs.
+// V2.81.57-unified.54 — leaderboards and participate/reset prefs.
 // Run: node tools/test-leaderboard.mjs
 
 import { readFileSync } from 'node:fs';
@@ -63,17 +63,17 @@ function ended(extra = {}) {
 console.log('=== stamp ===');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  check('display stamp is V2.81.57-unified.53', GAME_VERSION === 'V2.81.57-unified.53');
+  check('display stamp is V2.81.57-unified.54', GAME_VERSION === 'V2.81.57-unified.54');
   check('schema stays 11', SCHEMA_VERSION === 11);
   const gameStateSrc = readFileSync(join(root, 'src/state/gameState.js'), 'utf8');
   check('game-state json stays version 11', /version:\s*11/.test(gameStateSrc));
   check('leaderboard is outside game-state json', !/leaderboard/i.test(gameStateSrc));
   check('index.html carries the display stamp',
-    html.includes('content="V2.81.57-unified.53"')
-    && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.53'")
-    && html.includes("var LOCKED = 'V2.81.57-unified.53'")
-    && html.includes('style.css?v=V2.81.57-unified.53')
-    && html.includes('src/main.js?v=V2.81.57-unified.53'));
+    html.includes('content="V2.81.57-unified.54"')
+    && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.54'")
+    && html.includes("var LOCKED = 'V2.81.57-unified.54'")
+    && html.includes('style.css?v=V2.81.57-unified.54')
+    && html.includes('src/main.js?v=V2.81.57-unified.54'));
 }
 
 console.log('=== game types ===');
