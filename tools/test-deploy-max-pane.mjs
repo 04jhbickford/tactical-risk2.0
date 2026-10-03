@@ -126,21 +126,21 @@ function makePlacement({ placed = 0, infantry = 8 } = {}) {
 console.log('=== stamp ===');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  check('display stamp is V2.81.57-unified.46', GAME_VERSION === 'V2.81.57-unified.46');
+  check('display stamp is V2.81.57-unified.47', GAME_VERSION === 'V2.81.57-unified.47');
   check('schema stays 11', SCHEMA_VERSION === 11);
-  check('game docs write V2.82-unified.46', compatClientVersion() === 'V2.82-unified.46');
-  check('a V2.82-unified.45 doc does not prompt this tab',
-    compareGameVersions('V2.82-unified.45', GAME_VERSION) < 0);
-  check('a V2.82-unified.47 doc prompts this tab',
-    compareGameVersions('V2.82-unified.47', GAME_VERSION) > 0);
-  check('our own V2.82-unified.46 doc does not prompt',
-    compareGameVersions('V2.82-unified.46', GAME_VERSION) === 0);
+  check('game docs write V2.82-unified.47', compatClientVersion() === 'V2.82-unified.47');
+  check('a V2.82-unified.46 doc does not prompt this tab',
+    compareGameVersions('V2.82-unified.46', GAME_VERSION) < 0);
+  check('a V2.82-unified.48 doc prompts this tab',
+    compareGameVersions('V2.82-unified.48', GAME_VERSION) > 0);
+  check('our own V2.82-unified.47 doc does not prompt',
+    compareGameVersions('V2.82-unified.47', GAME_VERSION) === 0);
   check('index.html carries the display stamp',
-    html.includes('content="V2.81.57-unified.46"')
-    && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.46'")
-    && html.includes("var LOCKED = 'V2.81.57-unified.46'")
-    && html.includes('style.css?v=V2.81.57-unified.46')
-    && html.includes('src/main.js?v=V2.81.57-unified.46'));
+    html.includes('content="V2.81.57-unified.47"')
+    && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.47'")
+    && html.includes("var LOCKED = 'V2.81.57-unified.47'")
+    && html.includes('style.css?v=V2.81.57-unified.47')
+    && html.includes('src/main.js?v=V2.81.57-unified.47'));
 }
 
 console.log('=== cap predicate ===');

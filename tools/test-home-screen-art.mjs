@@ -11,8 +11,8 @@ const { GAME_VERSION, SCHEMA_VERSION, compareGameVersions, compatClientVersion }
   await import(pathToFileURL(join(root, 'src/version.js')));
 
 const ART = 'assets/Pictures/grok-image-702f41b9-ce2d-4291-a3b2-4f29bd8e8695.png';
-const SHA256 = '236c6ecc7d279afa3abcd2c369dbb9e59debf03f739ec8840ffdf242ef6b74b4';
-const BYTES = 719848;
+const SHA256 = '8e260cdf7adc1f02b7355f2831470316624e8606cb972638871a00636c5b56ec';
+const BYTES = 748376;
 
 let failures = 0;
 const check = (label, cond) => {
