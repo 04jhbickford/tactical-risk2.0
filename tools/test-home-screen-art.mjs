@@ -28,21 +28,21 @@ const bytes = readFileSync(join(root, ART));
 const hash = createHash('sha256').update(bytes).digest('hex');
 const url = `url('${ART}')`;
 
-check('display stamp is V2.81.57-unified.55', GAME_VERSION === 'V2.81.57-unified.55');
+check('display stamp is V2.81.57-unified.56', GAME_VERSION === 'V2.81.57-unified.56');
 check('schema stays 11', SCHEMA_VERSION === 11);
-check('game docs write V2.82-unified.55', compatClientVersion() === 'V2.82-unified.55');
+check('game docs write V2.82-unified.56', compatClientVersion() === 'V2.82-unified.56');
 check('a V2.82-unified.50 doc does not prompt this tab',
   compareGameVersions('V2.82-unified.50', GAME_VERSION) < 0);
-check('a V2.82-unified.56 doc prompts this tab',
-  compareGameVersions('V2.82-unified.56', GAME_VERSION) > 0);
-check('our own V2.82-unified.55 doc does not prompt',
-  compareGameVersions('V2.82-unified.55', GAME_VERSION) === 0);
+check('a V2.82-unified.57 doc prompts this tab',
+  compareGameVersions('V2.82-unified.57', GAME_VERSION) > 0);
+check('our own V2.82-unified.56 doc does not prompt',
+  compareGameVersions('V2.82-unified.56', GAME_VERSION) === 0);
 check('index.html carries the display stamp',
-  html.includes('content="V2.81.57-unified.55"')
-  && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.55'")
-  && html.includes("var LOCKED = 'V2.81.57-unified.55'")
-  && html.includes('style.css?v=V2.81.57-unified.55')
-  && html.includes('src/main.js?v=V2.81.57-unified.55'));
+  html.includes('content="V2.81.57-unified.56"')
+  && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.56'")
+  && html.includes("var LOCKED = 'V2.81.57-unified.56'")
+  && html.includes('style.css?v=V2.81.57-unified.56')
+  && html.includes('src/main.js?v=V2.81.57-unified.56'));
 check('both lobby backgrounds point at the painting',
   css.split(url).length - 1 === 2);
 check('painting bytes are the supplied file', hash === SHA256 && bytes.length === BYTES);
