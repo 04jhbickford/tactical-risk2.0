@@ -42,7 +42,7 @@ export function enemyFactoryAt(gameState, territoryName, playerId) {
 
 // Human combat-move of at least one strategic bomber into an enemy factory.
 // A choice already passed in (true or false) does not ask again. The AI
-// never raids and never sees the prompt.
+// never sees the prompt. It raids only when the move passes raid: true.
 export function raidPromptApplies({
   gameState,
   player,

@@ -94,6 +94,7 @@ import { VictoryScreen } from './ui/victoryScreen.js';
 import { recordLeaderboardGame } from './multiplayer/leaderboardStore.js';
 import { AIController } from './ai/aiController.js';
 import { normalizeAiDifficulty } from './ai/difficulty.js';
+import { normalizeAiSpecialization } from './ai/specialization.js';
 import { ActionLog } from './ui/actionLog.js';
 import { BugTracker } from './ui/bugTracker.js';
 import { AirLandingUI } from './ui/airLandingUI.js';
@@ -1482,6 +1483,9 @@ async function init() {
           lightColor: p.color || factionDef?.lightColor,
           isAI: p.isAI || false,
           aiDifficulty: p.isAI ? normalizeAiDifficulty(p.aiDifficulty) : null,
+          aiSpecialization: p.isAI
+            ? normalizeAiSpecialization(p.aiSpecialization, settingsData?.gameOptions)
+            : null,
           oderId: p.oderId, // Link to Firebase user ID
           discordUserId: p.discordUserId || '',
           discordName: p.discordName || '',

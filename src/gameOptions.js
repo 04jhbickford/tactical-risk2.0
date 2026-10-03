@@ -33,6 +33,10 @@ export const DEFAULT_GAME_OPTIONS = Object.freeze({
   // Garrisons are off until the host turns them on. A missing field loads
   // off. Schema stays 11.
   garrisons: false,
+  // Nukes lobby switch. Off until the host turns it on. A missing field
+  // loads off. It does not change combat. It lists the Rico specialization.
+  // Schema stays 11.
+  nukes: false,
 });
 
 export const STARTING_IPC_VALUES = Object.freeze([40, 60, 80, 100, 120, 150]);
@@ -123,6 +127,7 @@ export function normalizeGameOptions(raw, legacy = {}) {
   const mechRaw = src.mechanizedInfantry !== undefined ? src.mechanizedInfantry : old.mechanizedInfantry;
   const extraRaw = src.extraPacificBridges !== undefined ? src.extraPacificBridges : old.extraPacificBridges;
   const garrisonRaw = src.garrisons !== undefined ? src.garrisons : old.garrisons;
+  const nukesRaw = src.nukes !== undefined ? src.nukes : old.nukes;
   const techSetRaw = src.techSet !== undefined ? src.techSet : old.techSet;
   return {
     startingIPCs: pickNumber(
@@ -160,6 +165,8 @@ export function normalizeGameOptions(raw, legacy = {}) {
     extraPacificBridges: extraRaw === true,
     // Default OFF. Only an explicit true places garrisons.
     garrisons: garrisonRaw === true,
+    // Default OFF. Only an explicit true lists Rico. Combat is unchanged.
+    nukes: nukesRaw === true,
     // Default classic. Only an explicit expanded unlocks the extra tech.
     techSet: pickEnum(techSetRaw, TECH_SET_VALUES, DEFAULT_GAME_OPTIONS.techSet),
   };
@@ -180,6 +187,7 @@ export function isStandardRules(raw, legacy) {
     && o.mechanizedInfantry === DEFAULT_GAME_OPTIONS.mechanizedInfantry
     && o.extraPacificBridges === DEFAULT_GAME_OPTIONS.extraPacificBridges
     && o.garrisons === DEFAULT_GAME_OPTIONS.garrisons
+    && o.nukes === DEFAULT_GAME_OPTIONS.nukes
     && o.techSet === DEFAULT_GAME_OPTIONS.techSet;
 }
 
@@ -207,6 +215,7 @@ export function describe(raw, legacy) {
   if (o.mechanizedInfantry) parts.push('mechanized infantry');
   if (o.extraPacificBridges) parts.push('extra Pacific bridges');
   if (o.garrisons) parts.push('garrisons');
+  if (o.nukes) parts.push('nukes');
   if (o.techSet === TECH_SET_EXPANDED) parts.push('expanded tech');
   if (parts.length === 0) return 'Standard rules';
   return `Custom: ${parts.join(', ')}`;
@@ -253,6 +262,7 @@ export const PROTECTED_OPTION_KEYS = Object.freeze([
   'mechanizedInfantry',
   'extraPacificBridges',
   'garrisons',
+  'nukes',
   'techSet',
 ]);
 
@@ -330,6 +340,7 @@ export function optionRows(raw, legacy) {
     ['Tactical bombers', o.tacticalBombers ? 'On' : 'Off'],
     ['Mechanized infantry', o.mechanizedInfantry ? 'On' : 'Off'],
     ['Garrisons', o.garrisons ? 'On' : 'Off'],
+    ['Nukes', o.nukes ? 'On' : 'Off'],
     ['Tech tree', o.techSet === TECH_SET_EXPANDED ? 'Expanded tech' : 'Classic tech'],
   ];
 }

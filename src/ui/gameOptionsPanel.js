@@ -175,6 +175,10 @@ function rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMod
         <span class="go-label">Garrisons</span>
         ${shownValue(editable, toggleHtml('garrisons', o.garrisons, { editable }), o.garrisons ? 'On' : 'Off')}
       </div>
+      <div class="go-row" title="When on, an AI seat can specialize as Rico. Combat is unchanged. Nuke research is used only when that technology is already in the tree.">
+        <span class="go-label">Nukes</span>
+        ${shownValue(editable, toggleHtml('nukes', o.nukes, { editable }), o.nukes ? 'On' : 'Off')}
+      </div>
     </div>
     <div class="go-group">
       <h3 class="go-group-label">Players</h3>
@@ -294,6 +298,7 @@ export function readGameOptionsFrom(root) {
     mechanizedInfantry: flag('mechanizedInfantry'),
     extraPacificBridges: keptFlag('extraPacificBridges', 'keptExtra'),
     garrisons: flag('garrisons'),
+    nukes: flag('nukes'),
     territorySetup: valueOf('territorySetup')?.value,
     techAcquisition: valueOf('techAcquisition')?.value,
     techSet: valueOf('techSet')?.value,
@@ -420,7 +425,7 @@ export function bindGameOptions(root, { onChange, onToggle, onMapChange } = {}) 
         mapSelect.value = CLASSIC_MAP_ID;
         if (typeof onMapChange === 'function') onMapChange(CLASSIC_MAP_ID);
       }
-      for (const name of ['multipleTech', 'landBridges', 'teams', 'tacticalBombers', 'mechanizedInfantry', 'extraPacificBridges', 'garrisons']) {
+      for (const name of ['multipleTech', 'landBridges', 'teams', 'tacticalBombers', 'mechanizedInfantry', 'extraPacificBridges', 'garrisons', 'nukes']) {
         const el = panel.querySelector(`[data-go="${name}"]`);
         if (!el) continue;
         const on = !!next[name];

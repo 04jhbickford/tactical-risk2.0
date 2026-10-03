@@ -2,6 +2,12 @@
 
 ---
 
+## 10.3.26 — unified.55 AI specialization
+
+Stamp `V2.81.57-unified.55`. Schema stays 11. Each AI seat has a specialization beside difficulty. The default is General, which is today's AI. Admiral, Infantry Man, Blitzkrieg, Logistics Officer, and Bombadere are always listed. Rico is listed only while the host Nukes option is on. That option defaults off, does nothing to combat, and a save or lobby that omits it loads off. A missing specialization loads as General. A `V2.82-unified.54` doc is older than this tab and does not prompt. A `V2.82-unified.56` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.55`).
+
+Bastion, Discord (1555818805672943649, 1555818902859161723): a second per-AI option that changes flavor. Nukes lobby stub (1555818624982450218) is only the Rico gate.
+
 ## 10.3.26 — unified.54 Wasserfall
 
 Stamp `V2.81.57-unified.54`. Schema stays 11. Expanded tech adds Wasserfall beside Radio Deception Networks. Classic research is unchanged. After Wasserfall is researched, that player's AA guns hit on 2 or less. Without the tech they still hit on 1. Attack values are unchanged. A `V2.82-unified.53` doc is older than this tab and does not prompt. A `V2.82-unified.55` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.54`).

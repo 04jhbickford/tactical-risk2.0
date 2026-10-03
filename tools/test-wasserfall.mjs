@@ -112,7 +112,7 @@ function qty(gs, type, owner) {
 
 console.log('=== stamp and catalog ===');
 {
-  check('display stamp is V2.81.57-unified.54', GAME_VERSION === 'V2.81.57-unified.54');
+  check('display stamp is V2.81.57-unified.55', GAME_VERSION === 'V2.81.57-unified.55');
   check('schema stays 11', SCHEMA_VERSION === 11);
   const classicIds = Object.keys(TECHNOLOGIES);
   check('classic catalog has no Wasserfall', !classicIds.includes('wasserfall'));

@@ -7,6 +7,7 @@ import {
   seedClassicPlayerTechs,
 } from '../state/classicCapitals.js';
 import { DEFAULT_GAME_OPTIONS } from '../gameOptions.js';
+import { DEFAULT_AI_SPECIALIZATION, normalizeAiSpecialization } from '../ai/specialization.js';
 
 export const DEFAULT_HUMAN_SEAT = 'Russians';
 export const DEFAULT_AI_DIFFICULTY = 'medium';
@@ -14,6 +15,7 @@ export const DEFAULT_AI_DIFFICULTY = 'medium';
 export function buildClassicSoloPlayers(setup, {
   humanSeat = DEFAULT_HUMAN_SEAT,
   aiDifficulty = DEFAULT_AI_DIFFICULTY,
+  aiSpecialization = DEFAULT_AI_SPECIALIZATION,
   maxPlayers = DEFAULT_GAME_OPTIONS.maxPlayers,
 } = {}) {
   const factions = setup?.classic?.factions || setup?.factions || [];
@@ -28,6 +30,7 @@ export function buildClassicSoloPlayers(setup, {
       ...faction,
       isAI: !human,
       aiDifficulty: human ? 'human' : (aiDifficulty || DEFAULT_AI_DIFFICULTY),
+      aiSpecialization: human ? null : normalizeAiSpecialization(aiSpecialization),
     };
   });
   const human = players.find((p) => !p.isAI);
@@ -40,6 +43,7 @@ export function buildSoloPlayers(setup, {
   humanSeat = DEFAULT_HUMAN_SEAT,
   aiCount = 4,
   aiDifficulty = DEFAULT_AI_DIFFICULTY,
+  aiSpecialization = DEFAULT_AI_SPECIALIZATION,
   players = null,
 } = {}) {
   if (Array.isArray(players) && players.length >= 2) {
@@ -47,7 +51,7 @@ export function buildSoloPlayers(setup, {
     return [human, ...players.filter((p) => p !== human)];
   }
   if (mode !== 'risk') {
-    return buildClassicSoloPlayers(setup, { humanSeat, aiDifficulty });
+    return buildClassicSoloPlayers(setup, { humanSeat, aiDifficulty, aiSpecialization });
   }
   const factions = setup?.risk?.factions || setup?.classic?.factions || setup?.factions || [];
   const humanId = humanSeat || DEFAULT_HUMAN_SEAT;
@@ -62,6 +66,7 @@ export function buildSoloPlayers(setup, {
       ...faction,
       isAI: !isHuman,
       aiDifficulty: isHuman ? 'human' : (aiDifficulty || DEFAULT_AI_DIFFICULTY),
+      aiSpecialization: isHuman ? null : normalizeAiSpecialization(aiSpecialization),
     };
   });
 }
@@ -130,6 +135,7 @@ export function inspectSolo(gameState) {
       name: p.name,
       isAI: true,
       aiDifficulty: p.aiDifficulty || DEFAULT_AI_DIFFICULTY,
+      aiSpecialization: p.aiSpecialization || DEFAULT_AI_SPECIALIZATION,
     })),
     capitals,
     classicCapitals: { ...CLASSIC_CAPITALS },

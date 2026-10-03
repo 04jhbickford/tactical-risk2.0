@@ -14,9 +14,21 @@ import {
   normalizeAiDifficulty,
 } from './difficulty.js';
 import {
+  attackPriorityBonus,
+  capitalBiasScore,
+  capitalPlacementFacts,
+  layeredKnobs,
+  nukeUnitType,
+  NUKE_TECH_CANDIDATES,
+  preferredTechId,
+  techBias,
+  tiltPurchasePriorities,
+} from './specialization.js';
+import {
   adjacentSeas,
   countOwned,
   isIslandCapital,
+  landMoveTargets,
   pickIslandAssault,
   pickSecondaryFactorySite,
   pickTransportLoad,
@@ -262,11 +274,15 @@ export class AIController {
       existingCapitals,
       (name) => this.gameState.getConnections(name),
     );
+    const knobs = this._seatKnobs(player);
     const choice = pickCapitalFromPool(pool, this._placementTier(aiPlayer, player), {
       connectionCount: (territory) => this.gameState.getConnections(territory).length,
       friendlyNeighborCount: (territory) => this.gameState.getConnections(territory)
         .filter((neighbor) => this.gameState.getOwner(neighbor) === player.id).length,
       random: Math.random,
+      biasScore: knobs.capitalBias === 'none'
+        ? null
+        : (territory) => capitalBiasScore(knobs.capitalBias, this._capitalFacts(territory)),
     });
     if (!choice) return;
 
@@ -411,11 +427,17 @@ export class AIController {
     const ipcs = this.gameState.getIPCs(player.id);
     const availableTechs = this.gameState.getAvailableTechs?.(player.id) || [];
 
-    // Decide whether to research based on difficulty and resources
+    // Decide whether to research based on difficulty and resources.
+    // A specialization spends earlier only when its named tech is actually
+    // in the list. A missing id leaves the difficulty rule alone.
     let diceCount = 0;
     const level = this._seatLevel(player, aiPlayer);
+    const bias = techBias(player?.aiSpecialization, availableTechs, this.gameState?.gameOptions);
     if (availableTechs.length > 0 && ipcs >= 5) {
-      if ((level === 'hard' || level === 'hardest') && ipcs >= 15) {
+      if (bias.eager && ipcs >= 10) {
+        const cap = level === 'easy' ? 2 : 3;
+        diceCount = Math.min(cap, Math.floor(ipcs / 5));
+      } else if ((level === 'hard' || level === 'hardest') && ipcs >= 15) {
         diceCount = Math.min(3, Math.floor(ipcs / 5));
       } else if (level === 'medium' && ipcs >= 20) {
         diceCount = Math.min(2, Math.floor(ipcs / 5));
@@ -434,8 +456,9 @@ export class AIController {
       while (picks > 0) {
         const next = this.gameState.getAvailableTechs?.(player.id) || [];
         if (next.length === 0) break;
-        this.gameState.unlockTech(player.id, next[0]);
-        this._updateStatus(`${player.name} unlocked ${next[0]}!`);
+        const pick = preferredTechId(player?.aiSpecialization, next, this.gameState?.gameOptions) || next[0];
+        this.gameState.unlockTech(player.id, pick);
+        this._updateStatus(`${player.name} unlocked ${pick}!`);
         picks -= 1;
       }
       await this._delay(300);
@@ -451,13 +474,15 @@ export class AIController {
   _maybeBuyDirectTech(player) {
     if (this.gameState.gameOptions?.techAcquisition !== 'buy') return;
     const level = this._seatLevel(player);
-    if (level === 'easy') return;
     const available = this.gameState.getAvailableTechs?.(player.id) || [];
     if (!available.length) return;
+    const bias = techBias(player?.aiSpecialization, available, this.gameState?.gameOptions);
+    if (level === 'easy' && !bias.eager) return;
     const ipcs = this.gameState.getIPCs(player.id);
-    const reserve = (level === 'hard' || level === 'hardest') ? 0 : 35;
+    const reserve = bias.eager || level === 'hard' || level === 'hardest' ? 0 : 35;
     if (ipcs < DIRECT_TECH_IPC_COST + reserve) return;
-    this.gameState.buyTech(player.id, available[0]);
+    const pick = bias.pick || available[0];
+    this.gameState.buyTech(player.id, pick);
   }
 
   async _handlePurchase(aiPlayer, player) {
@@ -480,9 +505,10 @@ export class AIController {
       return;
     }
 
-    // Get strategic analysis
+    // Get strategic analysis. Difficulty sets the ratios. Specialization
+    // only tilts boats, the unit mix, and tech.
     const level = this._seatLevel(player, aiPlayer);
-    const knobs = difficultyKnobs(level);
+    const knobs = this._seatKnobs(player);
     const strategy = this._analyzeStrategicSituation(player.id, level);
 
     const capitalZone = this.gameState.territoryByName?.[capital];
@@ -539,12 +565,45 @@ export class AIController {
       }
     }
 
+    // Admiral buys a transport and an escort from a coastal capital even
+    // when a land path exists. The island plan above already did that
+    // job, so this runs only when that plan was skipped. Land buys follow.
+    if (!buyBoats && knobs.preferBoats && !strategy.threatenedCapital && capitalZone) {
+      const sea = adjacentSeas(this.gameState.territoryByName, capital)[0];
+      if (sea) {
+        const plan = planIslandNavyPurchases({
+          ipcs: remaining,
+          unitDefs: this.unitDefs,
+          transportCount: countOwned(this.gameState.units, player.id, ['transport']),
+          escortCount: countOwned(this.gameState.units, player.id, ['submarine', 'destroyer', 'cruiser', 'battleship', 'carrier']),
+          threatened: false,
+          reserve: 0,
+        });
+        for (const buy of plan.buys) {
+          if (buy.placement !== 'sea') continue;
+          for (let i = 0; i < buy.count; i++) {
+            if (!this.gameState.purchaseUnit(buy.unitType, sea, this.unitDefs)) break;
+            remaining -= this.unitDefs[buy.unitType]?.cost || 0;
+            purchased.push(buy.unitType);
+          }
+        }
+      }
+    }
+
     // Determine purchase priorities based on strategic situation.
     // An island start already spent on navy; skip the continental list
     // unless the capital is threatened and the navy plan was skipped.
     const priorities = buyBoats
       ? []
-      : this._getStrategicPurchasePriorities(level, strategy, player.id);
+      : tiltPurchasePriorities(
+        this._getStrategicPurchasePriorities(level, strategy, player.id),
+        knobs.specialization,
+        {
+          mechanized: mechanizedInfantryEnabled(this.gameState?.gameOptions),
+          nukeUnit: knobs.specialization === 'rico' ? nukeUnitType(this.unitDefs) : null,
+          gameOptions: this.gameState?.gameOptions,
+        },
+      );
 
     for (const { unitType, maxCount } of priorities) {
       const def = this.unitDefs[unitType];
@@ -566,6 +625,18 @@ export class AIController {
         this.gameState.purchaseUnit(unitType, capital, this.unitDefs);
         remaining -= def.cost;
         purchased.push(unitType);
+      }
+    }
+
+    // Bombadere still wants one bomber when the island navy skipped the
+    // land list. A threatened capital keeps the defensive buy.
+    if (knobs.raidFactories && !strategy.threatenedCapital && !purchased.includes('bomber')) {
+      const bomber = this.unitDefs?.bomber;
+      if (bomber && remaining >= bomber.cost) {
+        if (this.gameState.purchaseUnit('bomber', capital, this.unitDefs)) {
+          remaining -= bomber.cost;
+          purchased.push('bomber');
+        }
       }
     }
 
@@ -688,11 +759,13 @@ export class AIController {
     await this._delay(this._getActionDelay());
 
     // Get strategic analysis. The seat's stored level is the only input.
+    // Specialization adds a priority nudge and, for Bombadere, factory raids.
     const level = this._seatLevel(player, aiPlayer);
-    const knobs = difficultyKnobs(level);
+    const knobs = this._seatKnobs(player);
     const strategy = this._analyzeStrategicSituation(player.id, level);
     const denial = knobs.denyContinent ? this._denialTarget(player.id) : null;
 
+    await this._raidFactories(player);
     await this._projectIslandNavy(player, 'combat');
 
     // Adjacent land attacks only. Hardest does not search past this list.
@@ -935,6 +1008,16 @@ export class AIController {
         } else if (level === 'hard' || level === 'hardest') {
           priority *= 1.2;
         }
+
+        const seat = this.gameState.getPlayer?.(playerId);
+        priority += attackPriorityBonus(seat?.aiSpecialization, {
+          coastal: adjacentSeas(this.gameState.territoryByName, targetName).length > 0,
+          defensePower,
+          hasArmour: attackers.some((unit) => unit.type === 'armour' && (unit.quantity || 0) > 0),
+          factory: (this.gameState.units[targetName] || []).some((unit) => unit.type === 'factory'),
+          isEnemyCapital,
+          nukeReady: this._nukeReady(playerId),
+        }, this.gameState?.gameOptions);
 
         targets.push({
           territory: targetName,
@@ -1274,7 +1357,10 @@ export class AIController {
   // Combat unloads onto an enemy coast. Non-combat only sails.
   async _projectIslandNavy(player, mode) {
     const capital = this.gameState.playerState[player.id]?.capitalTerritory;
-    if (!isIslandCapital(this.gameState.territoryByName, capital, this.gameState.activeLandBridges?.())) return;
+    const island = isIslandCapital(this.gameState.territoryByName, capital, this.gameState.activeLandBridges?.());
+    // Admiral sails and lands even when the capital is not an island.
+    const admiral = this._seatKnobs(player).preferBoats;
+    if (!island && !admiral) return;
 
     const enemyLand = (name) => {
       const owner = this.gameState.getOwner(name);
@@ -1498,6 +1584,73 @@ export class AIController {
       }
     }
     return best;
+  }
+
+  // Bombadere sends bombers on a factory raid before the land attacks.
+  // Other specializations, and a tree with no bomber, do nothing.
+  async _raidFactories(player) {
+    if (!this._seatKnobs(player).raidFactories) return;
+    const range = (this.unitDefs?.bomber?.movement || 6)
+      + (this.gameState.hasTech?.(player.id, 'longRangeAircraft') ? 2 : 0);
+    const factories = [];
+    for (const territory of this.gameState.territories || []) {
+      if (territory.isWater) continue;
+      const stacks = this.gameState.units[territory.name] || [];
+      const factory = stacks.some((unit) => unit.type === 'factory' && (unit.quantity || 0) > 0);
+      if (!factory) continue;
+      const owner = this.gameState.getOwner(territory.name);
+      if (!owner || owner === player.id || this.gameState.areAllies?.(player.id, owner)) continue;
+      factories.push(territory.name);
+    }
+    if (!factories.length) return;
+    for (const [from, stacks] of Object.entries(this.gameState.units || {})) {
+      const bombers = (stacks || []).filter((unit) => (
+        unit.owner === player.id && unit.type === 'bomber' && !unit.moved && (unit.quantity || 0) > 0
+      ));
+      if (!bombers.length) continue;
+      const qty = bombers.reduce((sum, unit) => sum + (unit.quantity || 0), 0);
+      let target = null;
+      for (const name of factories) {
+        if (this.gameState.canAirUnitReach?.(from, name, range)) {
+          target = name;
+          break;
+        }
+      }
+      if (!target) continue;
+      this.gameState.moveUnits(
+        from,
+        target,
+        [{ type: 'bomber', quantity: qty }],
+        this.unitDefs,
+        { raid: true },
+      );
+    }
+  }
+
+  _nukeReady(playerId) {
+    const player = this.gameState.getPlayer?.(playerId);
+    if (this._seatKnobs(player).attackBias !== 'nuke') return false;
+    const unlocked = this.gameState.playerTechs?.[playerId]?.unlockedTechs || [];
+    return NUKE_TECH_CANDIDATES.some((id) => unlocked.includes(id));
+  }
+
+  _capitalFacts(name) {
+    const byName = this.gameState.territoryByName || {};
+    const bridges = this.gameState.activeLandBridges?.();
+    return capitalPlacementFacts(name, {
+      territoryByName: byName,
+      landNeighbors: (next) => landMoveTargets(byName, next, bridges),
+      allNeighbors: (next) => this.gameState.getConnections?.(next) || byName[next]?.connections || [],
+    });
+  }
+
+  // Difficulty knobs, plus the specialization flags. General adds none.
+  _seatKnobs(player) {
+    return layeredKnobs(
+      this._seatLevel(player),
+      player?.aiSpecialization,
+      this.gameState?.gameOptions,
+    );
   }
 
   // The seat field is the level. Saved easy / medium / hard stay those ids.

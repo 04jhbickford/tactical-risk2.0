@@ -38,13 +38,28 @@ export function capitalChoicePool(owned, existingCapitals, neighbors) {
 // Hard: most connections, ties keep the earlier territory.
 // Easy: random index in the pool.
 // Medium: most friendly neighbors, ties keep the first, all-zero keeps pool[0].
+// biasScore, when it separates the pool, keeps only the top score. Ties
+// still use the difficulty rule. A flat score leaves the pool alone.
 export function pickCapitalFromPool(pool, difficulty, {
   connectionCount = () => 0,
   friendlyNeighborCount = () => 0,
   random = Math.random,
+  biasScore = null,
 } = {}) {
-  const list = Array.isArray(pool) ? pool : [];
+  let list = Array.isArray(pool) ? pool.slice() : [];
   if (list.length === 0) return null;
+  if (typeof biasScore === 'function') {
+    let best = 0;
+    const scored = list.map((territory) => {
+      const score = Number(biasScore(territory)) || 0;
+      if (score > best) best = score;
+      return { territory, score };
+    });
+    if (best > 0) {
+      const top = scored.filter((row) => row.score === best).map((row) => row.territory);
+      if (top.length > 0 && top.length < list.length) list = top;
+    }
+  }
   if (difficulty === 'hard') {
     return list.reduce((best, territory) => (
       connectionCount(territory) > connectionCount(best) ? territory : best

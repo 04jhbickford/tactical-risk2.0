@@ -8,6 +8,10 @@ import {
   STARTING_IPC_OPTIONS,
   DEFAULT_STARTING_IPCS,
 } from '../ui/lobby.js';
+import {
+  normalizeAiSpecialization,
+  specializationChoices,
+} from '../ai/specialization.js';
 
 export {
   AI_DIFFICULTIES,
@@ -130,6 +134,7 @@ export function createSoloLobby(setup, search = '') {
       : (factions[0]?.id || 'Russians'),
     selectedPlayers: [],
     playerAI: {},
+    playerSpec: {},
     playerNames: {},
     playerColors: defaultColors(factions),
     playerTeams: {},
@@ -185,6 +190,27 @@ export function toggleLobbySeat(lobby, seat) {
   const human = lobby.selectedPlayers.find((id) => lobby.playerAI[id] === 'human');
   lobby.humanSeat = human || lobby.selectedPlayers[0] || lobby.humanSeat;
   return lobby;
+}
+
+export function setLobbySpecialization(lobby, seat, specialization) {
+  if (!(lobby.factions || []).some((f) => f.id === seat)) return lobby;
+  if ((lobby.playerAI?.[seat] || 'human') === 'human') return lobby;
+  if (!lobby.playerSpec) lobby.playerSpec = {};
+  lobby.playerSpec[seat] = normalizeAiSpecialization(specialization, lobby.gameOptions);
+  return lobby;
+}
+
+export function specializationSelectHtml(faction, lobby) {
+  const id = faction?.id;
+  if (!id) return '';
+  const on = (lobby?.selectedPlayers || []).includes(id);
+  if (!on || (lobby?.playerAI?.[id] || 'human') === 'human') return '';
+  const current = normalizeAiSpecialization(lobby?.playerSpec?.[id], lobby?.gameOptions);
+  const choices = specializationChoices(lobby?.gameOptions);
+  const name = faction.name || id;
+  return `<select class="three-lobby-select" data-lobby-select="spec" data-seat="${id}" aria-label="${name} specialization">
+    ${choices.map((row) => `<option value="${row.id}" ${current === row.id ? 'selected' : ''}>${row.name}</option>`).join('')}
+  </select>`;
 }
 
 export function setLobbyOccupant(lobby, seat, occupant) {
@@ -286,6 +312,10 @@ export function applyLobbyAction(lobby, kind, value) {
   }
   if (kind === 'ai') return setLobbyAiCount(lobby, value);
   if (kind === 'diff') return setLobbyDifficulty(lobby, value);
+  if (kind === 'spec') {
+    const [seat, spec] = String(value || '').split(':');
+    return setLobbySpecialization(lobby, seat, spec);
+  }
   if (kind === 'ipc') return setLobbyIpc(lobby, value);
   if (kind === 'teams') return setLobbyTeams(lobby, value === '1' || value === true);
   if (kind === 'team') {
@@ -331,6 +361,9 @@ export function lobbyBuildPlayers(lobby) {
       lightColor: custom?.lightColor || faction.lightColor,
       isAI: occupant !== 'human',
       aiDifficulty: occupant,
+      aiSpecialization: occupant !== 'human'
+        ? normalizeAiSpecialization(lobby.playerSpec?.[id], lobby.gameOptions)
+        : null,
       teamId: lobby.teamsEnabled ? (lobby.playerTeams?.[id] || null) : null,
     };
   });
