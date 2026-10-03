@@ -25,6 +25,9 @@ export const DEFAULT_GAME_OPTIONS = Object.freeze({
   // Extra Pacific bridges are off until the host turns them on. This is
   // not the Land bridges switch. A missing field loads off. Schema stays 11.
   extraPacificBridges: false,
+  // Garrisons are off until the host turns them on. A missing field loads
+  // off. Schema stays 11.
+  garrisons: false,
 });
 
 export const STARTING_IPC_VALUES = Object.freeze([40, 60, 80, 100, 120, 150]);
@@ -114,6 +117,7 @@ export function normalizeGameOptions(raw, legacy = {}) {
   const tacRaw = src.tacticalBombers !== undefined ? src.tacticalBombers : old.tacticalBombers;
   const mechRaw = src.mechanizedInfantry !== undefined ? src.mechanizedInfantry : old.mechanizedInfantry;
   const extraRaw = src.extraPacificBridges !== undefined ? src.extraPacificBridges : old.extraPacificBridges;
+  const garrisonRaw = src.garrisons !== undefined ? src.garrisons : old.garrisons;
   return {
     startingIPCs: pickNumber(
       src.startingIPCs ?? old.startingIPCs,
@@ -148,6 +152,8 @@ export function normalizeGameOptions(raw, legacy = {}) {
     // Default OFF. Only an explicit true adds the extra Pacific crossings
     // on Classic. The Land bridges switch is unchanged.
     extraPacificBridges: extraRaw === true,
+    // Default OFF. Only an explicit true places garrisons.
+    garrisons: garrisonRaw === true,
   };
 }
 
@@ -164,7 +170,8 @@ export function isStandardRules(raw, legacy) {
     && o.techAcquisition === DEFAULT_GAME_OPTIONS.techAcquisition
     && o.tacticalBombers === DEFAULT_GAME_OPTIONS.tacticalBombers
     && o.mechanizedInfantry === DEFAULT_GAME_OPTIONS.mechanizedInfantry
-    && o.extraPacificBridges === DEFAULT_GAME_OPTIONS.extraPacificBridges;
+    && o.extraPacificBridges === DEFAULT_GAME_OPTIONS.extraPacificBridges
+    && o.garrisons === DEFAULT_GAME_OPTIONS.garrisons;
 }
 
 /** Live summary. Standard rules, or "Custom: Heavy army, 8 per round, no land bridges". */
@@ -190,6 +197,7 @@ export function describe(raw, legacy) {
   if (o.tacticalBombers) parts.push('tactical bombers');
   if (o.mechanizedInfantry) parts.push('mechanized infantry');
   if (o.extraPacificBridges) parts.push('extra Pacific bridges');
+  if (o.garrisons) parts.push('garrisons');
   if (parts.length === 0) return 'Standard rules';
   return `Custom: ${parts.join(', ')}`;
 }
@@ -234,6 +242,7 @@ export const PROTECTED_OPTION_KEYS = Object.freeze([
   'tacticalBombers',
   'mechanizedInfantry',
   'extraPacificBridges',
+  'garrisons',
 ]);
 
 export function protectedGameOptions(raw) {
@@ -309,6 +318,7 @@ export function optionRows(raw, legacy) {
     ['Extra Pacific bridges', o.extraPacificBridges ? 'On' : 'Off'],
     ['Tactical bombers', o.tacticalBombers ? 'On' : 'Off'],
     ['Mechanized infantry', o.mechanizedInfantry ? 'On' : 'Off'],
+    ['Garrisons', o.garrisons ? 'On' : 'Off'],
   ];
 }
 

@@ -3,6 +3,7 @@
 import { describe, optionRows } from '../gameOptions.js';
 import { tacticalBombersEnabled } from '../state/tacticalPairing.js';
 import { mechanizedInfantryEnabled } from '../state/mechanizedInfantry.js';
+import { garrisonsEnabled } from '../state/garrison.js';
 
 export const CARRIER_BULLET_ON = 'Can carry up to 2 air units (fighters or tactical bombers).';
 export const CARRIER_BULLET_OFF = 'Can carry up to 2 fighters.';
@@ -91,6 +92,7 @@ export class RulesPanel {
               <tbody>
                 <tr><td>Infantry</td><td>3</td><td>1</td><td>2</td><td>1</td><td>Cheap, good defense</td></tr>
                 <tr data-rules-mechanized hidden><td>Mechanized Infantry</td><td>4</td><td>1</td><td>2</td><td>2</td><td>Attacks at 2 when paired with artillery, one for one. Stops on entering an enemy territory unless it moves with a tank.</td></tr>
+                <tr data-rules-garrison hidden><td>Garrison</td><td>—</td><td>0</td><td>2</td><td>0</td><td>Original capital only. Cannot move or be purchased. Defends like infantry. Lost only after every other unit there is gone. Returns for free at the end of the original owner's turn if it is missing and they still hold that capital.</td></tr>
                 <tr><td>Artillery</td><td>4</td><td>2</td><td>2</td><td>1</td><td data-rules-artillery-note>Boosts paired infantry</td></tr>
                 <tr><td>Armour (Tank)</td><td>6</td><td>3</td><td>3</td><td>2</td><td>Can blitz through friendly territory</td></tr>
                 <tr><td>Fighter</td><td>10</td><td>3</td><td>4</td><td>4</td><td>Air unit, can land on carriers</td></tr>
@@ -112,6 +114,7 @@ export class RulesPanel {
               <li><strong>Attacking:</strong> Roll dice equal to unit's attack value. Each die showing that number or less = hit.</li>
               <li><strong>Defending:</strong> Roll dice equal to unit's defense value. Same rules for hits.</li>
               <li><strong>Casualties:</strong> Attacker chooses defender casualties, defender chooses attacker casualties.</li>
+              <li data-rules-garrison hidden><strong>Garrison:</strong> Defends only. It is taken only after every other unit on that territory is destroyed.</li>
               <li><strong>Submarines:</strong> Cannot hit aircraft. Aircraft cannot hit a submarine unless that side has a destroyer in the battle. If one side has only aircraft and the other has only submarines, the submarines submerge and the battle ends.</li>
               <li><strong>Transports:</strong> A transport is not chosen as a casualty while a unit the enemy can hit is still in the battle. A submarine facing only aircraft, with no enemy destroyer, does not protect transports: they are destroyed with no dice and the submarine submerges. If a side's only units are transports and the enemy can hit them, the transports are destroyed with no dice.</li>
               <li><strong>Air Units:</strong> Cannot capture territory. Fighters and tactical bombers land on friendly land or a friendly carrier with room. Bombers land on friendly land only and never at sea.</li>
@@ -187,6 +190,10 @@ export class RulesPanel {
     });
     this.el?.querySelectorAll('[data-rules-mechanized]').forEach((el) => {
       el.hidden = !mech;
+    });
+    const garrison = garrisonsEnabled(this.gameState?.gameOptions);
+    this.el?.querySelectorAll('[data-rules-garrison]').forEach((el) => {
+      el.hidden = !garrison;
     });
     this.el?.querySelectorAll('[data-rules-artillery-note]').forEach((el) => {
       el.textContent = mech

@@ -17,6 +17,7 @@ const UNIT_DISPLAY_NAMES = {
   carrier: 'Carrier',
   factory: 'Factory',
   aaGun: 'AA Gun',
+  garrison: 'Garrison',
 };
 
 export function formatUnitName(unitType) {

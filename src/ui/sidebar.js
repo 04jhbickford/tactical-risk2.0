@@ -257,6 +257,7 @@ export class Sidebar {
 
         for (const [unitType, def] of unitList) {
           if (def.isBuilding) continue; // Can't buy factories
+          if (def.unpurchasable) continue;
           // Apply industrial tech discount
           const actualCost = hasIndustrialTech ? Math.max(1, def.cost - 1) : def.cost;
           const canAfford = ipcs >= actualCost;

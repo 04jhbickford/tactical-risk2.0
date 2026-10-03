@@ -283,6 +283,7 @@ export class PurchasePopup {
       .filter(([type, u]) => {
         // AA guns can now be purchased
         if (type === 'mechanizedInfantry' && !mechanizedInfantryEnabled(this.gameState?.gameOptions)) return false;
+        if (u.unpurchasable) return false;
 
         // Can buy land/air units if player has factories
         if ((u.isLand || u.isAir) && hasFactories) return true;

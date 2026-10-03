@@ -159,6 +159,10 @@ function rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMod
         <span class="go-label">Mechanized infantry</span>
         ${shownValue(editable, toggleHtml('mechanizedInfantry', o.mechanizedInfantry, { editable }), o.mechanizedInfantry ? 'On' : 'Off')}
       </div>
+      <div class="go-row" title="Places one garrison on each power's original capital. It cannot move or be bought. It defends like infantry and is lost last. If it is missing and the original owner still holds that capital at the end of their turn, it comes back for free.">
+        <span class="go-label">Garrisons</span>
+        ${shownValue(editable, toggleHtml('garrisons', o.garrisons, { editable }), o.garrisons ? 'On' : 'Off')}
+      </div>
     </div>
     <div class="go-group">
       <h3 class="go-group-label">Players</h3>
@@ -277,6 +281,7 @@ export function readGameOptionsFrom(root) {
     tacticalBombers: flag('tacticalBombers'),
     mechanizedInfantry: flag('mechanizedInfantry'),
     extraPacificBridges: keptFlag('extraPacificBridges', 'keptExtra'),
+    garrisons: flag('garrisons'),
     territorySetup: valueOf('territorySetup')?.value,
     techAcquisition: valueOf('techAcquisition')?.value,
   });
@@ -400,7 +405,7 @@ export function bindGameOptions(root, { onChange, onToggle, onMapChange } = {}) 
         mapSelect.value = CLASSIC_MAP_ID;
         if (typeof onMapChange === 'function') onMapChange(CLASSIC_MAP_ID);
       }
-      for (const name of ['multipleTech', 'landBridges', 'teams', 'tacticalBombers', 'mechanizedInfantry', 'extraPacificBridges']) {
+      for (const name of ['multipleTech', 'landBridges', 'teams', 'tacticalBombers', 'mechanizedInfantry', 'extraPacificBridges', 'garrisons']) {
         const el = panel.querySelector(`[data-go="${name}"]`);
         if (!el) continue;
         const on = !!next[name];

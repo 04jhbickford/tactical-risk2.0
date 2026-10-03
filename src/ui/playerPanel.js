@@ -2695,7 +2695,7 @@ export class PlayerPanel {
           <div class="pp-unit-breakdown">`;
 
       const unitCategories = {
-        'Land': ['infantry', 'artillery', 'tank', 'aaGun'],
+        'Land': ['infantry', 'garrison', 'artillery', 'tank', 'aaGun'],
         'Naval': ['transport', 'submarine', 'destroyer', 'cruiser', 'battleship', 'carrier'],
         'Air': ['fighter', 'bomber']
       };
@@ -3148,6 +3148,7 @@ export class PlayerPanel {
       .filter(([type, def]) => {
         if (type === 'tacticalBomber' && !tacticalBombersEnabled(this.gameState?.gameOptions)) return false;
         if (type === 'mechanizedInfantry' && !mechanizedInfantryEnabled(this.gameState?.gameOptions)) return false;
+        if (def.unpurchasable) return false;
         // AA guns can now be purchased
         if ((def.isLand || def.isAir || def.isBuilding) && hasFactories) return true;
         if (def.isSea && hasSeaZones) return true;
@@ -3488,7 +3489,7 @@ export class PlayerPanel {
       infantry: 'INF', mechanizedInfantry: 'MECH', armour: 'TNK', artillery: 'ART', fighter: 'FTR',
       bomber: 'BMB', tacticalBomber: 'TAC', transport: 'TRN', submarine: 'SUB',
       destroyer: 'DD', cruiser: 'CA', battleship: 'BB', carrier: 'CV',
-      factory: 'FAC', aaGun: 'AA',
+      factory: 'FAC', aaGun: 'AA', garrison: 'GAR',
     };
     return map[type] || String(type || '?').slice(0, 3).toUpperCase();
   }
@@ -3577,6 +3578,7 @@ export class PlayerPanel {
       const hasFactories = factoryTerritories.length > 0;
       const hasSeaZones = adjacentSeaZones.length > 0;
       const units = Object.entries(this.unitDefs || {}).filter(([, def]) => {
+        if (def.unpurchasable) return false;
         if ((def.isLand || def.isAir || def.isBuilding) && hasFactories) return true;
         if (def.isSea && hasSeaZones) return true;
         return false;

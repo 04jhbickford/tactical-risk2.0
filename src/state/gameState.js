@@ -101,6 +101,11 @@ import {
   mechanizedInfantryEnabled,
 } from './mechanizedInfantry.js';
 import {
+  GARRISON,
+  clampGarrisonSelection,
+  respawnOriginalGarrison,
+} from './garrison.js';
+import {
   applyCasualtySelection,
   airMayUseLandingOption,
   airVersusSubStalemate,
@@ -758,6 +763,7 @@ export class GameState {
         }
         this.units[territory] = units;
       }
+      respawnOriginalGarrison(this, player.id);
     }
 
     this.phase = GAME_PHASES.PLAYING;
@@ -1592,6 +1598,7 @@ export class GameState {
     units.push({ type: 'aaGun', quantity: 1, owner: player.id });
     units.push({ type: 'factory', quantity: 1, owner: player.id });
     this.units[territoryName] = units;
+    respawnOriginalGarrison(this, player.id);
 
     // Remove factory from units to place (it's been auto-placed on capital)
     const unitsToPlace = this.unitsToPlace[player.id] || [];
@@ -1648,6 +1655,7 @@ export class GameState {
     };
     removeOne('aaGun');
     removeOne('factory');
+    removeOne(GARRISON);
     this.units[last.territory] = units;
 
     if (last.factoryTaken) {
@@ -2183,6 +2191,9 @@ export class GameState {
     if (!unitDef) return { success: false, error: 'Unknown unit type' };
     if (unitType === MECHANIZED_INFANTRY && !mechanizedInfantryEnabled(this.gameOptions)) {
       return { success: false, error: 'Mechanized infantry is not in this game' };
+    }
+    if (unitType === GARRISON || unitDef.unpurchasable) {
+      return { success: false, error: 'Garrison cannot be purchased' };
     }
 
     // Check mobilization capacity - cannot buy more units than we can place
@@ -2818,6 +2829,7 @@ export class GameState {
     if (!unitDef) return false;
     if (unitType === 'tacticalBomber' && !tacticalBombersEnabled(this.gameOptions)) return false;
     if (unitType === MECHANIZED_INFANTRY && !mechanizedInfantryEnabled(this.gameOptions)) return false;
+    if (unitType === GARRISON || unitDef.unpurchasable) return false;
 
     const cost = unitDef.cost;
     if (this.playerState[player.id].ipcs < cost) return false;
@@ -2921,6 +2933,7 @@ export class GameState {
       console.warn(`nextTurn() ignored: game phase is '${this.phase}', not playing`);
       return;
     }
+    respawnOriginalGarrison(this, this.currentPlayer?.id);
     clearRaidedForTurnEnd(this.units);
 
     // Advance to the next player still in the game
@@ -3153,6 +3166,7 @@ export class GameState {
     if (!unitDef) return false;
     if (unitType === 'tacticalBomber' && !tacticalBombersEnabled(this.gameOptions)) return false;
     if (unitType === MECHANIZED_INFANTRY && !mechanizedInfantryEnabled(this.gameOptions)) return false;
+    if (unitType === GARRISON || unitDef.unpurchasable) return false;
 
     const totalCost = unitDef.cost * quantity;
     if (this.playerState[player.id].ipcs < totalCost) return false;
@@ -3191,6 +3205,9 @@ export class GameState {
     const isNonCombatMove = this.turnPhase === TURN_PHASES.NON_COMBAT_MOVE;
 
     if (!isCombatMove && !isNonCombatMove) return { success: false, error: 'Not in movement phase' };
+    if ((unitsToMove || []).some((unit) => unit?.type === GARRISON || unitDefs?.[unit.type]?.immovable)) {
+      return { success: false, error: 'Garrison cannot move' };
+    }
 
     const player = this.currentPlayer;
     if (!player) return { success: false, error: 'No current player' };
@@ -5293,6 +5310,7 @@ export class GameState {
       const def = unitDefs[unit.type];
       if (!def) continue;
       if ((Number(unit.quantity) || 0) <= 0) continue;
+      if (type === 'attack' && (unit.type === GARRISON || def.defendOnly)) continue;
       const hitValue = type === 'attack' ? def.attack : def.defense;
 
       for (let i = 0; i < unit.quantity; i++) {
@@ -5462,8 +5480,9 @@ export class GameState {
     // Apply remaining hits to cheapest units first
     const sorted = [...units].filter(u => {
       const def = unitDefs[u.type];
-      // Skip factories - they are captured, not destroyed
-      if (u.type === 'factory') return false;
+      // Skip factories - they are captured, not destroyed.
+      // A garrison is spent only after every other unit.
+      if (u.type === 'factory' || u.type === GARRISON) return false;
       // A hittable escort still shields transports for this whole round.
       if (u.type === 'transport' && shieldTransports) return false;
       // Skip multi-hit ships that are only damaged (not destroyed)
@@ -5484,6 +5503,21 @@ export class GameState {
       if (remove <= 0) continue;
       unit.quantity -= remove;
       this._noteSunkCargo(unit);
+      for (let i = 0; i < remove; i++) {
+        casualties.push({ type: unit.type, destroyed: true });
+      }
+    }
+
+    for (const unit of units) {
+      if (hitsLeft() <= 0) break;
+      if (unit?.type !== GARRISON || (Number(unit.quantity) || 0) <= 0) continue;
+      let remove = 0;
+      while (remove < unit.quantity && hitsLeft() > 0) {
+        if (!takeHit(unit)) break;
+        remove += 1;
+      }
+      if (remove <= 0) continue;
+      unit.quantity -= remove;
       for (let i = 0; i < remove; i++) {
         casualties.push({ type: unit.type, destroyed: true });
       }
@@ -5548,7 +5582,7 @@ export class GameState {
         selected[casualty.type] = (selected[casualty.type] || 0) + 1;
       }
     }
-    applyCasualtySelection(targetUnits, selected);
+    applyCasualtySelection(targetUnits, clampGarrisonSelection(targetUnits, selected));
 
     // Clean up destroyed units
     this.units[territory] = units.filter(u => u.quantity > 0);

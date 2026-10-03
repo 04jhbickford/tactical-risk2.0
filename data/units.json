@@ -124,5 +124,16 @@
     "isLand": true,
     "antiAir": true,
     "image": "AAGun.png"
+  },
+  "garrison": {
+    "cost": 3,
+    "attack": 0,
+    "defense": 2,
+    "movement": 0,
+    "isLand": true,
+    "defendOnly": true,
+    "immovable": true,
+    "unpurchasable": true,
+    "casualtyLast": true
   }
 }

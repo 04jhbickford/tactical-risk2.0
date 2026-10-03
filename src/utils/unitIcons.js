@@ -1,3 +1,5 @@
+import { garrisonIconDataUri } from './garrisonMark.js';
+
 // Utility for getting faction-specific unit icons
 // Icons are stored in units/{FactionId}/{ImageName}.png
 
@@ -49,6 +51,7 @@ const FACTION_ICON_DIR = {
  * @returns {string} The path to the unit icon
  */
 export function getUnitIconPath(unitType, factionId) {
+  if (unitType === 'garrison') return garrisonIconDataUri();
   // Check for faction-specific override
   const factionOverrides = UNIT_IMAGE_MAP[factionId] || {};
   const imageName = factionOverrides[unitType] || UNIT_IMAGE_MAP.default[unitType];
