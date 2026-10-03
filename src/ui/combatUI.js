@@ -48,6 +48,7 @@ import {
   clampGarrisonSelection,
   garrisonHitAllowed,
 } from '../state/garrison.js';
+import { defendingAaNeed } from '../state/radioDeception.js';
 
 export {
   getEnemyCombatUnits,
@@ -58,8 +59,9 @@ export {
   summarizeCombatForce,
 };
 
-// Readable AA result step (UI only). Rules unchanged: 1 die per attacking
-// aircraft, hit on 1, cheapest aircraft first, no attacker choice.
+// Readable AA result step (UI only). One die per attacking aircraft,
+// hit on the AA defend value (1, or 2 with Wasserfall), cheapest aircraft
+// first, no attacker choice.
 export const AA_RESULT_PHASE = 'aaResults';
 export const AA_RESULT_AUTO_PAUSE_MS = 600;
 
@@ -758,6 +760,14 @@ export class CombatUI {
     return Math.floor(Math.random() * 6) + 1;
   }
 
+  _aaHitPhrase() {
+    const stored = Number(this.combatState?.aaResults?.need);
+    const need = stored > 0
+      ? stored
+      : defendingAaNeed(this.gameState, this.combatState?.defenders);
+    return `hits on ${need}`;
+  }
+
   _rollAAFire() {
     const { attackers } = this.combatState;
     const attackForceBefore = summarizeCombatForce(attackers);
@@ -770,24 +780,25 @@ export class CombatUI {
 
     const totalAircraft = attackingAir.reduce((sum, u) => sum + (Number(u.quantity) || 0), 0);
 
-    // Roll 1 die per aircraft, hits on 1
+    // One die per aircraft. Classic AA hits on 1. Wasserfall hits on 2 or less.
     const rolls = [];
     let hits = 0;
     const aaSeat = (this.combatState.defenders || []).find((u) => u.type === 'aaGun')?.owner || null;
+    const need = defendingAaNeed(this.gameState, this.combatState.defenders);
     for (let i = 0; i < totalAircraft; i++) {
       const roll = this._rollD6({
         context: 'aa',
         side: 'defender',
         unit: 'aaGun',
-        need: 1,
+        need,
         playerSeat: aaSeat,
       });
-      const hit = roll === 1;
+      const hit = roll <= need;
       rolls.push({ roll, hit });
       if (hit) hits++;
     }
 
-    this.combatState.aaResults = { rolls, hits };
+    this.combatState.aaResults = { rolls, hits, need };
     this.combatState.aaFired = true;
 
     // A&A Rule: AA fire casualties are automatic - attacker doesn't choose
@@ -2613,7 +2624,7 @@ export class CombatUI {
       html += `
         <div class="aa-fire-section">
           <div class="aa-title">Anti-Aircraft Fire</div>
-          <div class="aa-desc">AA guns fire at attacking aircraft (hits on 1)</div>
+          <div class="aa-desc">AA guns fire at attacking aircraft (${this._aaHitPhrase()})</div>
         </div>
       `;
     }
@@ -2632,7 +2643,7 @@ export class CombatUI {
       html += `
         <div class="aa-results">
           <div class="aa-title">${aaPlayer?.name || 'Defender'} AA guns fire</div>
-          <div class="aa-desc">Defending anti-aircraft (hits on 1)</div>
+          <div class="aa-desc">Defending anti-aircraft (${this._aaHitPhrase()})</div>
           <div class="aa-result-header">AA Fire Results: ${hits} hit(s)</div>
           <div class="dice-display">
             ${rolls.slice(0, 12).map(r => `<div class="die ${r.hit ? 'hit' : 'miss'}">${r.roll}</div>`).join('')}
@@ -3132,7 +3143,7 @@ export class CombatUI {
   _renderPhoneCombatOddsBody(player, defenderPlayer, phase, winner, compact) {
     let html = this._renderPhoneCombatSummary(player, defenderPlayer, phase, winner, { compact });
     if (phase === 'aaFire') {
-      html += `<p class="phone-combat-blurb">AA guns fire at attacking aircraft (hits on 1). Confirm is Fire AA.</p>`;
+      html += `<p class="phone-combat-blurb">AA guns fire at attacking aircraft (${this._aaHitPhrase()}). Confirm is Fire AA.</p>`;
     } else if (phase === 'bombardment') {
       html += `<p class="phone-combat-blurb">Shore bombardment from adjacent sea. Confirm is Fire Bombardment.</p>`;
     } else if (phase === 'submarineFirstStrike') {

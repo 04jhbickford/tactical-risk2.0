@@ -2,6 +2,12 @@
 
 ---
 
+## 10.3.26 — unified.54 Wasserfall
+
+Stamp `V2.81.57-unified.54`. Schema stays 11. Expanded tech adds Wasserfall beside Radio Deception Networks. Classic research is unchanged. After Wasserfall is researched, that player's AA guns hit on 2 or less. Without the tech they still hit on 1. Attack values are unchanged. A `V2.82-unified.53` doc is older than this tab and does not prompt. A `V2.82-unified.55` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.54`).
+
+Bastion, Discord (1555810178513772555): one expanded technology, Wasserfall. AA guns become guided missile batteries and defend at 2.
+
 ## 10.3.26 — unified.53 Radio Deception Networks
 
 Stamp `V2.81.57-unified.53`. Schema stays 11. The host lobby option `techSet` defaults to classic. Expanded tech adds one researchable technology, Radio Deception Networks, on the existing Develop Technology list. A save that omits `techSet` or `radioDeception` loads as classic with no placement. A `V2.82-unified.52` doc is older than this tab and does not prompt. A `V2.82-unified.54` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.53`).

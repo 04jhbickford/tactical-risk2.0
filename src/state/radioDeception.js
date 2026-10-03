@@ -1,9 +1,15 @@
-// Radio Deception Networks. Off unless the host picks Expanded tech.
-// The placement is one optional object on the save. Old saves omit it.
-// Schema stays 11. Illusions are not written into `units`, so they cannot
-// move, attack, or defend. Obfuscated units stay real and still fight.
+// Expanded tech. Off unless the host picks Expanded tech.
+// Radio Deception Networks stores one optional object on the save.
+// Old saves omit it. Schema stays 11. Illusions are not written into
+// `units`, so they cannot move, attack, or defend. Obfuscated units stay
+// real and still fight.
+// Wasserfall is the other expanded research id. It is not a save field.
+// An unlocked id on the player is enough. Classic research omits both.
 
 export const RADIO_DECEPTION = 'radioDeception';
+export const WASSERFALL = 'wasserfall';
+export const AA_GUN_DEFEND = 1;
+export const WASSERFALL_DEFEND = 2;
 export const TECH_SET_CLASSIC = 'classic';
 export const TECH_SET_EXPANDED = 'expanded';
 export const TECH_SET_VALUES = Object.freeze([TECH_SET_CLASSIC, TECH_SET_EXPANDED]);
@@ -14,6 +20,16 @@ export const DECEPTION_UNIT_CAP = 2;
 export const RADIO_DECEPTION_TECH = Object.freeze({
   name: 'Radio Deception Networks',
   description: 'On one territory you control, hide up to two real units from enemies, or show up to two illusory land units. One placement. You and allies see it in grey.',
+});
+
+export const WASSERFALL_TECH = Object.freeze({
+  name: 'Wasserfall',
+  description: 'AA guns become guided missile batteries and defend at 2.',
+});
+
+const EXPANDED_TECH = Object.freeze({
+  [RADIO_DECEPTION]: RADIO_DECEPTION_TECH,
+  [WASSERFALL]: WASSERFALL_TECH,
 });
 
 // Land units a player may fake. Buildings and the optional garrison are not.
@@ -34,15 +50,39 @@ export function techSetLabel(value) {
 }
 
 export function researchableTechIds(classicIds, gameOptions) {
-  const ids = (classicIds || []).filter((id) => id && id !== RADIO_DECEPTION);
-  if (expandedTechEnabled(gameOptions)) ids.push(RADIO_DECEPTION);
+  const extra = Object.keys(EXPANDED_TECH);
+  const ids = (classicIds || []).filter((id) => id && !extra.includes(id));
+  if (expandedTechEnabled(gameOptions)) {
+    for (const id of extra) {
+      if (!ids.includes(id)) ids.push(id);
+    }
+  }
   return ids;
 }
 
 export function resolveTechInfo(techId, classicTable, gameOptions) {
   if (classicTable && classicTable[techId]) return classicTable[techId];
-  if (techId === RADIO_DECEPTION && expandedTechEnabled(gameOptions)) return RADIO_DECEPTION_TECH;
+  if (expandedTechEnabled(gameOptions) && EXPANDED_TECH[techId]) return EXPANDED_TECH[techId];
   return null;
+}
+
+// AA guns hit on 1. Wasserfall, researched under Expanded tech, hits on 2.
+// Classic, and Expanded without the tech, stay at 1. Attack is untouched.
+export function aaGunDefendValue(state, ownerId) {
+  if (!ownerId || !expandedTechEnabled(state?.gameOptions)) return AA_GUN_DEFEND;
+  const unlocked = state?.playerTechs?.[ownerId]?.unlockedTechs || [];
+  return unlocked.includes(WASSERFALL) ? WASSERFALL_DEFEND : AA_GUN_DEFEND;
+}
+
+// One volley for every defending AA gun. The best battery sets the number.
+export function defendingAaNeed(state, defenders) {
+  let need = AA_GUN_DEFEND;
+  for (const unit of defenders || []) {
+    if (unit?.type !== 'aaGun' || (Number(unit.quantity) || 0) <= 0) continue;
+    const value = aaGunDefendValue(state, unit.owner);
+    if (value > need) need = value;
+  }
+  return need;
 }
 
 function territoryOwner(state, name) {

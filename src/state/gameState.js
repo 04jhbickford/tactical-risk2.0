@@ -109,6 +109,8 @@ import {
 } from './garrison.js';
 import {
   RADIO_DECEPTION,
+  AA_GUN_DEFEND,
+  aaGunDefendValue,
   expandedTechEnabled,
   normalizeRadioBook,
   researchableTechIds,
@@ -4867,6 +4869,78 @@ export class GameState {
     if (transportsLackAShield(attackers, defenders, unitDefs, 'defense')) scrap(attackers);
   }
 
+  // Opening AA shot for auto-resolved land battles. Human combat already
+  // rolls this in the AA step. Classic auto-resolve stays on catalog
+  // defense (0) and does not add a shot. Wasserfall raises the shot to 2
+  // and that volley runs here too: one die per attacking aircraft, cheapest
+  // aircraft removed, once on the first round.
+  _fireGuidedAaVolley(attackers, defenders, unitDefs) {
+    const guns = (defenders || []).filter((unit) => (
+      unit?.type === 'aaGun' && (Number(unit.quantity) || 0) > 0
+    ));
+    if (!guns.length) return null;
+    let need = AA_GUN_DEFEND;
+    let seat = null;
+    for (const gun of guns) {
+      const value = aaGunDefendValue(this, gun.owner);
+      if (value > need) {
+        need = value;
+        seat = gun.owner || seat;
+      }
+    }
+    if (need <= AA_GUN_DEFEND) return null;
+    let aircraft = 0;
+    for (const unit of attackers || []) {
+      if (!unitDefs?.[unit.type]?.isAir) continue;
+      aircraft += Math.max(0, Number(unit.quantity) || 0);
+    }
+    if (aircraft <= 0) return null;
+    const rolls = [];
+    let hits = 0;
+    for (let i = 0; i < aircraft; i += 1) {
+      const roll = this._rollDie({
+        context: 'aa',
+        side: 'defender',
+        unit: 'aaGun',
+        need,
+        playerSeat: seat,
+      });
+      const hit = roll <= need;
+      rolls.push({ roll, hit });
+      if (hit) hits += 1;
+    }
+    if (hits > 0) {
+      const stacks = (attackers || [])
+        .filter((unit) => unitDefs?.[unit.type]?.isAir && (Number(unit.quantity) || 0) > 0)
+        .slice()
+        .sort((a, b) => (unitDefs[a.type]?.cost || 999) - (unitDefs[b.type]?.cost || 999));
+      let left = hits;
+      for (const stack of stacks) {
+        if (left <= 0) break;
+        const qty = Number(stack.quantity) || 0;
+        const take = Math.min(qty, left);
+        stack.quantity = qty - take;
+        left -= take;
+      }
+    }
+    return { need, rolls, hits };
+  }
+
+  _finishGuidedAaWipe(territory, beforeCounts, player) {
+    this._noteCombatRoundLosses(territory, beforeCounts);
+    this._flushCombatLossLedger(territory, 'defender');
+    this.combatQueue = this.combatQueue.filter((name) => name !== territory);
+    if (this._combatRoundsTracker) delete this._combatRoundsTracker[territory];
+    this._diceBattle = null;
+    this._notify();
+    flushDiceBuffer(this);
+    this._emitLedger('combat', {
+      territory,
+      playerId: player.id,
+      payload: { action: 'resolveCombat', winner: 'defender' },
+    });
+  }
+
   // Resolve combat in a territory (dice combat with naval rules)
   resolveCombat(territory, unitDefs) {
     const units = this.units[territory] || [];
@@ -4919,6 +4993,37 @@ export class GameState {
     }
 
     if (attackers.length === 0 || combatDefenders.length === 0) {
+      if (
+        !isNavalBattle
+        && attackers.length > 0
+        && !this._combatRoundsTracker?.[territory]
+      ) {
+        const beforeAa = this._combatUnitCounts(units);
+        const guided = this._fireGuidedAaVolley(attackers, allDefenders, unitDefs);
+        if (guided) {
+          attackers = attackers.filter((u) => (Number(u.quantity) || 0) > 0);
+          this.units[territory] = units.filter((u) => (Number(u.quantity) || 0) > 0 || u.type === 'factory');
+          const owner = this.getOwner(territory);
+          this._openCombatLossLedger(
+            territory,
+            player.id,
+            owner || this._mainEnemyOwner(allDefenders, player.id),
+          );
+          if (attackers.length === 0) {
+            this._finishGuidedAaWipe(territory, beforeAa, player);
+            return {
+              resolved: true,
+              winner: 'defender',
+              conquered: false,
+              aaHits: guided.hits,
+              attackersRemaining: 0,
+              defendersRemaining: allDefenders.reduce((sum, u) => sum + (Number(u.quantity) || 0), 0),
+            };
+          }
+          this._noteCombatRoundLosses(territory, beforeAa);
+          this._flushCombatLossLedger(territory, 'attacker');
+        }
+      }
       this.units[territory] = units.filter((u) => (Number(u.quantity) || 0) > 0 || u.type === 'factory');
       this._pendingCarriedLosses = [];
       // Shared land-hold capture (9.20.26.02). Air-only / attacker wipe
@@ -4997,6 +5102,36 @@ export class GameState {
     let surpriseDefenderLosses = [];
     const preStrikeAttack = forceSnap(attackers);
     const preStrikeDefense = forceSnap(allDefenders);
+    if (!isNavalBattle && this._combatRoundsTracker[territory] === 1) {
+      const guided = this._fireGuidedAaVolley(attackers, allDefenders, unitDefs);
+      if (guided) {
+        attackers = attackers.filter((u) => (Number(u.quantity) || 0) > 0);
+        this.recordCombatTelemetry({
+          kind: 'aa',
+          territory,
+          hits: guided.hits,
+          rolls: guided.rolls.map((row) => row.roll),
+          attackForce: preStrikeAttack,
+          defenseForce: preStrikeDefense,
+          survivors: forceSnap(attackers),
+          wiped: attackers.length === 0,
+        });
+        if (attackers.length === 0) {
+          this.units[territory] = units.filter((u) => (Number(u.quantity) || 0) > 0 || u.type === 'factory');
+          this._finishGuidedAaWipe(territory, beforeCounts, player);
+          return {
+            resolved: true,
+            winner: 'defender',
+            conquered: false,
+            aaHits: guided.hits,
+            attackHits: 0,
+            defenseHits: 0,
+            attackersRemaining: 0,
+            defendersRemaining: allDefenders.reduce((sum, u) => sum + (Number(u.quantity) || 0), 0),
+          };
+        }
+      }
+    }
     if (this._combatRoundsTracker[territory] === 1) {
       if (sideCanFirstStrike(attackerSubs, allDefenders, defenderHasDestroyer, unitDefs)) {
         const strike = this._rollCombatWithRolls(attackerSubs, 'attack', unitDefs, 'sub');
