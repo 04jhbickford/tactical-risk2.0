@@ -3,7 +3,12 @@
 export class VictoryScreen {
   constructor() {
     this.gameState = null;
+    this.onGameOver = null;
     this._create();
+  }
+
+  setOnGameOver(callback) {
+    this.onGameOver = typeof callback === 'function' ? callback : null;
   }
 
   _create() {
@@ -16,12 +21,11 @@ export class VictoryScreen {
   setGameState(gameState) {
     this.gameState = gameState;
 
-    // Subscribe to state changes to detect game over
-    gameState.subscribe(() => {
-      if (gameState.gameOver && !this.el.classList.contains('visible')) {
-        this.show();
-      }
-    });
+    const showIfOver = () => {
+      if (gameState.gameOver && !this.el.classList.contains('visible')) this.show();
+    };
+    gameState.subscribe(showIfOver);
+    showIfOver();
   }
 
   show() {
@@ -52,6 +56,10 @@ export class VictoryScreen {
     `;
 
     this.el.classList.remove('hidden');
+    this.el.classList.add('visible');
+    try { this.onGameOver?.(this.gameState); } catch (err) {
+      console.warn('[leaderboard] record failed', err);
+    }
 
     // Bind new game button
     this.el.querySelector('#victoryNewGame').addEventListener('click', () => {
@@ -85,5 +93,6 @@ export class VictoryScreen {
 
   hide() {
     this.el.classList.add('hidden');
+    this.el.classList.remove('visible');
   }
 }

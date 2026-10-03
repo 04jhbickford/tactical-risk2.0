@@ -234,5 +234,28 @@ service cloud.firestore {
             || diceNameOk(request.resource.data.displayName));
       allow delete: if false;
     }
+
+    // Per-player win/loss totals. A signed-in user writes only their own
+    // doc. Any signed-in user can read the board. No email field.
+    // Opt-out hides the row in the client. Rules are not deployed from
+    // this branch; until they are, the client keeps a device copy.
+    match /leaderboards/{userId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['displayName', 'optOut', 'scores', 'seen', 'updatedAt'])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 40
+        && !request.resource.data.displayName.matches('.*@.*')
+        && request.resource.data.optOut is bool
+        && request.resource.data.scores is map
+        && request.resource.data.scores.size() <= 4
+        && request.resource.data.seen is list
+        && request.resource.data.seen.size() <= 80
+        && request.resource.data.updatedAt is int
+        && !('email' in request.resource.data);
+      allow delete: if false;
+    }
   }
 }

@@ -217,9 +217,10 @@ check('lobby How to Play does not go through Play Online / auth',
   /data-action="how-to-play"/.test(lobbySrc)
   && /setOnRulesToggle/.test(lobbySrc)
   && !/how-to-play[\s\S]{0,80}onPlayOnline/.test(lobbySrc));
-check('home is a 3-mode tile grid (Local / Online / How to Play)',
+check('home is a 4-mode tile grid (Local / Online / How to Play / Leaderboards)',
   /lobby-mode-tiles/.test(lobbySrc)
   && /lobby-phone-card-howto/.test(lobbySrc)
+  && /data-action="leaderboards"/.test(lobbySrc)
   && /Start here/.test(lobbySrc));
 check('Rules guest path has contents jump + no-sign-in kicker',
   /rules-contents-select/.test(rulesSrc)

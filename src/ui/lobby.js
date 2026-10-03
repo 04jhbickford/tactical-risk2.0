@@ -15,6 +15,12 @@ import { CLASSIC_MAP_ID, markMapChrome } from '../map/mapRegistry.js';
 import { classicPowersForCap } from '../state/classicSeats.js';
 import { getBoard } from '../map/boardCatalog.js';
 import { bindLobbyDice, lobbyDiceEntryMarkup, renderDiceStatsMarkup } from './diceStatsPanel.js';
+import { renderLeaderboardPage, renderLeaderboardPrefs } from '../multiplayer/leaderboard.js';
+import {
+  loadLeaderboardView,
+  resetLeaderboardScores,
+  setLeaderboardOptOut,
+} from '../multiplayer/leaderboardStore.js';
 import { AI_LEVELS, normalizeAiDifficulty } from '../ai/difficulty.js';
 export { GAME_VERSION };
 
@@ -86,7 +92,20 @@ export class Lobby {
     this._ignoreCardTogglePlayer = null;
     this._docClickBound = false;
     this._diceOpen = false;
+    this._lbView = null;
+    this._lbToken = 0;
+    this._lbResetArmed = false;
+    this._lbNote = '';
+    this._leaderboardUser = null;
     this._create();
+  }
+
+  setLeaderboardUser(getUser) {
+    this._leaderboardUser = typeof getUser === 'function' ? getUser : null;
+  }
+
+  _lbUser() {
+    try { return this._leaderboardUser?.() || null; } catch { return null; }
   }
 
   setOnRulesToggle(callback) {
@@ -132,6 +151,15 @@ export class Lobby {
         break;
       case 'my-games':
         content = this._renderMyGames();
+        break;
+      case 'leaderboards':
+        content = renderLeaderboardPage(this._lbView);
+        break;
+      case 'leaderboard-prefs':
+        content = renderLeaderboardPrefs(this._lbView?.self, {
+          resetArmed: this._lbResetArmed,
+          note: this._lbNote,
+        });
         break;
       default:
         content = phone ? this._renderMobileMainMenu() : this._renderMainMenu();
@@ -206,6 +234,16 @@ export class Lobby {
               <span class="lobby-phone-card-kicker">Guest</span>
               <span class="lobby-phone-card-title">How to Play</span>
               <span class="lobby-phone-card-desc">Rules · no sign-in</span>
+            </span>
+          </button>
+          <button class="lobby-phone-card" data-action="leaderboards">
+            <span class="lobby-phone-card-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h16v2H4V6zm0 5h16v2H4v-2zm0 5h10v2H4v-2z"/></svg>
+            </span>
+            <span class="lobby-phone-card-copy">
+              <span class="lobby-phone-card-kicker">Records</span>
+              <span class="lobby-phone-card-title">Leaderboards</span>
+              <span class="lobby-phone-card-desc">Wins, losses, and games played</span>
             </span>
           </button>
         </div>
@@ -407,6 +445,17 @@ export class Lobby {
               <p>Rules — no sign-in</p>
             </div>
           </button>
+
+          <button class="lobby-menu-card" data-action="leaderboards">
+            <div class="menu-card-icon">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h16v2H4V6zm0 5h16v2H4v-2zm0 5h10v2H4v-2z"/></svg>
+            </div>
+            <div class="menu-card-content">
+              <p class="menu-card-kicker">Records</p>
+              <h3>Leaderboards</h3>
+              <p>Wins, losses, and games played</p>
+            </div>
+          </button>
         </div>
 
         ${hasSavedGames ? `
@@ -593,6 +642,42 @@ export class Lobby {
       if (this.onRulesToggle) this.onRulesToggle();
     });
 
+    this.el.querySelector('[data-action="leaderboards"]')?.addEventListener('click', () => {
+      this._openLeaderboards();
+    });
+
+    this.el.querySelector('[data-action="lb-prefs"]')?.addEventListener('click', () => {
+      this.mode = 'leaderboard-prefs';
+      this._lbResetArmed = false;
+      this._render();
+    });
+
+    this.el.querySelector('[data-action="lb-opt-out"]')?.addEventListener('change', (e) => {
+      const optOut = !!e.target.checked;
+      this._lbResetArmed = false;
+      this._lbNote = '';
+      setLeaderboardOptOut(this._lbUser(), optOut).then((self) => {
+        if (this.mode !== 'leaderboard-prefs') return;
+        this._lbView = { ...(this._lbView || {}), self };
+        this._render();
+      }).catch(() => {});
+    });
+
+    this.el.querySelector('[data-action="lb-reset"]')?.addEventListener('click', () => {
+      this._lbResetArmed = true;
+      this._render();
+    });
+
+    this.el.querySelector('[data-action="lb-reset-confirm"]')?.addEventListener('click', () => {
+      resetLeaderboardScores(this._lbUser()).then((self) => {
+        if (this.mode !== 'leaderboard-prefs') return;
+        this._lbResetArmed = false;
+        this._lbNote = 'Scores cleared.';
+        this._lbView = { ...(this._lbView || {}), self };
+        this._render();
+      }).catch(() => {});
+    });
+
     this.el.querySelector('[data-action="my-games"]')?.addEventListener('click', () => {
       this.mode = 'my-games';
       this._render();
@@ -608,6 +693,10 @@ export class Lobby {
     this.el.querySelector('[data-action="back"]')?.addEventListener('click', () => {
       // Keep seated factions + occupant (Human / Easy AI / …). Returning
       // to setup must not reset a card to Human.
+      if (this.mode === 'leaderboard-prefs') {
+        this._openLeaderboards();
+        return;
+      }
       this.mode = 'main';
       this._render();
     });
@@ -861,6 +950,32 @@ export class Lobby {
       localStorage.removeItem('tacticalRisk_autoSave_time');
       this._render();
     }
+  }
+
+  _openLeaderboards() {
+    this.mode = 'leaderboards';
+    this._lbResetArmed = false;
+    this._lbNote = '';
+    if (!this._lbView) {
+      this._lbView = { status: 'loading', signedIn: false, self: null, rows: [] };
+    }
+    this._render();
+    const token = ++this._lbToken;
+    loadLeaderboardView(this._lbUser()).then((view) => {
+      if (token !== this._lbToken) return;
+      if (this.mode !== 'leaderboards' && this.mode !== 'leaderboard-prefs') return;
+      this._lbView = view;
+      this._render();
+    }).catch(() => {
+      if (token !== this._lbToken) return;
+      this._lbView = {
+        status: 'error',
+        signedIn: !!this._lbUser()?.id,
+        self: this._lbView?.self || null,
+        rows: [],
+      };
+      if (this.mode === 'leaderboards' || this.mode === 'leaderboard-prefs') this._render();
+    });
   }
 
   show() {
