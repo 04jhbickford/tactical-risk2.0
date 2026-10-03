@@ -2,6 +2,12 @@
 
 ---
 
+## 10.3.26 — unified.49 Classic air lands in non-combat
+
+Stamp `V2.81.57-unified.49`. Schema stays 11. A `V2.82-unified.48` doc is older than this tab and does not prompt. A `V2.82-unified.50` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.49`).
+
+Robfox007, Discord message 1555703771714297999, 3:11pm PT on 2 Oct 2026: on Classic desktop, air that still needs a landing spot stays in the air when combat ends and lands during non-combat movement. A plane that cannot legally land by the end of non-combat is still lost. Pacific still chooses that landing when the battle ends. Combat dice, movement range, and who can be attacked are unchanged.
+
 ## 10.3.26 — unified.48 garrison with the capital
 
 Stamp `V2.81.57-unified.48`. Schema stays 11. A `V2.82-unified.47` doc is older than this tab and does not prompt. A `V2.82-unified.49` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.48`).

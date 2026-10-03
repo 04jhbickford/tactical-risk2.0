@@ -394,6 +394,23 @@ export function isAirUnitType(type, unitDefs = {}) {
   return KNOWN_AIR.has(type);
 }
 
+// Pacific still lands or crashes aircraft as combat ends. Classic leaves
+// them airborne and lands them during non-combat movement.
+export function airLandsDuringNonCombat(gameState) {
+  return (gameState?.mapId || 'classic') !== 'pacific';
+}
+
+// Movement left after the combat-move flight. Null means this hop is not
+// a Classic return, so the caller keeps the range it already computed.
+export function combatAirReturnRange(gameState, fromTerritory, type, totalMovement) {
+  if (!airLandsDuringNonCombat(gameState)) return null;
+  const origin = gameState?.airUnitOrigins?.[fromTerritory]?.[type];
+  if (!origin) return null;
+  const spent = Number(origin.distance) >= 999 ? 0 : Math.max(0, Number(origin.distance) || 0);
+  const total = Math.max(0, Number(totalMovement) || 0);
+  return Math.max(0, total - spent);
+}
+
 // Fighters and bombers sitting in a sea zone as their own stack are over
 // open water. Aircraft stored on carrier.aircraft are already landed.
 export function looseAirOverWater(units = {}, territoryByName = {}, owner, unitDefs = {}) {

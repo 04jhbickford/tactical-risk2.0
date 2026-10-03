@@ -3,7 +3,10 @@
 // controlled at the start of the turn, or a friendly or allied carrier
 // with room for that air type. Anything else is destroyed once.
 //
-// Combat → NCM still uses relocateAirFromCapturedLand and
+// Classic leaves aircraft that still need a landing airborne through
+// combat. They fly during non-combat, and this check destroys whatever
+// is still illegal when that phase ends.
+// Pacific still uses relocateAirFromCapturedLand and
 // resolveLooseAirOverWater, which fly or crash aircraft before NCM
 // starts. This check does not run on that transition, so those crashes
 // are not destroyed a second time.

@@ -101,7 +101,7 @@ import {
   moveUnitKey,
   seaZoneHasEnemyForAirAttack,
 } from '../state/combatMoveEligibility.js';
-import { hasLegalAirLandingFrom, wasFriendlyAtTurnStart } from '../state/airLanding.js';
+import { combatAirReturnRange, hasLegalAirLandingFrom, wasFriendlyAtTurnStart } from '../state/airLanding.js';
 import {
   factoriesAdjacentToSeaZone,
   factoryProductionUsed,
@@ -114,6 +114,7 @@ import {
 } from '../state/strategicBombing.js';
 import {
   canPlaceAirOnCarrierInSeaZone,
+  isLandingCarrier,
   pendingAirCanLoadInSeaZone,
   seaFirstUnitTypes,
 } from '../state/carrierPlacement.js';
@@ -4228,6 +4229,25 @@ export class PlayerPanel {
     return [...Object.values(movable), ...individualShips, ...cargoUnits, ...carrierAircraft];
   }
 
+  _seaZoneHasCarrierRoom(seaName, player, airUnits) {
+    const boarding = (airUnits || []).filter((unit) => unit.type !== 'bomber' && (Number(unit.quantity) || 0) > 0);
+    if (!boarding.length || !player) return false;
+    const carrierDef = this.unitDefs?.carrier;
+    if (!carrierDef) return false;
+    const carriers = (this.gameState.getUnitsAt(seaName) || [])
+      .filter((unit) => isLandingCarrier(this.gameState, unit, player.id));
+    let room = 0;
+    for (const carrier of carriers) {
+      const hulls = carrier.id ? 1 : Math.max(1, Number(carrier.quantity) || 1);
+      const aboard = (carrier.aircraft || []).length;
+      room += Math.max(0, (carrierDef.aircraftCapacity || 2) * hulls - aboard);
+    }
+    const need = boarding.reduce((sum, unit) => (
+      carrierDef.canCarry?.includes(unit.type) ? sum + (Number(unit.quantity) || 0) : sum
+    ), 0);
+    return need > 0 && room >= need;
+  }
+
   // Get valid destinations for selected units based on their movement range
   _getValidDestinations(fromTerritory, player, isCombatMove) {
     if (!fromTerritory || !this.territories || !this.gameState) return [];
@@ -4388,7 +4408,9 @@ export class PlayerPanel {
       const hasLongRange = this.gameState.hasTech(player.id, 'longRangeAircraft');
       const minMovement = Math.min(...airUnits.map(u => {
         const baseMove = u.def.movement || 4;
-        return hasLongRange ? baseMove + 2 : baseMove;
+        const total = hasLongRange ? baseMove + 2 : baseMove;
+        const returned = combatAirReturnRange(this.gameState, fromTerritory.name, u.type, total);
+        return returned == null ? total : returned;
       }));
       const reachable = this.gameState.getReachableTerritoriesForAir(
         fromTerritory.name, minMovement, player.id, isCombatMove
@@ -4420,6 +4442,17 @@ export class PlayerPanel {
         if (!destinations.has(terrName) && (isCombatMove || !isEnemy)) {
           destinations.set(terrName, { name: terrName, isEnemy, isWater: conn.isWater, distance: info.distance });
         }
+      }
+      // The reachability search omits the hex the aircraft is already in.
+      // A friendly carrier here is still a non-combat landing.
+      if (!isCombatMove && from.isWater && this._seaZoneHasCarrierRoom(fromTerritory.name, player, airUnits)) {
+        destinations.set(fromTerritory.name, {
+          name: fromTerritory.name,
+          isEnemy: false,
+          isWater: true,
+          distance: 0,
+          isCarrier: true,
+        });
       }
     }
 

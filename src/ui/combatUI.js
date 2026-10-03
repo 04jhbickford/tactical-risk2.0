@@ -4,7 +4,7 @@ import { getUnitIconPath } from '../utils/unitIcons.js';
 import { formatUnitName } from '../utils/unitNames.js';
 import { isMobileShell, setShellFlag } from './mobileShell.js';
 import { syncBottomSurfaces } from './bottomSurface.js';
-import { mergeLiveCarrierLoads, remainingAirLandingsToAssign } from '../state/airLanding.js';
+import { airLandsDuringNonCombat, mergeLiveCarrierLoads, remainingAirLandingsToAssign } from '../state/airLanding.js';
 import {
   getEnemyCombatUnits,
   getFriendlyCombatUnits,
@@ -1812,6 +1812,13 @@ export class CombatUI {
   }
 
   _checkAirLanding() {
+    // Classic does not pick a landing when the battle ends. The aircraft
+    // stay on the hex and fly during non-combat. A retreat still asks,
+    // and Pacific still lands at the end of the battle.
+    if (airLandsDuringNonCombat(this.gameState) && !this.combatState?.isRetreating) {
+      this.combatState.phase = 'resolved';
+      return;
+    }
     const player = this.gameState.currentPlayer;
     const { attackers } = this.combatState;
 

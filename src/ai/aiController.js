@@ -1053,6 +1053,10 @@ export class AIController {
     this._updateStatus(`${player.name} repositioning units...`);
     await this._delay(this._getActionDelay() / 2);
 
+    // Classic aircraft are still airborne after combat. Land them now,
+    // inside non-combat, using the movement they have left.
+    this.gameState.landAirDuringNonCombat?.(this.unitDefs);
+
     // Get strategic analysis
     const level = this._seatLevel(player, aiPlayer);
     const knobs = difficultyKnobs(level);
