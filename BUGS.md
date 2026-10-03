@@ -2,6 +2,12 @@
 
 ---
 
+## 10.3.26 — unified.48 garrison with the capital
+
+Stamp `V2.81.57-unified.48`. Schema stays 11. A `V2.82-unified.47` doc is older than this tab and does not prompt. A `V2.82-unified.49` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.48`).
+
+Bastion, Discord #tactical-risk (1555744723707363399, then correction 1555745299954278526): with Garrisons on, each power's garrison is placed on that power's capital as soon as that capital is placed. It is not held until the initial deployment phase ends. The other power is still placing a capital, and that power's starting units are still in the tray. With Garrisons off, placing a capital still adds no garrison.
+
 ## 10.3.26 — unified.47 home screen painting
 
 Stamp `V2.81.57-unified.47`. Schema stays 11. A `V2.82-unified.46` doc is older than this tab and does not prompt. A `V2.82-unified.48` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.47`).

@@ -159,7 +159,7 @@ function rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMod
         <span class="go-label">Mechanized infantry</span>
         ${shownValue(editable, toggleHtml('mechanizedInfantry', o.mechanizedInfantry, { editable }), o.mechanizedInfantry ? 'On' : 'Off')}
       </div>
-      <div class="go-row" title="Places one garrison on each power's original capital. It cannot move or be bought. It defends like infantry and is lost last. If it is missing and the original owner still holds that capital at the end of their turn, it comes back for free.">
+      <div class="go-row" title="Places one garrison on each power's original capital as soon as that power places the capital. It cannot move or be bought. It defends like infantry and is lost last. If it is missing and the original owner still holds that capital at the end of their turn, it comes back for free.">
         <span class="go-label">Garrisons</span>
         ${shownValue(editable, toggleHtml('garrisons', o.garrisons, { editable }), o.garrisons ? 'On' : 'Off')}
       </div>

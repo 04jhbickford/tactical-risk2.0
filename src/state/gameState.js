@@ -1598,6 +1598,9 @@ export class GameState {
     units.push({ type: 'aaGun', quantity: 1, owner: player.id });
     units.push({ type: 'factory', quantity: 1, owner: player.id });
     this.units[territoryName] = units;
+    // This power's garrison lands with the capital, before the seat
+    // advances and before that power deploys anything else. Do not hold
+    // it until the initial deployment phase ends.
     respawnOriginalGarrison(this, player.id);
 
     // Remove factory from units to place (it's been auto-placed on capital)

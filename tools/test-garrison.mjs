@@ -81,21 +81,21 @@ function firstLand(gs) {
 console.log('=== stamp ===');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  check('display stamp is V2.81.57-unified.47', GAME_VERSION === 'V2.81.57-unified.47');
+  check('display stamp is V2.81.57-unified.48', GAME_VERSION === 'V2.81.57-unified.48');
   check('schema stays 11', SCHEMA_VERSION === 11);
-  check('game docs write V2.82-unified.47', compatClientVersion() === 'V2.82-unified.47');
-  check('a V2.82-unified.46 doc does not prompt this tab',
-    compareGameVersions('V2.82-unified.46', GAME_VERSION) < 0);
-  check('a V2.82-unified.48 doc prompts this tab',
-    compareGameVersions('V2.82-unified.48', GAME_VERSION) > 0);
-  check('our own V2.82-unified.47 doc does not prompt',
-    compareGameVersions('V2.82-unified.47', GAME_VERSION) === 0);
+  check('game docs write V2.82-unified.48', compatClientVersion() === 'V2.82-unified.48');
+  check('a V2.82-unified.47 doc does not prompt this tab',
+    compareGameVersions('V2.82-unified.47', GAME_VERSION) < 0);
+  check('a V2.82-unified.49 doc prompts this tab',
+    compareGameVersions('V2.82-unified.49', GAME_VERSION) > 0);
+  check('our own V2.82-unified.48 doc does not prompt',
+    compareGameVersions('V2.82-unified.48', GAME_VERSION) === 0);
   check('index.html carries the display stamp',
-    html.includes('content="V2.81.57-unified.47"')
-    && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.47'")
-    && html.includes("var LOCKED = 'V2.81.57-unified.47'")
-    && html.includes('style.css?v=V2.81.57-unified.47')
-    && html.includes('src/main.js?v=V2.81.57-unified.47'));
+    html.includes('content="V2.81.57-unified.48"')
+    && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.48'")
+    && html.includes("var LOCKED = 'V2.81.57-unified.48'")
+    && html.includes('style.css?v=V2.81.57-unified.48')
+    && html.includes('src/main.js?v=V2.81.57-unified.48'));
 }
 
 console.log('=== lobby default off ===');
@@ -218,6 +218,63 @@ console.log('=== spawn only when the option is on ===');
   const restored = new GameState(readJson('data/setup.json'), readJson('data/territories.json'), readJson('data/continents.json'));
   restored.loadFromJSON(kept);
   check('an explicit true is restored', restored.gameOptions.garrisons === true);
+}
+
+console.log('=== with the capital, before deployment ===');
+{
+  const on = freshClassic(true);
+  const owner = on.currentPlayer.id;
+  const land = firstLand(on);
+  check('capital places', on.placeCapital(land) === true);
+  check('the other power is still placing a capital',
+    on.phase === GAME_PHASES.CAPITAL_PLACEMENT
+    && on.currentPlayer.id !== owner
+    && on.playerState[on.currentPlayer.id].hasPlacedCapital === false);
+  check('garrison is on that capital before deployment',
+    countType(on, GARRISON, land) === 1 && countType(on, GARRISON) === 1);
+  check('that power has not deployed a starting unit', (on.unitsPlacedThisRound || 0) === 0);
+  check('starting infantry are still in the tray',
+    on.getUnitsToPlace(owner).some((unit) => unit.type === 'infantry' && unit.quantity > 0));
+
+  const other = on.currentPlayer.id;
+  const otherLand = firstLand(on);
+  check('the other capital places', on.placeCapital(otherLand) === true);
+  check('deployment opens with both garrisons already down',
+    on.phase === GAME_PHASES.UNIT_PLACEMENT
+    && (on.unitsPlacedThisRound || 0) === 0
+    && countType(on, GARRISON, land) === 1
+    && countType(on, GARRISON, otherLand) === 1
+    && (on.units[land] || []).some((unit) => unit.type === GARRISON && unit.owner === owner)
+    && (on.units[otherLand] || []).some((unit) => unit.type === GARRISON && unit.owner === other)
+    && countType(on, GARRISON) === 2);
+
+  const drop = on.placeInitialUnit(on.currentPlayer.id === owner ? land : otherLand, 'infantry', unitDefs);
+  check('a deployment drop does not wait to add the garrison',
+    drop.success === true && countType(on, GARRISON) === 2);
+
+  for (const player of on.players) on.unitsToPlace[player.id] = [];
+  const finished = on.finishPlacementRound(unitDefs);
+  check('ending deployment leaves the same two garrisons',
+    finished.ok === true
+    && on.phase === GAME_PHASES.PLAYING
+    && countType(on, GARRISON) === 2);
+
+  const off = freshClassic(false);
+  const offLand = firstLand(off);
+  check('off can place a capital', off.placeCapital(offLand) === true);
+  check('off has no garrison while capitals are still being placed',
+    off.phase === GAME_PHASES.CAPITAL_PLACEMENT && countType(off, GARRISON) === 0);
+  const offOther = firstLand(off);
+  check('off second capital', off.placeCapital(offOther) === true);
+  check('off deployment starts with no garrison',
+    off.phase === GAME_PHASES.UNIT_PLACEMENT && countType(off, GARRISON) === 0);
+  const offDrop = off.placeInitialUnit(offLand, 'infantry', unitDefs);
+  check('off deployment still places no garrison',
+    offDrop.success === true && countType(off, GARRISON) === 0);
+  for (const player of off.players) off.unitsToPlace[player.id] = [];
+  const offDone = off.finishPlacementRound(unitDefs);
+  check('off ending deployment still places no garrison',
+    offDone.ok === true && off.phase === GAME_PHASES.PLAYING && countType(off, GARRISON) === 0);
 }
 
 console.log('=== cannot buy or move ===');

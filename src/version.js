@@ -3,7 +3,7 @@
 // multiplayer core (syncManager) can both import it without coupling UI code
 // into the sync path. Bump GAME_VERSION for every deployed change.
 
-export const GAME_VERSION = 'V2.81.57-unified.47';
+export const GAME_VERSION = 'V2.81.57-unified.48';
 
 // Schema version of the serialized game state (mirrors gameState.toJSON().version).
 // Bump only when the persisted state shape changes; a mismatch here is a harder
@@ -21,10 +21,10 @@ export function unifiedReleaseParts(version) {
 // only the first two numbers, and every unified.N display stamp is V2.81,
 // so the display stamp never prompts that tab. V2.82 is newer than V2.81.
 // The unified suffix is what this build compares. A newer doc
-// (V2.82-unified.48) prompts a stale unified.47 tab.
-// Our own write (V2.82-unified.47) does not. A V2.82-unified.46 doc does not.
+// (V2.82-unified.49) prompts a stale unified.48 tab.
+// Our own write (V2.82-unified.48) does not. A V2.82-unified.47 doc does not.
 // Older docs
-// (V2.82-unified.46 / .45 / .44 / .43 / .42 / .41 / .40 / .39 / .38 / .37 / .36 / .35 / .34 / .33 / .32 / .31 / .30 / .29 / .28 / .27 / .26 / .25 / .24 / .23 / .22 / .21 / .20.2 / .20.1 / .20 / .19) do not prompt this tab.
+// (V2.82-unified.47 / .46 / .45 / .44 / .43 / .42 / .41 / .40 / .39 / .38 / .37 / .36 / .35 / .34 / .33 / .32 / .31 / .30 / .29 / .28 / .27 / .26 / .25 / .24 / .23 / .22 / .21 / .20.2 / .20.1 / .20 / .19) do not prompt this tab.
 // A non-zero unified patch is kept; a zero patch is omitted.
 export function compatClientVersion(version = GAME_VERSION) {
   const parts = unifiedReleaseParts(version);
