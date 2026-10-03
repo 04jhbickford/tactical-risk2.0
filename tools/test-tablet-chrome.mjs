@@ -177,7 +177,7 @@ const { GAME_PHASES, TURN_PHASES, orderRiskSetupSeats } =
   await import(pathToFileURL(join(root, 'src/state/gameState.js')));
 const { TerritoryMap } =
   await import(pathToFileURL(join(root, 'src/map/territoryMap.js')));
-const { mergedTerritoryOutlineEdges } =
+const { mergedTerritoryOutlineEdges, capitalPlateMetrics } =
   await import(pathToFileURL(join(root, 'src/map/territoryRenderer.js')));
 const { formatAiTurnLine, resolveHudWhoseTurn } =
   await import(pathToFileURL(join(root, 'src/ui/hudClarity.js')));
@@ -1878,13 +1878,30 @@ console.log('=== V2.81.26 capital star / sea dest / Fit dest / pulses ===');
     mainSrc.indexOf("case 'place-capital'"),
     mainSrc.indexOf("case 'open-purchase'"),
   );
-  check('renderer gates capital stars and pulses the confirmed tile',
+  check('renderer gates capital markers and pulses the confirmed tile',
     /shouldDrawPhoneCapitalStar/.test(rendererSrc)
     && /shouldDrawPhoneCapitalGlow/.test(rendererSrc)
+    && /_drawCapitalPlate/.test(rendererSrc)
+    && !/_drawCapitalStar/.test(rendererSrc)
     && /setPhoneTilePulse/.test(rendererSrc)
     && /renderPhoneTilePulse/.test(mainSrc)
     && /PHONE_CONFIRM_PULSE_MS/.test(placeCapital)
     && !/fitPhoneCamera/.test(placeCapital));
+  const nearPlate = capitalPlateMetrics(1);
+  const farPlate = capitalPlateMetrics(0.22);
+  const labelFn = rendererSrc.slice(
+    rendererSrc.indexOf('_drawCapitalLabel'),
+    rendererSrc.indexOf('_drawCapitalFlag'),
+  );
+  check('capital plate is a horizontal rectangle and the icon fits inside',
+    nearPlate.width > nearPlate.height * 2
+    && farPlate.width > farPlate.height * 2
+    && nearPlate.iconR * 2 < nearPlate.height * 0.86
+    && farPlate.iconR * 2 < farPlate.height * 0.86
+    && nearPlate.iconR + nearPlate.ring * 0.72 < nearPlate.height / 2
+    && farPlate.iconR + farPlate.ring * 0.72 < farPlate.height / 2
+    && farPlate.width > nearPlate.width
+    && !labelFn.includes('★'));
   check('country outlines take zoom so world Fit is not a 1px hairline',
     /renderTerritoryOutlines\(ctx, zoom/.test(rendererSrc)
     && /renderTerritoryOutlines\(ctx, camera\.zoom\)/.test(mainSrc));

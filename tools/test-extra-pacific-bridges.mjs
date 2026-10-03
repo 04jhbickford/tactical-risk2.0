@@ -144,21 +144,21 @@ function qty(gs, territory, type) {
 console.log('=== stamp ===');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  check('display stamp is V2.81.57-unified.50', GAME_VERSION === 'V2.81.57-unified.50');
+  check('display stamp is V2.81.57-unified.51', GAME_VERSION === 'V2.81.57-unified.51');
   check('schema stays 11', SCHEMA_VERSION === 11);
-  check('game docs write V2.82-unified.50', compatClientVersion() === 'V2.82-unified.50');
-  check('a V2.82-unified.49 doc does not prompt this tab',
-    compareGameVersions('V2.82-unified.49', GAME_VERSION) < 0);
-  check('a V2.82-unified.51 doc prompts this tab',
-    compareGameVersions('V2.82-unified.51', GAME_VERSION) > 0);
-  check('our own V2.82-unified.50 doc does not prompt',
-    compareGameVersions('V2.82-unified.50', GAME_VERSION) === 0);
+  check('game docs write V2.82-unified.51', compatClientVersion() === 'V2.82-unified.51');
+  check('a V2.82-unified.50 doc does not prompt this tab',
+    compareGameVersions('V2.82-unified.50', GAME_VERSION) < 0);
+  check('a V2.82-unified.52 doc prompts this tab',
+    compareGameVersions('V2.82-unified.52', GAME_VERSION) > 0);
+  check('our own V2.82-unified.51 doc does not prompt',
+    compareGameVersions('V2.82-unified.51', GAME_VERSION) === 0);
   check('index.html carries the display stamp',
-    html.includes('content="V2.81.57-unified.50"')
-    && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.50'")
-    && html.includes("var LOCKED = 'V2.81.57-unified.50'")
-    && html.includes('style.css?v=V2.81.57-unified.50')
-    && html.includes('src/main.js?v=V2.81.57-unified.50'));
+    html.includes('content="V2.81.57-unified.51"')
+    && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.51'")
+    && html.includes("var LOCKED = 'V2.81.57-unified.51'")
+    && html.includes('style.css?v=V2.81.57-unified.51')
+    && html.includes('src/main.js?v=V2.81.57-unified.51'));
 }
 
 console.log('=== lobby ===');

@@ -106,6 +106,37 @@ export function isMergedInternalSeam(edge, siblingRings, {
   return false;
 }
 
+/**
+ * Horizontal capital plate. Wider than tall. The circular faction icon
+ * is sized to sit inside the plate, ring included.
+ * Zoomed out, world size grows so the plate stays readable on a world Fit.
+ */
+export function capitalPlateMetrics(zoom) {
+  const z = Math.max(Number(zoom) || 1, 0.12);
+  const zoomedOut = z < 0.5;
+  const screenW = zoomedOut ? 56 : 76;
+  let width = zoomedOut ? screenW / z : screenW;
+  width = Math.max(44, Math.min(width, zoomedOut ? 176 : 92));
+  const height = width * 0.42;
+  const corner = height * 0.36;
+  const iconR = height * 0.36;
+  const stroke = Math.min(height * 0.07, Math.max(1.35, 1.65 / Math.max(z, 0.2)));
+  const ring = Math.min(iconR * 0.2, Math.max(iconR * 0.12, 1.45 / Math.max(z, 0.2)));
+  return { width, height, corner, iconR, stroke, ring, zoomedOut };
+}
+
+/** One edge. Light on a dark faction, dark on a light faction. */
+function capitalPlateStroke(color) {
+  const match = /^#([0-9a-f]{6})$/i.exec(String(color || '').trim());
+  if (!match) return 'rgba(18, 12, 8, 0.92)';
+  const n = parseInt(match[1], 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  const y = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return y < 0.45 ? 'rgba(243, 238, 228, 0.95)' : 'rgba(18, 12, 8, 0.92)';
+}
+
 export function mergedTerritoryOutlineEdges(polygons) {
   const rings = (polygons || []).filter((p) => Array.isArray(p) && p.length >= 3);
   if (rings.length <= 1) {
@@ -1119,18 +1150,12 @@ export class TerritoryRenderer {
     ctx.restore();
   }
 
-  /** Draw capital markers with faction flags */
+  /** Draw capital markers: horizontal faction plate, circular flag centered. */
   renderCapitals(ctx, zoom) {
     if (!this.gameState) return;
 
-    // Scale parameters based on zoom - capitals should ALWAYS be very visible
-    const isZoomedOut = zoom < 0.5;
-
-    // Much larger markers when zoomed out
-    const baseSize = isZoomedOut ? 60 / Math.max(zoom, 0.15) : 48;
-    const flagWidth = Math.max(40, baseSize);
-    const flagHeight = flagWidth * 0.75;
-    const starSize = Math.max(20, baseSize * 0.5);
+    const plate = capitalPlateMetrics(zoom);
+    const isZoomedOut = plate.zoomedOut;
 
     for (const t of this.territories) {
       if (t.isWater) continue;
@@ -1158,17 +1183,15 @@ export class TerritoryRenderer {
         this._drawCapitalGlow(ctx, cx, y, color, zoom);
       }
 
-      // Draw "CAPITAL" label when zoomed out for extra visibility
+      // Word under the plate when the camera is far enough that the icon shrinks.
       if (isZoomedOut && zoom < 0.3) {
-        this._drawCapitalLabel(ctx, cx, y + flagHeight / 2 + 20, color);
+        this._drawCapitalLabel(ctx, cx, y + plate.height / 2 + Math.max(12, plate.height * 0.28), color, zoom);
       }
 
-      // Draw flag if available
       if (player && player.flag && zoom >= 0.15) {
-        this._drawCapitalFlag(ctx, cx, y, flagWidth, flagHeight, player.flag, color, isZoomedOut);
+        this._drawCapitalFlag(ctx, cx, y, plate, player.flag, color);
       } else {
-        // Fallback: draw star marker for capital - always visible
-        this._drawCapitalStar(ctx, cx, y, starSize * 1.5, color, isZoomedOut);
+        this._drawCapitalPlate(ctx, cx, y, plate, color);
       }
     }
   }
@@ -1198,116 +1221,83 @@ export class TerritoryRenderer {
     ctx.restore();
   }
 
-  _drawCapitalLabel(ctx, x, y, color) {
+  _drawCapitalLabel(ctx, x, y, color, zoom) {
     ctx.save();
-    ctx.font = 'bold 14px Arial';
+    const z = Math.max(Number(zoom) || 1, 0.2);
+    const fontPx = Math.min(42, Math.max(14, 12 / z));
+    ctx.font = `bold ${fontPx}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // White outline
+    ctx.lineWidth = Math.max(3, fontPx * 0.22);
     ctx.strokeStyle = '#000';
-    ctx.lineWidth = 4;
-    ctx.strokeText('★ CAPITAL ★', x, y);
+    ctx.strokeText('CAPITAL', x, y);
 
-    // Colored fill
     ctx.fillStyle = color;
-    ctx.fillText('★ CAPITAL ★', x, y);
+    ctx.fillText('CAPITAL', x, y);
 
     ctx.restore();
   }
 
-  _drawCapitalFlag(ctx, x, y, width, height, flag, color, isZoomedOut = false) {
+  _drawCapitalFlag(ctx, x, y, plate, flag, color) {
     const img = this.flagImages[flag];
+    this._drawCapitalPlate(ctx, x, y, plate, color);
+    this._drawCapitalIcon(ctx, x, y, plate.iconR, img, plate.ring);
+  }
+
+  /** Faction-colored horizontal plate. Rounded, shadowed, stroked to read on the map. */
+  _drawCapitalPlate(ctx, x, y, plate, color) {
+    const { width, height, corner, stroke } = plate;
+    const r = Math.max(1.5, Math.min(corner, height / 2 - 0.5, width / 2 - 0.5));
+    const left = x - width / 2;
+    const top = y - height / 2;
+    const fill = color || '#4A4A4A';
 
     ctx.save();
-
-    // Draw a BIG 5-pointed star in the PLAYER'S COLOR as the capital marker
-    const starSize = isZoomedOut ? 90 : 70;
-    this._drawCapitalStar(ctx, x, y, starSize, color, isZoomedOut);
-
-    // Draw smaller circular flag in the center of the star
-    const circleRadius = isZoomedOut ? 16 : 13;
-
-    // Draw circle border/background
-    ctx.shadowColor = 'rgba(0,0,0,0.5)';
-    ctx.shadowBlur = 4;
     ctx.beginPath();
-    ctx.arc(x, y, circleRadius + 2, 0, Math.PI * 2);
-    ctx.fillStyle = '#222';
+    this._roundRect(ctx, left, top, width, height, r);
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.42)';
+    ctx.shadowBlur = Math.max(3, height * 0.22);
+    ctx.shadowOffsetY = Math.max(1, height * 0.05);
+    ctx.fillStyle = fill;
     ctx.fill();
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 2;
+
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.lineWidth = stroke;
+    ctx.strokeStyle = capitalPlateStroke(fill);
     ctx.stroke();
+    ctx.restore();
+  }
+
+  /** Existing circular flag clip, centered on the plate. */
+  _drawCapitalIcon(ctx, x, y, radius, img, ring) {
+    const border = ring || Math.max(1.25, radius * 0.14);
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+    ctx.shadowBlur = Math.max(2, radius * 0.22);
+    ctx.beginPath();
+    ctx.arc(x, y, radius + border * 0.72, 0, Math.PI * 2);
+    ctx.fillStyle = '#16130f';
+    ctx.fill();
     ctx.shadowBlur = 0;
 
-    // Clip to circle and draw flag
     if (img && img.complete && img.naturalWidth > 0) {
       ctx.save();
       ctx.beginPath();
-      ctx.arc(x, y, circleRadius, 0, Math.PI * 2);
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
       ctx.clip();
-
-      // Draw flag image centered and covering the circle
-      const imgSize = circleRadius * 2.4;
+      const imgSize = radius * 2.4;
       ctx.drawImage(img, x - imgSize / 2, y - imgSize / 2, imgSize, imgSize);
       ctx.restore();
     }
 
-    // Draw circle border on top
     ctx.beginPath();
-    ctx.arc(x, y, circleRadius, 0, Math.PI * 2);
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 1.5;
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = '#f3eee4';
+    ctx.lineWidth = border;
     ctx.stroke();
-
-    ctx.restore();
-  }
-
-  _drawCapitalStar(ctx, x, y, size, color, isZoomedOut = false) {
-    const r = size / 2;
-    const innerR = r * 0.4;
-    const points = 5;
-
-    ctx.save();
-    ctx.translate(x, y);
-
-    // Strong glow effect for visibility at all zoom levels
-    ctx.shadowColor = color;
-    ctx.shadowBlur = isZoomedOut ? 20 : 12;
-
-    // Always add white outline for visibility (not just when zoomed out)
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = isZoomedOut ? 4 : 3;
-    ctx.beginPath();
-    for (let i = 0; i < points * 2; i++) {
-      const radius = i % 2 === 0 ? r : innerR;
-      const angle = (Math.PI / points) * i - Math.PI / 2;
-      const px = Math.cos(angle) * radius;
-      const py = Math.sin(angle) * radius;
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-    ctx.stroke();
-
-    ctx.fillStyle = color;
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = isZoomedOut ? 2 : 1.5;
-
-    ctx.beginPath();
-    for (let i = 0; i < points * 2; i++) {
-      const radius = i % 2 === 0 ? r : innerR;
-      const angle = (Math.PI / points) * i - Math.PI / 2;
-      const px = Math.cos(angle) * radius;
-      const py = Math.sin(angle) * radius;
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.shadowBlur = 0;
     ctx.restore();
   }
 
