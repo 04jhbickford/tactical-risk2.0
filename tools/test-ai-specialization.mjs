@@ -56,14 +56,14 @@ const mpSrc = readFileSync(join(root, 'src/ui/multiplayerLobby.js'), 'utf8');
 const unitDefs = JSON.parse(readFileSync(join(root, 'data/units.json'), 'utf8'));
 
 console.log('=== stamp ===');
-check('stamp is V2.81.57-unified.56', GAME_VERSION === 'V2.81.57-unified.56');
+check('stamp is V2.81.57-unified.57', GAME_VERSION === 'V2.81.57-unified.57');
 check('schema stays 11', SCHEMA_VERSION === 11);
 check('index.html carries the display stamp',
-  html.includes('content="V2.81.57-unified.56"')
-  && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.56'")
-  && html.includes("var LOCKED = 'V2.81.57-unified.56'")
-  && html.includes('style.css?v=V2.81.57-unified.56')
-  && html.includes('src/main.js?v=V2.81.57-unified.56'));
+  html.includes('content="V2.81.57-unified.57"')
+  && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.57'")
+  && html.includes("var LOCKED = 'V2.81.57-unified.57'")
+  && html.includes('style.css?v=V2.81.57-unified.57')
+  && html.includes('src/main.js?v=V2.81.57-unified.57'));
 
 console.log('=== normalize ===');
 check('default is general', DEFAULT_AI_SPECIALIZATION === 'general'
