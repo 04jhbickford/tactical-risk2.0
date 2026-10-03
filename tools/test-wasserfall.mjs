@@ -112,7 +112,7 @@ function qty(gs, type, owner) {
 
 console.log('=== stamp and catalog ===');
 {
-  check('display stamp is V2.81.57-unified.59', GAME_VERSION === 'V2.81.57-unified.59');
+  check('display stamp is V2.81.57-unified.60', GAME_VERSION === 'V2.81.57-unified.60');
   check('schema stays 11', SCHEMA_VERSION === 11);
   const classicIds = Object.keys(TECHNOLOGIES);
   check('classic catalog has no Wasserfall', !classicIds.includes('wasserfall'));
@@ -195,13 +195,15 @@ function fight(techSet, unlocked, face) {
 console.log('=== auto-resolve AA ===');
 {
   const plain = fight('expanded', false, 2);
-  check('without Wasserfall, auto-resolve does not add an AA shot',
-    !plain.seen.some((ctx) => ctx?.context === 'aa')
+  const plainAa = plain.seen.filter((ctx) => ctx?.context === 'aa');
+  check('without Wasserfall, auto-resolve still fires one die per aircraft at 1',
+    plainAa.length === 2 && plainAa.every((ctx) => ctx.need === 1 && ctx.unit === 'aaGun' && ctx.side === 'defender')
     && qty(plain.gs, 'fighter', 'Germans') === 1
     && qty(plain.gs, 'bomber', 'Germans') === 1);
   const classic = fight('classic', true, 2);
-  check('classic auto-resolve ignores a stored Wasserfall id',
-    !classic.seen.some((ctx) => ctx?.context === 'aa')
+  const classicAa = classic.seen.filter((ctx) => ctx?.context === 'aa');
+  check('classic auto-resolve ignores a stored Wasserfall id and still hits on 1',
+    classicAa.length === 2 && classicAa.every((ctx) => ctx.need === 1)
     && qty(classic.gs, 'fighter', 'Germans') === 1);
   const hit = fight('expanded', true, 2);
   const aa = hit.seen.filter((ctx) => ctx?.context === 'aa');
@@ -236,6 +238,140 @@ console.log('=== auto-resolve AA ===');
     && wiped?.conquered !== true
     && qty(only, 'fighter', 'Germans') === 0
     && only.getOwner('France') === 'British');
+
+  const classicOnly = board('classic');
+  classicOnly.units = {
+    France: [
+      { type: 'fighter', quantity: 1, owner: 'Germans' },
+      { type: 'aaGun', quantity: 1, owner: 'British' },
+    ],
+  };
+  classicOnly.combatQueue = ['France'];
+  classicOnly._rollDie = () => 1;
+  const classicWipe = classicOnly.resolveCombat('France', unitDefs);
+  check('an AA-only battery on classic shoots the aircraft down',
+    classicWipe?.winner === 'defender'
+    && classicWipe?.aaHits === 1
+    && qty(classicOnly, 'fighter', 'Germans') === 0
+    && classicOnly.getOwner('France') === 'British');
+}
+
+console.log('=== AA still fires after several combat phases ===');
+{
+  const gs = board('classic');
+  const aaShots = [];
+  gs._rollDie = (ctx) => {
+    if (ctx?.context === 'aa') {
+      aaShots.push(ctx);
+      return 1;
+    }
+    return 6;
+  };
+  for (let phase = 1; phase <= 6; phase += 1) {
+    gs.currentPlayerIndex = 0;
+    gs.turnPhase = TURN_PHASES.COMBAT;
+    gs.territoryState.France.owner = 'British';
+    gs.units = {
+      France: [
+        { type: 'fighter', quantity: 1, owner: 'Germans' },
+        { type: 'aaGun', quantity: 1, owner: 'British' },
+        { type: 'infantry', quantity: 1, owner: 'British' },
+      ],
+    };
+    // A round count left from an earlier battle must not silence this one.
+    gs._combatRoundsTracker = { France: 4 + phase };
+    gs._detectCombats(unitDefs);
+    const before = aaShots.length;
+    let guard = 0;
+    while (guard++ < 4 && gs.combatQueue.includes('France')) {
+      const result = gs.resolveCombat('France', unitDefs);
+      if (!result || result.resolved) break;
+    }
+    const shot = aaShots.slice(before);
+    check(`combat phase ${phase} still fires one classic AA die`,
+      shot.length === 1 && shot[0].need === 1 && shot[0].unit === 'aaGun' && shot[0].side === 'defender');
+    check(`combat phase ${phase} still removes the fighter`,
+      qty(gs, 'fighter', 'Germans') === 0 && qty(gs, 'aaGun', 'British') === 1);
+  }
+
+  const ongoing = board('classic');
+  const seen = [];
+  ongoing.units = {
+    France: [
+      { type: 'infantry', quantity: 2, owner: 'Germans' },
+      { type: 'fighter', quantity: 1, owner: 'Germans' },
+      { type: 'aaGun', quantity: 1, owner: 'British' },
+      { type: 'infantry', quantity: 2, owner: 'British' },
+    ],
+  };
+  ongoing.combatQueue = ['France'];
+  ongoing._rollDie = (ctx) => {
+    seen.push(ctx);
+    return ctx?.context === 'aa' ? 2 : 6;
+  };
+  const first = ongoing.resolveCombat('France', unitDefs);
+  const afterFirst = seen.filter((ctx) => ctx?.context === 'aa');
+  const second = ongoing.resolveCombat('France', unitDefs);
+  const sameBattle = seen.filter((ctx) => ctx?.context === 'aa');
+  check('the first round of a battle fires AA once',
+    afterFirst.length === 1 && afterFirst[0].need === 1 && first?.resolved !== true);
+  check('a later round of that same battle still fires AA',
+    sameBattle.length === 2
+    && sameBattle.every((ctx) => ctx.need === 1 && ctx.unit === 'aaGun' && ctx.side === 'defender')
+    && second?.resolved !== true
+    && qty(ongoing, 'fighter', 'Germans') === 1
+    && qty(ongoing, 'aaGun', 'British') === 1);
+
+  const guided = board('expanded');
+  guided.playerTechs.British.unlockedTechs = ['wasserfall'];
+  guided.currentPlayerIndex = 0;
+  guided.turnPhase = TURN_PHASES.COMBAT;
+  guided.units = {
+    France: [
+      { type: 'fighter', quantity: 1, owner: 'Germans' },
+      { type: 'aaGun', quantity: 1, owner: 'British' },
+      { type: 'infantry', quantity: 1, owner: 'British' },
+    ],
+  };
+  guided._combatRoundsTracker = { France: 9 };
+  guided._detectCombats(unitDefs);
+  const guidedSeen = [];
+  guided._rollDie = (ctx) => {
+    guidedSeen.push(ctx);
+    return 2;
+  };
+  guided.resolveCombat('France', unitDefs);
+  const guidedAa = guidedSeen.filter((ctx) => ctx?.context === 'aa');
+  check('a later combat phase with Wasserfall still hits on 2',
+    guidedAa.length === 1 && guidedAa[0].need === 2 && qty(guided, 'fighter', 'Germans') === 0);
+}
+
+console.log('=== human AA still opens after several battles ===');
+{
+  const gs = board('classic');
+  const ui = new CombatUI();
+  ui._render = () => {};
+  ui.setGameState(gs);
+  ui.setUnitDefs(unitDefs);
+  ui.setActionLog({ log() {} });
+  for (let battle = 1; battle <= 4; battle += 1) {
+    gs.units = {
+      France: [
+        { type: 'fighter', quantity: 1, owner: 'Germans' },
+        { type: 'aaGun', quantity: 1, owner: 'British' },
+      ],
+    };
+    gs.combatQueue = ['France'];
+    ui.currentTerritory = 'France';
+    ui._initCombatState();
+    check(`human battle ${battle} still opens on AA fire`,
+      ui.combatState.phase === 'aaFire' && ui.combatState.hasAA === true && ui.combatState.aaFired === false);
+    gs._rollDie = () => 1;
+    ui._rollAAFire();
+    check(`human battle ${battle} still hits on 1`,
+      ui.combatState.aaResults?.need === 1 && ui.combatState.aaResults?.hits === 1
+      && !ui.combatState.attackers.some((unit) => unit.type === 'fighter' && unit.quantity > 0));
+  }
 }
 
 console.log('=== human AA fire ===');

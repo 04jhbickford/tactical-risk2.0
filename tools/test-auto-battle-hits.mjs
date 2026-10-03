@@ -535,7 +535,9 @@ check('destroyer-present subs roll once in the general step and not in a strike'
   gs.combatQueue = ['Egypt'];
   const steps = armDiceLive(gs, mulberry32(99), 'Egypt');
   gs._rollDie = (ctx) => {
-    const face = 1;
+    // Opening AA now fires before the general roll. A 6 misses classic AA
+    // so the bombers are still on the board for the one-die check.
+    const face = ctx?.context === 'aa' ? 6 : 1;
     const context = ctx?.context || 'combat';
     const side = ctx?.side || null;
     if (!steps.length || steps[steps.length - 1].context !== context || steps[steps.length - 1].side !== side) {
