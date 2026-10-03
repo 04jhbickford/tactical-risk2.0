@@ -102,6 +102,8 @@ import {
   airMovementBadge,
   assignLandingToIndexes,
   returnToBaseAssignments,
+  listNcmReturnToBaseMoves,
+  applyNcmReturnToBase,
 } from '../state/airLanding.js';
 import { NO_LEGAL_AIR_LANDING_NOTE } from '../state/combatUnits.js';
 import {
@@ -1757,6 +1759,37 @@ export class PlayerPanel {
     return true;
   }
 
+  _ncmUnitDefs() {
+    return this.unitDefs || this.gameState?._unitDefs || this.gameState?.unitDefs || {};
+  }
+
+  // Phone peek hides the Actions body, so the same control sits in the
+  // bottom bar there. Desktop and an expanded phone sheet keep it in Actions.
+  _ncmReturnToBaseWhere() {
+    const gs = this.gameState;
+    if (!gs || gs.currentPlayer?.isAI || this.isAirLandingActive()) return '';
+    if (listNcmReturnToBaseMoves(gs, this._ncmUnitDefs()).length === 0) return '';
+    const peek = isMobileShell() && !!this.el?.classList?.contains('player-panel--peek');
+    return peek ? 'bar' : 'actions';
+  }
+
+  _ncmReturnToBaseButtonHtml(where) {
+    if (this._ncmReturnToBaseWhere() !== where) return '';
+    return `<button class="pp-action-btn secondary pp-ncm-return-base" data-action="return-air-to-base" type="button">Return to base</button>`;
+  }
+
+  _returnAirborneDuringNonCombat() {
+    const gs = this.gameState;
+    if (!gs || this.isAirLandingActive()) return false;
+    const result = applyNcmReturnToBase(gs, this._ncmUnitDefs());
+    if ((result?.moved || 0) > 0) {
+      this.moveSelectedUnits = {};
+      this.movePendingDest = null;
+    }
+    this._scheduleRender();
+    return (result?.moved || 0) > 0;
+  }
+
   handleAirLandingTerritoryClick(territory) {
     if (!this.isAirLandingActive()) return false;
     return this._assignAirLandingDestination(territory?.name);
@@ -2219,6 +2252,7 @@ export class PlayerPanel {
     html += looksBrokenBarHtml(this._looksBrokenReason);
     html += peekRow;
     html += warningHtml;
+    html += this._ncmReturnToBaseButtonHtml('bar');
     if (mobile) html += `<div class="pp-peek-cta-row">`;
     if (mobile && shouldShowPhoneTrayToggle({ mobile: true, phase })) {
       const expanded = !!this.trayExpanded;
@@ -2551,6 +2585,9 @@ export class PlayerPanel {
       }
 
       if (turnPhase === TURN_PHASES.COMBAT_MOVE || turnPhase === TURN_PHASES.NON_COMBAT_MOVE) {
+        if (turnPhase === TURN_PHASES.NON_COMBAT_MOVE) {
+          html += this._ncmReturnToBaseButtonHtml('actions');
+        }
         // Check if we have a territory selected with movable units
         const hasMovableTerritory = this.selectedTerritory && this._hasMovableUnits(this.selectedTerritory, player);
 
@@ -5865,7 +5902,8 @@ export class PlayerPanel {
         }
 
         if (action === 'return-air-to-base') {
-          this._returnAirToBase();
+          if (this.isAirLandingActive()) this._returnAirToBase();
+          else this._returnAirborneDuringNonCombat();
           return;
         }
 
