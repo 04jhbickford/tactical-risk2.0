@@ -2,6 +2,12 @@
 
 ---
 
+## 10.3.26 — unified.46 deploy-max right pane
+
+Stamp `V2.81.57-unified.46`. Schema stays 11. A `V2.82-unified.45` doc is older than this tab and does not prompt. A `V2.82-unified.47` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.46`).
+
+Bastion, Discord #tactical-risk-bug-report (1555737605272772619, 2 Oct 2026): during deployment, once the player has placed every unit they can this phase, the right pane was still listing the full unit roster. It now shows the existing undo control and "You have reached the maximum number of deployable units for this phase. Undo or pass the phase." Undo that drops them under the cap brings the roster back. Purchase undo, air landing, and the End Phase bar are unchanged.
+
 ## 10.3.26 — unified.45 four AI levels
 
 Stamp `V2.81.57-unified.45`. Schema stays 11. A `V2.82-unified.44` doc is older than this tab and does not prompt. A `V2.82-unified.46` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.45`).
