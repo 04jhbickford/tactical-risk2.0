@@ -52,21 +52,26 @@ const PACIFIC_LINKS = [
 
 const ADDED = [
   ['Philippines', 'Caroline Islands'],
-  ['Philippines', 'New Guinea'],
   ['Philippines', 'French Indo China'],
   ['Wake Island', 'Hawaiian Islands'],
   ['Hawaiian Islands', 'Midway'],
-  ['Hawaiian Islands', 'Mexico'],
   ['Wake Island', 'Okinawa'],
   ['Wake Island', 'Caroline Islands'],
   ['Philippines', 'Okinawa'],
   ['Borneo Celebes', 'Philippines'],
   ['West US', 'Midway'],
+  ['New Guinea', 'Solomon Islands'],
+  ['Borneo Celebes', 'New Guinea'],
+  ['West US', 'Hawaiian Islands'],
+  ['Australia', 'New Guinea'],
+  ['Japan', 'Okinawa'],
 ];
 
 const REMOVED = [
   ['Japan', 'Midway'],
   ['Philippines', 'Solomon Islands'],
+  ['Philippines', 'New Guinea'],
+  ['Hawaiian Islands', 'Mexico'],
 ];
 
 const LEFT_OUT = [
@@ -139,21 +144,21 @@ function qty(gs, territory, type) {
 console.log('=== stamp ===');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  check('display stamp is V2.81.57-unified.42', GAME_VERSION === 'V2.81.57-unified.42');
+  check('display stamp is V2.81.57-unified.50', GAME_VERSION === 'V2.81.57-unified.50');
   check('schema stays 11', SCHEMA_VERSION === 11);
-  check('game docs write V2.82-unified.42', compatClientVersion() === 'V2.82-unified.42');
-  check('a V2.82-unified.41 doc does not prompt this tab',
-    compareGameVersions('V2.82-unified.41', GAME_VERSION) < 0);
-  check('a V2.82-unified.43 doc prompts this tab',
-    compareGameVersions('V2.82-unified.43', GAME_VERSION) > 0);
-  check('our own V2.82-unified.42 doc does not prompt',
-    compareGameVersions('V2.82-unified.42', GAME_VERSION) === 0);
+  check('game docs write V2.82-unified.50', compatClientVersion() === 'V2.82-unified.50');
+  check('a V2.82-unified.49 doc does not prompt this tab',
+    compareGameVersions('V2.82-unified.49', GAME_VERSION) < 0);
+  check('a V2.82-unified.51 doc prompts this tab',
+    compareGameVersions('V2.82-unified.51', GAME_VERSION) > 0);
+  check('our own V2.82-unified.50 doc does not prompt',
+    compareGameVersions('V2.82-unified.50', GAME_VERSION) === 0);
   check('index.html carries the display stamp',
-    html.includes('content="V2.81.57-unified.42"')
-    && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.42'")
-    && html.includes("var LOCKED = 'V2.81.57-unified.42'")
-    && html.includes('style.css?v=V2.81.57-unified.42')
-    && html.includes('src/main.js?v=V2.81.57-unified.42'));
+    html.includes('content="V2.81.57-unified.50"')
+    && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.50'")
+    && html.includes("var LOCKED = 'V2.81.57-unified.50'")
+    && html.includes('style.css?v=V2.81.57-unified.50')
+    && html.includes('src/main.js?v=V2.81.57-unified.50'));
 }
 
 console.log('=== lobby ===');
@@ -220,7 +225,7 @@ console.log('=== pairs ===');
   const on = playing({ extraPacificBridges: true });
   const extras = on.activeLandBridges().slice(16);
   check('on adds the corrected Classic set and nothing else',
-    on.activeLandBridges().length === 27 && samePairs(extras, ADDED));
+    on.activeLandBridges().length === 30 && samePairs(extras, ADDED));
   check('on still has the original Alaska bridge', on.hasLandBridge('Alaska', 'Soviet Far East') === true);
   for (const [left, right] of ADDED) {
     check(`on steps ${left}–${right}`, on.hasLandBridge(left, right) === true);
