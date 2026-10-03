@@ -2,6 +2,12 @@
 
 ---
 
+## 10.3.26 — unified.51 capital rectangle marker
+
+Stamp `V2.81.57-unified.51`. Schema stays 11. A `V2.82-unified.50` doc is older than this tab and does not prompt. A `V2.82-unified.52` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.51`).
+
+Bastion, Discord #tactical-risk (1555787982366056479): capital markers are a horizontal faction-colored rectangle with the existing circular faction flag centered on it. Classic and Pacific use the same marker. The five-point capital star is gone. Pacific victory-city stars are unchanged.
+
 ## 10.3.26 — unified.50 revised Extra Pacific bridges
 
 Stamp `V2.81.57-unified.50`. Schema stays 11. The flag is still the optional `gameOptions.extraPacificBridges` field. A save that omits it loads off. A `V2.82-unified.49` doc is older than this tab and does not prompt. A `V2.82-unified.51` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.50`).
