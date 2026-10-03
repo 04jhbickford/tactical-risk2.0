@@ -6178,6 +6178,14 @@ html:not(.mobile-shell) .pp-inline-placement .pp-unit-list {
   margin-bottom: 12px;
 }
 
+[data-deploy-max] .pp-mobilize-msg {
+  font-size: 15px;
+  line-height: 1.35;
+  font-weight: 500;
+  color: #e8e8e8;
+  margin: 4px 0 12px;
+}
+
 .pp-inline-mobilize .pp-unit-list {
   overflow-y: auto;
   touch-action: pan-y;
@@ -18288,6 +18296,13 @@ html.mobile-shell .player-panel--expanded.player-panel--mobilize .pp-inline-mobi
     text-overflow: ellipsis;
     white-space: nowrap;
     pointer-events: none;
+  }
+
+  .phone-peek-pair-hint.pp-deploy-max-copy {
+    white-space: normal;
+    text-overflow: clip;
+    overflow: visible;
+    font-weight: 500;
   }
 
   .phone-peek-tools {

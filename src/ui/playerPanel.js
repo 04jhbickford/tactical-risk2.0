@@ -295,6 +295,33 @@ export function shouldShowBottomTurnActions({ isMultiplayer, isLocalPlayerTurn, 
   return true;
 }
 
+// Right-pane copy when this place / mobilize phase cannot take another unit.
+// Bastion, #tactical-risk-bug-report 1555737605272772619.
+export const DEPLOY_PHASE_MAX_COPY =
+  'You have reached the maximum number of deployable units for this phase. Undo or pass the phase.';
+
+// Initial placement hides the unit roster once this round's cap is filled,
+// or the pool is empty after at least one placement. A staged queue is not
+// deployed yet, so the roster stays until Deploy or Undo clears it.
+export function isInitialDeployAtMax({
+  placedThisRound = 0,
+  limit = 6,
+  poolRemaining = 0,
+  totalQueued = 0,
+} = {}) {
+  if ((Number(totalQueued) || 0) > 0) return false;
+  const placed = Number(placedThisRound) || 0;
+  const cap = Number(limit) || 0;
+  if (cap > 0 && placed >= cap) return true;
+  if (placed > 0 && (Number(poolRemaining) || 0) <= 0) return true;
+  return false;
+}
+
+// Mobilize hides the roster once every purchased unit has been placed.
+export function isMobilizeDeployAtMax({ pendingCount = 0 } = {}) {
+  return (Number(pendingCount) || 0) <= 0;
+}
+
 // Initial-deployment Actions-panel UX. Display-only: ships still cannot be
 // placed on land. selectedKind is 'owned-land' | 'valid-sea' | 'other'.
 export function computeInitialPlacementUX({
@@ -2221,7 +2248,7 @@ export class PlayerPanel {
         selectedTerritory: this.selectedTerritory,
         allowWater: phonePairAllowWater({ phase, turnPhase }),
       });
-      if (shouldShowPhonePeekMax({
+      if (!this._deployRosterHidden(phase, turnPhase, player) && shouldShowPhonePeekMax({
         mobile: true,
         phase,
         turnPhase,
@@ -3542,6 +3569,11 @@ export class PlayerPanel {
       allowWater: phonePairAllowWater({ phase, turnPhase }),
     });
 
+    if (phase === GAME_PHASES.UNIT_PLACEMENT && this._initialPlacementAtMax(player)) {
+      if (this.trayExpanded) return '';
+      return `<div class="phone-peek-pair-hint pp-deploy-max-copy" data-deploy-max="1">${DEPLOY_PHASE_MAX_COPY}</div>`;
+    }
+
     if (phase === GAME_PHASES.UNIT_PLACEMENT) {
       pairHint = resolvePhonePeekHint(phase, turnPhase, this.selectedUnitType, {
         territoryName: pairLand,
@@ -3602,6 +3634,11 @@ export class PlayerPanel {
           countLabel: String(qty),
         });
       }
+    } else if (phase === GAME_PHASES.PLAYING && turnPhase === TURN_PHASES.MOBILIZE && this._mobilizeAtMax()) {
+      if (this.trayExpanded) return '';
+      const canUndo = (this.gameState.mobilizationHistory || []).length > 0;
+      if (!canUndo) return '';
+      return `<div class="phone-peek-pair-hint pp-deploy-max-copy" data-deploy-max="1">${DEPLOY_PHASE_MAX_COPY}</div>`;
     } else if (phase === GAME_PHASES.PLAYING && turnPhase === TURN_PHASES.MOBILIZE && this.trayExpanded) {
       // The expanded tray already lists every pending type plus Deploy all.
       // Keeping the peek chips as well ate the 30dvh sheet and hid that button.
@@ -3733,6 +3770,39 @@ export class PlayerPanel {
     return html;
   }
 
+  _initialPlacementAtMax(player) {
+    const snap = this._getInitialPlacementUX(player);
+    return isInitialDeployAtMax({
+      placedThisRound: snap.placedThisRound,
+      limit: snap.limit,
+      poolRemaining: snap.landAirRemaining + snap.navalRemaining,
+      totalQueued: snap.totalQueued,
+    });
+  }
+
+  _mobilizePendingCount() {
+    const pending = this.gameState?.getPendingPurchases?.() || [];
+    return pending.reduce((sum, row) => sum + (Number(row?.quantity) || 0), 0);
+  }
+
+  _mobilizeAtMax() {
+    return isMobilizeDeployAtMax({ pendingCount: this._mobilizePendingCount() });
+  }
+
+  _deployRosterHidden(phase, turnPhase, player) {
+    if (phase === GAME_PHASES.UNIT_PLACEMENT) return this._initialPlacementAtMax(player);
+    if (phase === GAME_PHASES.PLAYING && turnPhase === TURN_PHASES.MOBILIZE) return this._mobilizeAtMax();
+    return false;
+  }
+
+  _renderDeployMaxNotice(undoHtml = '') {
+    return `
+      <div class="pp-deploy-max" data-deploy-max="1">
+        <div class="pp-mobilize-msg">${DEPLOY_PHASE_MAX_COPY}</div>
+        ${undoHtml}
+      </div>`;
+  }
+
   // Inline Placement UI - mimics buy phase style
   _renderInlinePlacement(player) {
     const {
@@ -3740,11 +3810,22 @@ export class PlayerPanel {
       unitsToPlace,
       totalQueued,
       landAirRemaining,
+      navalRemaining,
       isValidPlacement,
       isWater,
       ux,
+      limit,
     } = this._getInitialPlacementUX(player);
-    const limit = this.gameState.getUnitsPerRoundLimit?.() || 6;
+    if (isInitialDeployAtMax({
+      placedThisRound,
+      limit,
+      poolRemaining: landAirRemaining + navalRemaining,
+      totalQueued,
+    })) {
+      const canUndo = !!(this.gameState.placementHistory && this.gameState.placementHistory.length > 0);
+      const undoHtml = `<div class="pp-placement-actions"><button class="pp-action-btn secondary small" data-action="undo-placement"${canUndo ? '' : ' disabled'}>↩ Undo</button></div>`;
+      return `<div class="pp-inline-placement">${this._renderDeployMaxNotice(undoHtml)}</div>`;
+    }
     const canUndo = this.gameState.placementHistory && this.gameState.placementHistory.length > 0;
     const slotsRemaining = limit - placedThisRound;
     const showDoneButton = ux.showDone;
@@ -4792,18 +4873,22 @@ export class PlayerPanel {
 
     if (totalPending === 0) {
       const canUndo = (this.gameState.mobilizationHistory || []).length > 0;
-      html += `
-        <div class="pp-mobilize-done">
-          <div class="pp-mobilize-msg">✓ All units deployed!</div>
-          ${canUndo ? `
+      if (canUndo) {
+        const undoHtml = `
           <div class="pp-mobilize-undo">
             <button class="pp-undo-btn" data-action="undo-mobilize">
               <span class="undo-icon">↩</span>
               <span class="undo-text">Undo Last</span>
             </button>
-          </div>` : ''}
-        </div>
-      </div>`;
+          </div>`;
+        html += `<div class="pp-mobilize-done">${this._renderDeployMaxNotice(undoHtml)}</div>`;
+      } else {
+        html += `
+        <div class="pp-mobilize-done">
+          <div class="pp-mobilize-msg">✓ All units deployed!</div>
+        </div>`;
+      }
+      html += `</div>`;
       return html;
     }
 
