@@ -1,4 +1,4 @@
-// V2.81.57-unified.60 — Classic non-combat Return to base.
+// V2.81.57-unified.59 — Classic non-combat Return to base.
 // Run: node tools/test-ncm-return-to-base.mjs
 
 import { readFileSync } from 'fs';
@@ -171,14 +171,14 @@ function park(gs, territory, unit) {
 console.log('=== stamp ===');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  check('display stamp is V2.81.57-unified.60', GAME_VERSION === 'V2.81.57-unified.60');
+  check('display stamp is V2.81.57-unified.59', GAME_VERSION === 'V2.81.57-unified.59');
   check('schema stays 11', SCHEMA_VERSION === 11);
   check('index.html carries the display stamp',
-    html.includes('content="V2.81.57-unified.60"')
-    && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.60'")
-    && html.includes("var LOCKED = 'V2.81.57-unified.60'")
-    && html.includes('style.css?v=V2.81.57-unified.60')
-    && html.includes('src/main.js?v=V2.81.57-unified.60'));
+    html.includes('content="V2.81.57-unified.59"')
+    && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.59'")
+    && html.includes("var LOCKED = 'V2.81.57-unified.59'")
+    && html.includes('style.css?v=V2.81.57-unified.59')
+    && html.includes('src/main.js?v=V2.81.57-unified.59'));
 }
 
 console.log('=== returnToBaseAssignments still refuses a bomber sea origin ===');

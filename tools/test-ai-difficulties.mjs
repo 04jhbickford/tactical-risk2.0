@@ -157,7 +157,7 @@ function link(pairs) {
 }
 
 console.log('=== four AI levels ===');
-check('stamp is V2.81.57-unified.60', GAME_VERSION === 'V2.81.57-unified.60');
+check('stamp is V2.81.57-unified.59', GAME_VERSION === 'V2.81.57-unified.59');
 check('schema stays 11', SCHEMA_VERSION === 11);
 check('live turn is aiController from main', mainSrc.includes("from './ai/aiController.js'")
   && !mainSrc.includes('strategyAI'));
