@@ -109,8 +109,8 @@ import {
 } from './garrison.js';
 import {
   RADIO_DECEPTION,
-  AA_GUN_DEFEND,
   aaGunDefendValue,
+  defendingAaNeed,
   expandedTechEnabled,
   normalizeRadioBook,
   researchableTechIds,
@@ -4561,6 +4561,9 @@ export class GameState {
     // Clean up empty units
     this.units[combatTerritory] = combatUnits.filter(u => (Number(u.quantity) || 0) > 0);
     this.units[destination] = destUnits;
+    // The opening AA shot is once per battle. Leaving the round count set
+    // made the next battle in this territory skip AA.
+    if (this._combatRoundsTracker) delete this._combatRoundsTracker[combatTerritory];
 
     this._notify();
     this._emitLedger('retreat', {
@@ -4581,6 +4584,9 @@ export class GameState {
     // dismissed overlay / last-defender-dead hex is dropped and never
     // flips political control (35RB85 / 9.20.26.02).
     finalizeAttackerHoldsOnBoard(this, { unitDefs });
+    // A new Conduct Combat phase is a new set of battles. A round count left
+    // over from an earlier phase must not skip that battle's opening AA shot.
+    this._combatRoundsTracker = {};
     this.combatQueue = [];
     this.clearedSeaZones = new Set(); // Track sea zones cleared for shore bombardment
     // Note: amphibiousTerritories is set during combat move and used during combat phase
@@ -4870,26 +4876,25 @@ export class GameState {
     if (transportsLackAShield(attackers, defenders, unitDefs, 'defense')) scrap(attackers);
   }
 
-  // Opening AA shot for auto-resolved land battles. Human combat already
-  // rolls this in the AA step. Classic auto-resolve stays on catalog
-  // defense (0) and does not add a shot. Wasserfall raises the shot to 2
-  // and that volley runs here too: one die per attacking aircraft, cheapest
-  // aircraft removed, once on the first round.
-  _fireGuidedAaVolley(attackers, defenders, unitDefs) {
+  // Opening AA shot for each auto-resolved land combat round. Human combat
+  // rolls the same shot once, when the battle opens. One die per attacking
+  // aircraft, cheapest aircraft removed. Classic hits on 1. Wasserfall hits
+  // on 2 or less. A later round of the same battle fires again while guns
+  // and attacking aircraft remain. Catalog defense stays 0, so this shot is
+  // not the general combat roll.
+  _fireOpeningAaVolley(attackers, defenders, unitDefs) {
     const guns = (defenders || []).filter((unit) => (
       unit?.type === 'aaGun' && (Number(unit.quantity) || 0) > 0
     ));
     if (!guns.length) return null;
-    let need = AA_GUN_DEFEND;
+    const need = defendingAaNeed(this, guns);
     let seat = null;
     for (const gun of guns) {
-      const value = aaGunDefendValue(this, gun.owner);
-      if (value > need) {
-        need = value;
-        seat = gun.owner || seat;
-      }
+      if (aaGunDefendValue(this, gun.owner) !== need) continue;
+      seat = gun.owner || null;
+      if (seat) break;
     }
-    if (need <= AA_GUN_DEFEND) return null;
+    if (!seat) seat = guns[0].owner || null;
     let aircraft = 0;
     for (const unit of attackers || []) {
       if (!unitDefs?.[unit.type]?.isAir) continue;
@@ -4927,7 +4932,7 @@ export class GameState {
     return { need, rolls, hits };
   }
 
-  _finishGuidedAaWipe(territory, beforeCounts, player) {
+  _finishOpeningAaWipe(territory, beforeCounts, player) {
     this._noteCombatRoundLosses(territory, beforeCounts);
     this._flushCombatLossLedger(territory, 'defender');
     this.combatQueue = this.combatQueue.filter((name) => name !== territory);
@@ -4994,16 +4999,19 @@ export class GameState {
     }
 
     if (attackers.length === 0 || combatDefenders.length === 0) {
-      if (
-        !isNavalBattle
-        && attackers.length > 0
-        && !this._combatRoundsTracker?.[territory]
-      ) {
+      if (!isNavalBattle && attackers.length > 0) {
         const beforeAa = this._combatUnitCounts(units);
-        const guided = this._fireGuidedAaVolley(attackers, allDefenders, unitDefs);
+        const guided = this._fireOpeningAaVolley(attackers, allDefenders, unitDefs);
         if (guided) {
           attackers = attackers.filter((u) => (Number(u.quantity) || 0) > 0);
           this.units[territory] = units.filter((u) => (Number(u.quantity) || 0) > 0 || u.type === 'factory');
+          this.recordCombatTelemetry({
+            kind: 'aa',
+            territory,
+            hits: guided.hits,
+            rolls: guided.rolls.map((row) => row.roll),
+            wiped: attackers.length === 0,
+          });
           const owner = this.getOwner(territory);
           this._openCombatLossLedger(
             territory,
@@ -5011,7 +5019,7 @@ export class GameState {
             owner || this._mainEnemyOwner(allDefenders, player.id),
           );
           if (attackers.length === 0) {
-            this._finishGuidedAaWipe(territory, beforeAa, player);
+            this._finishOpeningAaWipe(territory, beforeAa, player);
             return {
               resolved: true,
               winner: 'defender',
@@ -5037,8 +5045,10 @@ export class GameState {
         : { captured: false };
       // Repair damaged ships at end of combat
       this._repairDamagedShips(units, unitDefs);
-      // Remove from combat queue
+      // Remove from combat queue. Drop the round count with it so the next
+      // battle here, even in this same phase, is allowed its opening AA shot.
       this.combatQueue = this.combatQueue.filter(t => t !== territory);
+      if (this._combatRoundsTracker) delete this._combatRoundsTracker[territory];
       this._notify();
       this._emitLedger('combat', {
         territory,
@@ -5103,8 +5113,8 @@ export class GameState {
     let surpriseDefenderLosses = [];
     const preStrikeAttack = forceSnap(attackers);
     const preStrikeDefense = forceSnap(allDefenders);
-    if (!isNavalBattle && this._combatRoundsTracker[territory] === 1) {
-      const guided = this._fireGuidedAaVolley(attackers, allDefenders, unitDefs);
+    if (!isNavalBattle) {
+      const guided = this._fireOpeningAaVolley(attackers, allDefenders, unitDefs);
       if (guided) {
         attackers = attackers.filter((u) => (Number(u.quantity) || 0) > 0);
         this.recordCombatTelemetry({
@@ -5119,7 +5129,7 @@ export class GameState {
         });
         if (attackers.length === 0) {
           this.units[territory] = units.filter((u) => (Number(u.quantity) || 0) > 0 || u.type === 'factory');
-          this._finishGuidedAaWipe(territory, beforeCounts, player);
+          this._finishOpeningAaWipe(territory, beforeCounts, player);
           return {
             resolved: true,
             winner: 'defender',

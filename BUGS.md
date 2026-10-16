@@ -2,6 +2,12 @@
 
 ---
 
+## 10.4.26 — unified.60 AA guns keep firing
+
+Stamp `V2.81.57-unified.60`. Schema stays 11. Auto-resolved land combat fires AA at the start of every round of that battle, including a later round after the gun already fired. One die per attacking aircraft still in the battle, cheapest aircraft removed. Classic hits on 1. Wasserfall hits on 2 or less after that research. The manual combat screen still opens AA once, when the battle starts. Factory AA is unchanged. A new Conduct Combat phase still clears a leftover round count so shore bombardment stays first-round only. A `V2.82-unified.59` doc is older than this tab and does not prompt. A `V2.82-unified.61` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.60`).
+
+Bastion, Discord #tactical-risk-bug-report (1556023650983878771): AA guns appeared to stop working after a certain number of combat phases, at least in single player and possibly in multiplayer.
+
 ## 10.3.26 — unified.59 Return to base in non-combat
 
 Stamp `V2.81.57-unified.59`. Schema stays 11. During non-combat, Classic solo and Classic multiplayer show Return to base when the current human has airborne aircraft that can still reach their recorded origin. One click sends those planes home under the same landing rules as a manual non-combat move. Planes that cannot legally reach that origin stay put. Pacific post-combat Return to base is unchanged. A `V2.82-unified.58` doc is older than this tab and does not prompt. A `V2.82-unified.60` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.59`).
