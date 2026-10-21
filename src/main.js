@@ -176,6 +176,11 @@ import {
 import { maybePostTurnNotice } from './multiplayer/turnNotice.js';
 import { bindDiscordTurnPing, seatKeyOf } from './multiplayer/discordTurnPing.js';
 import {
+  commitTurnHandoff,
+  TURN_SAVE_FAILED_WARNING,
+  turnNoticeCountsAsSent,
+} from './multiplayer/syncAuthority.js';
+import {
   resumeAuthEvent,
   shouldRefreshTokenOnResume,
 } from './multiplayer/authSession.js';
@@ -278,6 +283,32 @@ function showVersionBanner(remoteVersion, { mapRefusal = false, message = '' } =
   dismissBtn.onclick = () => banner.remove();
   banner.append(label, refreshBtn, dismissBtn);
   document.body.appendChild(banner);
+}
+
+function showTurnSaveWarning(message, onRetry) {
+  let banner = document.getElementById('turn-save-warning');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'turn-save-warning';
+    banner.setAttribute('role', 'alert');
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2100;background:#7f1d1d;color:#fff;padding:10px 16px;font-size:14px;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;box-shadow:0 2px 8px rgba(0,0,0,0.4);';
+    const label = document.createElement('span');
+    label.className = 'turn-save-warning-text';
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.textContent = 'Retry';
+    retry.style.cssText = 'background:#fff;color:#7f1d1d;border:none;padding:8px 16px;border-radius:6px;font-weight:600;cursor:pointer;min-height:44px;';
+    banner.append(label, retry);
+    document.body.appendChild(banner);
+  }
+  banner.querySelector('.turn-save-warning-text').textContent = message || TURN_SAVE_FAILED_WARNING;
+  banner.querySelector('button').onclick = () => {
+    if (typeof onRetry === 'function') onRetry();
+  };
+}
+
+function clearTurnSaveWarning() {
+  document.getElementById('turn-save-warning')?.remove();
 }
 
 async function init() {
@@ -574,7 +605,10 @@ async function init() {
   // Rules button is now in the HUD (top bar)
 
   // Action handler for player panel buttons
-  playerPanel.setActionCallback(async (action, data) => {
+  let dispatchPlayerAction = async () => {};
+  let turnHandoffBusy = false;
+  playerPanel.setActionCallback((action, data) => dispatchPlayerAction(action, data));
+  dispatchPlayerAction = async (action, data) => {
     if (!gameState) return;
 
     switch (action) {
@@ -1086,30 +1120,70 @@ async function init() {
         }
         const prevPlayer = gameState.currentPlayer;
         const prevRound = gameState.round;
+        const endingHumanTurn = gameState.isMultiplayer
+          && !!syncManager
+          && gameState.turnPhase === TURN_PHASES.COLLECT_INCOME;
 
-        // In multiplayer, set optimistic waiting state BEFORE nextPhase
-        // This prevents brief interaction window when turn passes to another player
-        if (gameState.isMultiplayer && gameState.turnPhase === TURN_PHASES.COLLECT_INCOME) {
-          // COLLECT_INCOME phase will pass turn to next player
+        if (endingHumanTurn) {
+          if (turnHandoffBusy) break;
+          turnHandoffBusy = true;
+          const snapshot = gameState.toJSON();
+          const prevSeatKey = seatKeyOf(gameState);
           playerPanel.setWaitingForSync(true);
-        }
-
-        gameState.nextPhase();
-        if (gameState.turnPhase === TURN_PHASES.MOBILIZE && gameState.currentPlayer?.isAI !== true) {
-          const plan = deployAllPrompt(gameState, unitDefs);
-          if (plan) {
-            const yes = await confirmChoice({
-              message: plan.message,
-              confirmLabel: 'Deploy',
-              cancelLabel: 'Not now',
+          let handoff;
+          try {
+            handoff = await commitTurnHandoff({
+              advance: () => { gameState.nextPhase(); },
+              push: () => syncManager.pushStateNow(),
+              sendNotice: async () => {
+                notifyTurnSwap(prevPlayer, gameState.currentPlayer);
+                const ping = unbindDiscordTurnPing?.confirmPushedSeat?.(seatKeyOf(gameState));
+                if (ping == null) return true;
+                const resolved = typeof ping.then === 'function' ? await ping : ping;
+                return { ok: turnNoticeCountsAsSent(resolved) };
+              },
+              restore: () => {
+                unbindDiscordTurnPing?.holdSeat?.(prevSeatKey);
+                unbindDiscordTurnPing?.discardPendingPing?.();
+                gameState.loadFromJSON(snapshot);
+                playerPanel.setWaitingForSync(false);
+              },
             });
-            if (yes) applyDeployAllPrompt(gameState, unitDefs, plan);
+          } finally {
+            turnHandoffBusy = false;
           }
-        }
-        notifyTurnSwap(prevPlayer, gameState.currentPlayer);
-        if (syncManager) {
-          const pushed = await syncManager.pushStateNow();
-          if (!pushed) playerPanel.setWaitingForSync(false);
+          if (!handoff.ok) {
+            showTurnSaveWarning(handoff.warning || TURN_SAVE_FAILED_WARNING, () => {
+              dispatchPlayerAction('next-phase');
+            });
+            camera.dirty = true;
+            break;
+          }
+          clearTurnSaveWarning();
+        } else {
+          // Optimistic waiting before a turn pass, so the panel does not
+          // accept clicks in the gap before the push returns.
+          if (gameState.isMultiplayer && gameState.turnPhase === TURN_PHASES.COLLECT_INCOME) {
+            playerPanel.setWaitingForSync(true);
+          }
+
+          gameState.nextPhase();
+          if (gameState.turnPhase === TURN_PHASES.MOBILIZE && gameState.currentPlayer?.isAI !== true) {
+            const plan = deployAllPrompt(gameState, unitDefs);
+            if (plan) {
+              const yes = await confirmChoice({
+                message: plan.message,
+                confirmLabel: 'Deploy',
+                cancelLabel: 'Not now',
+              });
+              if (yes) applyDeployAllPrompt(gameState, unitDefs, plan);
+            }
+          }
+          notifyTurnSwap(prevPlayer, gameState.currentPlayer);
+          if (syncManager) {
+            const pushed = await syncManager.pushStateNow();
+            if (!pushed) playerPanel.setWaitingForSync(false);
+          }
         }
         camera.dirty = true;
 
@@ -1128,7 +1202,7 @@ async function init() {
         movementUI.cancel();
         break;
     }
-  });
+  };
 
   // Continent panel
   const continentPanel = new ContinentPanel(continents);

@@ -4563,7 +4563,7 @@ export class GameState {
     this.units[destination] = destUnits;
     // The opening AA shot is once per battle. Leaving the round count set
     // made the next battle in this territory skip AA.
-    if (this._combatRoundsTracker) delete this._combatRoundsTracker[combatTerritory];
+    this._endBattle(combatTerritory);
 
     this._notify();
     this._emitLedger('retreat', {
@@ -4587,6 +4587,7 @@ export class GameState {
     // A new Conduct Combat phase is a new set of battles. A round count left
     // over from an earlier phase must not skip that battle's opening AA shot.
     this._combatRoundsTracker = {};
+    this._openBattles = new Set();
     this.combatQueue = [];
     this.clearedSeaZones = new Set(); // Track sea zones cleared for shore bombardment
     // Note: amphibiousTerritories is set during combat move and used during combat phase
@@ -4876,12 +4877,30 @@ export class GameState {
     if (transportsLackAShield(attackers, defenders, unitDefs, 'defense')) scrap(attackers);
   }
 
-  // Opening AA shot for each auto-resolved land combat round. Human combat
-  // rolls the same shot once, when the battle opens. One die per attacking
-  // aircraft, cheapest aircraft removed. Classic hits on 1. Wasserfall hits
-  // on 2 or less. A later round of the same battle fires again while guns
-  // and attacking aircraft remain. Catalog defense stays 0, so this shot is
-  // not the general combat roll.
+  // A battle is open until it resolves or retreats. A leftover round count
+  // from an earlier battle must not skip this battle's opening AA shot.
+  _beginBattleRound(territory) {
+    if (!this._openBattles) this._openBattles = new Set();
+    if (!this._combatRoundsTracker) this._combatRoundsTracker = {};
+    if (!this._openBattles.has(territory)) {
+      this._openBattles.add(territory);
+      this._combatRoundsTracker[territory] = 0;
+    }
+    this._combatRoundsTracker[territory] = (this._combatRoundsTracker[territory] || 0) + 1;
+    return this._combatRoundsTracker[territory];
+  }
+
+  _endBattle(territory) {
+    if (this._combatRoundsTracker) delete this._combatRoundsTracker[territory];
+    this._openBattles?.delete(territory);
+  }
+
+  // Opening AA shot, once, when an auto-resolved land battle starts. Human
+  // combat rolls the same shot once, when the battle opens. One die per
+  // attacking aircraft, cheapest aircraft removed. Classic hits on 1.
+  // Wasserfall hits on 2 or less. A later round of the same battle does not
+  // fire again. Catalog defense stays 0, so this shot is not the general
+  // combat roll. Factory AA is a separate raid and does not come through here.
   _fireOpeningAaVolley(attackers, defenders, unitDefs) {
     const guns = (defenders || []).filter((unit) => (
       unit?.type === 'aaGun' && (Number(unit.quantity) || 0) > 0
@@ -4936,7 +4955,7 @@ export class GameState {
     this._noteCombatRoundLosses(territory, beforeCounts);
     this._flushCombatLossLedger(territory, 'defender');
     this.combatQueue = this.combatQueue.filter((name) => name !== territory);
-    if (this._combatRoundsTracker) delete this._combatRoundsTracker[territory];
+    this._endBattle(territory);
     this._diceBattle = null;
     this._notify();
     flushDiceBuffer(this);
@@ -4980,7 +4999,7 @@ export class GameState {
     if (isNavalBattle && airVersusSubStalemate(attackers, allDefenders, unitDefs)) {
       this.units[territory] = units.filter((u) => (Number(u.quantity) || 0) > 0 || u.type === 'factory');
       this.combatQueue = this.combatQueue.filter((name) => name !== territory);
-      if (this._combatRoundsTracker) delete this._combatRoundsTracker[territory];
+      this._endBattle(territory);
       this._notify();
       this._emitLedger('combat', {
         territory,
@@ -5001,7 +5020,10 @@ export class GameState {
     if (attackers.length === 0 || combatDefenders.length === 0) {
       if (!isNavalBattle && attackers.length > 0) {
         const beforeAa = this._combatUnitCounts(units);
-        const guided = this._fireOpeningAaVolley(attackers, allDefenders, unitDefs);
+        const openingRound = this._beginBattleRound(territory);
+        const guided = openingRound === 1
+          ? this._fireOpeningAaVolley(attackers, allDefenders, unitDefs)
+          : null;
         if (guided) {
           attackers = attackers.filter((u) => (Number(u.quantity) || 0) > 0);
           this.units[territory] = units.filter((u) => (Number(u.quantity) || 0) > 0 || u.type === 'factory');
@@ -5048,7 +5070,7 @@ export class GameState {
       // Remove from combat queue. Drop the round count with it so the next
       // battle here, even in this same phase, is allowed its opening AA shot.
       this.combatQueue = this.combatQueue.filter(t => t !== territory);
-      if (this._combatRoundsTracker) delete this._combatRoundsTracker[territory];
+      this._endBattle(territory);
       this._notify();
       this._emitLedger('combat', {
         territory,
@@ -5076,18 +5098,17 @@ export class GameState {
     );
     this._pendingCarriedLosses = [];
 
-    // Shore bombardment: ships in adjacent sea zones can bombard land battles (first round only)
+    // Shore bombardment and AA are first-round only. A stale round count from
+    // an earlier battle in this territory is cleared when the battle opens.
+    const battleRound = this._beginBattleRound(territory);
     let bombardmentHits = 0;
     let bombardmentRolls = [];
-    if (!isNavalBattle && !this._combatRoundsTracker?.[territory]) {
+    if (!isNavalBattle && battleRound === 1) {
       const bombardmentResult = this._calculateShoreBombardment(territory, player.id, unitDefs);
       bombardmentHits = bombardmentResult.hits;
       bombardmentRolls = bombardmentResult.rolls;
     }
-    // Track combat rounds
-    if (!this._combatRoundsTracker) this._combatRoundsTracker = {};
-    this._combatRoundsTracker[territory] = (this._combatRoundsTracker[territory] || 0) + 1;
-    this._diceBattle = { territory, battleRound: this._combatRoundsTracker[territory] };
+    this._diceBattle = { territory, battleRound };
 
     // Submarine surprise strike once per battle, on round 1, matching the
     // combat screen. The gate is the same: active subs, no enemy destroyer,
@@ -5113,7 +5134,7 @@ export class GameState {
     let surpriseDefenderLosses = [];
     const preStrikeAttack = forceSnap(attackers);
     const preStrikeDefense = forceSnap(allDefenders);
-    if (!isNavalBattle) {
+    if (!isNavalBattle && battleRound === 1) {
       const guided = this._fireOpeningAaVolley(attackers, allDefenders, unitDefs);
       if (guided) {
         attackers = attackers.filter((u) => (Number(u.quantity) || 0) > 0);
@@ -5266,59 +5287,38 @@ export class GameState {
       result.winner = 'submerged';
       result.submerged = true;
       this.combatQueue = this.combatQueue.filter((name) => name !== territory);
-      if (this._combatRoundsTracker) delete this._combatRoundsTracker[territory];
+      this._endBattle(territory);
     } else if (remainingDefenders.length === 0) {
       // Attacker wins. Combat event first, then the capture, matching combatUI.
       this._flushCombatLossLedger(territory, 'attacker');
+      let conquered = false;
       if (isNavalBattle) {
         // Naval battle won - mark sea zone as cleared for shore bombardment
         this.markSeaZoneCleared(territory);
       } else {
-        // Land battle won - capture territory
-        const defender = allDefenders[0]?.owner;
-        this.territoryState[territory].owner = player.id;
-        this._sweepRadioDeception();
-
-        // Log territory capture for turn summary modal (multiplayer)
-        this.logTerritoryCapture(territory, defender, player.id);
-
-        // Transfer factory and AA gun ownership to the winner (captured, not destroyed - A&A Anniversary rules)
-        const territoryUnits = this.units[territory] || [];
-        for (const unit of territoryUnits) {
-          if (unit.type === 'factory' || unit.type === 'aaGun') {
-            unit.owner = player.id;
-            // Ensure unit has quantity (safeguard)
-            if (!unit.quantity || unit.quantity < 1) {
-              unit.quantity = 1;
-            }
-          }
-        }
-
-        // Award Risk card for conquering (one per turn per Risk rules)
-        if (!this.conqueredThisTurn[player.id]) {
-          this.conqueredThisTurn[player.id] = true;
-          const cardType = this.awardRiskCard(player.id);
-          result.cardAwarded = cardType;
-        }
-
-        // Handle capital capture (IPC transfer, victory check)
-        this.handleCapitalCapture(territory, player.id, defender);
+        // Land battle won. A land unit is required to take the territory.
+        // Air-only leaves the owner. A captured AA gun follows that capture.
+        const capture = captureIfAttackerHolds(this, territory, {
+          playerId: player.id,
+          unitDefs,
+        });
+        conquered = !!capture.captured;
+        if (capture.cardAwarded) result.cardAwarded = capture.cardAwarded;
       }
       // Repair surviving damaged ships
       this._repairDamagedShips(this.units[territory], unitDefs);
       this.combatQueue = this.combatQueue.filter(t => t !== territory);
-      // Clean up combat rounds tracker
-      if (this._combatRoundsTracker) delete this._combatRoundsTracker[territory];
+      this._endBattle(territory);
       result.resolved = true;
       result.winner = 'attacker';
-      result.conquered = !isNavalBattle; // Only land territories are "conquered"
+      result.conquered = conquered;
     } else if (remainingAttackers.length === 0) {
       this._flushCombatLossLedger(territory, 'defender');
       // Repair surviving damaged ships
       this._repairDamagedShips(this.units[territory], unitDefs);
       this.combatQueue = this.combatQueue.filter(t => t !== territory);
       // Clean up combat rounds tracker
-      if (this._combatRoundsTracker) delete this._combatRoundsTracker[territory];
+      this._endBattle(territory);
       result.resolved = true;
       result.winner = 'defender';
     } else {
@@ -5588,6 +5588,7 @@ export class GameState {
     let otherLeft = Math.max(0, Number(hits) || 0);
     let airLeft = 0;
     let subLeft = 0;
+    let freshDamage = 0;
     // Air hits are spent on non-subs first so a surface hit still follows
     // today's cheapest / battleship order. Subs refuse those air hits.
     if (profile?.canAirHitSubs === false) {
@@ -5655,9 +5656,11 @@ export class GameState {
         if (hitsLeft() <= 0) break;
         const undamaged = unit.quantity - (unit.damagedCount || 0);
         if (undamaged > 0 && takeHit(unit)) {
-          // Damage the ship instead of destroying
+          // Damage the ship instead of destroying. A second hit, below,
+          // is what sinks a ship damaged in this same pass.
           unit.damagedCount = (unit.damagedCount || 0) + 1;
           unit.damaged = true;
+          freshDamage += 1;
           casualties.push({ type: unit.type, damaged: true });
         }
       }
@@ -5668,7 +5671,7 @@ export class GameState {
       const def = unitDefs[u.type];
       // Skip factories - they are captured, not destroyed.
       // A garrison is spent only after every other unit.
-      if (u.type === 'factory' || u.type === GARRISON) return false;
+      if (u.type === 'factory' || u.type === GARRISON || u.type === 'aaGun') return false;
       // A hittable escort still shields transports for this whole round.
       if (u.type === 'transport' && shieldTransports) return false;
       // Skip multi-hit ships that are only damaged (not destroyed)
@@ -5707,6 +5710,27 @@ export class GameState {
       for (let i = 0; i < remove; i++) {
         casualties.push({ type: unit.type, destroyed: true });
       }
+    }
+
+    // An undamaged battleship took its first hit above. A hit still left
+    // after every cheaper unit is the second hit and sinks that hull.
+    while (freshDamage > 0 && hitsLeft() > 0) {
+      let sunk = false;
+      for (const unit of units) {
+        if (freshDamage <= 0 || hitsLeft() <= 0) break;
+        const def = unitDefs?.[unit.type];
+        if (!(def?.hp > 1) || !(unit.quantity > 0) || !(unit.damagedCount > 0)) continue;
+        if (!takeHit(unit)) break;
+        unit.quantity -= 1;
+        unit.damagedCount = Math.max(0, (unit.damagedCount || 0) - 1);
+        unit.damaged = unit.quantity > 0 && unit.damagedCount > 0;
+        this._noteSunkCargo(unit);
+        casualties.push({ type: unit.type, destroyed: true, wasDamaged: true });
+        freshDamage -= 1;
+        sunk = true;
+        break;
+      }
+      if (!sunk) break;
     }
 
     return casualties;

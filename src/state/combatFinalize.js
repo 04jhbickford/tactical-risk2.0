@@ -31,7 +31,10 @@ export function attackerHoldsWithLand(units, playerId, {
   isWater = false,
 } = {}) {
   if (isWater) return false;
-  const enemies = getEnemyCombatUnits(units, playerId, areAllies);
+  // AA guns are still a fight, but they do not block the capture once the
+  // other defenders are gone. Air-only still fails the land-unit check.
+  const enemies = getEnemyCombatUnits(units, playerId, areAllies)
+    .filter((unit) => unit.type !== 'aaGun');
   const friends = getFriendlyCombatUnits(units, playerId);
   if (enemies.length > 0 || friends.length === 0) return false;
   return friends.some((u) => isLandCombatUnit(u, unitDefs));

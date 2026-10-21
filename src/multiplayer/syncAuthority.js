@@ -205,3 +205,73 @@ export function evaluateAuthoritativePush({
     },
   };
 }
+
+export const TURN_SAVE_FAILED_WARNING =
+  'Could not save your turn. You are still on this turn.';
+
+// Discord soft-fails on purpose. Those results still count as the notice
+// having been handled. A missing binder is the caller's problem.
+export function turnNoticeCountsAsSent(notice) {
+  if (notice === true) return true;
+  if (!notice || typeof notice !== 'object') return false;
+  if (notice.ok === true) return true;
+  return notice.reason === 'unconfigured'
+    || notice.reason === 'skip-ai'
+    || notice.reason === 'no-pending'
+    || notice.reason === 'soft-fail'
+    || notice.reason === 'skip-probe';
+}
+
+// End Turn advances, then the save has to land. A failed save restores the
+// pre-handoff snapshot and asks for Retry. A notice problem after a
+// successful save does not roll the turn back.
+export async function commitTurnHandoff({
+  advance,
+  push,
+  sendNotice,
+  restore,
+} = {}) {
+  try {
+    await advance?.();
+  } catch {
+    try { await restore?.(); } catch { /* the warning still shows */ }
+    return {
+      ok: false,
+      advanced: false,
+      noticeSent: false,
+      warning: TURN_SAVE_FAILED_WARNING,
+      retry: true,
+    };
+  }
+
+  let pushed = false;
+  try {
+    pushed = await push?.();
+  } catch {
+    pushed = false;
+  }
+  if (pushed !== true) {
+    try { await restore?.(); } catch { /* the warning still shows */ }
+    return {
+      ok: false,
+      advanced: false,
+      noticeSent: false,
+      warning: TURN_SAVE_FAILED_WARNING,
+      retry: true,
+    };
+  }
+
+  let notice = null;
+  try {
+    notice = await sendNotice?.();
+  } catch {
+    notice = { ok: false };
+  }
+  return {
+    ok: true,
+    advanced: true,
+    noticeSent: notice === true || notice?.ok === true,
+    warning: '',
+    retry: false,
+  };
+}

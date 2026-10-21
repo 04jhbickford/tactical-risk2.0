@@ -112,7 +112,7 @@ function qty(gs, type, owner) {
 
 console.log('=== stamp and catalog ===');
 {
-  check('display stamp is V2.81.57-unified.60', GAME_VERSION === 'V2.81.57-unified.60');
+  check('display stamp is V2.81.57-unified.61', GAME_VERSION === 'V2.81.57-unified.61');
   check('schema stays 11', SCHEMA_VERSION === 11);
   const classicIds = Object.keys(TECHNOLOGIES);
   check('classic catalog has no Wasserfall', !classicIds.includes('wasserfall'));
@@ -315,9 +315,9 @@ console.log('=== AA still fires after several combat phases ===');
   const sameBattle = seen.filter((ctx) => ctx?.context === 'aa');
   check('the first round of a battle fires AA once',
     afterFirst.length === 1 && afterFirst[0].need === 1 && first?.resolved !== true);
-  check('a later round of that same battle still fires AA',
-    sameBattle.length === 2
-    && sameBattle.every((ctx) => ctx.need === 1 && ctx.unit === 'aaGun' && ctx.side === 'defender')
+  check('a later round of that same battle does not fire AA',
+    sameBattle.length === 1
+    && sameBattle[0].need === 1 && sameBattle[0].unit === 'aaGun' && sameBattle[0].side === 'defender'
     && second?.resolved !== true
     && qty(ongoing, 'fighter', 'Germans') === 1
     && qty(ongoing, 'aaGun', 'British') === 1);
