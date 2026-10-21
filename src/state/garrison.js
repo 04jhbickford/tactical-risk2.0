@@ -39,6 +39,15 @@ export function respawnOriginalGarrison(gameState, playerId) {
  * already selected. Factories are captured. Transports follow their own
  * escort rule and are not a second lock.
  */
+function pickedOfType(picked, type) {
+  let n = Number(picked[type]) || 0;
+  const prefix = `${type}@`;
+  for (const [key, value] of Object.entries(picked)) {
+    if (key.startsWith(prefix)) n += Number(value) || 0;
+  }
+  return n;
+}
+
 export function garrisonHitAllowed(units, selected = {}) {
   const picked = selected || {};
   const byType = new Map();
@@ -49,7 +58,7 @@ export function garrisonHitAllowed(units, selected = {}) {
     byType.set(unit.type, (byType.get(unit.type) || 0) + qty);
   }
   for (const [type, qty] of byType) {
-    if ((Number(picked[type]) || 0) < qty) return false;
+    if (pickedOfType(picked, type) < qty) return false;
   }
   return true;
 }

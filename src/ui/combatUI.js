@@ -1655,6 +1655,21 @@ export class CombatUI {
     const selected = {};
     let remaining = count;
 
+    // One owner keeps the plain type key. Two factions of the same type
+    // each get type@owner so a hit cannot spend the other faction's hull.
+    const ownersByType = new Map();
+    for (const unit of units) {
+      if (!unit?.type || !(unit.quantity > 0)) continue;
+      if (!ownersByType.has(unit.type)) ownersByType.set(unit.type, new Set());
+      ownersByType.get(unit.type).add(unit.owner);
+    }
+    const pickKey = (unit) => {
+      const owners = ownersByType.get(unit.type);
+      if (owners && owners.size > 1 && unit.owner) return `${unit.type}@${unit.owner}`;
+      return unit.type;
+    };
+    const bbSplit = (ownersByType.get('battleship')?.size || 0) > 1;
+
     // Get battleships for later
     const battleships = units.filter(u => u.type === 'battleship' && u.quantity > 0);
     const hasUndamagedBattleship = battleships.some((battleship) => {
@@ -1676,7 +1691,8 @@ export class CombatUI {
       for (const unit of sorted) {
         if (remaining <= 0) break;
         const take = Math.min(unit.quantity, remaining);
-        selected[unit.type] = (selected[unit.type] || 0) + take;
+        const key = pickKey(unit);
+        selected[key] = (selected[key] || 0) + take;
         remaining -= take;
       }
     };
@@ -1726,11 +1742,56 @@ export class CombatUI {
       }
     };
 
-    if (damageFirst) damageUndamaged();
+    const damageUndamagedSplit = () => {
+      for (const battleship of battleships) {
+        if (remaining <= 0) break;
+        const def = this.unitDefs[battleship.type];
+        if (!(def?.hp > 1)) continue;
+        const undamaged = battleship.quantity - (battleship.damagedCount || 0);
+        if (undamaged <= 0) continue;
+        const toDamage = Math.min(undamaged, remaining);
+        const key = `battleship_damage@${battleship.owner}`;
+        selected[key] = (selected[key] || 0) + toDamage;
+        remaining -= toDamage;
+      }
+    };
+    const destroyPredamagedSplit = () => {
+      for (const battleship of battleships) {
+        if (remaining <= 0) break;
+        const damagedCount = battleship.damagedCount || 0;
+        if (damagedCount <= 0) continue;
+        const toDestroy = Math.min(damagedCount, remaining);
+        const key = `battleship@${battleship.owner}`;
+        selected[key] = (selected[key] || 0) + toDestroy;
+        remaining -= toDestroy;
+      }
+    };
+    const destroyJustDamagedSplit = () => {
+      if (remaining <= 0) return;
+      const owners = ownersByType.get('battleship') || new Set();
+      for (const owner of owners) {
+        if (remaining <= 0) break;
+        const ships = battleships.filter((ship) => ship.owner === owner);
+        const preDamaged = ships.reduce((sum, ship) => sum + (ship.damagedCount || 0), 0);
+        const damagedThisPass = selected[`battleship_damage@${owner}`] || 0;
+        const freshDestroys = Math.max(0, (selected[`battleship@${owner}`] || 0) - preDamaged);
+        const room = Math.max(0, damagedThisPass - freshDestroys);
+        const toDestroy = Math.min(room, remaining);
+        if (toDestroy <= 0) continue;
+        const key = `battleship@${owner}`;
+        selected[key] = (selected[key] || 0) + toDestroy;
+        remaining -= toDestroy;
+      }
+    };
+
+    const damage = bbSplit ? damageUndamagedSplit : damageUndamaged;
+    const pre = bbSplit ? destroyPredamagedSplit : destroyPredamaged;
+    const just = bbSplit ? destroyJustDamagedSplit : destroyJustDamaged;
+    if (damageFirst) damage();
     takeCheapest();
-    if (!damageFirst) damageUndamaged();
-    destroyPredamaged();
-    destroyJustDamaged();
+    if (!damageFirst) damage();
+    pre();
+    just();
 
     // A transport is a valid target once no hittable escort can take the hit.
     if (remaining > 0 && !this._sideShieldsTransports(units)) {
@@ -1738,7 +1799,8 @@ export class CombatUI {
       for (const unit of transports) {
         if (remaining <= 0) break;
         const take = Math.min(unit.quantity, remaining);
-        selected.transport = (selected.transport || 0) + take;
+        const key = pickKey(unit);
+        selected[key] = (selected[key] || 0) + take;
         remaining -= take;
       }
     }
@@ -1749,7 +1811,8 @@ export class CombatUI {
       for (const unit of garrisons) {
         if (remaining <= 0) break;
         const take = Math.min(unit.quantity, remaining);
-        selected[GARRISON] = (selected[GARRISON] || 0) + take;
+        const key = pickKey(unit);
+        selected[key] = (selected[key] || 0) + take;
         remaining -= take;
       }
     }
@@ -4176,15 +4239,29 @@ export class CombatUI {
       if (seen.has(unit.type)) continue;
       seen.add(unit.type);
       const stacks = living.filter((row) => row.type === unit.type);
-      rows.push({
-        type: unit.type,
-        owner: unit.owner,
-        quantity: stacks.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0),
-        damagedCount: stacks.reduce((sum, row) => sum + Math.min(
-          Number(row.quantity) || 0,
-          Math.max(0, Number(row.damagedCount) || 0),
-        ), 0),
-      });
+      const owners = [];
+      for (const stack of stacks) {
+        if (!owners.includes(stack.owner)) owners.push(stack.owner);
+      }
+      const groups = owners.length > 1
+        ? owners.map((owner) => stacks.filter((row) => row.owner === owner))
+        : [stacks];
+      for (const group of groups) {
+        const qualify = owners.length > 1 && group[0]?.owner;
+        const owner = group[0]?.owner;
+        rows.push({
+          type: unit.type,
+          owner,
+          selectKey: qualify ? `${unit.type}@${owner}` : unit.type,
+          damageKey: qualify ? `battleship_damage@${owner}` : 'battleship_damage',
+          sinkKey: qualify ? `battleship@${owner}` : 'battleship',
+          quantity: group.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0),
+          damagedCount: group.reduce((sum, row) => sum + Math.min(
+            Number(row.quantity) || 0,
+            Math.max(0, Number(row.damagedCount) || 0),
+          ), 0),
+        });
+      }
     }
 
     for (const u of rows) {
@@ -4195,8 +4272,8 @@ export class CombatUI {
       if (u.type === 'battleship') {
         const damagedCount = u.damagedCount || 0;
         const undamagedCount = u.quantity - damagedCount;
-        const damageSelected = selected['battleship_damage'] || 0;
-        const destroySelected = selected['battleship'] || 0;
+        const damageSelected = selected[u.damageKey] || 0;
+        const destroySelected = selected[u.sinkKey] || 0;
         const pendingDamage = damageSelected;
         const maxDestroyable = battleshipDestroyCap(damagedCount, undamagedCount, pendingDamage);
         const choiceRow = (key, label, selectedCount, maxCount) => `
@@ -4227,18 +4304,18 @@ export class CombatUI {
         `;
         if (undamagedCount > 0) {
           html += choiceRow(
-            'battleship_damage',
+            u.damageKey,
             'Battleship — take 1 hit (damaged)',
             damageSelected,
             undamagedCount,
           );
         }
         if (damagedCount > 0 || undamagedCount > 0) {
-          html += choiceRow('battleship', 'Battleship — sunk', destroySelected, maxDestroyable);
+          html += choiceRow(u.sinkKey, 'Battleship — sunk', destroySelected, maxDestroyable);
         }
       } else {
         // Standard units
-        const selectedCount = selected[u.type] || 0;
+        const selectedCount = selected[u.selectKey] || 0;
         const garrisonHeld = u.type !== GARRISON && (Number(selected[GARRISON]) || 0) > 0;
         const garrisonLocked = u.type === GARRISON && !garrisonHitAllowed(units, selected);
         const casualtyName = u.type === GARRISON ? formatUnitName(u.type) : u.type;
@@ -4251,9 +4328,9 @@ export class CombatUI {
             </div>
             ${!readonly ? `
               <div class="casualty-controls">
-                <button class="casualty-btn minus" data-side="${side}" data-unit="${u.type}" ${selectedCount <= 0 || garrisonHeld ? 'disabled' : ''}>−</button>
+                <button class="casualty-btn minus" data-side="${side}" data-unit="${u.selectKey}" ${selectedCount <= 0 || garrisonHeld ? 'disabled' : ''}>−</button>
                 <span class="casualty-selected">${selectedCount}</span>
-                <button class="casualty-btn plus" data-side="${side}" data-unit="${u.type}" ${selectedCount >= u.quantity || garrisonLocked || (u.type === 'submarine' && selectedCount >= this._maxLegalSubSelections(side)) ? 'disabled' : ''}>+</button>
+                <button class="casualty-btn plus" data-side="${side}" data-unit="${u.selectKey}" ${selectedCount >= u.quantity || garrisonLocked || (u.type === 'submarine' && selectedCount >= this._maxLegalSubSelections(side)) ? 'disabled' : ''}>+</button>
               </div>
             ` : `
               <div class="casualty-controls readonly">
@@ -4500,7 +4577,10 @@ export class CombatUI {
     }
   }
 
-  _adjustCasualty(side, unitType, delta) {
+  _adjustCasualty(side, unitKey, delta) {
+    const at = String(unitKey).indexOf('@');
+    const unitType = at > 0 ? unitKey.slice(0, at) : unitKey;
+    const owner = at > 0 ? unitKey.slice(at + 1) : null;
     const {
       attackers, defenders,
       pendingAttackerCasualties, pendingDefenderCasualties,
@@ -4511,7 +4591,11 @@ export class CombatUI {
     const units = side === 'attacker' ? attackers : defenders;
     const pendingCasualties = side === 'attacker' ? pendingAttackerCasualties : pendingDefenderCasualties;
     const selectedCasualties = side === 'attacker' ? selectedAttackerCasualties : selectedDefenderCasualties;
-    const stacksOf = (type) => (units || []).filter((u) => u?.type === type && (Number(u.quantity) || 0) > 0);
+    const stacksOf = (type) => (units || []).filter((u) => (
+      u?.type === type
+      && (Number(u.quantity) || 0) > 0
+      && (owner == null || u.owner === owner)
+    ));
 
     // Special handling for battleship_damage (refers to undamaged battleships taking damage)
     if (unitType === 'battleship_damage') {
@@ -4521,7 +4605,7 @@ export class CombatUI {
       const undamagedCount = battleships.reduce((sum, battleship) => (
         sum + Math.max(0, (Number(battleship.quantity) || 0) - (Number(battleship.damagedCount) || 0))
       ), 0);
-      const current = selectedCasualties['battleship_damage'] || 0;
+      const current = selectedCasualties[unitKey] || 0;
       const newValue = Math.max(0, Math.min(undamagedCount, current + delta));
 
       // Check we don't exceed required casualties (air hits on subs are not assignable)
@@ -4530,13 +4614,14 @@ export class CombatUI {
       const newTotal = currentTotal - current + newValue;
 
       if (newTotal <= effectivePending) {
-        selectedCasualties['battleship_damage'] = newValue;
+        selectedCasualties[unitKey] = newValue;
         const cap = battleshipDestroyCap(
           battleships.reduce((sum, ship) => sum + (Number(ship.damagedCount) || 0), 0),
           undamagedCount,
           newValue,
         );
-        if ((selectedCasualties.battleship || 0) > cap) selectedCasualties.battleship = cap;
+        const sinkKey = owner ? `battleship@${owner}` : 'battleship';
+        if ((selectedCasualties[sinkKey] || 0) > cap) selectedCasualties[sinkKey] = cap;
         if (side === 'attacker') this.combatState.attackerPicksTouched = true;
         else this.combatState.defenderPicksTouched = true;
         this._render();
@@ -4557,20 +4642,22 @@ export class CombatUI {
     if (unitType === 'battleship') {
       const damagedCount = stacks.reduce((sum, unit) => sum + (Number(unit.damagedCount) || 0), 0);
       const undamagedCount = maxSelectable - damagedCount;
-      const pendingDamage = selectedCasualties['battleship_damage'] || 0;
+      const damageKey = owner ? `battleship_damage@${owner}` : 'battleship_damage';
+      const pendingDamage = selectedCasualties[damageKey] || 0;
       maxSelectable = battleshipDestroyCap(damagedCount, undamagedCount, pendingDamage);
     }
 
-    const current = selectedCasualties[unitType] || 0;
+    const current = selectedCasualties[unitKey] || 0;
     const newValue = Math.max(0, Math.min(maxSelectable, current + delta));
     if (unitType === 'submarine' && newValue > this._maxLegalSubSelections(side)) return;
     if (this.unitDefs?.[unitType]?.isAir && newValue > current) {
       const profile = this._airVsSubProfile(side);
       const subBudget = Math.min(Math.max(0, profile.subHits || 0), pendingCasualties);
       const airCap = Math.max(0, pendingCasualties - subBudget);
-      const airNow = Object.entries(selectedCasualties).reduce((sum, [type, count]) => (
-        sum + (this.unitDefs?.[type]?.isAir ? (Number(count) || 0) : 0)
-      ), 0);
+      const airNow = Object.entries(selectedCasualties).reduce((sum, [type, count]) => {
+        const bare = type.includes('@') ? type.slice(0, type.indexOf('@')) : type;
+        return sum + (this.unitDefs?.[bare]?.isAir ? (Number(count) || 0) : 0);
+      }, 0);
       if (airNow - current + newValue > airCap) return;
     }
 
@@ -4580,7 +4667,7 @@ export class CombatUI {
     const newTotal = currentTotal - current + newValue;
 
     if (newTotal <= effectivePending) {
-      selectedCasualties[unitType] = newValue;
+      selectedCasualties[unitKey] = newValue;
       if (side === 'attacker') this.combatState.attackerPicksTouched = true;
       else this.combatState.defenderPicksTouched = true;
       this._render();

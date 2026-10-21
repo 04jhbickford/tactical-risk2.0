@@ -18551,6 +18551,18 @@ html.mobile-shell .player-panel--expanded.player-panel--mobilize .pp-inline-mobi
     font-style: normal;
   }
 
+  .phone-peek-max {
+    display: block;
+    margin-top: 1px;
+    max-width: 100%;
+    overflow: hidden;
+    font: 700 8px/1 -apple-system, "SF Pro Text", sans-serif;
+    letter-spacing: 0.02em;
+    color: #c4a35a;
+    font-style: normal;
+    white-space: nowrap;
+  }
+
   .phone-peek-tile-steps {
     display: flex;
     align-items: center;

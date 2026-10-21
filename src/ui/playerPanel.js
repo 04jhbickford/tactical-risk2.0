@@ -2300,6 +2300,9 @@ export class PlayerPanel {
         selectedTerritory: this.selectedTerritory,
         allowWater: phonePairAllowWater({ phase, turnPhase }),
       });
+      const purchaseMax = phase === GAME_PHASES.PLAYING && turnPhase === TURN_PHASES.PURCHASE
+        ? (this.gameState.maxBuyable?.(this.selectedUnitType, this.unitDefs) ?? 0)
+        : null;
       if (!this._deployRosterHidden(phase, turnPhase, player) && shouldShowPhonePeekMax({
         mobile: true,
         phase,
@@ -2308,11 +2311,14 @@ export class PlayerPanel {
         hasNamedDest: !!this.movePendingDest || phase === GAME_PHASES.UNIT_PLACEMENT
           || turnPhase === TURN_PHASES.MOBILIZE,
         hasUnitType: !!this.selectedUnitType,
-        remainingOfType: this._phoneIconRemaining(this.selectedUnitType, player, phase, turnPhase),
+        remainingOfType: purchaseMax != null
+          ? purchaseMax
+          : this._phoneIconRemaining(this.selectedUnitType, player, phase, turnPhase),
       })) {
+        const maxText = purchaseMax != null ? `Max ${purchaseMax}` : 'Max';
         html += `
         <button type="button" class="pp-peek-max" data-action="phone-pair-max" data-unit="${this.selectedUnitType}" data-chrome="ready">
-          Max
+          ${maxText}
         </button>`;
       }
     }
@@ -3307,7 +3313,8 @@ export class PlayerPanel {
       const qty = pendingUnit?.quantity || 0;
       // Apply industrial tech discount (-1 IPC, min 1)
       const actualCost = hasIndustrialTech ? Math.max(1, def.cost - 1) : def.cost;
-      const canAfford = remaining >= actualCost;
+      const maxBuy = this.gameState.maxBuyable?.(unitType, this.unitDefs) ?? 0;
+      const canAdd = maxBuy > 0 && remaining >= actualCost;
       const imageSrc = getUnitIconPath(unitType, player.id);
       const unitLabel = formatUnitName(unitType);
       const costDisplay = hasIndustrialTech && def.cost > 1
@@ -3324,8 +3331,8 @@ export class PlayerPanel {
           <div class="pp-buy-controls">
             <button class="pp-qty-btn" data-action="buy-unit" data-unit="${unitType}" data-delta="-1" ${qty <= 0 ? 'disabled' : ''}>−</button>
             <span class="pp-buy-qty">${qty}</span>
-            <button class="pp-qty-btn" data-action="buy-unit" data-unit="${unitType}" data-delta="1" ${!canAfford ? 'disabled' : ''}>+</button>
-            <button class="pp-qty-btn max-btn" data-action="buy-max" data-unit="${unitType}" ${!canAfford ? 'disabled' : ''}>Max</button>
+            <button class="pp-qty-btn" data-action="buy-unit" data-unit="${unitType}" data-delta="1" ${!canAdd ? 'disabled' : ''}>+</button>
+            <button class="pp-qty-btn max-btn" data-action="buy-max" data-unit="${unitType}" ${!canAdd ? 'disabled' : ''}>Max ${maxBuy}</button>
           </div>
         </div>`;
     };
@@ -3701,6 +3708,7 @@ export class PlayerPanel {
     minusOff = false,
     plusOff = false,
     countLabel = null,
+    maxLabel = '',
   } = {}) {
     const name = formatUnitName(unitType);
     const short = this._phonePeekShort(unitType);
@@ -3716,9 +3724,13 @@ export class PlayerPanel {
           <button type="button" class="phone-peek-step" data-action="${stepAction}" data-unit="${unitKey}" data-delta="1" ${plusOff ? 'disabled' : ''} aria-label="More ${name}">+</button>
         </div>`
       : `<div class="phone-peek-tile-steps"><b>${label}</b></div>`;
+    const maxHtml = maxLabel
+      ? `<span class="phone-peek-max">${maxLabel}</span>`
+      : '';
     return `<div class="phone-peek-tile${on}" ${selectAttr} role="group" aria-label="${name}">
       ${imageSrc ? `<img src="${imageSrc}" alt="" class="phone-peek-icon">` : ''}
       <em>${short}</em>
+      ${maxHtml}
       ${steps}
     </div>`;
   }
@@ -3786,7 +3798,8 @@ export class PlayerPanel {
         const imageSrc = getUnitIconPath(unitType, player.id);
         const qty = pending.find(p => p.type === unitType)?.quantity || 0;
         const cost = Number(def?.cost) || 0;
-        const canAfford = cost <= 0 || ipcs >= cost;
+        const maxBuy = this.gameState.maxBuyable?.(unitType, this.unitDefs) ?? 0;
+        const canAfford = (cost <= 0 || ipcs >= cost) && maxBuy > 0;
         chips += this._phonePeekTileHtml({
           unitType,
           imageSrc,
@@ -3797,6 +3810,7 @@ export class PlayerPanel {
           minusOff: qty <= 0,
           plusOff: !canAfford,
           countLabel: String(qty),
+          maxLabel: `Max ${maxBuy}`,
         });
       }
     } else if (phase === GAME_PHASES.PLAYING && turnPhase === TURN_PHASES.MOBILIZE && this._mobilizeAtMax()) {
