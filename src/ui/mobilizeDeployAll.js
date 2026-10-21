@@ -2,6 +2,29 @@
 // Ships follow the chosen sea zone, or the only sea adjacent to a factory.
 // Several seas and no choice skips ships and says so.
 
+// Every pending purchase the chosen factory or sea zone can still take,
+// in list order, stopping when that factory's remaining slots run out.
+// A new factory does not spend those slots.
+export function selectAllPendingPurchases(pending, {
+  placeable = () => false,
+  usesFactorySlot = () => true,
+  slotsRemaining = 0,
+} = {}) {
+  let slots = Math.max(0, Math.floor(Number(slotsRemaining) || 0));
+  const selected = {};
+  for (const item of pending || []) {
+    const type = item?.type;
+    const qty = Math.max(0, Math.floor(Number(item?.quantity) || 0));
+    if (!type || qty <= 0 || !placeable(item)) continue;
+    const slotted = usesFactorySlot(item) !== false;
+    const take = slotted ? Math.min(qty, slots) : qty;
+    if (take <= 0) continue;
+    selected[type] = (selected[type] || 0) + take;
+    if (slotted) slots -= take;
+  }
+  return selected;
+}
+
 export function adjacentMobilizeSeas(gameState, territoryName, playerId) {
   const territory = gameState?.territoryByName?.[territoryName];
   if (!territory || territory.isWater) return [];

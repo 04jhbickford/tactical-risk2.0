@@ -4,7 +4,7 @@ import { TURN_PHASES } from '../state/gameState.js';
 import { landBlitzOptions } from '../state/mechanizedInfantry.js';
 import { getUnitIconPath } from '../utils/unitIcons.js';
 import { airCombatMoveMayOccupy, combatMoveReachableDests, maxMoveSelection, seaZoneHasEnemyForAirAttack } from '../state/combatMoveEligibility.js';
-import { combatAirReturnRange, hasLegalAirLandingFrom, wasFriendlyAtTurnStart } from '../state/airLanding.js';
+import { combatAirReturnRange, hasLegalAirLandingFrom, listedAircraftMoveLabel, wasFriendlyAtTurnStart } from '../state/airLanding.js';
 import { isLandingCarrier } from '../state/carrierPlacement.js';
 import { moveUnitsWithRaidPrompt } from './raidPrompt.js';
 import { raiderNcmMovementRange } from '../state/strategicBombing.js';
@@ -891,12 +891,14 @@ export class MovementUI {
       for (const [type, data] of Object.entries(aircraftByType)) {
         const acImageSrc = getUnitIconPath(type, data.owner);
         const count = data.indices.length;
+        const moveBadge = listedAircraftMoveLabel(this.gameState, this.selectedFrom?.name, type, this.unitDefs);
 
         html += `
           <div class="mp-aircraft-row">
             <div class="mp-aircraft-info">
               ${acImageSrc ? `<img src="${acImageSrc}" class="mp-aircraft-icon" alt="${type}">` : ''}
               <span class="mp-aircraft-name">${type}</span>
+              ${moveBadge ? `<span class="mp-aircraft-name" data-moves-left="${moveBadge.remaining}" title="${moveBadge.title}">${moveBadge.remaining} left</span>` : ''}
               <span class="mp-aircraft-count">×${count}</span>
             </div>
             <div class="mp-aircraft-actions">
@@ -1406,6 +1408,13 @@ export class MovementUI {
       if (def?.isAir) tooltipParts.push('Air unit');
       if (def?.isLand) tooltipParts.push('Land unit');
       if (def?.isSea) tooltipParts.push('Naval unit');
+      const moveBadge = def?.isAir
+        ? listedAircraftMoveLabel(this.gameState, this.selectedFrom?.name, unitType, this.unitDefs)
+        : null;
+      if (moveBadge) {
+        const moveAt = tooltipParts.findIndex((part) => part.startsWith('Movement:'));
+        if (moveAt >= 0) tooltipParts[moveAt] = `Movement: ${moveBadge.remaining} left`;
+      }
       const tooltipText = tooltipParts.join(' | ');
 
       html += `
@@ -1413,6 +1422,7 @@ export class MovementUI {
           <div class="mp-unit-info">
             ${imageSrc ? `<img src="${imageSrc}" class="mp-unit-icon" alt="${unitType}">` : ''}
             <span class="mp-unit-name">${unitType}</span>
+            ${moveBadge ? `<span class="mp-unit-name" data-moves-left="${moveBadge.remaining}" title="${moveBadge.title}">${moveBadge.remaining} left</span>` : ''}
             <span class="mp-unit-info-icon" title="${tooltipText}">ⓘ</span>
             <span class="mp-unit-avail">(${unitData.totalQuantity})</span>
           </div>

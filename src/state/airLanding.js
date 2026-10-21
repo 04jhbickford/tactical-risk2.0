@@ -540,6 +540,19 @@ export function mergeLiveCarrierLoads(liveUnits = [], nextUnits = []) {
   return result;
 }
 
+// Moves still available for an aircraft listed or selected in a movement
+// phase. Distance already flown this turn comes from airUnitOrigins.
+// Long Range Aircraft adds 2. A unit that is not aircraft returns null.
+export function listedAircraftMoveLabel(gameState, territoryName, type, unitDefs) {
+  if (!isAirUnitType(type, unitDefs)) return null;
+  const movement = Number(unitDefs?.[type]?.movement) || 0;
+  const playerId = gameState?.currentPlayer?.id;
+  const longRange = !!(playerId && gameState.hasTech?.(playerId, 'longRangeAircraft'));
+  const raw = Number(gameState?.airUnitOrigins?.[territoryName]?.[type]?.distance) || 0;
+  const distance = raw >= 999 ? 0 : raw;
+  return airMovementBadge({ movement, distance, longRange });
+}
+
 export function airMovementBadge({
   movement = 0,
   distance = 0,
