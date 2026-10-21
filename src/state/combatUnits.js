@@ -143,6 +143,31 @@ export function transportsLackAShield(units, enemies, unitDefs = {}, enemyRoll =
   return !sideHasNonTransportUnit(units, enemies, unitDefs, enemyRoll);
 }
 
+function casualtyKeyOwner(key) {
+  const at = String(key).indexOf('@');
+  if (at <= 0) return null;
+  return { type: key.slice(0, at), owner: key.slice(at + 1) };
+}
+
+function markBattleshipDamage(list, amount, owner = null) {
+  let damageLeft = Math.max(0, Number(amount) || 0);
+  if (damageLeft <= 0) return;
+  for (const unit of list) {
+    if (damageLeft <= 0) break;
+    if (unit?.type !== 'battleship') continue;
+    if (owner != null && unit.owner !== owner) continue;
+    const qty = Math.max(0, Number(unit.quantity) || 0);
+    if (qty <= 0) continue;
+    const already = Math.min(qty, Math.max(0, Number(unit.damagedCount) || 0));
+    const room = qty - already;
+    const take = Math.min(room, damageLeft);
+    if (take <= 0) continue;
+    unit.damagedCount = already + take;
+    unit.damaged = unit.damagedCount > 0;
+    damageLeft -= take;
+  }
+}
+
 export function applyCasualtySelection(units, selected = {}, context = null) {
   const list = Array.isArray(units) ? units : [];
   const ignoreTransport = sideHasNonTransportUnit(
@@ -154,21 +179,11 @@ export function applyCasualtySelection(units, selected = {}, context = null) {
   const applied = [];
   const sunk = [];
 
-  let damageLeft = Math.max(0, Number(selected.battleship_damage) || 0);
-  if (damageLeft > 0) {
-    for (const unit of list) {
-      if (damageLeft <= 0) break;
-      if (unit?.type !== 'battleship') continue;
-      const qty = Math.max(0, Number(unit.quantity) || 0);
-      if (qty <= 0) continue;
-      const already = Math.min(qty, Math.max(0, Number(unit.damagedCount) || 0));
-      const room = qty - already;
-      const take = Math.min(room, damageLeft);
-      if (take <= 0) continue;
-      unit.damagedCount = already + take;
-      unit.damaged = unit.damagedCount > 0;
-      damageLeft -= take;
-    }
+  markBattleshipDamage(list, selected.battleship_damage, null);
+  for (const [key, raw] of Object.entries(selected || {})) {
+    const parsed = casualtyKeyOwner(key);
+    if (!parsed || parsed.type !== 'battleship_damage') continue;
+    markBattleshipDamage(list, raw, parsed.owner);
   }
 
   let sinkLeft = Math.max(0, Number(selected.battleship) || 0);
@@ -193,7 +208,36 @@ export function applyCasualtySelection(units, selected = {}, context = null) {
     }
   }
 
-  for (const [type, raw] of Object.entries(selected || {})) {
+  // A type@owner pick spends only that faction. A battleship key removes
+  // that owner's hull (damaged first) and leaves every other faction's ship.
+  for (const [key, raw] of Object.entries(selected || {})) {
+    const parsed = casualtyKeyOwner(key);
+    if (!parsed || parsed.type !== 'battleship') continue;
+    let left = Math.max(0, Number(raw) || 0);
+    if (left <= 0) continue;
+    const ships = list.filter((u) => (
+      u?.type === 'battleship' && u.owner === parsed.owner && (Number(u.quantity) || 0) > 0
+    ));
+    const order = [...ships].sort((a, b) => (Number(b.damagedCount) || 0) - (Number(a.damagedCount) || 0));
+    for (const unit of order) {
+      if (left <= 0) break;
+      const qty = Math.max(0, Number(unit.quantity) || 0);
+      const dmg = Math.min(qty, Math.max(0, Number(unit.damagedCount) || 0));
+      const take = Math.min(qty, left);
+      if (take <= 0) continue;
+      unit.quantity = qty - take;
+      unit.damagedCount = Math.max(0, dmg - take);
+      unit.damaged = unit.quantity > 0 && unit.damagedCount > 0;
+      left -= take;
+      applied.push({ unit, type: 'battleship', taken: take });
+      if (unit.quantity <= 0) sunk.push(unit);
+    }
+  }
+
+  for (const [key, raw] of Object.entries(selected || {})) {
+    const parsed = casualtyKeyOwner(key);
+    const type = parsed ? parsed.type : key;
+    const owner = parsed ? parsed.owner : null;
     if (type === 'battleship' || type === 'battleship_damage' || type === 'factory' || type === 'aaGun') continue;
     if (type === 'transport' && ignoreTransport) continue;
     let left = Math.max(0, Number(raw) || 0);
@@ -201,6 +245,7 @@ export function applyCasualtySelection(units, selected = {}, context = null) {
     for (const unit of list) {
       if (left <= 0) break;
       if (unit?.type !== type) continue;
+      if (owner != null && unit.owner !== owner) continue;
       const qty = Math.max(0, Number(unit.quantity) || 0);
       if (qty <= 0) continue;
       const take = Math.min(qty, left);

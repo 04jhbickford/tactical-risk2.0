@@ -2,6 +2,12 @@
 
 ---
 
+## 10.21.26 — unified.62 purchase cap and casualty colours
+
+Stamp `V2.81.57-unified.62`. Schema stays 11. A purchase cannot exceed the placement room of factories held at the start of the turn, and the buy row shows that max. Two enemy factions' ships of the same type are separate casualty rows, each in that faction's colour, and a hit on one does not remove the other. A second strategic bombing raid, mobilization undo, an air attack out of Persia while infantry stay, the casualty remainder line, a retreating bomber sent home, AA guns moving only in non-combat, and a turn ping that lists 4 tanks lost were already behaving on unified.61. A `V2.82-unified.61` doc is older than this tab and does not prompt. A `V2.82-unified.63` doc does. Game docs write `clientVersion` through `compatClientVersion` (`V2.82-unified.62`).
+
+Discord #tactical-risk, 27 Sep–3 Oct: strategic bombing once, uncapped purchases, mobilization undo, Persia air, casualty report, retreating bombers, AA guns attacking, phantom ships and battleship colour, and a turn ping that dropped 4 tanks.
+
 ## 10.21.26 — unified.61 AA once, battleship hits, turn save
 
 Stamp `V2.81.57-unified.61`. Schema stays 11. AA fires once at the start of each battle, in auto-resolved and manual combat, including a later separate attack into the same territory. An AA gun is never a casualty. If only the gun remains, a land attacker captures by the normal rule and air-only does not. An undamaged battleship needs two assigned hits before it can be sunk. A failed End Turn save stays on the current player and shows Retry. A `V2.82-unified.60` doc is older than this tab and does not prompt. A `V2.82-unified.62` doc does. Game docs write `clientVersion` through `compatClientVersion` (`V2.82-unified.61`).

@@ -2615,26 +2615,25 @@ export class GameState {
     return territories;
   }
 
-  // Calculate total mobilization capacity for a player
-  // Capital = 20 units, each additional factory = 5 units
+  // Calculate total mobilization capacity for a player.
+  // Capital = 20 units, each additional factory = 5 units, minus damage.
+  // When factoriesAtTurnStart is set, only those factories count. A factory
+  // taken this turn cannot take units, so it cannot raise the buy cap.
   getMobilizationCapacity(playerId) {
     const capital = this.playerState[playerId]?.capitalTerritory;
+    const atStart = this.factoriesAtTurnStart;
+    const limitToStart = atStart instanceof Set && atStart.size > 0;
+    const allowed = (name) => !limitToStart || atStart.has(name);
     let totalCapacity = 0;
 
-    // Capital provides 20 capacity if player still owns it, minus factory damage.
-    if (capital && this.getOwner(capital) === playerId) {
+    if (capital && this.getOwner(capital) === playerId && allowed(capital)) {
       totalCapacity += this.getFactoryPlacementLimit(capital, playerId);
     }
 
-    // Each additional factory provides 5 capacity, minus factory damage.
     for (const [terrName, units] of Object.entries(this.units)) {
-      // Skip capital (already counted)
       if (terrName === capital) continue;
-
-      // Check if territory is owned by player
+      if (!allowed(terrName)) continue;
       if (this.getOwner(terrName) !== playerId) continue;
-
-      // Check for factory
       const hasFactory = units.some(u => u.type === 'factory' && u.owner === playerId);
       if (hasFactory) {
         totalCapacity += this.getFactoryPlacementLimit(terrName, playerId);
@@ -2642,6 +2641,25 @@ export class GameState {
     }
 
     return totalCapacity;
+  }
+
+  // Units still unbought that this turn can place.
+  purchaseHeadroom(playerId = this.currentPlayer?.id) {
+    if (!playerId) return 0;
+    return Math.max(0, this.getMobilizationCapacity(playerId) - this.getPendingPurchaseCount(playerId));
+  }
+
+  // How many more of this type the current IPCs and placement room allow.
+  maxBuyable(unitType, unitDefs, playerId = this.currentPlayer?.id) {
+    const def = unitDefs?.[unitType];
+    if (!def || !playerId) return 0;
+    const room = this.purchaseHeadroom(playerId);
+    if (room <= 0) return 0;
+    let cost = Number(def.cost) || 0;
+    if (this.hasTech?.(playerId, 'industrialTech')) cost = Math.max(1, cost - 1);
+    if (cost <= 0) return room;
+    const ipcs = Math.max(0, Math.floor(Number(this.getIPCs(playerId)) || 0));
+    return Math.max(0, Math.min(room, Math.floor(ipcs / cost)));
   }
 
   // Optional repair during Purchase. 1 IPC per damage point. Owner only.
