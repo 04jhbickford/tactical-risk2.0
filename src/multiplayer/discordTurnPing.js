@@ -1007,6 +1007,10 @@ export function bindDiscordTurnPing(gameState, {
   const unbind = () => {
     try { unsub(); } catch { /* already gone */ }
   };
+  unbind.holdSeat = (seat) => {
+    lastSeat = seat || '';
+    pending = null;
+  };
   unbind.confirmPushedSeat = (seat) => {
     if (!pending || pending.seat !== seat) return { ok: false, reason: 'no-pending' };
     const job = pending.job;

@@ -2,6 +2,10 @@
 
 ---
 
+## 10.21.26 — unified.61 AA once, battleship hits, turn save
+
+Stamp `V2.81.57-unified.61`. Schema stays 11. AA fires once at the start of each battle, in auto-resolved and manual combat, including a later separate attack into the same territory. An AA gun is never a casualty. If only the gun remains, a land attacker captures by the normal rule and air-only does not. An undamaged battleship needs two assigned hits before it can be sunk. A failed End Turn save stays on the current player and shows Retry. A `V2.82-unified.60` doc is older than this tab and does not prompt. A `V2.82-unified.62` doc does. Game docs write `clientVersion` through `compatClientVersion` (`V2.82-unified.61`).
+
 ## 10.4.26 — unified.60 AA guns keep firing
 
 Stamp `V2.81.57-unified.60`. Schema stays 11. Auto-resolved land combat fires AA at the start of every round of that battle, including a later round after the gun already fired. One die per attacking aircraft still in the battle, cheapest aircraft removed. Classic hits on 1. Wasserfall hits on 2 or less after that research. The manual combat screen still opens AA once, when the battle starts. Factory AA is unchanged. A new Conduct Combat phase still clears a leftover round count so shore bombardment stays first-round only. A `V2.82-unified.59` doc is older than this tab and does not prompt. A `V2.82-unified.61` doc does. Game docs still write `clientVersion` through `compatClientVersion` (`V2.82-unified.60`).

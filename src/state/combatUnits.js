@@ -179,9 +179,10 @@ export function applyCasualtySelection(units, selected = {}, context = null) {
       if (sinkLeft <= 0) break;
       const qty = Math.max(0, Number(unit.quantity) || 0);
       const dmg = Math.min(qty, Math.max(0, Number(unit.damagedCount) || 0));
+      // A destroy pick sinks a hull that is already damaged. An undamaged
+      // hull takes the first hit as damage and stays afloat.
       const fromDamaged = Math.min(dmg, sinkLeft);
-      const fromFresh = Math.min(Math.max(0, qty - fromDamaged), sinkLeft - fromDamaged);
-      const take = fromDamaged + fromFresh;
+      const take = fromDamaged;
       if (take <= 0) continue;
       unit.quantity = qty - take;
       unit.damagedCount = Math.max(0, dmg - fromDamaged);
@@ -193,7 +194,7 @@ export function applyCasualtySelection(units, selected = {}, context = null) {
   }
 
   for (const [type, raw] of Object.entries(selected || {})) {
-    if (type === 'battleship' || type === 'battleship_damage' || type === 'factory') continue;
+    if (type === 'battleship' || type === 'battleship_damage' || type === 'factory' || type === 'aaGun') continue;
     if (type === 'transport' && ignoreTransport) continue;
     let left = Math.max(0, Number(raw) || 0);
     if (left <= 0) continue;
@@ -214,10 +215,10 @@ export function applyCasualtySelection(units, selected = {}, context = null) {
 }
 
 // Submarine first strike uses the same filter as casualty assignment:
-// a sub cannot hit a sub or an aircraft. AA guns and ships can be hit.
+// a sub cannot hit a sub, an aircraft, or an AA gun. Ships can be hit.
 export function unitIsFirstStrikeTarget(unit, unitDefs = {}) {
   if (!unit || (Number(unit.quantity) || 0) <= 0) return false;
-  if (unit.type === 'submarine' || unit.type === 'factory') return false;
+  if (unit.type === 'submarine' || unit.type === 'factory' || unit.type === 'aaGun') return false;
   if (unitDefs?.[unit.type]?.isAir) return false;
   return true;
 }

@@ -272,6 +272,16 @@ export function phoneCombatAttackerWinPercent({
 // the existing "captures" line. Aircraft do not take either.
 export const AIR_ONLY_VICTORY_NOTE = 'Victory - but the territory remains under their control.';
 
+// An undamaged battleship absorbs the first hit as damage. Destroy stays
+// unavailable until that hit is assigned. A ship already damaged can be sunk
+// with the next single hit.
+export function battleshipDestroyCap(damagedCount = 0, undamagedCount = 0, pendingDamage = 0) {
+  const damaged = Math.max(0, Number(damagedCount) || 0);
+  const fresh = Math.max(0, Number(undamagedCount) || 0);
+  const pending = Math.max(0, Number(pendingDamage) || 0);
+  return damaged + Math.min(pending, fresh);
+}
+
 export function attackerSurvivorsCaptureTerritory(attackers, unitDefs) {
   return (attackers || []).some((unit) => {
     if (!unit || unit.type === 'aaGun') return false;
@@ -805,6 +815,7 @@ export class CombatUI {
   }
 
   _rollAAFire() {
+    if (this.combatState?.aaFired) return;
     const { attackers } = this.combatState;
     const attackForceBefore = summarizeCombatForce(attackers);
 
@@ -1655,7 +1666,7 @@ export class CombatUI {
 
     const takeCheapest = () => {
       const sorted = [...units]
-        .filter(u => u.quantity > 0 && u.type !== 'transport' && u.type !== 'factory' && u.type !== 'battleship' && u.type !== GARRISON)
+        .filter(u => u.quantity > 0 && u.type !== 'transport' && u.type !== 'factory' && u.type !== 'battleship' && u.type !== 'aaGun' && u.type !== GARRISON)
         .sort((a, b) => {
           const costA = this.unitDefs[a.type]?.cost || 999;
           const costB = this.unitDefs[b.type]?.cost || 999;
@@ -2114,11 +2125,13 @@ export class CombatUI {
     // IMMEDIATE UPDATE: Sync casualties to gameState so map updates in real-time
     this._syncCombatStateToGame();
 
-    // Check for resolution
-    if (this.combatState.defenders.length === 0) {
+    // An AA gun is not a defender that can hold the hex.
+    const attackersLeft = countLivingUnits(this.combatState.attackers);
+    const defendersLeft = countLivingUnits(this.combatState.defenders, { excludeTypes: ['aaGun'] });
+    if (attackersLeft > 0 && defendersLeft <= 0) {
       this.combatState.winner = 'attacker';
       this._checkAirLanding();
-    } else if (this.combatState.attackers.length === 0) {
+    } else if (attackersLeft === 0) {
       this.combatState.winner = 'defender';
       this._checkAirLanding();
     } else if (this._openAirSubStalemate()) {
@@ -2334,10 +2347,15 @@ export class CombatUI {
         const clean = persistableUnit({ ...factory, owner: player.id });
         if (clean) units.push(clean);
       }
-      // Capture AA guns (they have 0 combat value, so they're captured not destroyed)
+      // AA is captured only when a land unit takes the territory. Air-only
+      // leaves the gun with the defender.
       const aaGuns = existingUnits.filter(u => u.type === 'aaGun' && u.owner !== player.id);
+      const landCapture = attackerSurvivorsCaptureTerritory(
+        this.combatState.attackers,
+        this.unitDefs,
+      ) && !this.gameState.territoryByName?.[this.currentTerritory]?.isWater;
       for (const aa of aaGuns) {
-        const clean = persistableUnit({ ...aa, owner: player.id });
+        const clean = persistableUnit({ ...aa, owner: landCapture ? player.id : aa.owner });
         if (clean) units.push(clean);
       }
     }
@@ -4121,7 +4139,7 @@ export class CombatUI {
       if (unit.quantity <= 0) continue;
       // Factories are captured. A transport is not a casualty while any
       // other unit is alive. An undefended transport is removed with no dice.
-      if (unit.type === 'factory') continue;
+      if (unit.type === 'factory' || unit.type === 'aaGun') continue;
       if (unit.type === 'transport' && this._sideShieldsTransports(units)) continue;
 
       if (unit.type === 'battleship') {
@@ -4149,6 +4167,7 @@ export class CombatUI {
     const living = (units || []).filter((u) => (
       (Number(u.quantity) || 0) > 0
       && u.type !== 'factory'
+      && u.type !== 'aaGun'
       && !(concealTransports && u.type === 'transport')
     ));
     const rows = [];
@@ -4179,7 +4198,7 @@ export class CombatUI {
         const damageSelected = selected['battleship_damage'] || 0;
         const destroySelected = selected['battleship'] || 0;
         const pendingDamage = damageSelected;
-        const maxDestroyable = damagedCount + Math.max(0, undamagedCount - pendingDamage);
+        const maxDestroyable = battleshipDestroyCap(damagedCount, undamagedCount, pendingDamage);
         const choiceRow = (key, label, selectedCount, maxCount) => `
             <div class="casualty-unit ${selectedCount > 0 ? 'has-casualties' : ''}">
               <div class="casualty-unit-info">
@@ -4512,12 +4531,20 @@ export class CombatUI {
 
       if (newTotal <= effectivePending) {
         selectedCasualties['battleship_damage'] = newValue;
+        const cap = battleshipDestroyCap(
+          battleships.reduce((sum, ship) => sum + (Number(ship.damagedCount) || 0), 0),
+          undamagedCount,
+          newValue,
+        );
+        if ((selectedCasualties.battleship || 0) > cap) selectedCasualties.battleship = cap;
         if (side === 'attacker') this.combatState.attackerPicksTouched = true;
         else this.combatState.defenderPicksTouched = true;
         this._render();
       }
       return;
     }
+
+    if (unitType === 'aaGun') return;
 
     const stacks = stacksOf(unitType);
     if (!stacks.length) return;
@@ -4531,8 +4558,7 @@ export class CombatUI {
       const damagedCount = stacks.reduce((sum, unit) => sum + (Number(unit.damagedCount) || 0), 0);
       const undamagedCount = maxSelectable - damagedCount;
       const pendingDamage = selectedCasualties['battleship_damage'] || 0;
-      // Can destroy: damaged + (undamaged - pendingDamage)
-      maxSelectable = damagedCount + Math.max(0, undamagedCount - pendingDamage);
+      maxSelectable = battleshipDestroyCap(damagedCount, undamagedCount, pendingDamage);
     }
 
     const current = selectedCasualties[unitType] || 0;
