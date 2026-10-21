@@ -140,10 +140,12 @@ console.log('=== restoring a seat does not ping it ===');
 console.log('=== visible retry ===');
 {
   const main = readFileSync(join(root, 'src/main.js'), 'utf8');
+  const warning = readFileSync(join(root, 'src/ui/turnSaveWarning.js'), 'utf8');
   check('End Turn uses the handoff and shows Retry',
     main.includes('commitTurnHandoff(')
-    && main.includes("retry.textContent = 'Retry'")
-    && main.includes("banner.id = 'turn-save-warning'")
+    && main.includes('showTurnSaveWarning')
+    && warning.includes("retry.textContent = 'Retry'")
+    && warning.includes("banner.id = 'turn-save-warning'")
     && main.includes('holdSeat'));
 }
 
