@@ -14,7 +14,7 @@ import {
   resolveTechInfo,
 } from '../state/radioDeception.js';
 import { renderCombatBattleList } from './battleOrder.js';
-import { adjacentMobilizeSeas } from './mobilizeDeployAll.js';
+import { adjacentMobilizeSeas, selectAllPendingPurchases } from './mobilizeDeployAll.js';
 import { DIRECT_TECH_IPC_COST } from '../gameOptions.js';
 import { getMap } from '../map/mapRegistry.js';
 import { pacificVictoryLine } from '../map/pacificVictory.js';
@@ -100,6 +100,7 @@ import {
   mergeLandingSelections,
   resolveLandingDestination,
   airMovementBadge,
+  listedAircraftMoveLabel,
   assignLandingToIndexes,
   returnToBaseAssignments,
   listNcmReturnToBaseMoves,
@@ -430,7 +431,7 @@ export function resolvePhonePeekHint(phase, turnPhase, selectedUnitType, opts = 
   return '';
 }
 
-export function formatPhoneMoveSelectionSummary(selected, { formatName = formatUnitName } = {}) {
+export function formatPhoneMoveSelectionSummary(selected, { formatName = formatUnitName, movesLeftByType = null } = {}) {
   const parts = [];
   for (const [key, qty] of Object.entries(selected || {})) {
     const n = Number(qty) || 0;
@@ -440,7 +441,8 @@ export function formatPhoneMoveSelectionSummary(selected, { formatName = formatU
     else if (key.startsWith('cargo:')) type = key.split(':')[2] || 'cargo';
     else if (key.startsWith('aircraft:')) type = key.split(':').pop();
     const name = String(formatName(type) || type).toLowerCase();
-    parts.push(`${n} ${name}`);
+    const left = movesLeftByType?.[type];
+    parts.push(left == null ? `${n} ${name}` : `${n} ${name} (${left} left)`);
   }
   return parts.join(' · ');
 }
@@ -1466,6 +1468,39 @@ export class PlayerPanel {
     this._pointerLock = null;
   }
 
+  _moveSelectionSummary(player) {
+    const from = this._phoneDeployDest();
+    const movesLeftByType = {};
+    const movable = from && player ? this._getMovableUnits(from, player) : [];
+    for (const unit of movable) {
+      if (!this.unitDefs?.[unit.type]?.isAir) continue;
+      const badge = listedAircraftMoveLabel(this.gameState, from.name, unit.type, this.unitDefs);
+      if (badge) movesLeftByType[unit.type] = badge.remaining;
+    }
+    return formatPhoneMoveSelectionSummary(this.moveSelectedUnits, { movesLeftByType });
+  }
+
+  // Pending purchases the selected factory or sea zone can still place.
+  _mobilizeSelectPlan(player) {
+    if (!player) return {};
+    const pending = this.gameState?.getPendingPurchases?.() || [];
+    const dest = this.selectedTerritory;
+    const valid = !!(dest && this._isValidMobilizeLocation(dest, player));
+    const needsPick = !!(valid && this._mobilizeNeedsFactoryPick(dest, player));
+    const slots = (!valid || needsPick) ? 0 : this._mobilizeSlotsRemaining(dest, player);
+    return selectAllPendingPurchases(pending, {
+      slotsRemaining: slots,
+      placeable: (item) => valid && !needsPick && this._phoneMobilizeFitsDest(item.type, dest, player),
+      usesFactorySlot: (item) => !this.unitDefs?.[item.type]?.isBuilding,
+    });
+  }
+
+  _applyMobilizeSelectAll() {
+    const plan = this._mobilizeSelectPlan(this.gameState?.currentPlayer);
+    this.placementQueue = { ...plan };
+    return plan;
+  }
+
   _commitStagedMobilize() {
     if (!this.onAction) return false;
     const dest = this._phoneDeployDest();
@@ -2047,7 +2082,7 @@ export class PlayerPanel {
       const isAttack = seaAttack || (
         destOwner && destOwner !== player.id && !this.gameState.areAllies(player.id, destOwner)
       );
-      const selectedSummary = formatPhoneMoveSelectionSummary(this.moveSelectedUnits);
+      const selectedSummary = this._moveSelectionSummary(player);
       const named = resolvePhoneMoveCta({
         destName: this.movePendingDest,
         isAttack,
@@ -2205,7 +2240,7 @@ export class PlayerPanel {
             }),
             destName: this.movePendingDest || '',
             techDiceCount: this.techDiceCount,
-            selectedSummary: formatPhoneMoveSelectionSummary(this.moveSelectedUnits),
+            selectedSummary: this._moveSelectionSummary(player),
           })
           : (warningText || resolvePhonePeekHint(phase, turnPhase, this.selectedUnitType, {
             territoryName: resolvePhoneDeployLandName({
@@ -2215,7 +2250,7 @@ export class PlayerPanel {
             }),
             destName: this.movePendingDest || '',
             techDiceCount: this.techDiceCount,
-            selectedSummary: formatPhoneMoveSelectionSummary(this.moveSelectedUnits),
+            selectedSummary: this._moveSelectionSummary(player),
           }) || ''))
         : '';
       warningHtml = '';
@@ -3843,7 +3878,7 @@ export class PlayerPanel {
       }
     } else if (phase === GAME_PHASES.PLAYING
       && (turnPhase === TURN_PHASES.COMBAT_MOVE || turnPhase === TURN_PHASES.NON_COMBAT_MOVE)) {
-      const selectedSummary = formatPhoneMoveSelectionSummary(this.moveSelectedUnits);
+      const selectedSummary = this._moveSelectionSummary(player);
       pairHint = resolvePhonePeekHint(phase, turnPhase, this.selectedUnitType, {
         territoryName: pairLand,
         destName: this.movePendingDest || '',
@@ -3859,6 +3894,9 @@ export class PlayerPanel {
         const imageSrc = getUnitIconPath(unit.type, player.id);
         const staged = Number(this.moveSelectedUnits?.[unitKey]) || 0;
         const have = remainingEligibleOfType({ available: unit.quantity });
+        const moveBadge = this.unitDefs?.[unit.type]?.isAir
+          ? listedAircraftMoveLabel(this.gameState, from?.name, unit.type, this.unitDefs)
+          : null;
         chips += this._phonePeekTileHtml({
           unitType: unit.type,
           unitKey,
@@ -3872,6 +3910,7 @@ export class PlayerPanel {
           stepAction: 'move-unit',
           minusOff: staged <= 0,
           plusOff: staged >= have,
+          maxLabel: moveBadge ? `${moveBadge.remaining} left` : '',
         });
       }
     } else if (shouldShowTechResearch(phase, turnPhase)) {
@@ -4776,7 +4815,7 @@ export class PlayerPanel {
       this.moveUnitTab = hasNaval ? 'naval' : (hasAir ? 'air' : 'cargo');
     }
 
-    const selectedSummary = formatPhoneMoveSelectionSummary(this.moveSelectedUnits);
+    const selectedSummary = this._moveSelectionSummary(player);
     let html = `
       <div class="pp-inline-movement">
         <div class="pp-move-from">
@@ -4814,6 +4853,9 @@ export class PlayerPanel {
 
       // Get unit stats for hover tooltip (not inline display)
       const unitDef = this.unitDefs?.[unit.type];
+      const moveBadge = unitDef?.isAir
+        ? listedAircraftMoveLabel(this.gameState, this.selectedTerritory?.name, unit.type, this.unitDefs)
+        : null;
       let statsTooltip = '';
       if (unitDef) {
         const hasLongRange = unitDef.isAir && this.gameState?.hasTech(player.id, 'longRangeAircraft');
@@ -4821,7 +4863,9 @@ export class PlayerPanel {
         const hasSuperSubs = unit.type === 'submarine' && this.gameState?.hasTech(player.id, 'superSubs');
         const attack = (unitDef.attack || 0) + (hasJets ? 1 : 0) + (hasSuperSubs ? 1 : 0);
         const defense = (unitDef.defense || 0) + (hasJets ? 1 : 0);
-        const movement = (unitDef.movement || 1) + (hasLongRange ? 2 : 0);
+        const movement = moveBadge
+          ? `${moveBadge.remaining} left`
+          : ((unitDef.movement || 1) + (hasLongRange ? 2 : 0));
         const cost = unitDef.cost || 0;
         statsTooltip = `${unit.type.charAt(0).toUpperCase() + unit.type.slice(1)}\nAttack: ${attack} | Defense: ${defense}\nMovement: ${movement} | Cost: ${cost} IPCs`;
       }
@@ -4833,6 +4877,7 @@ export class PlayerPanel {
           <div class="pp-move-unit-info">
             ${imageSrc ? `<img src="${imageSrc}" class="pp-move-icon" alt="${unit.type}">` : ''}
             <span class="pp-move-name">${displayName}</span>
+            ${moveBadge ? `<span class="pp-move-name" data-moves-left="${moveBadge.remaining}" title="${moveBadge.title}">${moveBadge.remaining} left</span>` : ''}
             ${!unit.isIndividual ? `<span class="pp-move-avail">(${unit.quantity})</span>` : ''}
           </div>
           <div class="pp-move-controls">
@@ -5185,6 +5230,11 @@ export class PlayerPanel {
 
     // Show unit list with +/- controls (like buy phase)
     html += `<div class="pp-unit-list">`;
+    const pickedHtml = (unit) => {
+      const picked = Number(this.placementQueue?.[unit.type]) || 0;
+      if (picked <= 0) return '';
+      return `<span class="pp-buy-qty" data-mobilize-selected="${unit.type}">${picked} selected</span>`;
+    };
 
     // Land units section
     if (landUnits.length > 0) {
@@ -5204,11 +5254,12 @@ export class PlayerPanel {
           );
         const canPlace = (onFactory || onCarrier) && !needsFactoryPick;
         html += `
-          <div class="pp-buy-row ${canPlace ? 'can-place' : ''}">
+          <div class="pp-buy-row ${canPlace ? 'can-place' : ''}${pickedHtml(unit) ? ' has-qty' : ''}">
             <div class="pp-buy-info">
               ${imageSrc ? `<img src="${imageSrc}" class="pp-buy-icon" alt="${unit.type}">` : ''}
               <span class="pp-buy-name">${formatUnitName(unit.type)}</span>
               <span class="pp-buy-qty-label">×${unit.quantity}</span>
+              ${pickedHtml(unit)}
             </div>
             <div class="pp-buy-controls">
               <button class="pp-qty-btn" data-action="mobilize-unit" data-unit="${unit.type}" ${!canPlace ? 'disabled' : ''}>+</button>
@@ -5225,11 +5276,12 @@ export class PlayerPanel {
         const imageSrc = getUnitIconPath(unit.type, player.id);
         const canPlace = isWater && isValidPlacement && !needsFactoryPick;
         html += `
-          <div class="pp-buy-row ${canPlace ? 'can-place' : ''}">
+          <div class="pp-buy-row ${canPlace ? 'can-place' : ''}${pickedHtml(unit) ? ' has-qty' : ''}">
             <div class="pp-buy-info">
               ${imageSrc ? `<img src="${imageSrc}" class="pp-buy-icon" alt="${unit.type}">` : ''}
               <span class="pp-buy-name">${formatUnitName(unit.type)}</span>
               <span class="pp-buy-qty-label">×${unit.quantity}</span>
+              ${pickedHtml(unit)}
             </div>
             <div class="pp-buy-controls">
               <button class="pp-qty-btn" data-action="mobilize-unit" data-unit="${unit.type}" ${!canPlace ? 'disabled' : ''}>+</button>
@@ -5246,11 +5298,12 @@ export class PlayerPanel {
         const imageSrc = getUnitIconPath(unit.type, player.id);
         const canPlace = isOwnedLand && !isFactoryTerritory && isValidPlacement;
         html += `
-          <div class="pp-buy-row ${canPlace ? 'can-place' : ''}">
+          <div class="pp-buy-row ${canPlace ? 'can-place' : ''}${pickedHtml(unit) ? ' has-qty' : ''}">
             <div class="pp-buy-info">
               ${imageSrc ? `<img src="${imageSrc}" class="pp-buy-icon" alt="${unit.type}">` : ''}
               <span class="pp-buy-name">${formatUnitName(unit.type)}</span>
               <span class="pp-buy-qty-label">×${unit.quantity}</span>
+              ${pickedHtml(unit)}
             </div>
             <div class="pp-buy-controls">
               <button class="pp-qty-btn" data-action="mobilize-unit" data-unit="${unit.type}" ${!canPlace ? 'disabled' : ''}>+</button>
@@ -5276,6 +5329,14 @@ export class PlayerPanel {
       .replace(/&/g, '&amp;')
       .replace(/"/g, '&quot;')
       .replace(/</g, '&lt;');
+    const selectPlan = this._mobilizeSelectPlan(player);
+    const selectTotal = Object.values(selectPlan).reduce((sum, n) => sum + n, 0);
+    const queue = this.placementQueue || {};
+    const alreadySelected = selectTotal > 0
+      && Object.entries(selectPlan).every(([type, n]) => (Number(queue[type]) || 0) === n)
+      && Object.entries(queue).every(([type, n]) => !n || selectPlan[type] === n);
+    const canSelectAll = selectTotal > 0 && !alreadySelected;
+    html += `<button type="button" class="pp-deploy-all" data-action="mobilize-select-all" ${canSelectAll ? '' : 'disabled'}>Select all</button>`;
     html += `<button type="button" class="pp-deploy-all" data-action="mobilize-deploy-all" data-territory="${esc(this.selectedTerritory?.name || '')}" ${canDeployAll ? '' : 'disabled'}>Deploy all here</button>`;
     if (this.mobilizeDeployNote) {
       html += `<div class="pp-mobilize-note">${esc(this.mobilizeDeployNote)}</div>`;
@@ -5962,6 +6023,12 @@ export class PlayerPanel {
             this.mobilizeSourceFactory = factoryName;
             this._scheduleRender();
           }
+          return;
+        }
+
+        if (action === 'mobilize-select-all') {
+          this._applyMobilizeSelectAll();
+          this._scheduleRender();
           return;
         }
 

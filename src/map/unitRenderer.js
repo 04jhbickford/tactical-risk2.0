@@ -4,6 +4,12 @@ import { getUnitIconPath, unitIconForOwner, NEUTRAL_UNIT_COLOR } from '../utils/
 import { isMobileShell, phoneUnitIconSize, phoneMapStackOffsets, shouldHideUnitsAtZoom } from '../ui/mobileShell.js';
 import { presentTerritoryUnits } from '../state/radioDeception.js';
 
+/** Digits drawn on the factory icon when damage is above 0. Empty when undamaged. */
+export function factoryDamageDigits(damage) {
+  const n = Math.floor(Number(damage) || 0);
+  return n > 0 ? String(n) : '';
+}
+
 /** Damage digits sit inside the factory icon, upper left. No separate chip. */
 export function factoryDamageLabelOrigin(iconX, iconY, iconSize) {
   const bg = Number(iconSize) + 4;
@@ -167,9 +173,8 @@ export class UnitRenderer {
 
   // Digits on the factory icon, upper left. No chip beside the stack.
   _drawFactoryDamageOnIcon(ctx, x, y, iconSize, damage, zoom) {
-    const n = Math.floor(Number(damage) || 0);
-    if (n <= 0) return;
-    const text = String(n);
+    const text = factoryDamageDigits(damage);
+    if (!text) return;
     const origin = factoryDamageLabelOrigin(x, y, iconSize);
     const fontPx = factoryDamageFontWorld(iconSize, zoom);
     const z = Math.max(0.08, Number(zoom) || 1);

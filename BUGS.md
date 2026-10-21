@@ -2,6 +2,14 @@
 
 ---
 
+## 10.21.26 — unified.64 wishlist
+
+Stamp `V2.81.57-unified.64`. Schema stays 11. Mobilize has one Select all button. It marks every pending purchase the chosen factory or sea zone can still place, and Confirm deploys that selection. A fighter, bomber, or tactical bomber listed or selected during movement shows how many moves it has left. A factory with damage shows that number on its icon. An undamaged factory does not. A `V2.82-unified.63` doc is older than this tab and does not prompt. A `V2.82-unified.65` doc does. Game docs write `clientVersion` through `compatClientVersion` (`V2.82-unified.64`).
+
+Rob (robfox007): Select all for mobilization (25 Sep), remaining fighter movement (27 Sep), and the factory damage number on the icon (30 Sep).
+
+Receipt: `node tools/test-unified-64-wishlist.mjs`.
+
 ## 10.21.26 — unified.63 AI handoff and battle choice
 
 Stamp `V2.81.57-unified.63`. Schema stays 11. An easy AI sea battle that neither side can damage (sub versus sub, or a fighter and a sub versus a lone sub) now ends with the units still in the zone, and the AI turn always hands off. A thrown phase does the same. Setup no longer stops on the first naval unit when that sea is enemy-occupied and land is still in the pool. Several queued battles stay on the list until the player picks one. Resolve opens a battle only when it is the only one. A grouped carrier keeps its fighter when it moves, and peeling that hull onto its own id keeps the fighter too. A rejected End Turn save, through the real sync push, restores the seat and shows Retry. Subs versus aircraft, the lobby list control, an empty carrier in a drag-selected fleet, a second land move after an amphibious landing, the sub first-strike button with no naval target, and an island capital's naval purchase were already behaving. A `V2.82-unified.62` doc is older than this tab and does not prompt. A `V2.82-unified.64` doc does. Game docs write `clientVersion` through `compatClientVersion` (`V2.82-unified.63`).
