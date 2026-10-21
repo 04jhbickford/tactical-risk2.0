@@ -2642,7 +2642,9 @@ export class PlayerPanel {
         if (combatCount > 0) {
           html += renderCombatBattleList(this.gameState, { phone: isMobileShell() });
         }
-        if (raidCount + combatCount > 0) {
+        // Several battles: the list is the choice. Resolve would open
+        // whichever battle is first in the queue.
+        if (raidCount > 0 || combatCount === 1) {
           const parts = [];
           if (raidCount > 0) parts.push(`${raidCount} raid${raidCount > 1 ? 's' : ''}`);
           if (combatCount > 0) parts.push(`${combatCount} battle${combatCount > 1 ? 's' : ''}`);
@@ -2650,7 +2652,7 @@ export class PlayerPanel {
             <button class="pp-action-btn combat" data-action="open-combat">
               ⚔️ Resolve ${parts.join(' and ')}
             </button>`;
-        } else {
+        } else if (combatCount === 0) {
           html += `<div class="pp-hint">No battles to resolve</div>`;
         }
       }

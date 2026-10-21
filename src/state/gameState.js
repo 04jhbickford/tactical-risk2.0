@@ -121,6 +121,7 @@ import {
   applyCasualtySelection,
   airMayUseLandingOption,
   airVersusSubStalemate,
+  battleHasNoLegalHit,
   countAirHits,
   countSubHits,
   sideCanFirstStrike,
@@ -447,6 +448,17 @@ export class GameState {
     this._shipIdCounter = 0;
   }
 
+  // The first hull created for this move takes the load peeled off the source.
+  _giveMovedLoad(stack, aircraft, cargo) {
+    if (!stack) return;
+    if (stack.type === 'carrier' && aircraft?.length) {
+      stack.aircraft = [...(stack.aircraft || []), ...aircraft.splice(0)];
+    }
+    if (stack.type === 'transport' && cargo?.length) {
+      stack.cargo = [...(stack.cargo || []), ...cargo.splice(0)];
+    }
+  }
+
   // Generate unique ID for individual ship tracking
   _generateShipId(type) {
     this._shipIdCounter++;
@@ -465,24 +477,32 @@ export class GameState {
 
     if (!grouped) return null;
 
-    // Split off one ship with unique ID
+    // Split off one ship with unique ID. Aircraft and cargo move with a
+    // hull. The last hull takes whatever is left so a fighter is not
+    // deleted with the empty group.
     grouped.quantity--;
+    const airPool = Array.isArray(grouped.aircraft) ? grouped.aircraft : [];
+    const cargoPool = Array.isArray(grouped.cargo) ? grouped.cargo : [];
+    const lastHull = grouped.quantity <= 0;
+    const takeAir = shipType === 'carrier' ? airPool.splice(0, lastHull ? airPool.length : 2) : [];
+    const takeCargo = shipType === 'transport' ? cargoPool.splice(0, lastHull ? cargoPool.length : 2) : [];
+    grouped.aircraft = airPool;
+    grouped.cargo = cargoPool;
     const individual = {
       type: shipType,
       quantity: 1,
       owner: playerId,
       id: this._generateShipId(shipType),
-      aircraft: [],
-      cargo: [],
+      aircraft: takeAir,
+      cargo: takeCargo,
       moved: grouped.moved || false,
       movementUsed: grouped.movementUsed || 0
     };
     units.push(individual);
 
-    // Clean up empty group
     if (grouped.quantity <= 0) {
       const idx = units.indexOf(grouped);
-      units.splice(idx, 1);
+      if (idx >= 0) units.splice(idx, 1);
     }
 
     return individual;
@@ -3675,6 +3695,8 @@ export class GameState {
       // Perform the move - pull from multiple stacks if needed
       // Track how much we took from each stack (for sea units with multi-hop)
       const takenByMovementUsed = {}; // { movementUsed: quantity }
+      const carriedAircraft = [];
+      const carriedCargo = [];
       let remaining = moveUnit.quantity;
 
       for (const sourceUnit of sourceStacks) {
@@ -3685,6 +3707,20 @@ export class GameState {
 
         // Track for sea unit multi-hop
         takenByMovementUsed[srcMovementUsed] = (takenByMovementUsed[srcMovementUsed] || 0) + toTake;
+
+        // A grouped carrier or transport stores its load on the stack.
+        // Moving the hull by quantity used to leave that load behind and
+        // then delete it when the stack hit 0.
+        if (sourceUnit.type === 'carrier' && Array.isArray(sourceUnit.aircraft)) {
+          const room = (unitDefs?.carrier?.aircraftCapacity || 2) * toTake;
+          const last = sourceUnit.quantity - toTake <= 0;
+          carriedAircraft.push(...sourceUnit.aircraft.splice(0, last ? sourceUnit.aircraft.length : room));
+        }
+        if (sourceUnit.type === 'transport' && Array.isArray(sourceUnit.cargo)) {
+          const room = (unitDefs?.transport?.transportCapacity || unitDefs?.transport?.capacity || 2) * toTake;
+          const last = sourceUnit.quantity - toTake <= 0;
+          carriedCargo.push(...sourceUnit.cargo.splice(0, last ? sourceUnit.cargo.length : room));
+        }
 
         sourceUnit.quantity -= toTake;
         remaining -= toTake;
@@ -3789,14 +3825,17 @@ export class GameState {
 
             if (destUnit) {
               destUnit.quantity += quantity;
+              this._giveMovedLoad(destUnit, carriedAircraft, carriedCargo);
             } else {
-              toUnits.push({
+              const created = {
                 type: moveUnit.type,
                 quantity: quantity,
                 owner: player.id,
                 moved: isFullyMoved,
                 movementUsed: newMovementUsed
-              });
+              };
+              this._giveMovedLoad(created, carriedAircraft, carriedCargo);
+              toUnits.push(created);
             }
           }
         } else {
@@ -5014,7 +5053,13 @@ export class GameState {
       return true;
     });
 
-    if (isNavalBattle && airVersusSubStalemate(attackers, allDefenders, unitDefs)) {
+    if (isNavalBattle && (
+      airVersusSubStalemate(attackers, allDefenders, unitDefs)
+      || battleHasNoLegalHit(attackers, allDefenders, unitDefs)
+    )) {
+      // Aircraft that launched for a fight nobody can hit go back aboard.
+      // Leaving them loose over water deletes them at the end of non-combat.
+      this._restowCarrierAir(units, unitDefs);
       this.units[territory] = units.filter((u) => (Number(u.quantity) || 0) > 0 || u.type === 'factory');
       this.combatQueue = this.combatQueue.filter((name) => name !== territory);
       this._endBattle(territory);

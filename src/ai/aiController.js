@@ -197,11 +197,26 @@ export class AIController {
 
     this.isProcessing = true;
     this._updateStatus(`${currentPlayer.name} is thinking...`);
+    const seatAtStart = currentPlayer.id;
+    const progressBefore = this._aiProgressKey();
 
     try {
       await this._processAITurn(this.aiPlayers[currentPlayer.id], currentPlayer);
     } catch (err) {
       console.error('[AI] Error during AI turn:', err);
+    }
+
+    // A thrown phase, a battle that cannot hit, or a placement that cannot
+    // legally finish must not leave the seat here. The turn ping never fires
+    // until this client hands off.
+    if (
+      this._hasAuthority()
+      && !this.gameState.gameOver
+      && this.gameState.currentPlayer?.id === seatAtStart
+      && this.gameState.currentPlayer?.isAI
+      && this._aiProgressKey() === progressBefore
+    ) {
+      this._forceAiHandoff(this.gameState.currentPlayer);
     }
 
     this.isProcessing = false;
@@ -326,52 +341,44 @@ export class AIController {
       // Authority may have shifted mid-turn (host returned) — stop immediately
       if (!this._hasAuthority()) return;
 
-      // Find a unit type that can actually be placed
-      let unitType = null;
-      let isNaval = false;
-
-      for (const unit of unitsToPlace) {
-        if (unit.quantity > 0) {
-          const def = this.unitDefs?.[unit.type];
-          if (def) {
-            // Skip naval units if no valid sea zones
-            if (def.isSea && ownedSeas.length === 0) continue;
-            // Skip land units if no owned land (shouldn't happen)
-            if (def.isLand && ownedLand.length === 0) continue;
-            unitType = unit.type;
-            isNaval = def.isSea;
+      // One illegal sea must not abandon the land still in the pool.
+      // Try every open destination, then the next unit type.
+      const pool = this.gameState.getUnitsToPlace(player.id);
+      let placed = false;
+      for (const unit of pool) {
+        if (!(unit.quantity > 0) || placed) continue;
+        const def = this.unitDefs?.[unit.type];
+        if (!def) continue;
+        const spots = def.isSea
+          ? ownedSeas.filter((sea) => this._setupSeaIsOpen(sea, player.id))
+          : ownedLand;
+        if (spots.length === 0) continue;
+        const ordered = def.isSea
+          ? spots
+          : [this._pickPlacementTerritory(spots, player.id, this._placementTier(aiPlayer, player)), ...spots];
+        for (const territory of ordered) {
+          if (!territory) continue;
+          const result = this.gameState.placeInitialUnit(territory, unit.type, this.unitDefs);
+          if (result?.success) {
+            placedThisRound++;
+            placed = true;
+            await this._delay(150);
+            this._notifyAction('placeUnit', { unitType: unit.type, territory });
             break;
           }
         }
       }
-
-      if (!unitType) break; // No placeable units remaining
-
-      // Pick territory based on unit type and difficulty
-      let territory;
-      if (isNaval && ownedSeas.length > 0) {
-        territory = ownedSeas[Math.floor(Math.random() * ownedSeas.length)];
-      } else if (ownedLand.length > 0) {
-        territory = this._pickPlacementTerritory(ownedLand, player.id, this._placementTier(aiPlayer, player));
-      } else {
-        break;
-      }
-
-      // Place the unit
-      const result = this.gameState.placeInitialUnit(territory, unitType, this.unitDefs);
-      if (result.success) {
-        placedThisRound++;
-        await this._delay(150); // Small delay for visual feedback
-        this._notifyAction('placeUnit', { unitType, territory });
-      } else {
-        break;
-      }
+      if (!placed) break;
     }
 
-    // Finish placement round after placing units
+    // Finish placement round after placing units. Leftover ships with
+    // nowhere legal to go must not pin the seat on this round.
     await this._delay(300);
     if (!this._hasAuthority()) return;
-    this.gameState.finishPlacementRound(this.unitDefs);
+    const done = this.gameState.finishPlacementRound(this.unitDefs);
+    if (done?.ok === false && done.reason === 'not-ready') {
+      this.gameState.finishPlacementRound(this.unitDefs, { allowNavalSkip: true });
+    }
     this._notifyAction('finishPlacement', {});
   }
 
@@ -1107,17 +1114,23 @@ export class AIController {
       await this._delay(this.skipMode ? 20 : 200);
     }
 
-    // Auto-resolve all combats
-    while (this.gameState.combatQueue && this.gameState.combatQueue.length > 0) {
+    // Auto-resolve all combats. A battle that never sets resolved used to
+    // spin here forever, so the turn never ended and no turn ping was sent.
+    let battles = 0;
+    while (this.gameState.combatQueue && this.gameState.combatQueue.length > 0 && battles++ < 30) {
       const combat = this.gameState.combatQueue[0];
       this._updateStatus(`Battle for ${combat}...`);
 
-      // Auto-battle until resolved
       let safety = 100;
       while (safety-- > 0) {
         const result = this.gameState.resolveCombat(combat, this.unitDefs);
         if (!result || result.resolved) break;
         await this._delay(this.skipMode ? 20 : 200);
+      }
+
+      if (this.gameState.combatQueue?.[0] === combat) {
+        this.gameState.combatQueue = this.gameState.combatQueue.filter((name) => name !== combat);
+        this.gameState._endBattle?.(combat);
       }
 
       await this._delay(this.skipMode ? 50 : 300);
@@ -1797,6 +1810,103 @@ export class AIController {
       const isWater = this.gameState.territories.find(t => t.name === c)?.isWater;
       return owner && owner !== playerId && !isWater;
     });
+  }
+
+  _aiProgressKey() {
+    const gs = this.gameState;
+    if (!gs) return '';
+    return [
+      gs.phase,
+      gs.turnPhase,
+      gs.currentPlayerIndex,
+      gs.round,
+      gs.unitsPlacedThisRound || 0,
+      (gs.combatQueue || []).length,
+      (gs.raidQueue || []).length,
+      (gs.pendingPurchases || []).length,
+    ].join('|');
+  }
+
+  _refundAllPending(playerId) {
+    const rows = (this.gameState.pendingPurchases || []).filter((row) => row.owner === playerId);
+    let back = 0;
+    for (const row of rows) {
+      const cost = Number(row.cost) || Number(this.unitDefs?.[row.type]?.cost) || 0;
+      back += cost * (Number(row.quantity) || 0);
+    }
+    if (back > 0 && this.gameState.playerState?.[playerId]) {
+      this.gameState.playerState[playerId].ipcs = (Number(this.gameState.playerState[playerId].ipcs) || 0) + back;
+    }
+    this.gameState.pendingPurchases = (this.gameState.pendingPurchases || [])
+      .filter((row) => row.owner !== playerId);
+  }
+
+  // The phase handler returned the same seat. End the turn anyway.
+  _forceAiHandoff(player) {
+    const gs = this.gameState;
+    if (!gs || !player || gs.currentPlayer?.id !== player.id || gs.gameOver) return;
+    console.warn('[AI] Forcing a handoff from', gs.phase, gs.turnPhase, player.id);
+
+    if (gs.phase === GAME_PHASES.PLAYING) {
+      let guard = 0;
+      while (gs.currentPlayer?.id === player.id && !gs.gameOver && guard++ < 8) {
+        const phase = gs.turnPhase;
+        const index = gs.currentPlayerIndex;
+        gs.combatQueue = [];
+        gs.raidQueue = [];
+        if (phase === TURN_PHASES.PURCHASE || phase === TURN_PHASES.MOBILIZE) {
+          this._refundAllPending(player.id);
+        }
+        gs.nextPhase();
+        if (gs.currentPlayer?.id === player.id && gs.currentPlayerIndex === index && gs.turnPhase === phase) {
+          gs.combatQueue = [];
+          gs.raidQueue = [];
+          this._refundAllPending(player.id);
+          gs.nextTurn();
+          break;
+        }
+      }
+      return;
+    }
+
+    if (gs.phase === GAME_PHASES.UNIT_PLACEMENT) {
+      const done = gs.finishPlacementRound(this.unitDefs, { allowNavalSkip: true });
+      if (done?.ok === false && gs.currentPlayer?.id === player.id) {
+        const pool = gs.getUnitsToPlace(player.id);
+        for (const row of pool || []) row.quantity = 0;
+        gs.finishPlacementRound(this.unitDefs, { allowNavalSkip: true });
+      }
+      return;
+    }
+
+    if (gs.phase === GAME_PHASES.TERRITORY_DRAFT && gs.draft) {
+      gs.draft.pickIndex = (Number(gs.draft.pickIndex) || 0) + 1;
+      if (gs.draft.pickIndex >= (gs.draft.order || []).length) gs._completeTerritoryDraft?.();
+      else gs._syncDraftSeat?.();
+      return;
+    }
+
+    if (gs.phase === GAME_PHASES.CAPITAL_PLACEMENT) {
+      let capGuard = 0;
+      do {
+        gs.currentPlayerIndex++;
+        if (gs.currentPlayerIndex >= gs.players.length) {
+          gs.currentPlayerIndex = 0;
+          gs.phase = GAME_PHASES.UNIT_PLACEMENT;
+          gs.turnPhase = 'setup';
+          gs.unitsPlacedThisRound = 0;
+          break;
+        }
+        capGuard++;
+      } while (gs.players[gs.currentPlayerIndex]?.surrendered && capGuard < gs.players.length);
+    }
+  }
+
+  _setupSeaIsOpen(seaName, playerId) {
+    const units = this.gameState.units?.[seaName] || [];
+    return !units.some((unit) => (
+      unit?.owner && unit.owner !== playerId && (Number(unit.quantity) || 0) > 0
+    ));
   }
 
   _getAdjacentSeaZones(playerId) {

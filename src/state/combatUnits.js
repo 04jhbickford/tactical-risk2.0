@@ -349,6 +349,21 @@ export function airVersusSubStalemate(attackers, defenders, unitDefs = {}) {
   return false;
 }
 
+// Neither side can inflict a hit. Submarines cannot hit submarines or
+// aircraft, and aircraft cannot hit submarines without a destroyer.
+// An empty side is not this case: that battle is already over.
+export function battleHasNoLegalHit(attackers, defenders, unitDefs = {}) {
+  const living = (units) => (units || []).filter((unit) => (
+    unit && unit.type !== 'factory' && (Number(unit.quantity) || 0) > 0
+  ));
+  const atk = living(attackers);
+  const def = living(defenders);
+  if (!atk.length || !def.length) return false;
+  const attackCanHit = def.some((unit) => enemyCouldHitUnit(unit, atk, unitDefs, 'attack'));
+  const defenseCanHit = atk.some((unit) => enemyCouldHitUnit(unit, def, unitDefs, 'defense'));
+  return !attackCanHit && !defenseCanHit;
+}
+
 export function sideIsOnlyTransports(units) {
   const living = livingStacks(units).filter((unit) => unit.type !== 'aaGun');
   return living.length > 0 && living.every((unit) => unit.type === 'transport');

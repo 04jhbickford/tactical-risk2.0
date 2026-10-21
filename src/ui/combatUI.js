@@ -20,6 +20,7 @@ import {
   unitsForGeneralCombat,
   unitsSubsMayRoll,
   airVersusSubStalemate,
+  battleHasNoLegalHit,
   sideHasNonTransportUnit,
   transportsLackAShield,
   AIR_CANNOT_HIT_SUBS_HINT,
@@ -608,16 +609,28 @@ export class CombatUI {
 
   // Subs facing only aircraft leave the fight and stay in the zone.
   // The battle does not roll again.
+  _restowCombatCarrierAir() {
+    const combined = [
+      ...(this.combatState?.attackers || []),
+      ...(this.combatState?.defenders || []),
+    ];
+    this.gameState?._restowCarrierAir?.(combined, this.unitDefs);
+  }
+
   _openAirSubStalemate() {
     if (!this.combatState || !this._currentTerritoryIsWater()) return false;
     const { attackers, defenders } = this.combatState;
-    if (!airVersusSubStalemate(attackers, defenders, this.unitDefs)) return false;
+    const stalled = airVersusSubStalemate(attackers, defenders, this.unitDefs)
+      || battleHasNoLegalHit(attackers, defenders, this.unitDefs);
+    if (!stalled) return false;
+    this._restowCombatCarrierAir();
     this.combatState.phase = 'resolved';
     this.combatState.winner = 'submerged';
     this.combatState.submerged = true;
     const territory = this.currentTerritory;
     if (territory && this.gameState) {
       this.gameState.combatQueue = (this.gameState.combatQueue || []).filter((name) => name !== territory);
+      this._syncCombatStateToGame();
     }
     return true;
   }
