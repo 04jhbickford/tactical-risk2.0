@@ -13,6 +13,7 @@ Every change is judged as a premium game. Cheap chrome, clipped controls, and st
 3. Use only free tools and CC0 or permissively licensed assets. Record each new asset's licence and source in the PR (and next to the file if it ships in-repo). Paid, scraped, or unclear-licence art and audio stay out. `PHASE_4_PLAN.md` allows a free/CC0 pack such as Kenney for audio; that plan is not implemented, and it is not permission to add anything else.
 4. Gate visual work on an approved still before building. Show the intended frame (desktop and the phone width below). Do not implement the visual until that still is approved.
 5. QA after the build. Exercise the path. A single screenshot is not a pass.
+- Cut taglines, helper text and secondary labels. If a screen needs them to make sense, fix the layout.
 
 There is no QA bar in `README.md`. Use these instead:
 
