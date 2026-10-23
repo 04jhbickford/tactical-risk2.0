@@ -138,11 +138,11 @@ async function buy(name, opts, difficulty, tacticalBombers) {
     gs.players[0] = player;
     const bought = [];
     const startIpc = gs.getIPCs('usa');
-    const orig = gs.purchaseUnit.bind(gs);
-    gs.purchaseUnit = (type, where, defs) => {
-      const ok = orig(type, where, defs);
-      if (ok) bought.push(type);
-      return ok;
+    const orig = gs.addToPendingPurchases.bind(gs);
+    gs.addToPendingPurchases = (type, defs, where) => {
+      const result = orig(type, defs, where);
+      if (result?.success) bought.push(type);
+      return result;
     };
     await ai._handlePurchase({ difficulty }, player);
     const spent = bought.reduce((sum, type) => sum + (unitDefs[type]?.cost || 0), 0);

@@ -236,12 +236,12 @@ async function settle() {
 console.log('=== stamp ===');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  const stamp = 'V2.81.57-unified.64';
-  check('display stamp is V2.81.57-unified.64', GAME_VERSION === stamp);
+  const stamp = 'V2.81.57-unified.65';
+  check('display stamp is V2.81.57-unified.65', GAME_VERSION === stamp);
   check('schema stays 11', SCHEMA_VERSION === 11);
-  check('game docs write V2.82-unified.64', compatClientVersion() === 'V2.82-unified.64');
-  check('a V2.82-unified.65 doc prompts this tab', compareGameVersions('V2.82-unified.65', GAME_VERSION) > 0);
-  check('a V2.82-unified.63 doc does not prompt this tab', compareGameVersions('V2.82-unified.63', GAME_VERSION) < 0);
+  check('game docs write V2.82-unified.65', compatClientVersion() === 'V2.82-unified.65');
+  check('a V2.82-unified.66 doc prompts this tab', compareGameVersions('V2.82-unified.66', GAME_VERSION) > 0);
+  check('a V2.82-unified.64 doc does not prompt this tab', compareGameVersions('V2.82-unified.64', GAME_VERSION) < 0);
   check('index.html carries the display stamp',
     html.includes(`name="tr-game-version" content="${stamp}"`)
     && html.includes(`window.__TR_GAME_VERSION = '${stamp}'`)
@@ -573,9 +573,21 @@ console.log('=== 9. an island capital buys a navy ===');
   gs.units[ISLE] = [{ type: 'factory', owner: AI, quantity: 1 }];
   const ai = aiController(gs);
   await ai._handlePurchase(ai.aiPlayers[AI] || { difficulty: 'easy' }, gs.currentPlayer);
+  const queued = (gs.pendingPurchases || [])
+    .filter((row) => row.owner === AI && ['transport', 'submarine', 'destroyer', 'cruiser', 'battleship', 'carrier'].includes(row.type))
+    .reduce((sum, row) => sum + (row.quantity || 0), 0);
+  check('the easy AI queues a naval unit for an island capital', queued >= 1 && qty(gs, SEA, 'transport', AI) === 0, {
+    pending: gs.pendingPurchases,
+    sea: gs.units[SEA],
+  });
+  gs.turnPhase = TURN_PHASES.MOBILIZE;
+  await ai._handleMobilize(ai.aiPlayers[AI] || { difficulty: 'easy' }, gs.currentPlayer);
   const boats = ['transport', 'submarine', 'destroyer', 'cruiser', 'battleship', 'carrier']
     .reduce((sum, type) => sum + qty(gs, SEA, type, AI), 0);
-  check('the easy AI buys a naval unit for an island capital', boats >= 1, {
+  const cargo = (gs.units[SEA] || [])
+    .filter((unit) => unit.owner === AI && unit.type === 'transport')
+    .reduce((sum, unit) => sum + (unit.cargo || []).length, 0);
+  check('the easy AI mobilizes that navy into the sea, not onto a transport', boats >= 1 && cargo === 0, {
     sea: gs.units[SEA],
     ipcs: gs.playerState[AI].ipcs,
     phase: gs.turnPhase,

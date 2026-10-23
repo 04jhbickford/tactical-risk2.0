@@ -2,6 +2,14 @@
 
 ---
 
+## 10.23.26 — unified.65 playtest round
+
+Stamp `V2.81.57-unified.65`. Schema stays 11. AA fires once at the start of a battle, one die per attacking aircraft, and that die kills that aircraft. Auto-resolve and the combat screen use the same shot. AA is still never a casualty, and an AA-only defence still loses. Any number of loaded transports can move together and unload in one amphibious assault. Each transport selects on its own. Select all then a right-click moves the aircraft that can enter that hex. A sunk transport stays off the board across a save and a reload. The AI queues purchases and mobilizes sea units to a factory sea zone and land and air to a factory territory. The Players pane shows the income that turn will collect. A naval icon after a multi-space move is drawn inside the sea zone. A `V2.82-unified.64` doc is older than this tab and does not prompt. A `V2.82-unified.66` doc does. Game docs write `clientVersion` through `compatClientVersion` (`V2.82-unified.65`).
+
+Discord #tactical-risk, 21 Oct 2026: AA fire assigned to the cheapest aircraft (1562545908762157116), amphibious assault capped at two transports (1562541966007205899, 1562557252169375836), transports linked in selection (1562544315740196916), Select all plus right-click did nothing for bombers (1562531583351853117), a sunk transport came back (1562542047666249920), the AI placed units onto transports (1562543143633551463), bots showed zero income (1562546278796230806), and a battleship icon disappeared after a two-space move (1562607088117620910).
+
+Receipt: `node tools/test-unified-65-reports.mjs`.
+
 ## 10.21.26 — unified.64 wishlist
 
 Stamp `V2.81.57-unified.64`. Schema stays 11. Mobilize has one Select all button. It marks every pending purchase the chosen factory or sea zone can still place, and Confirm deploys that selection. A fighter, bomber, or tactical bomber listed or selected during movement shows how many moves it has left. A factory with damage shows that number on its icon. An undamaged factory does not. A `V2.82-unified.63` doc is older than this tab and does not prompt. A `V2.82-unified.65` doc does. Game docs write `clientVersion` through `compatClientVersion` (`V2.82-unified.64`).

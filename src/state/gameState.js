@@ -32,6 +32,7 @@ import {
   wasFriendlyAtTurnStart,
 } from './airLanding.js';
 import { airCombatMoveMayOccupy, landOnlySeaAttackIllegal, moveSelectionProfile, seaZoneHasEnemyForAirAttack } from './combatMoveEligibility.js';
+import { aaShotTargets, applyAaRolls } from './aaFire.js';
 import { cascadeUndoIndexes } from './moveUndo.js';
 import { emitGameEvent, summarizeUnits } from '../multiplayer/gameEventLog.js';
 import { notePhaseSnapshot } from '../multiplayer/phaseSnapshot.js';
@@ -459,10 +460,60 @@ export class GameState {
     }
   }
 
+  // Ids are `${type}_${n}`. The counter is not saved. After a reload it
+  // must continue past every hull already on the board, or the next
+  // transport_1 collides with one that is already loaded.
+  _syncShipIdCounter() {
+    let max = Number(this._shipIdCounter) || 0;
+    for (const stacks of Object.values(this.units || {})) {
+      for (const unit of stacks || []) {
+        const match = /_(\d+)$/.exec(String(unit?.id || ''));
+        if (match) max = Math.max(max, Number(match[1]));
+      }
+    }
+    this._shipIdCounter = max;
+    return max;
+  }
+
   // Generate unique ID for individual ship tracking
   _generateShipId(type) {
-    this._shipIdCounter++;
+    this._syncShipIdCounter();
+    this._shipIdCounter += 1;
     return `${type}_${this._shipIdCounter}`;
+  }
+
+  // Two hulls that share an id are one selection key and one move target.
+  // Keep the first. Give every later copy its own id.
+  ensureUniqueShipIds() {
+    this._syncShipIdCounter();
+    const seen = new Set();
+    for (const stacks of Object.values(this.units || {})) {
+      for (const unit of stacks || []) {
+        if (!unit?.id) continue;
+        const id = String(unit.id);
+        if (!seen.has(id)) {
+          seen.add(id);
+          continue;
+        }
+        unit.id = this._generateShipId(unit.type || 'ship');
+        seen.add(String(unit.id));
+      }
+    }
+  }
+
+  // A hull at quantity 0 is already sunk. Factories stay so capture can
+  // transfer them. Leaving a zero-quantity id on the board lets the next
+  // consolidate or undo add to it and the ship comes back.
+  _scrubDeadUnits() {
+    for (const name of Object.keys(this.units || {})) {
+      const stacks = this.units[name];
+      if (!Array.isArray(stacks)) continue;
+      this.units[name] = stacks.filter((unit) => {
+        if (!unit?.type) return false;
+        if (unit.type === 'factory') return true;
+        return (Number(unit.quantity) || 0) > 0;
+      });
+    }
   }
 
   // Split a grouped ship into an individual ship with unique ID
@@ -4275,30 +4326,31 @@ export class GameState {
         }
       }
     } else {
-      // Handle regular units (aggregated by type)
+      // Handle regular units (aggregated by type). Only units still at the
+      // destination go back. A stack already removed (sunk, captured, or
+      // otherwise gone) must not be created again at the origin.
       for (const moveUnit of lastMove.units) {
-        // Remove from destination. A raid move took the bomber stack marked raid.
         const wantRaid = !!lastMove.raid && moveUnit.type === 'bomber';
         const destUnit = toUnits.find(u => (
           u.type === moveUnit.type && u.owner === player.id && !u.id && !!u.raid === wantRaid
         )) || toUnits.find(u => u.type === moveUnit.type && u.owner === player.id && !u.id);
-        if (destUnit) {
-          destUnit.quantity -= moveUnit.quantity;
-          if (destUnit.quantity <= 0) {
-            const idx = toUnits.indexOf(destUnit);
-            toUnits.splice(idx, 1);
-          }
+        const have = Number(destUnit?.quantity) || 0;
+        const take = Math.min(have, Number(moveUnit.quantity) || 0);
+        if (!destUnit || take <= 0) continue;
+        destUnit.quantity = have - take;
+        if (destUnit.quantity <= 0) {
+          const idx = toUnits.indexOf(destUnit);
+          toUnits.splice(idx, 1);
         }
 
-        // Add back to source (without moved flag)
         const sourceUnit = fromUnits.find(u => u.type === moveUnit.type && u.owner === player.id && !u.id);
         if (sourceUnit) {
-          sourceUnit.quantity += moveUnit.quantity;
+          sourceUnit.quantity += take;
           delete sourceUnit.moved;
         } else {
           fromUnits.push({
             type: moveUnit.type,
-            quantity: moveUnit.quantity,
+            quantity: take,
             owner: player.id,
           });
         }
@@ -4954,10 +5006,11 @@ export class GameState {
 
   // Opening AA shot, once, when an auto-resolved land battle starts. Human
   // combat rolls the same shot once, when the battle opens. One die per
-  // attacking aircraft, cheapest aircraft removed. Classic hits on 1.
-  // Wasserfall hits on 2 or less. A later round of the same battle does not
-  // fire again. Catalog defense stays 0, so this shot is not the general
-  // combat roll. Factory AA is a separate raid and does not come through here.
+  // attacking aircraft, and that die's hit kills that aircraft. Classic hits
+  // on 1. Wasserfall hits on 2 or less. A later round of the same battle
+  // does not fire again. Catalog defense stays 0, so this shot is not the
+  // general combat roll. Factory AA is a separate raid and does not come
+  // through here.
   _fireOpeningAaVolley(attackers, defenders, unitDefs) {
     const guns = (defenders || []).filter((unit) => (
       unit?.type === 'aaGun' && (Number(unit.quantity) || 0) > 0
@@ -4971,15 +5024,11 @@ export class GameState {
       if (seat) break;
     }
     if (!seat) seat = guns[0].owner || null;
-    let aircraft = 0;
-    for (const unit of attackers || []) {
-      if (!unitDefs?.[unit.type]?.isAir) continue;
-      aircraft += Math.max(0, Number(unit.quantity) || 0);
-    }
-    if (aircraft <= 0) return null;
+    const targets = aaShotTargets(attackers, unitDefs);
+    if (!targets.length) return null;
     const rolls = [];
     let hits = 0;
-    for (let i = 0; i < aircraft; i += 1) {
+    for (let i = 0; i < targets.length; i += 1) {
       const roll = this._rollDie({
         context: 'aa',
         side: 'defender',
@@ -4991,20 +5040,7 @@ export class GameState {
       rolls.push({ roll, hit });
       if (hit) hits += 1;
     }
-    if (hits > 0) {
-      const stacks = (attackers || [])
-        .filter((unit) => unitDefs?.[unit.type]?.isAir && (Number(unit.quantity) || 0) > 0)
-        .slice()
-        .sort((a, b) => (unitDefs[a.type]?.cost || 999) - (unitDefs[b.type]?.cost || 999));
-      let left = hits;
-      for (const stack of stacks) {
-        if (left <= 0) break;
-        const qty = Number(stack.quantity) || 0;
-        const take = Math.min(qty, left);
-        stack.quantity = qty - take;
-        left -= take;
-      }
-    }
+    applyAaRolls(targets, rolls);
     return { need, rolls, hits };
   }
 
@@ -5950,6 +5986,8 @@ export class GameState {
   }
 
   _clearMovedFlags() {
+    this._scrubDeadUnits();
+    this.ensureUniqueShipIds();
     // Clear moved flags and consolidate duplicate stacks
     for (const territory of Object.keys(this.units)) {
       const units = this.units[territory];
@@ -8060,6 +8098,8 @@ export class GameState {
     this._normalizeAfterLoad();
     this.territoryState = data.territoryState;
     this.units = data.units;
+    this._scrubDeadUnits();
+    this.ensureUniqueShipIds();
     this.playerState = data.playerState;
     this.pendingPurchases = data.pendingPurchases || [];
     this.combatQueue = data.combatQueue || [];

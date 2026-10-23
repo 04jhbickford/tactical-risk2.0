@@ -90,11 +90,11 @@ async function playOne(index) {
     gameOptions: { territorySetup: setupMode, tacticalBombers },
   });
   let tacBought = 0;
-  const purchaseUnit = gs.purchaseUnit.bind(gs);
-  gs.purchaseUnit = function countTac(type, ...rest) {
-    const ok = purchaseUnit(type, ...rest);
-    if (ok && type === 'tacticalBomber') tacBought += 1;
-    return ok;
+  const queuePurchase = gs.addToPendingPurchases.bind(gs);
+  gs.addToPendingPurchases = function countTac(type, ...rest) {
+    const result = queuePurchase(type, ...rest);
+    if (result?.success && type === 'tacticalBomber') tacBought += 1;
+    return result;
   };
   const ai = new AIController();
   ai.unitDefs = unitDefs;

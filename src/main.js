@@ -30,7 +30,7 @@ import {
   UNKNOWN_MAP_MESSAGE,
 } from './map/mapRegistry.js';
 import { getBoard, registerBoard } from './map/boardCatalog.js';
-import { decomposeMoveSelection } from './state/combatMoveEligibility.js';
+import { decomposeMoveSelection, legalMoveForDestination } from './state/combatMoveEligibility.js';
 import { MapRenderer } from './map/mapRenderer.js';
 import { TerritoryRenderer } from './map/territoryRenderer.js';
 import { TerritoryMap } from './map/territoryMap.js';
@@ -926,16 +926,23 @@ async function init() {
       }
 
       case 'execute-move':
-        // Execute a move from inline movement UI
-        if (data.from && data.to && (data.units?.length > 0 || data.shipIds?.length > 0 || data.cargoUnloads?.length > 0)) {
-          // Handle amphibious unload (from sea zone to coastal territory)
-          if (data.isAmphibiousUnload && (data.shipIds?.length > 0 || data.cargoUnloads?.length > 0)) {
+        // Execute a move from inline movement UI. Amphibious unloads and
+        // any other stacks that can enter the same hex both go through.
+        if (data.from && data.to && (data.units?.length > 0 || data.shipIds?.length > 0 || data.cargoUnloads?.length > 0 || data.amphibiousShipIds?.length > 0)) {
+          const amphibiousIds = data.isAmphibiousUnload
+            ? (data.amphibiousShipIds || data.shipIds || [])
+            : [];
+          const moveShipIds = data.isAmphibiousUnload
+            ? (data.moveShipIds || [])
+            : (data.shipIds || []);
+          let moved = false;
+
+          if (data.isAmphibiousUnload && (amphibiousIds.length > 0 || data.cargoUnloads?.length > 0)) {
             const seaUnits = gameState.getUnitsAt(data.from) || [];
             const transports = seaUnits.filter(u => u.type === 'transport' && u.owner === gameState.currentPlayer.id);
             let anySuccess = false;
             const unloadedUnits = [];
 
-            // Handle cargo unloads (specific units selected for amphibious assault)
             if (data.cargoUnloads?.length > 0) {
               for (const cargoUnload of data.cargoUnloads) {
                 let remaining = cargoUnload.quantity;
@@ -958,15 +965,14 @@ async function init() {
               }
             }
 
-            // Handle ship-based unloads (whole transport cargo)
-            for (const shipId of data.shipIds || []) {
-              // Find transport index by ID
-              const transportIdx = transports.findIndex(t => t.id === shipId);
-              if (transportIdx >= 0) {
-                const result = gameState.unloadTransport(data.from, transportIdx, data.to);
-                if (result.success) {
-                  anySuccess = true;
-                }
+            for (const shipId of amphibiousIds) {
+              const live = (gameState.getUnitsAt(data.from) || [])
+                .filter(u => u.type === 'transport' && u.owner === gameState.currentPlayer.id);
+              const transportIdx = live.findIndex(t => t.id === shipId);
+              const fallback = transportIdx >= 0 ? transportIdx : transports.findIndex(t => t.id === shipId);
+              if (fallback >= 0) {
+                const result = gameState.unloadTransport(data.from, fallback, data.to);
+                if (result.success) anySuccess = true;
               }
             }
 
@@ -974,35 +980,32 @@ async function init() {
               const logUnits = unloadedUnits.length > 0 ? unloadedUnits : [{ type: 'amphibious', quantity: 1 }];
               actionLog.logMove(data.from, data.to, logUnits, gameState.currentPlayer);
               camera.dirty = true;
-              if (!data.keepPhonePair) {
-                selectedTerritory = null;
-                playerPanel.setSelectedTerritory(null);
-              }
-              if (syncManager) await syncManager.pushStateNow();
+              moved = true;
             }
-          } else {
-            // Regular move
+          }
+
+          const unitsToMove = data.units || [];
+          if (unitsToMove.length > 0 || moveShipIds.length > 0) {
             const moveOptions = {};
-            if (data.shipIds && data.shipIds.length > 0) {
-              moveOptions.shipIds = data.shipIds;
-            }
-            const unitsToMove = data.units || [];
+            if (moveShipIds.length > 0) moveOptions.shipIds = moveShipIds;
             const result = await moveUnitsWithRaidPrompt(
               gameState, data.from, data.to, unitsToMove, unitDefs, moveOptions,
             );
             if (result.success) {
               actionLog.logMove(data.from, data.to, unitsToMove, gameState.currentPlayer);
               camera.dirty = true;
-              if (!data.keepPhonePair) {
-                selectedTerritory = null;
-                playerPanel.setSelectedTerritory(null);
-              }
-              // Sea→sea Confirm Attack must hit the cloud before a host or
-              // in-flight snapshot reloads the origin stack.
-              if (syncManager) await syncManager.pushStateNow();
-            } else {
+              moved = true;
+            } else if (!moved) {
               console.warn('Move failed:', result.error);
             }
+          }
+
+          if (moved) {
+            if (!data.keepPhonePair) {
+              selectedTerritory = null;
+              playerPanel.setSelectedTerritory(null);
+            }
+            if (syncManager) await syncManager.pushStateNow();
           }
         }
         break;
@@ -3221,17 +3224,27 @@ async function init() {
         // Execute the move
         playerPanel.movePendingDest = hit.name;
 
-        // Confirm the move
+        // Confirm the move. Ship ids stay on the decomposed selection so an
+        // empty carrier still sails with the fleet. Unit stacks are the ones
+        // that can actually enter this hex, so a bomber is not blocked by
+        // infantry that was selected with it.
         const picked = decomposeMoveSelection(playerPanel.moveSelectedUnits || {});
-        const amphibious = !!dragSourceTerritory.isWater && !hit.isWater
-          && (picked.shipIds.length > 0 || picked.cargoUnloads.length > 0);
+        const legal = legalMoveForDestination(
+          gameState,
+          dragSourceTerritory.name,
+          hit.name,
+          playerPanel.moveSelectedUnits || {},
+          unitDefs,
+        );
+        const amphibious = legal.isAmphibiousUnload;
         if (amphibious && playerPanel.onAction) {
           playerPanel.onAction('execute-move', {
             from: dragSourceTerritory.name,
             to: hit.name,
-            units: picked.units,
-            shipIds: picked.shipIds,
-            cargoUnloads: picked.cargoUnloads,
+            units: legal.units,
+            shipIds: [],
+            amphibiousShipIds: legal.amphibiousShipIds,
+            cargoUnloads: legal.cargoUnloads,
             isAmphibiousUnload: true,
           });
         }
@@ -3239,7 +3252,7 @@ async function init() {
           gameState,
           dragSourceTerritory.name,
           hit.name,
-          picked.units,
+          legal.units,
           unitDefs,
           { shipIds: picked.shipIds },
         );
@@ -3248,7 +3261,7 @@ async function init() {
           actionLog.logMove(
             dragSourceTerritory.name,
             hit.name,
-            picked.units,
+            legal.units,
             gameState.currentPlayer,
           );
           // Illegal drops never reach here — the stack stays on the source.

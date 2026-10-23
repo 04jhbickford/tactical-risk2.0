@@ -367,18 +367,18 @@ export class UnitRenderer {
 
   // Adjust sea zone center to avoid island/land overlap
   _adjustSeaZoneCenter(territory, cx, cy) {
-    // First check for manual absolute coordinates
+    const polygons = territory.polygons || [];
+    const inside = (x, y) => polygons.length > 0 && this._pointInPolygons(x, y, polygons);
     const manualCenter = UnitRenderer.SEA_ZONE_CENTERS[territory.name];
-    if (manualCenter) {
-      return {
-        x: manualCenter.x,
-        y: manualCenter.y
-      };
+    if (manualCenter && inside(manualCenter.x, manualCenter.y)) {
+      return { x: manualCenter.x, y: manualCenter.y };
     }
 
-    // Fall back to automatic positioning
     const bestPos = this._findBestSeaZonePosition(territory, cx, cy);
-    return bestPos || { x: cx, y: cy };
+    if (bestPos && inside(bestPos.x, bestPos.y)) return bestPos;
+    const interior = this._interiorSeaPoint(territory, polygons);
+    if (interior) return interior;
+    return inside(cx, cy) ? { x: cx, y: cy } : { x: cx, y: cy };
   }
 
   // Find the best position within a sea zone (furthest from land)
@@ -472,13 +472,65 @@ export class UnitRenderer {
       }
     }
 
-    // Require minimum distance from land (40 pixels) to use the computed position
-    if (bestScore < 40) {
-      // Fall back to moving away from land centers
-      return this._fallbackSeaZonePosition(seaZone, defaultX, defaultY);
+    // Any interior sample is a legal icon anchor. Rejecting a low score
+    // used to push the icon out of the polygon, so a moved ship was in
+    // the zone for the tooltip and missing on the map.
+    if (bestScore > -Infinity && this._pointInPolygons(bestPoint.x, bestPoint.y, polygons)) {
+      return bestPoint;
     }
+    const fallback = this._fallbackSeaZonePosition(seaZone, defaultX, defaultY);
+    if (fallback && this._pointInPolygons(fallback.x, fallback.y, polygons)) return fallback;
+    return this._interiorSeaPoint(seaZone, polygons);
+  }
 
-    return bestPoint;
+  // A point guaranteed inside the sea polygon when the coarse grid misses.
+  _interiorSeaPoint(territory, polygons) {
+    const polys = polygons || territory?.polygons || [];
+    if (!polys.length) return null;
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const poly of polys) {
+      for (const [x, y] of poly) {
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+      }
+    }
+    if (!Number.isFinite(minX)) return null;
+    const inside = (x, y) => this._pointInPolygons(x, y, polys);
+    for (const step of [10, 4]) {
+      for (let x = minX; x <= maxX; x += step) {
+        for (let y = minY; y <= maxY; y += step) {
+          if (inside(x, y)) return { x, y };
+        }
+      }
+    }
+    for (const poly of polys) {
+      if (!poly || poly.length < 3) continue;
+      let ax = 0;
+      let ay = 0;
+      for (const [x, y] of poly) {
+        ax += x;
+        ay += y;
+      }
+      ax /= poly.length;
+      ay /= poly.length;
+      for (let i = 0; i < poly.length; i += 1) {
+        const [x1, y1] = poly[i];
+        const [x2, y2] = poly[(i + 1) % poly.length];
+        const mx = (x1 + x2) / 2;
+        const my = (y1 + y2) / 2;
+        for (const t of [0.2, 0.45, 0.7]) {
+          const x = mx + (ax - mx) * t;
+          const y = my + (ay - my) * t;
+          if (inside(x, y)) return { x, y };
+        }
+      }
+    }
+    return null;
   }
 
   // Fallback method using the old approach
