@@ -396,14 +396,24 @@ console.log('=== 9.22.26.10 island-capital navy ===');
   ai.unitDefs = navyDefs;
   ai._delay = async () => {};
   await ai._handlePurchase({ difficulty: 'medium' }, gs.players[0]);
+  const pendingCount = (type) => (gs.pendingPurchases || [])
+    .filter((row) => row.type === type && row.owner === 'jp')
+    .reduce((sum, row) => sum + (row.quantity || 0), 0);
   const ships = (type) => (gs.units.Sea || []).filter((u) => u.type === type && u.owner === 'jp')
     .reduce((sum, u) => sum + (u.quantity || 0), 0);
-  check('island AI placed transports in the capital sea', ships('transport') === 2);
-  check('island AI placed an escort', ships('submarine') === 1);
+  check('island AI queues transports instead of placing them during purchase', pendingCount('transport') === 2 && ships('transport') === 0);
+  check('island AI queues an escort', pendingCount('submarine') === 1 && ships('submarine') === 0);
   check('factory is queued for the other landmass',
     (gs.pendingPurchases || []).some((row) => row.type === 'factory' && row.territory === 'Foothold' && row.owner === 'jp'));
+  gs.factoriesAtTurnStart = new Set(['Philippines']);
   gs.turnPhase = TURN_PHASES.MOBILIZE;
   await ai._handleMobilize({ difficulty: 'medium' }, gs.players[0]);
+  const cargo = (gs.units.Sea || [])
+    .filter((unit) => unit.type === 'transport' && unit.owner === 'jp')
+    .reduce((sum, unit) => sum + (unit.cargo || []).length, 0);
+  check('island AI placed transports in the capital sea', ships('transport') === 2);
+  check('island AI placed an escort', ships('submarine') === 1);
+  check('mobilized land stays off the transports', cargo === 0);
   check('factory mobilizes on the foothold',
     (gs.units.Foothold || []).some((u) => u.type === 'factory' && u.owner === 'jp'));
 

@@ -29,6 +29,7 @@ import {
 import { dequeueResolvedCombatHeads, applyTerritoryCapture } from '../state/combatFinalize.js';
 import { persistableUnit } from '../state/persistState.js';
 import { isRaidMission } from '../state/strategicBombing.js';
+import { aaShotTargets, applyAaRolls } from '../state/aaFire.js';
 import { emitGameEvent, getGameEventLog } from '../multiplayer/gameEventLog.js';
 import { flushDiceBuffer } from '../stats/diceTracker.js';
 import { renderCombatBattleList } from './battleOrder.js';
@@ -61,8 +62,8 @@ export {
 };
 
 // Readable AA result step (UI only). One die per attacking aircraft,
-// hit on the AA defend value (1, or 2 with Wasserfall), cheapest aircraft
-// first, no attacker choice.
+// hit on the AA defend value (1, or 2 with Wasserfall). That die kills
+// that aircraft. No attacker choice.
 export const AA_RESULT_PHASE = 'aaResults';
 export const AA_RESULT_AUTO_PAUSE_MS = 600;
 
@@ -463,9 +464,15 @@ export class CombatUI {
     const player = this.gameState.currentPlayer;
     const units = this.gameState.getUnitsAt(this.currentTerritory);
 
+    const cloneCombatUnit = (unit) => {
+      const copy = { ...unit };
+      if (Array.isArray(unit.cargo)) copy.cargo = unit.cargo.map((item) => ({ ...item }));
+      if (Array.isArray(unit.aircraft)) copy.aircraft = unit.aircraft.map((item) => ({ ...item }));
+      return copy;
+    };
     const attackers = units
       .filter(u => u.owner === player.id && u.raid !== true && u.raided !== true)
-      .map(u => ({ ...u }));
+      .map(cloneCombatUnit);
 
     // Include aircraft from carriers as separate combat units
     // In A&A rules, carrier-based aircraft launch and participate in combat
@@ -490,7 +497,7 @@ export class CombatUI {
     // Exclude factories from combat - they are captured, not destroyed
     const defenders = units
       .filter(u => u.owner !== player.id && !this.gameState.areAllies(player.id, u.owner) && u.type !== 'factory')
-      .map(u => ({ ...u }));
+      .map(cloneCombatUnit);
 
     // Include aircraft from defender carriers as combat units
     const defenderCarriers = defenders.filter(u => u.type === 'carrier');
@@ -838,14 +845,15 @@ export class CombatUI {
       return def && def.isAir;
     });
 
-    const totalAircraft = attackingAir.reduce((sum, u) => sum + (Number(u.quantity) || 0), 0);
+    const targets = aaShotTargets(attackingAir, this.unitDefs);
 
-    // One die per aircraft. Classic AA hits on 1. Wasserfall hits on 2 or less.
+    // One die per aircraft, bound to that aircraft. Classic AA hits on 1.
+    // Wasserfall hits on 2 or less.
     const rolls = [];
     let hits = 0;
     const aaSeat = (this.combatState.defenders || []).find((u) => u.type === 'aaGun')?.owner || null;
     const need = defendingAaNeed(this.gameState, this.combatState.defenders);
-    for (let i = 0; i < totalAircraft; i++) {
+    for (let i = 0; i < targets.length; i++) {
       const roll = this._rollD6({
         context: 'aa',
         side: 'defender',
@@ -861,12 +869,11 @@ export class CombatUI {
     this.combatState.aaResults = { rolls, hits, need };
     this.combatState.aaFired = true;
 
-    // A&A Rule: AA fire casualties are automatic - attacker doesn't choose
-    // The AA gun owner decides, and by convention cheapest aircraft are lost first
+    // Each hit kills the aircraft that die was rolled against.
     if (hits > 0) {
       this.combatState.pendingAACasualties = hits;
-      // Auto-select casualties (cheapest aircraft first)
-      this.combatState.selectedAACasualties = this._selectCheapestAircraftCasualties(attackers, hits);
+      this.combatState.selectedAACasualties = applyAaRolls(targets, rolls);
+      this.combatState.aaHitsAlreadyApplied = true;
       this._applyAACasualties({ proceed: false });
     } else {
       this.combatState.selectedAACasualties = {};
@@ -908,14 +915,18 @@ export class CombatUI {
   _applyAACasualties({ proceed = true } = {}) {
     const { attackers, selectedAACasualties, totalAttackerLosses } = this.combatState;
     if (selectedAACasualties && !this.combatState.aaCasualtiesApplied) {
-      for (const [type, count] of Object.entries(selectedAACasualties)) {
-        let remaining = Number(count) || 0;
-        for (const unit of attackers.filter((u) => u.type === type)) {
-          if (remaining <= 0) break;
-          const take = Math.min(Number(unit.quantity) || 0, remaining);
-          unit.quantity = (Number(unit.quantity) || 0) - take;
-          remaining -= take;
+      if (!this.combatState.aaHitsAlreadyApplied) {
+        for (const [type, count] of Object.entries(selectedAACasualties)) {
+          let remaining = Number(count) || 0;
+          for (const unit of attackers.filter((u) => u.type === type)) {
+            if (remaining <= 0) break;
+            const take = Math.min(Number(unit.quantity) || 0, remaining);
+            unit.quantity = (Number(unit.quantity) || 0) - take;
+            remaining -= take;
+          }
         }
+      }
+      for (const [type, count] of Object.entries(selectedAACasualties)) {
         totalAttackerLosses[type] = (totalAttackerLosses[type] || 0) + count;
       }
       this.combatState.attackers = attackers.filter(u => (Number(u.quantity) || 0) > 0);
@@ -2779,7 +2790,7 @@ export class CombatUI {
             ${rolls.slice(0, 12).map(r => `<div class="die ${r.hit ? 'hit' : 'miss'}">${r.roll}</div>`).join('')}
             ${rolls.length > 12 ? `<span class="dice-more">+${rolls.length - 12}</span>` : ''}
           </div>
-          <div class="aa-desc">${hits > 0 ? `Aircraft lost: ${lossStr} (cheapest first)` : 'No aircraft lost'}</div>
+          <div class="aa-desc">${hits > 0 ? `Aircraft lost: ${lossStr}` : 'No aircraft lost'}</div>
         </div>
       `;
     }
@@ -3362,7 +3373,7 @@ export class CombatUI {
             ${rolls.slice(0, 12).map((r) => `<div class="die ${r.hit ? 'hit' : 'miss'}">${r.roll}</div>`).join('')}
             ${rolls.length > 12 ? `<span class="dice-more">+${rolls.length - 12}</span>` : ''}
           </div>
-          <div class="aa-desc">${hits > 0 ? `Aircraft lost: ${lossStr} (cheapest first)` : 'No aircraft lost'}</div>
+          <div class="aa-desc">${hits > 0 ? `Aircraft lost: ${lossStr}` : 'No aircraft lost'}</div>
         </div>`;
     }
     if (phase === 'resolved') {

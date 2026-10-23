@@ -558,7 +558,7 @@ export class AIController {
         const where = buy.placement === 'sea' ? sea : capital;
         if (!where) continue;
         for (let i = 0; i < buy.count; i++) {
-          if (!this.gameState.purchaseUnit(buy.unitType, where, this.unitDefs)) break;
+          if (!this._queuePurchase(buy.unitType, where)) break;
           remaining -= this.unitDefs[buy.unitType]?.cost || 0;
           purchased.push(buy.unitType);
         }
@@ -589,7 +589,7 @@ export class AIController {
         for (const buy of plan.buys) {
           if (buy.placement !== 'sea') continue;
           for (let i = 0; i < buy.count; i++) {
-            if (!this.gameState.purchaseUnit(buy.unitType, sea, this.unitDefs)) break;
+            if (!this._queuePurchase(buy.unitType, sea)) break;
             remaining -= this.unitDefs[buy.unitType]?.cost || 0;
             purchased.push(buy.unitType);
           }
@@ -629,7 +629,7 @@ export class AIController {
       let count = Math.min(maxCount, Math.floor(remaining / def.cost));
 
       for (let i = 0; i < count && remaining >= def.cost; i++) {
-        this.gameState.purchaseUnit(unitType, capital, this.unitDefs);
+        if (!this._queuePurchase(unitType, capital)) break;
         remaining -= def.cost;
         purchased.push(unitType);
       }
@@ -640,7 +640,7 @@ export class AIController {
     if (knobs.raidFactories && !strategy.threatenedCapital && !purchased.includes('bomber')) {
       const bomber = this.unitDefs?.bomber;
       if (bomber && remaining >= bomber.cost) {
-        if (this.gameState.purchaseUnit('bomber', capital, this.unitDefs)) {
+        if (this._queuePurchase('bomber', capital)) {
           remaining -= bomber.cost;
           purchased.push('bomber');
         }
@@ -655,7 +655,7 @@ export class AIController {
       && this._pairingPartnerCount(player.id) > 0) {
       const tac = this.unitDefs.tacticalBomber;
       if (tac && remaining >= tac.cost) {
-        if (this.gameState.purchaseUnit('tacticalBomber', capital, this.unitDefs)) {
+        if (this._queuePurchase('tacticalBomber', capital)) {
           remaining -= tac.cost;
           purchased.push('tacticalBomber');
         }
@@ -754,6 +754,13 @@ export class AIController {
         for (const air of unit.aircraft || []) add(air);
         for (const cargo of unit.cargo || []) add(cargo);
       }
+    }
+    // Queued this phase. They are not on the board until mobilize.
+    for (const row of this.gameState?.pendingPurchases || []) {
+      if (!row || row.owner !== playerId) continue;
+      if (row.type !== 'fighter' && row.type !== 'armour') continue;
+      const qty = Number(row.quantity) || 0;
+      if (qty > 0) total += qty;
     }
     return total;
   }
@@ -1470,25 +1477,55 @@ export class AIController {
   // ============================================
   // MOBILIZE (place purchased units)
   // ============================================
+  _queuePurchase(unitType, territory) {
+    const result = this.gameState.addToPendingPurchases(unitType, this.unitDefs, territory || null);
+    return !!(result && result.success);
+  }
+
+  _mobilizeWhere(player, row) {
+    const def = this.unitDefs?.[row.type];
+    if (!def) return null;
+    const capital = this.gameState.playerState[player.id]?.capitalTerritory || null;
+    const seas = [...(this.gameState._getValidNavalPlacementZones?.(player.id) || [])];
+    const started = this.gameState.factoriesAtTurnStart;
+    const landFactories = (started instanceof Set && started.size > 0)
+      ? [...started]
+      : (this.gameState._getFactoryTerritories?.(player.id) || []);
+    if (def.isSea) {
+      if (row.territory && seas.includes(row.territory)) return [row.territory, ...seas.filter((name) => name !== row.territory)];
+      return seas;
+    }
+    if (def.isBuilding) return row.territory ? [row.territory] : [];
+    const preferred = (row.territory && landFactories.includes(row.territory))
+      ? row.territory
+      : (landFactories.includes(capital) ? capital : landFactories[0]);
+    return preferred ? [preferred] : [];
+  }
+
   async _handleMobilize(aiPlayer, player) {
     this._updateStatus(`${player.name} mobilizing units...`);
     await this._delay(this._getActionDelay() / 2);
 
-    // Island-start factories are queued in purchase and placed here.
+    // Same placement rules as a human: sea to a factory sea zone, land and
+    // air onto a factory territory. Nothing loads onto a transport here.
     const pending = (this.gameState.pendingPurchases || [])
-      .filter((row) => row.owner === player.id && row.type === 'factory' && row.territory);
+      .filter((row) => row.owner === player.id && (row.quantity || 0) > 0);
     for (const row of pending) {
       const qty = row.quantity || 0;
       for (let i = 0; i < qty; i++) {
-        const placed = this.gameState.mobilizeUnit('factory', row.territory, this.unitDefs);
+        const choices = this._mobilizeWhere(player, row);
+        let placed = null;
+        for (const where of choices) {
+          placed = this.gameState.mobilizeUnit(row.type, where, this.unitDefs);
+          if (placed?.success) break;
+        }
         if (!placed?.success) {
-          this._refundPending(player.id, 'factory');
+          this._refundPending(player.id, row.type);
           break;
         }
       }
     }
 
-    // Units are placed during purchase at capital, just advance
     this._notifyAction('mobilize', {});
     this.gameState.nextPhase();
     this._notifyAction('nextPhase', {});

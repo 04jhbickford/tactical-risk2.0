@@ -443,11 +443,11 @@ console.log('=== computer ===');
     ai._notifyAction = () => {};
     const player = { ...gs.players[0], aiDifficulty: 'easy' };
     const bought = [];
-    const orig = gs.purchaseUnit.bind(gs);
-    gs.purchaseUnit = (type, where, defs) => {
-      const ok = orig(type, where, defs);
-      if (ok) bought.push(type);
-      return ok;
+    const orig = gs.addToPendingPurchases.bind(gs);
+    gs.addToPendingPurchases = (type, defs, where) => {
+      const result = orig(type, defs, where);
+      if (result?.success) bought.push(type);
+      return result;
     };
     await ai._handlePurchase({ difficulty: 'easy' }, player);
     return bought;

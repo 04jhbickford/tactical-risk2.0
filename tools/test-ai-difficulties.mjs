@@ -128,11 +128,11 @@ async function runAttacks(gs) {
 async function runPurchase(gs) {
   gs.turnPhase = TURN_PHASES.PURCHASE;
   const bought = [];
-  const orig = gs.purchaseUnit.bind(gs);
-  gs.purchaseUnit = (type, where, defs) => {
-    const ok = orig(type, where, defs);
-    if (ok) bought.push(type);
-    return ok;
+  const orig = gs.addToPendingPurchases.bind(gs);
+  gs.addToPendingPurchases = (type, defs, where) => {
+    const result = orig(type, defs, where);
+    if (result?.success) bought.push(type);
+    return result;
   };
   const ai = controller(gs);
   await ai._handlePurchase({ difficulty: gs.players[0].aiDifficulty }, gs.players[0]);

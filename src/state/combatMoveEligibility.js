@@ -246,3 +246,130 @@ export function decomposeMoveSelection(selected = {}) {
   }
   return { units, shipIds, cargoUnloads };
 }
+
+function airCanEnter(gameState, fromName, toName, unit, unitDefs, playerId, isCombatMove) {
+  const def = unitDefs[unit.type];
+  if (!def?.isAir) return false;
+  const toT = gameState.territoryByName?.[toName];
+  if (!toT) return false;
+  const longRange = !!gameState.hasTech?.(playerId, 'longRangeAircraft');
+  const range = (def.movement || 4) + (longRange ? 2 : 0);
+  if (fromName !== toName && typeof gameState.canAirUnitReach === 'function'
+    && !gameState.canAirUnitReach(fromName, toName, range)) {
+    return false;
+  }
+  if (isCombatMove && !toT.isWater && !airCombatMoveMayOccupy(gameState, toName, playerId)) {
+    if (!(unit.type === 'bomber' && enemyFactoryAt(gameState, toName, playerId))) return false;
+  }
+  if (toT.isWater && isCombatMove && !seaZoneHasEnemyForAirAttack(gameState, toName, playerId)) {
+    return false;
+  }
+  if (isCombatMove && typeof gameState._calculateAirDistance === 'function') {
+    const remaining = range - (Number(gameState._calculateAirDistance(fromName, toName)) || 0);
+    if (!hasLegalAirLandingFrom(gameState, toName, remaining, unit.type, unitDefs, playerId)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function landCanEnter(gameState, fromName, toName, unit, unitDefs, playerId, isCombatMove) {
+  const def = unitDefs[unit.type];
+  const toT = gameState.territoryByName?.[toName];
+  if (!def?.isLand || !toT) return false;
+  if (isCombatMove && unit.type === 'aaGun') return false;
+  const range = def.movement || 1;
+  const adjacent = (gameState.getConnections?.(fromName) || []).includes(toName);
+  if (toT.isWater) {
+    if (!friendlyTransportCanLoad(gameState, toName, playerId, [unit])) return false;
+    return adjacent || range > 1;
+  }
+  if (range <= 1) return adjacent;
+  const blitz = landBlitzOptions([unit], { isCombatMove });
+  if (typeof gameState.canLandUnitReach !== 'function') return adjacent;
+  return gameState.canLandUnitReach(fromName, toName, range, playerId, isCombatMove, blitz);
+}
+
+function seaCanEnter(gameState, fromName, toName, range, playerId, isCombatMove) {
+  const toT = gameState.territoryByName?.[toName];
+  if (!toT?.isWater) return false;
+  const adjacent = (gameState.getConnections?.(fromName) || []).includes(toName);
+  const steps = Math.max(1, Number(range) || 1);
+  if (steps <= 1) return adjacent;
+  if (typeof gameState.canSeaUnitReach !== 'function') return adjacent;
+  return gameState.canSeaUnitReach(fromName, toName, steps, playerId, isCombatMove);
+}
+
+// Select All stages every stack. A right-click dest is often legal for
+// only some of them. Send those. Leave the rest where they are.
+export function legalMoveForDestination(gameState, fromName, toName, selected, unitDefs = {}) {
+  const empty = {
+    units: [],
+    shipIds: [],
+    amphibiousShipIds: [],
+    cargoUnloads: [],
+    isAmphibiousUnload: false,
+  };
+  if (!gameState || !fromName || !toName) return empty;
+  const fromT = gameState.territoryByName?.[fromName];
+  const toT = gameState.territoryByName?.[toName];
+  const playerId = gameState.currentPlayer?.id;
+  if (!fromT || !toT || !playerId) return empty;
+  const picked = decomposeMoveSelection(selected);
+  const isCombatMove = gameState.turnPhase === 'combat_move';
+  const adjacent = (gameState.getConnections?.(fromName) || []).includes(toName);
+  const units = [];
+  const shipIds = [];
+  const amphibiousShipIds = [];
+  const cargoUnloads = [];
+
+  for (const unit of picked.units) {
+    const def = unitDefs[unit.type];
+    if (!def) continue;
+    if (def.isAir && airCanEnter(gameState, fromName, toName, unit, unitDefs, playerId, isCombatMove)) {
+      units.push(unit);
+    } else if (def.isLand && landCanEnter(gameState, fromName, toName, unit, unitDefs, playerId, isCombatMove)) {
+      units.push(unit);
+    } else if (def.isSea) {
+      const range = def.movement || 1;
+      if (seaCanEnter(gameState, fromName, toName, range, playerId, isCombatMove)) units.push(unit);
+    }
+  }
+
+  const seaUnits = gameState.units?.[fromName] || [];
+  if (fromT.isWater && toT.isWater) {
+    for (const id of picked.shipIds) {
+      const ship = seaUnits.find((unit) => unit?.id === id && unit.owner === playerId);
+      if (!ship || ship.moved) continue;
+      const range = (unitDefs[ship.type]?.movement || 2) - (Number(ship.movementUsed) || 0);
+      if (range <= 0) continue;
+      if (seaCanEnter(gameState, fromName, toName, range, playerId, isCombatMove)) shipIds.push(id);
+    }
+  }
+
+  if (fromT.isWater && !toT.isWater && adjacent) {
+    const owner = gameState.getOwner?.(toName);
+    const enemy = owner && owner !== playerId && !gameState.areAllies?.(playerId, owner);
+    if (isCombatMove || !enemy) {
+      for (const id of picked.shipIds) {
+        const ship = seaUnits.find((unit) => unit?.id === id && unit.owner === playerId);
+        if (ship?.type === 'transport' && (ship.cargo || []).some((item) => item && !item.moved)) {
+          amphibiousShipIds.push(id);
+        }
+      }
+      for (const row of picked.cargoUnloads) {
+        const ship = seaUnits.find((unit) => unit?.id === row.transportId && unit.owner === playerId);
+        const have = (ship?.cargo || []).filter((item) => item?.type === row.unitType && !item.moved).length;
+        if (have > 0) cargoUnloads.push({ ...row, quantity: Math.min(row.quantity, have) });
+      }
+    }
+  }
+
+  return {
+    units,
+    shipIds,
+    amphibiousShipIds,
+    cargoUnloads,
+    isAmphibiousUnload: amphibiousShipIds.length > 0 || cargoUnloads.length > 0,
+  };
+}

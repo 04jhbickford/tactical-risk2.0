@@ -111,6 +111,7 @@ import {
   airCombatMoveMayOccupy,
   airSelectionType,
   decomposeMoveSelection,
+  legalMoveForDestination,
   maxMoveSelection,
   moveSelectionProfile,
   moveUnitKey,
@@ -3180,29 +3181,10 @@ export class PlayerPanel {
   }
 
   _calculateIncome(playerId) {
-    let income = 0;
-    const territories = this.gameState.getPlayerTerritories(playerId);
-
-    for (const tName of territories) {
-      const t = this.gameState.territoryByName[tName];
-      if (t && !t.isWater) {
-        income += t.ipc || 0;
-      }
+    if (typeof this.gameState?.getCollectIncomeAmount === 'function') {
+      return this.gameState.getCollectIncomeAmount(playerId);
     }
-
-    // Add continent bonuses
-    if (this.continents) {
-      for (const continent of this.continents) {
-        const controlsAll = continent.territories.every(t =>
-          this.gameState.getOwner(t) === playerId
-        );
-        if (controlsAll) {
-          income += continent.bonus || 0;
-        }
-      }
-    }
-
-    return income;
+    return 0;
   }
 
   _countUnits(playerId) {
@@ -4329,6 +4311,7 @@ export class PlayerPanel {
   // Get movable units at a territory for current player
   _getMovableUnits(territory, player) {
     if (!territory || !player) return [];
+    this.gameState.ensureUniqueShipIds?.();
     const units = this.gameState.getUnitsAt(territory.name);
     const movable = {};
     const individualShips = []; // Track transports/carriers with cargo separately
@@ -5908,25 +5891,27 @@ export class PlayerPanel {
         // Handle confirm move
         if (action === 'confirm-move') {
           if (this.onAction && this.movePendingDest && this.selectedTerritory) {
-            const picked = decomposeMoveSelection(this.moveSelectedUnits);
-            const units = picked.units;
-            const shipIds = picked.shipIds;
-            const cargoUnloads = picked.cargoUnloads;
+            const legal = legalMoveForDestination(
+              this.gameState,
+              this.selectedTerritory.name,
+              this.movePendingDest,
+              this.moveSelectedUnits,
+              this.unitDefs,
+            );
+            const units = legal.units;
+            const shipIds = legal.shipIds;
+            const cargoUnloads = legal.cargoUnloads;
+            const amphibiousShipIds = legal.amphibiousShipIds;
 
-            if (units.length > 0 || shipIds.length > 0 || cargoUnloads.length > 0) {
-              // Check if this is an amphibious unload (from sea zone to land)
-              const fromTerritory = this.territories?.[this.selectedTerritory.name];
-              const toTerritory = this.territories?.[this.movePendingDest];
-              const isAmphibiousUnload = fromTerritory?.isWater && !toTerritory?.isWater &&
-                (shipIds.length > 0 || cargoUnloads.length > 0);
-
+            if (units.length > 0 || shipIds.length > 0 || cargoUnloads.length > 0 || amphibiousShipIds.length > 0) {
               this.onAction('execute-move', {
                 from: this.selectedTerritory.name,
                 to: this.movePendingDest,
                 units,
                 shipIds,
+                amphibiousShipIds,
                 cargoUnloads,
-                isAmphibiousUnload
+                isAmphibiousUnload: legal.isAmphibiousUnload,
               });
               // Reset staged units and dest. Keep the from stack named
               // so the next wave can tap units → dest → Confirm again.
