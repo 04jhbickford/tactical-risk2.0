@@ -124,8 +124,8 @@ export class RiskCardsDropdown {
             `}
           </div>
         `;
-      } else if (cards.length >= 5) {
-        html += `<div class="rcd-warning">Must trade when you have 5+ cards!</div>`;
+      } else if (cards.length >= 6) {
+        html += `<div class="rcd-warning">Cash in required</div>`;
       }
 
       html += `</div>`;

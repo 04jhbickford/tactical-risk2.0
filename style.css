@@ -4758,14 +4758,89 @@ html.mobile-shell .pp-ncm-return-base {
   font-weight: 600;
 }
 
-.pp-action-btn.trade-cards {
+.pp-action-btn.trade-cards,
+.pp-action-btn.trade-set {
   background: linear-gradient(135deg, #9c27b0, #7b1fa2);
-  padding: 4px 10px;
-  font-size: 11px;
+  min-height: 44px;
+  padding: 10px 12px;
+  font-size: 13px;
 }
 
-.pp-action-btn.trade-cards:hover {
+.pp-action-btn.trade-cards:hover,
+.pp-action-btn.trade-set:hover {
   background: linear-gradient(135deg, #ab47bc, #8e24aa);
+  transform: none;
+}
+
+.pp-action-btn.trade-cards:active,
+.pp-action-btn.trade-set:active {
+  background: linear-gradient(135deg, #7b1fa2, #6a1b9a);
+  transform: none;
+}
+
+.pp-action-btn.trade-set:disabled,
+.pp-action-btn.trade-cards:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.pp-risk-sets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Phone sheet is 30dvh. The two set choices share one 44px row so both
+   stay above the phase bar. */
+html.mobile-shell .pp-risk-sets {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: stretch;
+}
+
+html.mobile-shell .pp-risk-sets .pp-trade-value {
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+html.mobile-shell .pp-risk-sets .pp-action-btn.trade-set {
+  flex: 1 1 0;
+  min-width: 44px;
+}
+
+/* The 30dvh sheet leaves one short band above the phase bar.
+   Same green chip, pulled tight so the track and both names fit. */
+html.mobile-shell .pp-player-card .pp-tech-list {
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  padding-top: 0;
+  border-top: 0;
+  gap: 4px 8px;
+}
+
+html.mobile-shell .pp-player-card .pp-tech-item {
+  padding: 1px 8px;
+}
+
+.pp-risk-track {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.pp-risk-last {
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffc107;
+}
+
+.pp-risk-next {
+  font-size: 12px;
+  font-weight: 600;
+  color: #888;
 }
 
 .pp-risk-cards-warning {

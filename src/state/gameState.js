@@ -133,6 +133,7 @@ import {
   unitsForGeneralCombat,
   unitsSubsMayRoll,
 } from './combatUnits.js';
+import { isSeaUnitType, repairSeaUnitsOnLand } from './seaOnLand.js';
 import {
   factoryProductionUsed,
   resolveSeaMobilizeFactory,
@@ -250,6 +251,15 @@ export { RADIO_DECEPTION };
 
 // RISK card trade values (escalating)
 export const RISK_CARD_VALUES = [12, 18, 24, 30, 36, 45, 60, 75];
+
+// Last cashed value, then the next three milestones. The table clamps at 75.
+export function riskMilestoneTrack(tradeCount) {
+  const count = Math.max(0, Number(tradeCount) || 0);
+  const lastIndex = RISK_CARD_VALUES.length - 1;
+  const last = count > 0 ? RISK_CARD_VALUES[Math.min(count - 1, lastIndex)] : null;
+  const next = [0, 1, 2].map((step) => RISK_CARD_VALUES[Math.min(count + step, lastIndex)]);
+  return { last, next };
+}
 
 // Land bridges — the active map's list. Classic is CLASSIC_LAND_BRIDGES.
 export const LAND_BRIDGES = CLASSIC_LAND_BRIDGES;
@@ -1961,6 +1971,9 @@ export class GameState {
 
     // Naval units: can be placed on any sea zone adjacent to ANY owned coastal territory
     if (unitDef.isSea) {
+      if (!territory.isWater) {
+        return { success: false, error: 'Naval units must be placed on sea zones' };
+      }
       const ownedCoastal = this.getPlayerTerritories(player.id).filter(tName => {
         const t = this.territoryByName[tName];
         return t && !t.isWater && t.connections.some(conn => {
@@ -2433,6 +2446,9 @@ export class GameState {
       // Naval units: placed on sea zones adjacent to territories with factories.
       // The producing factory's cap is spent, and a shared sea zone must name
       // which factory (9.21.26.09 / 09b).
+      if (!this.territoryByName[territoryName]?.isWater) {
+        return { success: false, error: 'Naval units must be placed on sea zones adjacent to territories with factories' };
+      }
       const validSeaZones = this._getValidNavalPlacementZones(player.id);
       if (!validSeaZones.has(territoryName)) {
         return { success: false, error: 'Naval units must be placed on sea zones adjacent to territories with factories' };
@@ -3158,6 +3174,10 @@ export class GameState {
       console.warn(`nextPhase() ignored: game phase is '${this.phase}', not playing`);
       return;
     }
+    if (this.turnPhase === TURN_PHASES.PURCHASE && this.mustCashRiskCards()) {
+      console.warn('Cannot leave Purchase: six RISK cards must be cashed');
+      return;
+    }
     this.lastNcmAirCrashes = [];
 
     let currentIndex = TURN_PHASE_ORDER.indexOf(this.turnPhase);
@@ -3392,11 +3412,12 @@ export class GameState {
       return { success: false, error: 'AA guns move in non-combat only' };
     }
 
-    // For sea units, check if destination is reachable within movement range
+    // For sea units, check if destination is reachable within movement range.
+    // Ship ids are a second write path and follow the same rule.
+    if ((seaUnits.length > 0 || (options.shipIds && options.shipIds.length > 0)) && !toT?.isWater) {
+      return { success: false, error: 'Naval units can only move to sea zones' };
+    }
     if (seaUnits.length > 0) {
-      if (!toT?.isWater) {
-        return { success: false, error: 'Naval units can only move to sea zones' };
-      }
       // Get max sea movement range of units being moved
       let maxSeaMovement = 0;
       for (const seaUnit of seaUnits) {
@@ -4427,12 +4448,16 @@ export class GameState {
     }
 
     const combatUnits = this.units[combatTerritory] || [];
+    const unitDefs = this._unitDefs || this.unitDefs || {};
 
-    // Move each unit back to its origin
+    // Move each unit back to its origin. Sea units only return to sea.
     for (const move of movesToRetreat) {
       const fromUnits = this.units[move.from] || [];
+      const originWater = !!this.territoryByName[move.from]?.isWater;
 
       for (const moveUnit of move.units) {
+        const sea = isSeaUnitType(moveUnit.type, unitDefs);
+        if (!isAirUnitType(moveUnit.type, unitDefs) && sea !== originWater) continue;
         // Find unit in combat territory
         const combatUnit = combatUnits.find(u =>
           u.type === moveUnit.type && u.owner === player.id && !isRaidMission(u)
@@ -4484,9 +4509,13 @@ export class GameState {
       m.to === combatTerritory && m.player === player.id
     );
 
-    // Get unique origin territories
+    // Get unique origin territories. A sea battle retreats to sea.
+    // A land battle retreats to land.
+    const battleWater = !!this.territoryByName[combatTerritory]?.isWater;
     const destinations = new Set();
     for (const move of movesToRetreat) {
+      const originWater = !!this.territoryByName[move.from]?.isWater;
+      if (originWater !== battleWater) continue;
       // Only include friendly/allied territories as retreat options
       const owner = this.getOwner(move.from);
       if (move.from && (owner === player.id || this.areAllies(player.id, owner) || !owner)) {
@@ -4639,8 +4668,11 @@ export class GameState {
     };
 
     const airToPark = [];
+    const destWater = !!this.territoryByName[destination]?.isWater;
     for (const unit of unitsToRetreat) {
       if (isAirUnitType(unit.type, unitDefs)) continue;
+      // Sea units stay in the sea zone when the chosen origin is land.
+      if (isSeaUnitType(unit.type, unitDefs) !== destWater) continue;
       deliver(unit);
       unit.quantity = 0;
     }
@@ -5914,10 +5946,15 @@ export class GameState {
     if (playerPurchases.length === 0) return;
 
     // Place each purchase at its designated territory
+    const unitDefs = this._unitDefs || this.unitDefs || {};
     for (const purchase of playerPurchases) {
       const territory = purchase.territory;
       if (!territory) {
         console.warn('Purchase missing territory:', purchase);
+        continue;
+      }
+      if (isSeaUnitType(purchase.type, unitDefs) && !this.territoryByName[territory]?.isWater) {
+        console.warn(`Refused to mobilize ${purchase.quantity}x ${purchase.type} onto land ${territory}`);
         continue;
       }
 
@@ -6702,6 +6739,14 @@ export class GameState {
     return cardType;
   }
 
+  // Six cards and a legal set: Purchase cannot end until one set is cashed.
+  mustCashRiskCards(playerId) {
+    const id = playerId || this.currentPlayer?.id;
+    if (!id) return false;
+    const cards = this.riskCards?.[id] || [];
+    return cards.length >= 6 && this.canTradeRiskCards(id);
+  }
+
   // Check if player can trade cards (needs 3+ cards with a valid set)
   canTradeRiskCards(playerId) {
     const cards = this.riskCards[playerId] || [];
@@ -6819,6 +6864,18 @@ export class GameState {
     }
 
     const cards = this.riskCards[playerId] || [];
+    const wanted = Array.isArray(cardSet) ? cardSet.map(String) : [];
+    const isListedSet = this._findAllValidCardSets(cards).some((set) => {
+      if (set.length !== wanted.length) return false;
+      const left = wanted.slice();
+      for (const card of set) {
+        const idx = left.indexOf(card);
+        if (idx < 0) return false;
+        left.splice(idx, 1);
+      }
+      return left.length === 0;
+    });
+    if (!isListedSet) return { success: false, ipcs: 0, error: 'Invalid card set' };
 
     // Validate the set exists in player's hand
     const tempCards = [...cards];
@@ -8099,6 +8156,7 @@ export class GameState {
     this.territoryState = data.territoryState;
     this.units = data.units;
     this._scrubDeadUnits();
+    this._seaOnLandRepairs = repairSeaUnitsOnLand(this, this._unitDefs || this.unitDefs || {});
     this.ensureUniqueShipIds();
     this.playerState = data.playerState;
     this.pendingPurchases = data.pendingPurchases || [];

@@ -175,7 +175,7 @@ check('S5 select-all drag keeps empty carriers and rides their aircraft',
   && naval.cargoUnloads.length === 1
   && naval.cargoUnloads[0].transportId === 'transport-9'
   && naval.units.some((unit) => unit.type === 'infantry' && unit.quantity === 1)
-  && mainSrc.includes('shipIds: picked.shipIds'));
+  && mainSrc.includes('shipIds: legal.shipIds'));
 const ridingCargo = decomposeMoveSelection({
   'ship:transport-9': 1,
   'cargo:transport-9:infantry': 2,

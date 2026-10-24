@@ -2,6 +2,14 @@
 
 ---
 
+## 10.24.26 — unified.66 playtest round
+
+Stamp `V2.81.57-unified.66`. Schema stays 11. A naval unit cannot be written onto land. A drag of a hull, a retreat, setup placement, mobilization, and purchase placement all refuse it. A save that already has a ship on land moves that ship to an adjacent friendly sea zone, or removes it when no friendly sea zone exists, and logs the repair. A destroyer cancels only the other side's submarine surprise strike. Six RISK cards with a legal set must be cashed before Purchase can end, including the AI. When more than one set is legal, the player picks the set. The Players tab shows the last RISK value and the next three under each player's cards, and each opponent's technologies. On the phone sheet one battle offers Resolve, the cash-in choices share one row, and the opponent technologies sit on one line under that track. A `V2.82-unified.65` doc is older than this tab and does not prompt. A `V2.82-unified.67` doc does. Game docs write `clientVersion` through `compatClientVersion` (`V2.82-unified.66`).
+
+Discord #tactical-risk: a UK ship ended on Japan (crusader_bastion, 23 Oct), a submarine beside its own destroyer got no surprise strike in West Spain Sea Zone (crusader_bastion, 23 Oct), RISK cards at six must be cashed and the set chosen, with the cash-in timeline on the Players tab (robfox007, 21 Oct), and opponent technologies on that tab (robfox007, 21 Oct).
+
+Receipt: `node tools/test-unified-66-reports.mjs`.
+
 ## 10.23.26 — unified.65 playtest round
 
 Stamp `V2.81.57-unified.65`. Schema stays 11. AA fires once at the start of a battle, one die per attacking aircraft, and that die kills that aircraft. Auto-resolve and the combat screen use the same shot. AA is still never a casualty, and an AA-only defence still loses. Any number of loaded transports can move together and unload in one amphibious assault. Each transport selects on its own. Select all then a right-click moves the aircraft that can enter that hex. A sunk transport stays off the board across a save and a reload. The AI queues purchases and mobilizes sea units to a factory sea zone and land and air to a factory territory. The Players pane shows the income that turn will collect. A naval icon after a multi-space move is drawn inside the sea zone. A `V2.82-unified.64` doc is older than this tab and does not prompt. A `V2.82-unified.66` doc does. Game docs write `clientVersion` through `compatClientVersion` (`V2.82-unified.65`).

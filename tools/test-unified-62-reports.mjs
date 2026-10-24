@@ -87,12 +87,12 @@ function advanceTo(gs, phase, playerId = null) {
 console.log('=== stamp ===');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  const stamp = 'V2.81.57-unified.65';
-  check('display stamp is V2.81.57-unified.65', GAME_VERSION === stamp);
+  const stamp = 'V2.81.57-unified.66';
+  check('display stamp is V2.81.57-unified.66', GAME_VERSION === stamp);
   check('schema stays 11', SCHEMA_VERSION === 11);
-  check('game docs write V2.82-unified.65', compatClientVersion() === 'V2.82-unified.65');
-  check('a V2.82-unified.66 doc prompts this tab', compareGameVersions('V2.82-unified.66', GAME_VERSION) > 0);
-  check('a V2.82-unified.64 doc does not prompt this tab', compareGameVersions('V2.82-unified.64', GAME_VERSION) < 0);
+  check('game docs write V2.82-unified.66', compatClientVersion() === 'V2.82-unified.66');
+  check('a V2.82-unified.67 doc prompts this tab', compareGameVersions('V2.82-unified.67', GAME_VERSION) > 0);
+  check('a V2.82-unified.65 doc does not prompt this tab', compareGameVersions('V2.82-unified.65', GAME_VERSION) < 0);
   check('index.html carries the display stamp',
     html.includes(`name="tr-game-version" content="${stamp}"`)
     && html.includes(`window.__TR_GAME_VERSION = '${stamp}'`)

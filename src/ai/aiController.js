@@ -492,7 +492,17 @@ export class AIController {
     this.gameState.buyTech(player.id, pick);
   }
 
+  _cashRequiredRiskCards(player) {
+    let guard = 0;
+    while (this.gameState.mustCashRiskCards?.(player.id) && guard < 8) {
+      guard += 1;
+      const result = this.gameState.tradeRiskCards(player.id);
+      if (!result?.success) break;
+    }
+  }
+
   async _handlePurchase(aiPlayer, player) {
+    this._cashRequiredRiskCards(player);
     this._maybeBuyDirectTech(player);
     this._updateStatus(`${player.name} purchasing units...`);
     await this._delay(this._getActionDelay());
