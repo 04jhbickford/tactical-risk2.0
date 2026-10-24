@@ -380,6 +380,7 @@ export function shouldShowPhonePanelBody({
     return turnPhase === TURN_PHASES.DEVELOP_TECH
       || turnPhase === TURN_PHASES.PURCHASE
       || turnPhase === TURN_PHASES.COMBAT_MOVE
+      || turnPhase === TURN_PHASES.COMBAT
       || turnPhase === TURN_PHASES.NON_COMBAT_MOVE
       || turnPhase === TURN_PHASES.MOBILIZE;
   }

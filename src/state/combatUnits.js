@@ -268,6 +268,8 @@ export function unitIsFirstStrikeTarget(unit, unitDefs = {}) {
   return true;
 }
 
+// A destroyer cancels only the opposing side's surprise strike.
+// A destroyer on the same side as the submarines does not cancel them.
 export function sideCanFirstStrike(subs, enemyUnits, enemyHasDestroyer, unitDefs = {}) {
   const hasSubs = (subs || []).some((u) => u?.type === 'submarine' && (Number(u.quantity) || 0) > 0);
   if (!hasSubs || enemyHasDestroyer) return false;

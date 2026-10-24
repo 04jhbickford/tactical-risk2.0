@@ -425,12 +425,13 @@ export class AIPlayer {
     const territories = this._getOwnedTerritories();
     const unitDef = this.gameState.unitDefs?.[unitType];
 
-    // Naval units go to sea zones
+    // Naval units go to sea zones. No sea zone means no placement.
     if (unitDef?.isSea) {
       const seaZones = this._getAdjacentSeaZones();
       if (seaZones.length > 0) {
         return seaZones[Math.floor(Math.random() * seaZones.length)];
       }
+      return null;
     }
 
     // Land and air units

@@ -235,8 +235,8 @@ export class ContinentPanel {
             `}
           </div>
         `;
-      } else if (cards.length >= 5) {
-        html += `<div class="rc-warning">⚠️ Must trade when you have 5+ cards!</div>`;
+      } else if (cards.length >= 6) {
+        html += `<div class="rc-warning">Cash in required</div>`;
       }
     }
 

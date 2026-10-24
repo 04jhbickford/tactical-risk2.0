@@ -30,7 +30,7 @@ import {
   UNKNOWN_MAP_MESSAGE,
 } from './map/mapRegistry.js';
 import { getBoard, registerBoard } from './map/boardCatalog.js';
-import { decomposeMoveSelection, legalMoveForDestination } from './state/combatMoveEligibility.js';
+import { legalMoveForDestination } from './state/combatMoveEligibility.js';
 import { MapRenderer } from './map/mapRenderer.js';
 import { TerritoryRenderer } from './map/territoryRenderer.js';
 import { TerritoryMap } from './map/territoryMap.js';
@@ -3224,11 +3224,10 @@ async function init() {
         // Execute the move
         playerPanel.movePendingDest = hit.name;
 
-        // Confirm the move. Ship ids stay on the decomposed selection so an
-        // empty carrier still sails with the fleet. Unit stacks are the ones
-        // that can actually enter this hex, so a bomber is not blocked by
-        // infantry that was selected with it.
-        const picked = decomposeMoveSelection(playerPanel.moveSelectedUnits || {});
+        // Confirm the move. Ship ids are the ones that can enter this sea
+        // zone, so an empty carrier still sails and a hull cannot land. Unit
+        // stacks are the ones that can actually enter this hex, so a bomber
+        // is not blocked by infantry that was selected with it.
         const legal = legalMoveForDestination(
           gameState,
           dragSourceTerritory.name,
@@ -3254,7 +3253,7 @@ async function init() {
           hit.name,
           legal.units,
           unitDefs,
-          { shipIds: picked.shipIds },
+          { shipIds: legal.shipIds },
         );
 
         if (result.success) {

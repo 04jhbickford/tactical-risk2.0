@@ -1,7 +1,7 @@
 // Player-focused panel with tabbed navigation
 // Tabs: Actions, Stats, Territory, Log
 
-import { GAME_PHASES, TURN_PHASES, TURN_PHASE_NAMES, TECHNOLOGIES, shouldShowTechResearch, shouldShowPurchase } from '../state/gameState.js';
+import { GAME_PHASES, TURN_PHASES, TURN_PHASE_NAMES, TECHNOLOGIES, shouldShowTechResearch, shouldShowPurchase, riskMilestoneTrack } from '../state/gameState.js';
 import {
   DECEPTION_ILLUSION,
   DECEPTION_OBFUSCATE,
@@ -623,6 +623,28 @@ export function shouldShowPhoneSetupUndo({
     canUndoCapital,
   });
   return resolved.show && (resolved.action === 'undo-placement' || resolved.action === 'undo-capital');
+}
+
+function formatRiskSet(set) {
+  const counts = {};
+  for (const card of set || []) counts[card] = (counts[card] || 0) + 1;
+  const labels = {
+    infantry: 'Infantry',
+    cavalry: 'Cavalry',
+    artillery: 'Artillery',
+    wild: 'Wild',
+  };
+  return ['infantry', 'cavalry', 'artillery', 'wild']
+    .filter((type) => counts[type])
+    .map((type) => (counts[type] > 1 ? `${counts[type]} ${labels[type]}` : labels[type]))
+    .join(', ');
+}
+
+function renderRiskTrack(tradeCount) {
+  const track = riskMilestoneTrack(tradeCount);
+  const last = track.last == null ? '' : `<span class="pp-risk-last">${track.last}</span>`;
+  const next = track.next.map((value) => `<span class="pp-risk-next">${value}</span>`).join('');
+  return `<div class="pp-risk-track">${last}${next}</div>`;
 }
 
 export class PlayerPanel {
@@ -2153,6 +2175,16 @@ export class PlayerPanel {
           disabled: false,
         };
       }
+    } else if (isMobileShell() && phase === GAME_PHASES.PLAYING && turnPhase === TURN_PHASES.COMBAT) {
+      const combatCount = this.gameState.combatQueue?.length || 0;
+      const raidCount = this.gameState.raidQueue?.length || 0;
+      if (raidCount > 0 || combatCount === 1) {
+        confirmCandidate = {
+          action: 'open-combat',
+          label: 'Resolve',
+          disabled: false,
+        };
+      }
     } else if (phase === GAME_PHASES.PLAYING && turnPhase === TURN_PHASES.MOBILIZE) {
       const dest = this._phoneDeployDest();
       const unitType = this.selectedUnitType
@@ -2190,9 +2222,13 @@ export class PlayerPanel {
       const pendingPurchases = this.gameState.getPendingPurchases?.() || [];
       const unplacedUnits = pendingPurchases.reduce((sum, p) => sum + p.quantity, 0);
       const hasUnplacedUnits = turnPhase === TURN_PHASES.MOBILIZE && unplacedUnits > 0;
+      const mustCashRisk = turnPhase === TURN_PHASES.PURCHASE
+        && !!this.gameState.mustCashRiskCards?.(player.id);
 
       if (hasUnresolvedCombats) {
         warningHtml = `<div class="pp-bottom-warning">⚠️ Resolve all battles before advancing</div>`;
+      } else if (mustCashRisk) {
+        warningHtml = `<div class="pp-bottom-warning">Cash in required</div>`;
       } else if (hasUnplacedUnits) {
         const unitWord = unplacedUnits > 1 ? 'units' : 'unit';
         warningHtml = `<div class="pp-bottom-warning">⚠️ Place all ${unplacedUnits} purchased ${unitWord} first — click a factory (or adjacent sea zone) on the map, then use + / All in the Actions tab</div>`;
@@ -2203,7 +2239,7 @@ export class PlayerPanel {
         label: turnPhase === TURN_PHASES.DEVELOP_TECH
           ? (desktop ? 'End Phase - Develop Technology' : 'Develop technology')
           : `End Phase · ${TURN_PHASE_NAMES[turnPhase] || 'Phase'}`,
-        disabled: hasUnresolvedCombats || hasUnplacedUnits || airLandingActive,
+        disabled: hasUnresolvedCombats || hasUnplacedUnits || airLandingActive || mustCashRisk,
       };
     } else if (phase === GAME_PHASES.CAPITAL_PLACEMENT
       || (phase === GAME_PHASES.TERRITORY_DRAFT && isMobileShell())) {
@@ -2707,6 +2743,19 @@ export class PlayerPanel {
     return html;
   }
 
+  _renderOpponentTechs(playerId, viewerId, techIds) {
+    if (!playerId || playerId === viewerId || !techIds?.length) return '';
+    const names = [];
+    for (const techId of techIds) {
+      const tech = resolveTechInfo(techId, TECHNOLOGIES, this.gameState?.gameOptions);
+      if (tech?.name) names.push(tech.name);
+    }
+    if (names.length === 0) return '';
+    return `<div class="pp-tech-list">${names.map((name) => (
+      `<div class="pp-tech-item"><span class="pp-tech-name">${name}</span></div>`
+    )).join('')}</div>`;
+  }
+
   _renderStatsTab(currentPlayer) {
     let html = '<div class="pp-stats-tab">';
     if (getMap(this.gameState?.mapId)?.victoryMode === 'pacificVC') {
@@ -2737,6 +2786,7 @@ export class PlayerPanel {
         totalUnits,
         units,
         techs: techs.length,
+        techIds: techs,
         ipcs,
         hasCapital,
         isCurrentTurn: p.id === currentPlayer.id,
@@ -2750,6 +2800,10 @@ export class PlayerPanel {
 
     // Player cards
     const isMultiplayer = this.gameState.isMultiplayer;
+    const viewer = (isMultiplayer && this.localUserId)
+      ? playerStats.find((stats) => stats.player.oderId === this.localUserId)
+      : playerStats.find((stats) => stats.player.id === currentPlayer.id);
+    const viewerId = viewer?.player.id || currentPlayer.id;
 
     for (const stats of playerStats) {
       const p = stats.player;
@@ -2801,6 +2855,8 @@ export class PlayerPanel {
               <span class="pp-pstat-label">Cards</span>
             </div>
           </div>
+          ${renderRiskTrack(this.gameState.cardTradeCount?.[p.id] || 0)}
+          ${this._renderOpponentTechs(p.id, viewerId, stats.techIds)}
         </div>`;
     }
 
@@ -3290,6 +3346,7 @@ export class PlayerPanel {
     });
 
     // Show Risk cards trade option if available
+    this.validCardSets = [];
     if (riskCards.length > 0) {
       const cardIcons = { infantry: '🚶', cavalry: '🐎', artillery: '💣', wild: '⭐' };
       const cardCounts = {};
@@ -3304,14 +3361,21 @@ export class PlayerPanel {
             </span>
           </div>`;
 
-      if (canTradeCards) {
+      const cardSets = canTradeCards ? (this.gameState.getValidCardSets?.(player.id) || []) : [];
+      this.validCardSets = cardSets;
+      if (cardSets.length > 1) {
+        html += `<div class="pp-risk-sets">`;
+        html += `<span class="pp-trade-value">+${nextCardValue}</span>`;
+        cardSets.forEach((set, index) => {
+          html += `<button type="button" class="pp-action-btn trade-set" data-action="trade-set" data-set="${index}">${formatRiskSet(set)}</button>`;
+        });
+        html += `</div>`;
+      } else if (cardSets.length === 1) {
         html += `
           <div class="pp-risk-cards-trade">
-            <span class="pp-trade-value">Trade for +${nextCardValue} IPCs</span>
-            <button class="pp-action-btn trade-cards" data-action="trade-risk-cards">Cash In</button>
+            <span class="pp-trade-value">+${nextCardValue}</span>
+            <button type="button" class="pp-action-btn trade-cards" data-action="trade-risk-cards">Cash In</button>
           </div>`;
-      } else if (riskCards.length >= 5) {
-        html += `<div class="pp-risk-cards-warning">⚠️ You must trade cards (5+ cards)</div>`;
       }
 
       html += `</div>`;
@@ -3797,6 +3861,9 @@ export class PlayerPanel {
           countLabel: String(unit.quantity),
         });
       }
+    } else if (phase === GAME_PHASES.PLAYING && turnPhase === TURN_PHASES.PURCHASE && this.trayExpanded) {
+      // The open sheet already lists the buy row and the cash-in. The peek
+      // chips sat in the bottom bar and covered the Players tabs at 390.
     } else if (phase === GAME_PHASES.PLAYING && turnPhase === TURN_PHASES.PURCHASE) {
       pairHint = resolvePhonePeekHint(phase, turnPhase, this.selectedUnitType, {
         territoryName: pairLand,
@@ -5980,7 +6047,7 @@ export class PlayerPanel {
         if (action === 'next-phase') {
           const stillCombat = this.gameState?.turnPhase === TURN_PHASES.COMBAT
             && (this.gameState?.combatQueue?.length || 0) > 0;
-          if (stillCombat) {
+          if (stillCombat || this.gameState?.mustCashRiskCards?.()) {
             this._scheduleRender();
             return;
           }
