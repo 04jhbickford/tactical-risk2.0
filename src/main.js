@@ -47,6 +47,7 @@ import { TerritoryTooltip } from './ui/territoryTooltip.js';
 import { PurchasePopup } from './ui/purchasePopup.js';
 import { MovementUI } from './ui/movementUI.js';
 import { pointerStartsUnitDrag, rightClickConfirmsMove } from './ui/mapPointer.js';
+import { dragMovementRoute } from './map/dragPath.js';
 import { CombatUI } from './ui/combatUI.js';
 import { applyDeployAllPrompt, deployAllPrompt, runMobilizeDeployAll } from './ui/mobilizeDeployAll.js';
 import { confirmChoice } from './ui/confirmChoice.js';
@@ -428,6 +429,7 @@ async function init() {
 
   // Drag-and-drop state for unit movement
   let isDraggingUnits = false;
+  let dragPathHover = undefined;
   let dragSourceTerritory = null;
   let dragStartPos = { x: 0, y: 0 };
   let dragCurrentPos = { x: 0, y: 0 };
@@ -3069,6 +3071,7 @@ async function init() {
         // Start dragging the units already selected. Do not widen the
         // selection to the whole stack (9.22.26.09).
         isDraggingUnits = true;
+        dragPathHover = undefined;
         canvas.classList.add('dragging-units');
         canvas.classList.remove('panning');
 
@@ -3099,6 +3102,20 @@ async function init() {
       } else {
         territoryRenderer.setDragDestination(null, false, false);
       }
+      const hoverName = hit?.name || null;
+      if (hoverName !== dragPathHover) {
+        dragPathHover = hoverName;
+        const legal = !!(hoverName && dragValidDestinations.some((d) => d.name === hoverName));
+        const route = legal ? dragMovementRoute(gameState, {
+          from: dragSourceTerritory?.name,
+          to: hoverName,
+          playerId: gameState.currentPlayer?.id,
+          isCombatMove: gameState.turnPhase === TURN_PHASES.COMBAT_MOVE,
+          selection: playerPanel.moveSelectedUnits,
+          unitDefs,
+        }) : null;
+        territoryRenderer.setDragPath(route?.names || null);
+      }
 
       return;
     }
@@ -3118,6 +3135,9 @@ async function init() {
       // Camera is being panned - cancel drag and hide tooltips
       dragSourceTerritory = null;
       isDraggingUnits = false;
+      dragPathHover = undefined;
+      territoryRenderer.setDragPath(null);
+      territoryRenderer.setDragDestination(null, false, false);
       canvas.classList.remove('dragging-units');
       canvas.classList.add('panning');
       canvas.classList.remove('hovering');
@@ -3274,9 +3294,11 @@ async function init() {
 
       // Clear drag state
       isDraggingUnits = false;
+      dragPathHover = undefined;
       dragSourceTerritory = null;
       dragValidDestinations = [];
       territoryRenderer.setDragDestination(null, false, false);
+      territoryRenderer.setDragPath(null);
       camera.dirty = true;
       return;
     }
@@ -3820,6 +3842,10 @@ async function init() {
         // Units
         if (unitRenderer) {
           unitRenderer.render(ctx, camera.zoom);
+        }
+
+        if (isDraggingUnits) {
+          territoryRenderer.renderDragPath(ctx, camera.zoom);
         }
 
         territoryRenderer.renderVictoryCities(ctx, camera.zoom);

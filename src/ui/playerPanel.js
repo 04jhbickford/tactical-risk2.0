@@ -644,7 +644,7 @@ function renderRiskTrack(tradeCount) {
   const track = riskMilestoneTrack(tradeCount);
   const last = track.last == null ? '' : `<span class="pp-risk-last">${track.last}</span>`;
   const next = track.next.map((value) => `<span class="pp-risk-next">${value}</span>`).join('');
-  return `<div class="pp-risk-track">${last}${next}</div>`;
+  return `<div class="pp-risk-track"><span class="pp-risk-label">RISK Tracker:</span>${last}${next}</div>`;
 }
 
 export class PlayerPanel {
@@ -2855,7 +2855,7 @@ export class PlayerPanel {
               <span class="pp-pstat-label">Cards</span>
             </div>
           </div>
-          ${renderRiskTrack(this.gameState.cardTradeCount?.[p.id] || 0)}
+          ${renderRiskTrack(this.gameState.currentRiskTradeCount?.() || 0)}
           ${this._renderOpponentTechs(p.id, viewerId, stats.techIds)}
         </div>`;
     }

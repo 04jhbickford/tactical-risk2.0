@@ -2,6 +2,14 @@
 
 ---
 
+## 10.25.26 — unified.67 Discord asks
+
+Stamp `V2.81.57-unified.67`. Schema stays 11. A turn ping can be a Discord DM to the player whose turn it is when `DISCORD_TURN_DM` is set. Otherwise the channel webhook is unchanged. A missing Discord user, a missing bot token, or a failed DM posts the channel ping instead. While units are dragged, a dashed yellow line with a black outline follows the movement route through each territory and disappears when the drag ends. A damaged factory's number is red. The RISK cash-in ladder is one count for every player. An old save with no shared count uses the sum of the per-player counts. The Players pane labels that row `RISK Tracker:`. The rules drop-down has the transport and unloading sentences Rob wrote, plus a section for each technology tree. A `V2.82-unified.66` doc is older than this tab and does not prompt. A `V2.82-unified.68` doc does. Game docs write `clientVersion` through `compatClientVersion` (`V2.82-unified.67`).
+
+Discord #tactical-risk, 24 Oct 2026: turn ping as a DM (robfox007, 1563585786060738662), a drag path through the move (crusader_bastion, 1563592117736177806), factory damage in red (crusader_bastion, 1563589837850808424), one RISK ladder for the table (robfox007, 1563672562095886337), and rules text for transports, unloading, and technologies (robfox007, 1563676766369874043).
+
+Receipt: `node tools/test-unified-67-reports.mjs`.
+
 ## 10.24.26 — unified.66 playtest round
 
 Stamp `V2.81.57-unified.66`. Schema stays 11. A naval unit cannot be written onto land. A drag of a hull, a retreat, setup placement, mobilization, and purchase placement all refuse it. A save that already has a ship on land moves that ship to an adjacent friendly sea zone, or removes it when no friendly sea zone exists, and logs the repair. A destroyer cancels only the other side's submarine surprise strike. Six RISK cards with a legal set must be cashed before Purchase can end, including the AI. When more than one set is legal, the player picks the set. The Players tab shows the last RISK value and the next three under each player's cards, and each opponent's technologies. On the phone sheet one battle offers Resolve, the cash-in choices share one row, and the opponent technologies sit on one line under that track. A `V2.82-unified.65` doc is older than this tab and does not prompt. A `V2.82-unified.67` doc does. Game docs write `clientVersion` through `compatClientVersion` (`V2.82-unified.66`).

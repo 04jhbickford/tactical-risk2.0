@@ -1,6 +1,7 @@
 // Renders territory overlays: ownership colors, outlines, continent borders, hover/selection, labels
 
 import { MAP_WIDTH, SCROLL_WRAP_X } from './camera.js';
+import { strokeDragPath } from './dragPath.js';
 import { CLASSIC_LAND_BRIDGES as LAND_BRIDGES, getActiveMap } from './mapRegistry.js';
 import { experimentalControlFlagSize, politicalControlMarks } from './politicalControl.js';
 import {
@@ -2004,6 +2005,51 @@ export class TerritoryRenderer {
     this.dragDestTerritory = territoryName;
     this.dragDestIsValid = isValid;
     this.dragDestIsEnemy = isEnemy;
+  }
+
+  // Reused name list and point buffer. A frame only writes into them.
+  _dragPathNames = [];
+  _dragPathXY = [];
+
+  setDragPath(names) {
+    const buf = this._dragPathNames;
+    if (!names || names.length < 2) {
+      buf.length = 0;
+      return;
+    }
+    if (buf.length === names.length) {
+      let same = true;
+      for (let i = 0; i < names.length; i++) {
+        if (buf[i] !== names[i]) { same = false; break; }
+      }
+      if (same) return;
+    }
+    buf.length = names.length;
+    for (let i = 0; i < names.length; i++) buf[i] = names[i];
+  }
+
+  /** Dashed yellow path with a black outline, through each territory center. */
+  renderDragPath(ctx, zoom) {
+    const names = this._dragPathNames;
+    if (!names || names.length < 2) return;
+    const xy = this._dragPathXY;
+    const need = names.length * 2;
+    if (xy.length < need) xy.length = need;
+    let count = 0;
+    let prevX = null;
+    for (let i = 0; i < names.length; i++) {
+      const t = this.territoryByName[names[i]];
+      if (!t) return;
+      let [x, y] = this._getTerritoryCenter(t);
+      if (x == null || y == null) return;
+      if (prevX != null && SCROLL_WRAP_X && Math.abs(x - prevX) > MAP_WIDTH / 2) {
+        x += x < prevX ? MAP_WIDTH : -MAP_WIDTH;
+      }
+      xy[count++] = x;
+      xy[count++] = y;
+      prevX = x;
+    }
+    strokeDragPath(ctx, xy, count, zoom);
   }
 
   /** Render drag destination highlight */

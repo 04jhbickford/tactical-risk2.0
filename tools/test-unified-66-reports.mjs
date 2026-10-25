@@ -123,10 +123,10 @@ const atlantic = 'Atlantic';
 console.log('=== stamp ===');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  const stamp = 'V2.81.57-unified.66';
-  check('display stamp is V2.81.57-unified.66', GAME_VERSION === stamp);
+  const stamp = 'V2.81.57-unified.67';
+  check('display stamp is V2.81.57-unified.67', GAME_VERSION === stamp);
   check('schema stays 11', SCHEMA_VERSION === 11);
-  check('game docs write V2.82-unified.66', compatClientVersion() === 'V2.82-unified.66');
+  check('game docs write V2.82-unified.67', compatClientVersion() === 'V2.82-unified.67');
   check('index.html carries the display stamp',
     html.includes(`name="tr-game-version" content="${stamp}"`)
     && html.includes(`window.__TR_GAME_VERSION = '${stamp}'`)

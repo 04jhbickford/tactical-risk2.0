@@ -82,11 +82,11 @@ function panel(gs) {
 console.log('=== stamp ===');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  const stamp = 'V2.81.57-unified.66';
-  check('display stamp is V2.81.57-unified.66', GAME_VERSION === stamp);
+  const stamp = 'V2.81.57-unified.67';
+  check('display stamp is V2.81.57-unified.67', GAME_VERSION === stamp);
   check('schema stays 11', SCHEMA_VERSION === 11 && /version: 11/.test(readFileSync(join(root, 'src/state/gameState.js'), 'utf8')));
-  check('game docs write V2.82-unified.66', compatClientVersion() === 'V2.82-unified.66');
-  check('a V2.82-unified.67 doc prompts this tab', compareGameVersions('V2.82-unified.67', GAME_VERSION) > 0);
+  check('game docs write V2.82-unified.67', compatClientVersion() === 'V2.82-unified.67');
+  check('a V2.82-unified.68 doc prompts this tab', compareGameVersions('V2.82-unified.68', GAME_VERSION) > 0);
   check('a V2.82-unified.65 doc does not prompt this tab', compareGameVersions('V2.82-unified.65', GAME_VERSION) < 0);
   check('index.html carries the display stamp',
     html.includes(`name="tr-game-version" content="${stamp}"`)

@@ -1,6 +1,8 @@
 // Vercel serverless Discord turn ping.
 // Reads DISCORD_TURN_WEBHOOK_URL from server env (Preview + Production).
-// Never ships the URL to the client. Never logs or echoes it.
+// DISCORD_TURN_DM gates a direct message to the seat's Discord user.
+// Unset, the channel webhook is unchanged. Never ships a token or URL
+// to the client. Never logs or echoes either one.
 // Soft-fail only (always 200 for POST). Body: gameId, turnIndex, seatId,
 // discordUserId, faction, phase, summary, deepLink, actorName, actorFaction.
 // Name fields are a fallback when discordUserId is empty. The header is the
@@ -318,6 +320,72 @@ function readWebhookUrl() {
   return url;
 }
 
+// Off unless Vercel has DISCORD_TURN_DM set to 1 / true / on / yes.
+function turnPingDmEnabled(env = process.env) {
+  const raw = String(env?.DISCORD_TURN_DM ?? '').trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'on' || raw === 'yes';
+}
+
+// DM only when the gate is on, the seat resolved to a snowflake, and the
+// bot token is present. Anything else stays on the channel webhook.
+function selectTurnPingDelivery({ dmEnabled = false, userId = '', botToken = '' } = {}) {
+  if (!dmEnabled) return 'channel';
+  if (!normalizeDiscordSnowflake(userId)) return 'channel';
+  if (!String(botToken || '').trim()) return 'channel';
+  return 'dm';
+}
+
+function rememberPing(key) {
+  seen.add(key);
+  if (seen.size > 200) {
+    const first = seen.values().next().value;
+    seen.delete(first);
+  }
+}
+
+// REST only. Opens a DM channel, then posts. A 403 (DMs closed) or any
+// other failure returns not-ok so the caller can fall back to the webhook.
+async function sendDiscordDirectMessage(token, userId, content) {
+  const fetchFn = globalThis.fetch;
+  if (typeof fetchFn !== 'function') return { ok: false, reason: 'dm-network' };
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 2500);
+  if (typeof timer.unref === 'function') timer.unref();
+  try {
+    const opened = await fetchFn('https://discord.com/api/v10/users/@me/channels', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bot ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ recipient_id: userId }),
+      signal: ctrl.signal,
+    });
+    if (!opened?.ok) return { ok: false, reason: 'dm-open' };
+    const channel = await opened.json();
+    const channelId = normalizeDiscordSnowflake(channel?.id);
+    if (!channelId) return { ok: false, reason: 'dm-open' };
+    const posted = await fetchFn(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bot ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        content,
+        allowed_mentions: { parse: [] },
+      }),
+      signal: ctrl.signal,
+    });
+    if (!posted?.ok) return { ok: false, reason: 'dm-post' };
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: 'dm-network' };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function json(res, status, body) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json');
@@ -325,7 +393,7 @@ function json(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
-module.exports = async function handler(req, res) {
+async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
     res.end();
@@ -366,8 +434,11 @@ module.exports = async function handler(req, res) {
     return;
   }
 
+  const dmEnabled = turnPingDmEnabled();
+  const botToken = String(process.env.DISCORD_BOT_TOKEN || '').trim();
   const webhook = readWebhookUrl();
-  if (!webhook) {
+  // Gate off: missing webhook is the same unconfigured response as before.
+  if (!webhook && (!dmEnabled || !botToken)) {
     json(res, 200, { ok: false, reason: 'unconfigured' });
     return;
   }
@@ -409,6 +480,25 @@ module.exports = async function handler(req, res) {
   }
 
   const allowed_mentions = allowedMentionsFor(mentionId);
+  const delivery = selectTurnPingDelivery({
+    dmEnabled,
+    userId: mentionId,
+    botToken,
+  });
+
+  if (delivery === 'dm') {
+    const dm = await sendDiscordDirectMessage(botToken, mentionId, content);
+    if (dm.ok) {
+      rememberPing(key);
+      json(res, 200, { ok: true, reason: 'dm', delivery: 'dm' });
+      return;
+    }
+  }
+
+  if (!webhook) {
+    json(res, 200, { ok: false, reason: 'unconfigured' });
+    return;
+  }
 
   try {
     const posted = await fetch(webhook, {
@@ -420,13 +510,17 @@ module.exports = async function handler(req, res) {
       json(res, 200, { ok: false, reason: 'soft-fail' });
       return;
     }
-    seen.add(key);
-    if (seen.size > 200) {
-      const first = seen.values().next().value;
-      seen.delete(first);
-    }
-    json(res, 200, { ok: true, reason: 'sent' });
+    rememberPing(key);
+    json(res, 200, {
+      ok: true,
+      reason: 'sent',
+      delivery: delivery === 'dm' ? 'channel-fallback' : 'channel',
+    });
   } catch {
     json(res, 200, { ok: false, reason: 'network' });
   }
-};
+}
+
+handler.selectTurnPingDelivery = selectTurnPingDelivery;
+handler.turnPingDmEnabled = turnPingDmEnabled;
+module.exports = handler;
