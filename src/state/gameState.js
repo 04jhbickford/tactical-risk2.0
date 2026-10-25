@@ -261,6 +261,28 @@ export function riskMilestoneTrack(tradeCount) {
   return { last, next };
 }
 
+// How many sets have been cashed, summed across players. An old save
+// has only the per-player map. A missing or junk value adds nothing.
+export function deriveRiskTradeCount(cardTradeCount) {
+  if (!cardTradeCount || typeof cardTradeCount !== 'object') return 0;
+  let sum = 0;
+  for (const value of Object.values(cardTradeCount)) {
+    const n = Math.floor(Number(value));
+    if (Number.isFinite(n) && n > 0) sum += n;
+  }
+  return sum;
+}
+
+// Explicit riskTradeCount wins, including 0. A save that omits the field
+// takes the sum of the per-player history. Never throws.
+export function resolveRiskTradeCount(data) {
+  if (data && Object.prototype.hasOwnProperty.call(data, 'riskTradeCount')) {
+    const n = Math.floor(Number(data.riskTradeCount));
+    if (Number.isFinite(n)) return Math.max(0, n);
+  }
+  return deriveRiskTradeCount(data?.cardTradeCount);
+}
+
 // Land bridges — the active map's list. Classic is CLASSIC_LAND_BRIDGES.
 export const LAND_BRIDGES = CLASSIC_LAND_BRIDGES;
 
@@ -388,8 +410,13 @@ export class GameState {
 
     // RISK cards: { playerId: [ 'infantry', 'cavalry', 'artillery', 'wild' ] }
     this.riskCards = {};
-    // Track how many times each player has traded cards (for escalating values)
+    // Per player: how many sets that seat has cashed. The ladder itself
+    // is riskTradeCount, shared by every seat.
     this.cardTradeCount = {};
+    // Additive (no schema bump). Old saves omit it and load as the sum
+    // of cardTradeCount. _riskLadderExplicit is not serialized.
+    this.riskTradeCount = 0;
+    this._riskLadderExplicit = false;
     // Track if player has conquered a territory this turn (for Risk card award - one per turn)
     this.conqueredThisTurn = {};
     // Additive Set. Classic NCM validation does not read this (fail closed).
@@ -6832,13 +6859,15 @@ export class GameState {
       if (idx >= 0) cards.splice(idx, 1);
     }
 
-    // Get trade value based on how many times player has traded
-    const tradeNum = this.cardTradeCount[playerId] || 0;
+    // Shared ladder. The seat's own count still increments so an old
+    // save can be summed if this field is ever dropped.
+    const tradeNum = this.currentRiskTradeCount();
     const value = RISK_CARD_VALUES[Math.min(tradeNum, RISK_CARD_VALUES.length - 1)];
 
-    // Increment trade count and award IPCs
     const ipcBefore = ipcMapFromState(this);
-    this.cardTradeCount[playerId] = tradeNum + 1;
+    this.riskTradeCount = tradeNum + 1;
+    this._riskLadderExplicit = true;
+    this.cardTradeCount[playerId] = (this.cardTradeCount[playerId] || 0) + 1;
     this.playerState[playerId].ipcs += value;
 
     this._notify();
@@ -6850,9 +6879,18 @@ export class GameState {
     return { success: true, ipcs: value };
   }
 
-  // Get current RISK card trade value for player
-  getNextRiskCardValue(playerId) {
-    const tradeNum = this.cardTradeCount[playerId] || 0;
+  // Sets cashed on the shared ladder. A live game uses riskTradeCount.
+  // A state that only has the old per-player map uses their sum.
+  currentRiskTradeCount() {
+    const explicit = Math.max(0, Math.floor(Number(this.riskTradeCount) || 0));
+    if (this._riskLadderExplicit) return explicit;
+    return Math.max(explicit, deriveRiskTradeCount(this.cardTradeCount));
+  }
+
+  // Next cash-in for any player. playerId is kept so older callers
+  // still pass a seat; the ladder does not read it.
+  getNextRiskCardValue(_playerId) {
+    const tradeNum = this.currentRiskTradeCount();
     return RISK_CARD_VALUES[Math.min(tradeNum, RISK_CARD_VALUES.length - 1)];
   }
 
@@ -6893,13 +6931,13 @@ export class GameState {
       if (idx >= 0) cards.splice(idx, 1);
     }
 
-    // Get trade value based on how many times player has traded
-    const tradeNum = this.cardTradeCount[playerId] || 0;
+    const tradeNum = this.currentRiskTradeCount();
     const value = RISK_CARD_VALUES[Math.min(tradeNum, RISK_CARD_VALUES.length - 1)];
 
-    // Increment trade count and award IPCs
     const ipcBefore = ipcMapFromState(this);
-    this.cardTradeCount[playerId] = tradeNum + 1;
+    this.riskTradeCount = tradeNum + 1;
+    this._riskLadderExplicit = true;
+    this.cardTradeCount[playerId] = (this.cardTradeCount[playerId] || 0) + 1;
     this.playerState[playerId].ipcs += value;
 
     this._notify();
@@ -8056,6 +8094,9 @@ export class GameState {
       })(),
       riskCards: this.riskCards,
       cardTradeCount: this.cardTradeCount,
+      // Additive (no schema bump). Shared RISK ladder. Omitted on old
+      // saves; those load as the sum of cardTradeCount.
+      riskTradeCount: Math.max(0, Math.floor(Number(this.riskTradeCount) || 0)),
       unitsToPlace: cloneUnitsToPlace(this.unitsToPlace),
       placementRound: this.placementRound,
       // Additive (no schema bump): mid-wave rejoin must restore the 6-unit cap.
@@ -8171,6 +8212,8 @@ export class GameState {
     this._sweepRadioDeception();
     this.riskCards = data.riskCards || {};
     this.cardTradeCount = data.cardTradeCount || {};
+    this.riskTradeCount = resolveRiskTradeCount(data);
+    this._riskLadderExplicit = true;
     this.unitsToPlace = cloneUnitsToPlace(data.unitsToPlace || {});
     this.placementRound = data.placementRound || 0;
     // Same seat + stale remote 0/missing must not wipe a local 1/6 (B28).

@@ -4831,6 +4831,12 @@ html.mobile-shell .pp-player-card .pp-tech-item {
   margin-top: 8px;
 }
 
+.pp-risk-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #ccc;
+}
+
 .pp-risk-last {
   font-size: 12px;
   font-weight: 700;

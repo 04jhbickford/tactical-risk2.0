@@ -4,6 +4,39 @@ import { describe, optionRows } from '../gameOptions.js';
 import { tacticalBombersEnabled } from '../state/tacticalPairing.js';
 import { mechanizedInfantryEnabled } from '../state/mechanizedInfantry.js';
 import { garrisonsEnabled } from '../state/garrison.js';
+import { RADIO_DECEPTION_TECH } from '../state/radioDeception.js';
+
+export const TRANSPORT_RULES_LINE = 'Transports: Can carry 2 infantry OR 1 infantry + 1 other land unit. Transports can not be taken as casualties. Undefended transports are destroyed when an enemy unit can hit them.';
+export const UNLOAD_RULES_LINE = 'Unloading: Units can unload during combat movement for amphibious assault. Loaded units can also unload during the noncombat phase. Unloading a unit uses up all of that unit\'s movement for the round.';
+
+// Effects taken from the code that applies each technology.
+// Classic research is the default tree. Expanded research is a second tree.
+export const CLASSIC_TECH_RULES = Object.freeze([
+  { id: 'jets', name: 'Jets', text: 'Fighters attack and defend 1 higher.' },
+  { id: 'rockets', name: 'Rockets', text: 'During combat movement, each AA gun can fire once at an adjacent enemy factory. The roll is one die. That player loses that many IPCs, and not more IPCs than they hold.' },
+  { id: 'superSubs', name: 'Super Submarines', text: 'Submarines attack 1 higher.' },
+  { id: 'longRangeAircraft', name: 'Long Range Aircraft', text: 'Aircraft move 2 farther.' },
+  { id: 'heavyBombers', name: 'Heavy Bombers', text: 'Bombers roll 2 dice in combat. Each bomber that survives factory AA on a strategic bombing raid also rolls 2 dice.' },
+  { id: 'industrialTech', name: 'Industrial Technology', text: 'Units cost 1 IPC less, and never less than 1.' },
+]);
+
+export const EXPANDED_TECH_RULES = Object.freeze([
+  { id: 'radioDeception', name: RADIO_DECEPTION_TECH.name, text: RADIO_DECEPTION_TECH.description },
+  { id: 'wasserfall', name: 'Wasserfall', text: 'AA guns defend at 2. Without this technology they defend at 1. Attack is unchanged.' },
+]);
+
+function labeledRule(line) {
+  const split = String(line).indexOf(':');
+  const label = split >= 0 ? line.slice(0, split) : line;
+  const rest = split >= 0 ? line.slice(split + 1).trim() : '';
+  return `<li><strong>${label}:</strong> ${rest}</li>`;
+}
+
+function techRulesHtml(id, title, note, rows) {
+  const items = rows.map((row) => `<li><strong>${row.name}:</strong> ${row.text}</li>`).join('');
+  const lead = note ? `<p>${note}</p>` : '';
+  return `<section class="rules-section" id="rules-${id}" data-rules-section="${id}"><h3>${title}</h3>${lead}<ul>${items}</ul></section>`;
+}
 
 export const CARRIER_BULLET_ON = 'Can carry up to 2 air units (fighters or tactical bombers).';
 export const CARRIER_BULLET_OFF = 'Can carry up to 2 fighters.';
@@ -61,6 +94,8 @@ export class RulesPanel {
             <option value="transport">Transport &amp; Carrier</option>
             <option value="territory">Territory Control</option>
             <option value="movement">Movement Rules</option>
+            <option value="tech-classic">Classic technologies</option>
+            <option value="tech-expanded">Expanded technologies</option>
           </select>
         </label>
 
@@ -126,10 +161,10 @@ export class RulesPanel {
           <section class="rules-section" id="rules-transport" data-rules-section="transport">
             <h3>Transport & Carrier Rules</h3>
             <ul>
-              <li><strong>Transports:</strong> Can carry 2 infantry OR 1 infantry + 1 other land unit. Not a casualty while a unit the enemy can hit is still in the battle. A submarine aircraft cannot hit does not protect it. Undefended transports are destroyed when an enemy unit can hit them.</li>
+              ${labeledRule(TRANSPORT_RULES_LINE)}
               <li><strong>Carriers:</strong> <span data-rules-carrier-bullet>Can carry up to 2 fighters.</span></li>
               <li><strong>Loading:</strong> Units can load during non-combat movement from adjacent coastal territories.</li>
-              <li><strong>Unloading:</strong> Units can unload during combat movement for amphibious assault.</li>
+              ${labeledRule(UNLOAD_RULES_LINE)}
             </ul>
           </section>
 
@@ -153,6 +188,8 @@ export class RulesPanel {
               <li><strong>Land Bridges:</strong> Some territories are connected across water (e.g., straits).</li>
             </ul>
           </section>
+          ${techRulesHtml('tech-classic', 'Classic technologies', '', CLASSIC_TECH_RULES)}
+          ${techRulesHtml('tech-expanded', 'Expanded technologies', 'In the game only when the host picks Expanded tech.', EXPANDED_TECH_RULES)}
         </div>
       </div>
     `;

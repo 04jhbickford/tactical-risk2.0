@@ -4,6 +4,9 @@ import { getUnitIconPath, unitIconForOwner, NEUTRAL_UNIT_COLOR } from '../utils/
 import { isMobileShell, phoneUnitIconSize, phoneMapStackOffsets, shouldHideUnitsAtZoom } from '../ui/mobileShell.js';
 import { presentTerritoryUnits } from '../state/radioDeception.js';
 
+/** Same red the drag uses for an enemy destination. Black stroke stays. */
+export const FACTORY_DAMAGE_COLOR = '#e74c3c';
+
 /** Digits drawn on the factory icon when damage is above 0. Empty when undamaged. */
 export function factoryDamageDigits(damage) {
   const n = Math.floor(Number(damage) || 0);
@@ -187,7 +190,7 @@ export class UnitRenderer {
     ctx.lineWidth = Math.max(1 / z, fontPx * 0.18);
     ctx.strokeStyle = 'rgba(0,0,0,0.92)';
     ctx.strokeText(text, origin.x, origin.y);
-    ctx.fillStyle = '#fff';
+    ctx.fillStyle = FACTORY_DAMAGE_COLOR;
     ctx.fillText(text, origin.x, origin.y);
     ctx.restore();
   }
