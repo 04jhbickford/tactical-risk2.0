@@ -1,5 +1,12 @@
 # AGENTS.md — standing rules
 
+## Agent cold start
+
+Read these before any work. They live on James's agent box, not in this repo.
+- `/workspace/briefs/agent-os/SYSTEM.md` (the system spec)
+- P-000 in `/workspace/briefs/_context/PRACTICES.md`
+- the project MANIFEST at `/workspace/briefs/_context/tactical-risk/MANIFEST.md`
+
 Read this before changing Tactical Risk. Also read `CLAUDE.md` (deploy and multiplayer authority) and append every playtest round to `BUGS.md`.
 
 Browser WWII grand strategy. Vanilla ES modules, no bundler. Entry: `index.html` → `src/main.js`. Rules and state: `src/state/gameState.js`. Multiplayer: `src/multiplayer/`.
