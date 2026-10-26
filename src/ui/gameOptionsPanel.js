@@ -13,6 +13,7 @@ import {
   normalizeGameOptions,
   PACIFIC_HISTORICAL_SETUP,
   phoneOptionsLabel,
+  sliderReadout,
   techAcquisitionLabel,
   territorySetupLabel,
 } from '../gameOptions.js';
@@ -57,6 +58,16 @@ function toggleHtml(name, on, { editable, onLabel = 'On', offLabel = 'Off', extr
   const attr = pressed ? 'aria-pressed' : 'aria-checked';
   const role = pressed ? 'button' : 'switch';
   return `<button type="button" class="go-toggle ${extraClass}" data-go="${name}" ${id ? `id="${id}"` : ''} role="${role}" ${attr}="${on ? 'true' : 'false'}" ${editable ? '' : 'disabled'}>${on ? onLabel : offLabel}</button>`;
+}
+
+function sliderHtml(name, value, max, editable, label) {
+  const stored = value == null ? -1 : value;
+  const readout = sliderReadout(name, stored);
+  return `
+    <span class="go-slider">
+      <input type="range" class="go-slider-input" data-go="${name}" id="go-${name}" min="-1" max="${max}" value="${stored}" aria-label="${esc(label)}" aria-valuemin="-1" aria-valuemax="${max}" aria-valuenow="${stored}" aria-valuetext="${esc(readout)}" ${editable ? '' : 'disabled'}>
+      <span class="go-slider-readout" data-go-readout="${name}">${esc(readout)}</span>
+    </span>`;
 }
 
 function stepperHtml(value, editable) {
@@ -155,6 +166,10 @@ function rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMod
         <span class="go-label">Land bridges</span>
         ${shownValue(editable, toggleHtml('landBridges', o.landBridges, { editable }), o.landBridges ? 'On' : 'Off')}
       </div>
+      <div class="go-row" title="Land units cannot use a hop that exists only as a land bridge. Air still can.">
+        <span class="go-label">Land-bridge blocking</span>
+        ${shownValue(editable, toggleHtml('landBridgeBlocking', o.landBridgeBlocking, { editable }), o.landBridgeBlocking ? 'On' : 'Off')}
+      </div>
       ${mapId === 'pacific' ? '' : `
       <div class="go-row" title="Classic only. Adds the Pacific land crossings that exist on this map, one step each, the same as Land bridges. Off leaves Classic movement unchanged.">
         <span class="go-label">Extra Pacific bridges</span>
@@ -178,6 +193,37 @@ function rowsHtml(options, { editable, teamsToggleId, teamsToggleClass, draftMod
       <div class="go-row" title="When on, an AI seat can specialize as Rico. Combat is unchanged. Nuke research is used only when that technology is already in the tree.">
         <span class="go-label">Nukes</span>
         ${shownValue(editable, toggleHtml('nukes', o.nukes, { editable }), o.nukes ? 'On' : 'Off')}
+      </div>
+      <div class="go-row" title="Off: naval units cannot be bought, placed, or start on the board.">
+        <span class="go-label">Naval units</span>
+        ${shownValue(editable, toggleHtml('navalUnits', o.navalUnits, { editable }), o.navalUnits ? 'On' : 'Off')}
+      </div>
+      <div class="go-row" title="Off: air units cannot be bought, placed, or start on the board.">
+        <span class="go-label">Air units</span>
+        ${shownValue(editable, toggleHtml('airUnits', o.airUnits, { editable }), o.airUnits ? 'On' : 'Off')}
+      </div>
+      <div class="go-row" title="Replaces every risk starting-row quantity. Standard keeps the catalog.">
+        <span class="go-label">Starting units</span>
+        ${shownValue(editable, sliderHtml('startingUnits', o.startingUnits, 20, editable, 'Starting units'), o.startingUnits == null ? 'Standard' : String(o.startingUnits))}
+      </div>
+    </div>
+    <div class="go-group">
+      <h3 class="go-group-label">Economy</h3>
+      <div class="go-row" title="Replaces every non-capital territory IPC. Map keeps each territory's own value.">
+        <span class="go-label">Territory IPC</span>
+        ${shownValue(editable, sliderHtml('nonCapitalIpc', o.nonCapitalIpc, 20, editable, 'Territory IPC'), o.nonCapitalIpc == null ? 'Map' : String(o.nonCapitalIpc))}
+      </div>
+      <div class="go-row" title="Capital income. 10 is today's capital.">
+        <span class="go-label">Capital IPC</span>
+        ${shownValue(editable, sliderHtml('capitalIpc', o.capitalIpc, 50, editable, 'Capital IPC'), o.capitalIpc == null ? '10' : String(o.capitalIpc))}
+      </div>
+      <div class="go-row" title="Units a capital factory can place. 20 is today's capital.">
+        <span class="go-label">Capital factory</span>
+        ${shownValue(editable, sliderHtml('capitalFactoryOutput', o.capitalFactoryOutput, 50, editable, 'Capital factory'), o.capitalFactoryOutput == null ? '20' : String(o.capitalFactoryOutput))}
+      </div>
+      <div class="go-row" title="Units any other factory can place. 5 is today's factory.">
+        <span class="go-label">Purchased factory</span>
+        ${shownValue(editable, sliderHtml('purchasedFactoryOutput', o.purchasedFactoryOutput, 50, editable, 'Purchased factory'), o.purchasedFactoryOutput == null ? '5' : String(o.purchasedFactoryOutput))}
       </div>
     </div>
     <div class="go-group">
@@ -272,9 +318,16 @@ export function readGameOptionsFrom(root) {
   const per = valueOf('unitsPerRound');
   const flag = (name) => {
     const el = valueOf(name);
-    if (!el) return undefined;
+    if (!el || el.type === 'range') return undefined;
     if (el.hasAttribute('aria-pressed')) return el.getAttribute('aria-pressed') === 'true';
     return el.getAttribute('aria-checked') === 'true';
+  };
+  const sliderValue = (name) => {
+    const el = valueOf(name);
+    if (!el || el.type !== 'range') return undefined;
+    const n = Number(el.value);
+    if (!Number.isFinite(n) || n < 0) return null;
+    return n;
   };
   // Classic shows the switch. Pacific hides it and keeps the stored value
   // so a map change does not turn the Classic option off.
@@ -299,6 +352,14 @@ export function readGameOptionsFrom(root) {
     extraPacificBridges: keptFlag('extraPacificBridges', 'keptExtra'),
     garrisons: flag('garrisons'),
     nukes: flag('nukes'),
+    navalUnits: flag('navalUnits'),
+    airUnits: flag('airUnits'),
+    landBridgeBlocking: flag('landBridgeBlocking'),
+    nonCapitalIpc: sliderValue('nonCapitalIpc'),
+    capitalIpc: sliderValue('capitalIpc'),
+    capitalFactoryOutput: sliderValue('capitalFactoryOutput'),
+    purchasedFactoryOutput: sliderValue('purchasedFactoryOutput'),
+    startingUnits: sliderValue('startingUnits'),
     territorySetup: valueOf('territorySetup')?.value,
     techAcquisition: valueOf('techAcquisition')?.value,
     techSet: valueOf('techSet')?.value,
@@ -425,13 +486,23 @@ export function bindGameOptions(root, { onChange, onToggle, onMapChange } = {}) 
         mapSelect.value = CLASSIC_MAP_ID;
         if (typeof onMapChange === 'function') onMapChange(CLASSIC_MAP_ID);
       }
-      for (const name of ['multipleTech', 'landBridges', 'teams', 'tacticalBombers', 'mechanizedInfantry', 'extraPacificBridges', 'garrisons', 'nukes']) {
+      for (const name of ['multipleTech', 'landBridges', 'landBridgeBlocking', 'teams', 'tacticalBombers', 'mechanizedInfantry', 'extraPacificBridges', 'garrisons', 'nukes', 'navalUnits', 'airUnits']) {
         const el = panel.querySelector(`[data-go="${name}"]`);
         if (!el) continue;
         const on = !!next[name];
         if (el.hasAttribute('aria-pressed')) el.setAttribute('aria-pressed', on ? 'true' : 'false');
         else el.setAttribute('aria-checked', on ? 'true' : 'false');
         el.textContent = on ? 'On' : 'Off';
+      }
+      for (const name of ['nonCapitalIpc', 'capitalIpc', 'capitalFactoryOutput', 'purchasedFactoryOutput', 'startingUnits']) {
+        const el = panel.querySelector(`[data-go="${name}"]`);
+        if (!el) continue;
+        el.value = '-1';
+        el.setAttribute('aria-valuenow', '-1');
+        const readout = sliderReadout(name, -1);
+        el.setAttribute('aria-valuetext', readout);
+        const label = panel.querySelector(`[data-go-readout="${name}"]`);
+        if (label) label.textContent = readout;
       }
       emit(next);
     }
@@ -463,6 +534,29 @@ export function bindGameOptions(root, { onChange, onToggle, onMapChange } = {}) 
       btn.textContent = on ? 'On' : 'Off';
       emit(normalizeGameOptions({ ...current, [name]: on }));
     });
+  });
+
+  const paintSlider = (input) => {
+    const readout = sliderReadout(input.dataset.go, Number(input.value));
+    input.setAttribute('aria-valuenow', input.value);
+    input.setAttribute('aria-valuetext', readout);
+    const label = panel.querySelector(`[data-go-readout="${input.dataset.go}"]`);
+    if (label) label.textContent = readout;
+  };
+  panel.querySelectorAll('input[type="range"][data-go]').forEach((input) => {
+    input.addEventListener('input', (e) => {
+      e.stopPropagation();
+      if (!editable) return;
+      paintSlider(input);
+    });
+    input.addEventListener('change', (e) => {
+      e.stopPropagation();
+      if (!editable) return;
+      paintSlider(input);
+      emit(readGameOptionsFrom(panel));
+    });
+    input.addEventListener('click', (e) => e.stopPropagation());
+    input.addEventListener('pointerdown', (e) => e.stopPropagation());
   });
 
   panel.querySelectorAll('select[data-go]').forEach((select) => {

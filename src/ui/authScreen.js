@@ -8,8 +8,9 @@ import {
 } from '../multiplayer/authSession.js';
 
 export class AuthScreen {
-  constructor(onComplete) {
+  constructor(onComplete, { entry } = {}) {
     this.onComplete = onComplete;
+    this.entry = entry === 'first' ? 'first' : 'menu';
     this.authManager = getAuthManager();
     this.el = null;
     this.mode = 'login'; // 'restoring', 'login', 'signup', 'phone', 'verify'
@@ -118,7 +119,7 @@ export class AuthScreen {
 
             <button class="auth-back-btn modern" data-action="back">
               <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-              Back to Menu
+              ${this.entry === 'first' ? 'Play on this device' : 'Back to Menu'}
             </button>
           </div>
         </div>

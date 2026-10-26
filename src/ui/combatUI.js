@@ -34,14 +34,12 @@ import { emitGameEvent, getGameEventLog } from '../multiplayer/gameEventLog.js';
 import { flushDiceBuffer } from '../stats/diceTracker.js';
 import { renderCombatBattleList } from './battleOrder.js';
 import {
-  consumePairedAttack,
   countPairing,
   TACTICAL_PAIR_LABEL,
   tacticalBombersEnabled,
 } from '../state/tacticalPairing.js';
 import {
   artillerySupportState,
-  consumeArtillerySupport,
   MECHANIZED_INFANTRY,
   MECHANIZED_SUPPORT_LABEL,
 } from '../state/mechanizedInfantry.js';
@@ -50,6 +48,7 @@ import {
   clampGarrisonSelection,
   garrisonHitAllowed,
 } from '../state/garrison.js';
+import { rollCombatSide } from '../state/combatRoll.js';
 import { defendingAaNeed } from '../state/radioDeception.js';
 
 export {
@@ -1290,100 +1289,35 @@ export class CombatUI {
       openingStrike && !!this.combatState.defenderSubsHaveFirstStrike,
     ), attackers, this.unitDefs);
 
-    // Roll for attackers
-    const attackRolls = [];
-    let attackHits = 0;
-
-    // Artillery supports one infantry or one mechanized infantry. Infantry
-    // keeps the bonus it already had. Extra mechanized infantry stay at 1.
-    const artillerySupport = artillerySupportState(attackers, { applyInfantry: true });
-    let pairedBombers = countPairing(attackers, {
-      enabled: tacticalBombersEnabled(this.gameState?.gameOptions),
-    }).paired;
-
-    // Check attacker technologies
-    const hasJets = attackerId && this.gameState.hasTech(attackerId, 'jets');
-    const hasSuperSubs = attackerId && this.gameState.hasTech(attackerId, 'superSubs');
-    const hasHeavyBombers = attackerId && this.gameState.hasTech(attackerId, 'heavyBombers');
-
-    for (const unit of attackPool) {
-      const def = this.unitDefs[unit.type];
-      if (!def) continue;
-      if (unit.type === GARRISON || def.defendOnly) continue;
-
-      // Heavy Bombers: Bombers roll 2 dice each
-      const dicePerUnit = (unit.type === 'bomber' && hasHeavyBombers) ? 2 : 1;
-
-      for (let i = 0; i < unit.quantity; i++) {
-        for (let d = 0; d < dicePerUnit; d++) {
-          let attackValue = def.attack;
-
-          // Artillery support on the first die only. Defence is unchanged.
-          if (d === 0) {
-            attackValue = consumeArtillerySupport(unit.type, attackValue, artillerySupport);
-          }
-
-          // Jets technology: Fighters +1 attack
-          if (unit.type === 'fighter' && hasJets) {
-            attackValue += 1;
-          }
-
-          // Super Submarines: Submarines +1 attack
-          if (unit.type === 'submarine' && hasSuperSubs) {
-            attackValue += 1;
-          }
-
-          // Tactical bomber + fighter or tank, same battle, 1:1. Defence is unchanged.
-          if (d === 0) {
-            const paired = consumePairedAttack(unit.type, attackValue, pairedBombers);
-            attackValue = paired.attack;
-            pairedBombers = paired.pairedLeft;
-          }
-
-          const roll = this._rollD6({
-            context: 'combat',
-            side: 'attacker',
-            unit: unit.type,
-            need: attackValue,
-            playerSeat: attackerId,
-          });
-          const hit = roll <= attackValue;
-          attackRolls.push({ roll, hit, unitType: unit.type, attackValue });
-          if (hit) attackHits++;
-        }
-      }
-    }
-
-    // Roll for defenders
-    const defenseRolls = [];
-    let defenseHits = 0;
-
-    // Check defender technologies
-    const defenderHasJets = defenderId && this.gameState.hasTech(defenderId, 'jets');
-
-    for (const unit of defensePool) {
-      const def = this.unitDefs[unit.type];
-      if (!def) continue;
-      for (let i = 0; i < unit.quantity; i++) {
-        let defenseValue = def.defense;
-
-        // Jets technology: Fighters +1 defense
-        if (unit.type === 'fighter' && defenderHasJets) {
-          defenseValue += 1;
-        }
-
-        const roll = this._rollD6({
-          context: 'combat',
-          side: 'defender',
-          unit: unit.type,
-          need: defenseValue,
-          playerSeat: defenderId,
-        });
-        const hit = roll <= defenseValue;
-        defenseRolls.push({ roll, hit, unitType: unit.type, defenseValue });
-        if (hit) defenseHits++;
-      }
-    }
+    const attackRolled = rollCombatSide({
+      units: attackPool,
+      supportUnits: attackers,
+      type: 'attack',
+      unitDefs: this.unitDefs,
+      gameState: this.gameState,
+      rollDie: (meta) => this._rollD6({ ...meta, playerSeat: attackerId }),
+      applyInfantry: true,
+      contextLabel: 'combat',
+      side: 'attacker',
+      seatOwner: attackerId,
+      gameOptions: this.gameState?.gameOptions,
+    });
+    const defenseRolled = rollCombatSide({
+      units: defensePool,
+      type: 'defense',
+      unitDefs: this.unitDefs,
+      gameState: this.gameState,
+      rollDie: (meta) => this._rollD6({ ...meta, playerSeat: defenderId }),
+      applyInfantry: false,
+      contextLabel: 'combat',
+      side: 'defender',
+      seatOwner: defenderId,
+      gameOptions: this.gameState?.gameOptions,
+    });
+    const attackRolls = attackRolled.rolls;
+    const defenseRolls = defenseRolled.rolls;
+    const attackHits = attackRolled.hits;
+    const defenseHits = defenseRolled.hits;
 
     // Track submarine hits separately (subs can only hit sea units, not air)
     const attackerSubHits = attackRolls.filter(r => r.unitType === 'submarine' && r.hit).length;

@@ -110,9 +110,9 @@ function inf(owner = 'italians') {
 
 console.log('=== stamp ===');
 {
-  check('display stamp is V2.81.57-unified.67', GAME_VERSION === 'V2.81.57-unified.67');
+  check('display stamp is V2.81.57-unified.68', GAME_VERSION === 'V2.81.57-unified.68');
   check('schema stays 11', SCHEMA_VERSION === 11);
-  check('game docs write V2.82-unified.67', compatClientVersion() === 'V2.82-unified.67');
+  check('game docs write V2.82-unified.68', compatClientVersion() === 'V2.82-unified.68');
 }
 
 console.log('=== 1. one AA die per aircraft ===');

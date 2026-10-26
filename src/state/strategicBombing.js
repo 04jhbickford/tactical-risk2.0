@@ -61,7 +61,7 @@ export function factoryOutput(gameState, territoryName, ownerId) {
   const capital = ownerId
     ? (gameState?.playerState?.[ownerId]?.capitalTerritory || null)
     : null;
-  return factoryProductionLimit(territoryName, capital);
+  return factoryProductionLimit(territoryName, capital, gameState?.gameOptions);
 }
 
 export function maxFactoryDamage(output) {

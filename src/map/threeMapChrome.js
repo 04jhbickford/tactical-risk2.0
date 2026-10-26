@@ -73,7 +73,7 @@ const FALLBACK_TECHS = [
   { id: 'jets', name: 'Jets', info: 'Fighters +1 attack/defense' },
   { id: 'rockets', name: 'Rockets', info: 'AA guns can bombard adjacent territories' },
   { id: 'superSubs', name: 'Super Submarines', info: 'Submarines +1 attack' },
-  { id: 'longRangeAircraft', name: 'Long Range Aircraft', info: 'Aircraft +2 movement' },
+  { id: 'longRangeAircraft', name: 'Long Range Aircraft', info: 'Fighters, bombers, and tactical bombers move 2 farther' },
   { id: 'heavyBombers', name: 'Heavy Bombers', info: 'Bombers roll 2 dice in combat' },
   { id: 'industrialTech', name: 'Industrial Technology', info: 'Units cost -1 IPC (min 1)' },
 ];

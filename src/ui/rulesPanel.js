@@ -15,7 +15,7 @@ export const CLASSIC_TECH_RULES = Object.freeze([
   { id: 'jets', name: 'Jets', text: 'Fighters attack and defend 1 higher.' },
   { id: 'rockets', name: 'Rockets', text: 'During combat movement, each AA gun can fire once at an adjacent enemy factory. The roll is one die. That player loses that many IPCs, and not more IPCs than they hold.' },
   { id: 'superSubs', name: 'Super Submarines', text: 'Submarines attack 1 higher.' },
-  { id: 'longRangeAircraft', name: 'Long Range Aircraft', text: 'Aircraft move 2 farther.' },
+  { id: 'longRangeAircraft', name: 'Long Range Aircraft', text: 'Fighters, bombers, and tactical bombers move 2 farther.' },
   { id: 'heavyBombers', name: 'Heavy Bombers', text: 'Bombers roll 2 dice in combat. Each bomber that survives factory AA on a strategic bombing raid also rolls 2 dice.' },
   { id: 'industrialTech', name: 'Industrial Technology', text: 'Units cost 1 IPC less, and never less than 1.' },
 ]);

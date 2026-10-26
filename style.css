@@ -21340,6 +21340,65 @@ html.mobile-shell.tech-active .tech-popup {
   background: #2563eb;
   border-color: #60a5fa;
 }
+.go-toggle:disabled,
+.go-slider-input:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.go-slider {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 28px;
+}
+.go-slider-input {
+  flex: 1 1 auto;
+  min-width: 96px;
+  width: 9rem;
+  height: 28px;
+  margin: 0;
+  accent-color: #c9a44a;
+  cursor: pointer;
+}
+.go-slider-input:active {
+  accent-color: #f4ead4;
+}
+.go-slider-readout {
+  min-width: 4.5rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: #e8dcc4;
+}
+.pp-income {
+  margin: 6px 0 8px;
+  padding: 0;
+}
+.pp-income-verdict {
+  margin: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: #f4ead4;
+}
+.pp-income-lines {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+.pp-income-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #c5c9d4;
+}
+.pp-income-line span:last-child {
+  font-variant-numeric: tabular-nums;
+  color: #c9a44a;
+}
 .go-stepper { display: inline-flex; align-items: center; gap: 6px; }
 .go-step {
   width: 28px;
@@ -21432,7 +21491,9 @@ html.mobile-shell.tech-active .tech-popup {
   .go-control.modern-select,
   .go-toggle,
   .go-step,
-  .go-reset {
+  .go-reset,
+  .go-slider,
+  .go-slider-input {
     min-height: 44px;
     height: 44px;
   }
@@ -21467,10 +21528,12 @@ html.mobile-shell.tech-active .tech-popup {
   .go-panel.is-sheet .go-sheet {
     display: flex;
   }
+  .go-panel.is-open .go-body,
   .go-panel.is-sheet .go-body {
     display: flex;
     flex: 1 1 auto;
     min-height: 0;
+    max-height: min(52vh, 420px);
     overflow-y: auto;
     touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
@@ -21543,9 +21606,12 @@ html.mobile-shell.tech-active .tech-popup {
   .go-toggle,
   .go-step,
   .go-reset,
-  .go-done {
+  .go-done,
+  .go-slider,
+  .go-slider-input {
     min-height: 44px;
   }
+  .go-slider-input { width: 100%; }
   .go-step { width: 44px; height: 44px; }
   .go-control.modern-select { width: 100%; height: 44px; font-size: 16px; }
   .setup-footer,

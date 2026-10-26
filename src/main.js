@@ -183,6 +183,7 @@ import {
 } from './multiplayer/syncAuthority.js';
 import { clearTurnSaveWarning, showTurnSaveWarning } from './ui/turnSaveWarning.js';
 import {
+  isRealAuthIdentity,
   resumeAuthEvent,
   shouldRefreshTokenOnResume,
 } from './multiplayer/authSession.js';
@@ -2632,6 +2633,26 @@ async function init() {
     multiplayerLobby.show();
   };
 
+  const openHomeAfterSplash = async () => {
+    if (!isFirebaseConfigured()) {
+      lobby.show();
+      return;
+    }
+    try {
+      await withTimeout(authManager.whenReady(), STARTUP_AUTH_TIMEOUT_MS, 'auth-ready');
+    } catch {
+      // A slow restore still uses whatever user is already on the manager.
+    }
+    if (isRealAuthIdentity(authManager.getUser())) {
+      lobby.show();
+      return;
+    }
+    authScreen = new AuthScreen(() => {
+      lobby.show();
+    }, { entry: 'first' });
+    authScreen.show();
+  };
+
   // Lobby (local games)
   const lobby = new Lobby(setup, async (gameMode, selectedPlayers, options = {}) => {
     const savedMap = options.loadFromSave ? loadMapDecision(options.loadFromSave.mapId) : null;
@@ -2711,6 +2732,7 @@ async function init() {
       requestAnimationFrame(fitPhoneCamera);
     }
   }, handlePlayOnline);
+  lobby.hide();
   lobby.setLeaderboardUser(() => authManager.getUser());
   lobby.loadBoard = ensureBoard;
   lobby.setOnRulesToggle(() => {
@@ -2761,6 +2783,7 @@ async function init() {
     }
   } else {
     reportStartupStatus('Home ready', 100);
+    await openHomeAfterSplash();
     dismissStartupLoader();
   }
 

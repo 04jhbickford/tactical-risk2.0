@@ -284,7 +284,13 @@ function landCanEnter(gameState, fromName, toName, unit, unitDefs, playerId, isC
     if (!friendlyTransportCanLoad(gameState, toName, playerId, [unit])) return false;
     return adjacent || range > 1;
   }
-  if (range <= 1) return adjacent;
+  if (range <= 1) {
+    if (!adjacent) return false;
+    if (typeof gameState.landBridgeBlocks === 'function' && gameState.landBridgeBlocks(fromName, toName)) {
+      return false;
+    }
+    return true;
+  }
   const blitz = landBlitzOptions([unit], { isCombatMove });
   if (typeof gameState.canLandUnitReach !== 'function') return adjacent;
   return gameState.canLandUnitReach(fromName, toName, range, playerId, isCombatMove, blitz);

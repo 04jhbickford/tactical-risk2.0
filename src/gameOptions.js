@@ -37,6 +37,24 @@ export const DEFAULT_GAME_OPTIONS = Object.freeze({
   // loads off. It does not change combat. It lists the Rico specialization.
   // Schema stays 11.
   nukes: false,
+  // Naval and air are in the game. Only an explicit false removes them.
+  // A missing field loads on. Schema stays 11.
+  navalUnits: true,
+  airUnits: true,
+  // Land-bridge blocking is off. Land bridges themselves stay on.
+  // Blocking stops a land hop that exists only as a land bridge.
+  // Air still uses those links. A missing field loads off.
+  landBridgeBlocking: false,
+  // Null keeps each territory's own production. A number replaces every
+  // non-capital IPC. Capital income stays 10 until capitalIpc is set.
+  nonCapitalIpc: null,
+  capitalIpc: null,
+  // Null keeps capital factory output at 20 and every other factory at 5.
+  capitalFactoryOutput: null,
+  purchasedFactoryOutput: null,
+  // Null keeps the catalog after Light or Heavy. A number replaces every
+  // risk starting-row quantity. It does not flatten a Pacific 1940 setup.
+  startingUnits: null,
 });
 
 export const STARTING_IPC_VALUES = Object.freeze([40, 60, 80, 100, 120, 150]);
@@ -64,6 +82,15 @@ function pickArmy(value) {
 function pickEnum(value, allowed, fallback) {
   const key = String(value || '');
   return allowed.includes(key) ? key : fallback;
+}
+
+function pickOptionalInt(value, min, max) {
+  if (value == null || value === '' || value === false) return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return null;
+  const i = Math.floor(n);
+  if (i < min || i > max) return null;
+  return i;
 }
 
 function pickTerritorySetup(value) {
@@ -129,6 +156,14 @@ export function normalizeGameOptions(raw, legacy = {}) {
   const garrisonRaw = src.garrisons !== undefined ? src.garrisons : old.garrisons;
   const nukesRaw = src.nukes !== undefined ? src.nukes : old.nukes;
   const techSetRaw = src.techSet !== undefined ? src.techSet : old.techSet;
+  const navalRaw = src.navalUnits !== undefined ? src.navalUnits : old.navalUnits;
+  const airRaw = src.airUnits !== undefined ? src.airUnits : old.airUnits;
+  const blockRaw = src.landBridgeBlocking !== undefined ? src.landBridgeBlocking : old.landBridgeBlocking;
+  const nonCapitalRaw = src.nonCapitalIpc !== undefined ? src.nonCapitalIpc : old.nonCapitalIpc;
+  const capitalIpcRaw = src.capitalIpc !== undefined ? src.capitalIpc : old.capitalIpc;
+  const capitalFactoryRaw = src.capitalFactoryOutput !== undefined ? src.capitalFactoryOutput : old.capitalFactoryOutput;
+  const purchasedFactoryRaw = src.purchasedFactoryOutput !== undefined ? src.purchasedFactoryOutput : old.purchasedFactoryOutput;
+  const startingUnitsRaw = src.startingUnits !== undefined ? src.startingUnits : old.startingUnits;
   return {
     startingIPCs: pickNumber(
       src.startingIPCs ?? old.startingIPCs,
@@ -169,6 +204,82 @@ export function normalizeGameOptions(raw, legacy = {}) {
     nukes: nukesRaw === true,
     // Default classic. Only an explicit expanded unlocks the extra tech.
     techSet: pickEnum(techSetRaw, TECH_SET_VALUES, DEFAULT_GAME_OPTIONS.techSet),
+    // Default ON. Only an explicit false removes that family.
+    navalUnits: navalRaw === false ? false : true,
+    airUnits: airRaw === false ? false : true,
+    // Default OFF. Only an explicit true blocks land-only bridge hops.
+    landBridgeBlocking: blockRaw === true,
+    nonCapitalIpc: pickOptionalInt(nonCapitalRaw, 0, 20),
+    capitalIpc: pickOptionalInt(capitalIpcRaw, 0, 50),
+    capitalFactoryOutput: pickOptionalInt(capitalFactoryRaw, 0, 50),
+    purchasedFactoryOutput: pickOptionalInt(purchasedFactoryRaw, 0, 50),
+    startingUnits: pickOptionalInt(startingUnitsRaw, 0, 20),
+  };
+}
+
+export function navalUnitsEnabled(gameOptions) {
+  return gameOptions?.navalUnits !== false;
+}
+
+export function airUnitsEnabled(gameOptions) {
+  return gameOptions?.airUnits !== false;
+}
+
+export function landBridgeBlockingEnabled(gameOptions) {
+  return gameOptions?.landBridgeBlocking === true;
+}
+
+const SEA_UNIT_TYPES = new Set(['transport', 'submarine', 'destroyer', 'cruiser', 'battleship', 'carrier']);
+const AIR_UNIT_TYPES = new Set(['fighter', 'bomber', 'tacticalBomber']);
+
+export function unitFamilyEnabled(gameOptions, type, unitDef) {
+  const sea = !!(unitDef?.isSea || SEA_UNIT_TYPES.has(type));
+  const air = !!(unitDef?.isAir || AIR_UNIT_TYPES.has(type));
+  if (sea && !navalUnitsEnabled(gameOptions)) return false;
+  if (air && !airUnitsEnabled(gameOptions)) return false;
+  return true;
+}
+
+export function capitalIpcValue(gameOptions) {
+  const n = pickOptionalInt(gameOptions?.capitalIpc, 0, 50);
+  return n == null ? 10 : n;
+}
+
+export function nonCapitalIpcOverride(gameOptions) {
+  return pickOptionalInt(gameOptions?.nonCapitalIpc, 0, 20);
+}
+
+export function capitalFactoryOutputValue(gameOptions) {
+  const n = pickOptionalInt(gameOptions?.capitalFactoryOutput, 0, 50);
+  return n == null ? 20 : n;
+}
+
+export function purchasedFactoryOutputValue(gameOptions) {
+  const n = pickOptionalInt(gameOptions?.purchasedFactoryOutput, 0, 50);
+  return n == null ? 5 : n;
+}
+
+export function startingUnitsCount(gameOptions) {
+  return pickOptionalInt(gameOptions?.startingUnits, 0, 20);
+}
+
+export function applyStartingUnitCount(pool, count) {
+  if (count == null) return pool;
+  const mapRows = (rows) => (rows || []).map((row) => ({
+    type: row.type,
+    quantity: count,
+  })).filter((row) => row.quantity > 0);
+  return {
+    land: mapRows(pool?.land),
+    naval: mapRows(pool?.naval),
+  };
+}
+
+export function stripDisabledUnitRows(pool, gameOptions) {
+  const keep = (row) => unitFamilyEnabled(gameOptions, row?.type, null) && (Number(row?.quantity) || 0) > 0;
+  return {
+    land: (pool?.land || []).filter(keep),
+    naval: (pool?.naval || []).filter(keep),
   };
 }
 
@@ -188,7 +299,15 @@ export function isStandardRules(raw, legacy) {
     && o.extraPacificBridges === DEFAULT_GAME_OPTIONS.extraPacificBridges
     && o.garrisons === DEFAULT_GAME_OPTIONS.garrisons
     && o.nukes === DEFAULT_GAME_OPTIONS.nukes
-    && o.techSet === DEFAULT_GAME_OPTIONS.techSet;
+    && o.techSet === DEFAULT_GAME_OPTIONS.techSet
+    && o.navalUnits === true
+    && o.airUnits === true
+    && o.landBridgeBlocking === false
+    && o.nonCapitalIpc == null
+    && (o.capitalIpc == null || o.capitalIpc === 10)
+    && (o.capitalFactoryOutput == null || o.capitalFactoryOutput === 20)
+    && (o.purchasedFactoryOutput == null || o.purchasedFactoryOutput === 5)
+    && o.startingUnits == null;
 }
 
 /** Live summary. Standard rules, or "Custom: Heavy army, 8 per round, no land bridges". */
@@ -217,6 +336,18 @@ export function describe(raw, legacy) {
   if (o.garrisons) parts.push('garrisons');
   if (o.nukes) parts.push('nukes');
   if (o.techSet === TECH_SET_EXPANDED) parts.push('expanded tech');
+  if (!o.navalUnits) parts.push('no naval');
+  if (!o.airUnits) parts.push('no air');
+  if (o.landBridgeBlocking) parts.push('land bridges blocked');
+  if (o.nonCapitalIpc != null) parts.push(`territory ${o.nonCapitalIpc} IPC`);
+  if (o.capitalIpc != null && o.capitalIpc !== 10) parts.push(`capital ${o.capitalIpc} IPC`);
+  if (o.capitalFactoryOutput != null && o.capitalFactoryOutput !== 20) {
+    parts.push(`capital factory ${o.capitalFactoryOutput}`);
+  }
+  if (o.purchasedFactoryOutput != null && o.purchasedFactoryOutput !== 5) {
+    parts.push(`factory ${o.purchasedFactoryOutput}`);
+  }
+  if (o.startingUnits != null) parts.push(`starting units ${o.startingUnits}`);
   if (parts.length === 0) return 'Standard rules';
   return `Custom: ${parts.join(', ')}`;
 }
@@ -264,6 +395,14 @@ export const PROTECTED_OPTION_KEYS = Object.freeze([
   'garrisons',
   'nukes',
   'techSet',
+  'navalUnits',
+  'airUnits',
+  'landBridgeBlocking',
+  'nonCapitalIpc',
+  'capitalIpc',
+  'capitalFactoryOutput',
+  'purchasedFactoryOutput',
+  'startingUnits',
 ]);
 
 export function protectedGameOptions(raw) {
@@ -342,7 +481,27 @@ export function optionRows(raw, legacy) {
     ['Garrisons', o.garrisons ? 'On' : 'Off'],
     ['Nukes', o.nukes ? 'On' : 'Off'],
     ['Tech tree', o.techSet === TECH_SET_EXPANDED ? 'Expanded tech' : 'Classic tech'],
+    ['Naval units', o.navalUnits ? 'On' : 'Off'],
+    ['Air units', o.airUnits ? 'On' : 'Off'],
+    ['Land-bridge blocking', o.landBridgeBlocking ? 'On' : 'Off'],
+    ['Territory IPC', o.nonCapitalIpc == null ? 'Map' : String(o.nonCapitalIpc)],
+    ['Capital IPC', o.capitalIpc == null ? '10' : String(o.capitalIpc)],
+    ['Capital factory', o.capitalFactoryOutput == null ? '20' : String(o.capitalFactoryOutput)],
+    ['Purchased factory', o.purchasedFactoryOutput == null ? '5' : String(o.purchasedFactoryOutput)],
+    ['Starting units', o.startingUnits == null ? 'Standard' : String(o.startingUnits)],
   ];
+}
+
+export function sliderReadout(name, value) {
+  if (value == null || Number(value) < 0) {
+    if (name === 'nonCapitalIpc') return 'Map';
+    if (name === 'capitalIpc') return '10';
+    if (name === 'capitalFactoryOutput') return '20';
+    if (name === 'purchasedFactoryOutput') return '5';
+    if (name === 'startingUnits') return 'Standard';
+    return '';
+  }
+  return String(value);
 }
 
 export function techAcquisitionLabel(mode) {

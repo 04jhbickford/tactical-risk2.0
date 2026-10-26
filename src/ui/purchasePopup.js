@@ -4,6 +4,8 @@
 import { getUnitIconPath } from '../utils/unitIcons.js';
 import { shouldShowPurchase } from '../state/gameState.js';
 import { mechanizedInfantryEnabled } from '../state/mechanizedInfantry.js';
+import { unitFamilyEnabled } from '../gameOptions.js';
+import { tacticalBombersEnabled } from '../state/tacticalPairing.js';
 import { damagedFactoryRows, renderFactoryRepairHtml, stepRepairPoints } from '../state/strategicBombing.js';
 import { setShellFlag } from './mobileShell.js';
 import { syncBottomSurfaces } from './bottomSurface.js';
@@ -282,7 +284,9 @@ export class PurchasePopup {
     const units = Object.entries(this.unitDefs)
       .filter(([type, u]) => {
         // AA guns can now be purchased
+        if (type === 'tacticalBomber' && !tacticalBombersEnabled(this.gameState?.gameOptions)) return false;
         if (type === 'mechanizedInfantry' && !mechanizedInfantryEnabled(this.gameState?.gameOptions)) return false;
+        if (!unitFamilyEnabled(this.gameState?.gameOptions, type, u)) return false;
         if (u.unpurchasable) return false;
 
         // Can buy land/air units if player has factories
