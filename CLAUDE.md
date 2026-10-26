@@ -42,3 +42,14 @@ Rules:
 - Firestore queries: avoid compound inequality/range filters that require
   composite indexes (`firestore.indexes.json` is intentionally empty); stick to
   equality/in/array-contains shapes that index-merge.
+
+## Practice pointers
+
+P-001 see briefs/_context/PRACTICES.md (James's agent-OS box)
+P-002 see briefs/_context/PRACTICES.md (James's agent-OS box)
+P-004 see briefs/_context/PRACTICES.md (James's agent-OS box)
+P-008 see briefs/_context/PRACTICES.md (James's agent-OS box)
+P-010 see briefs/_context/PRACTICES.md (James's agent-OS box)
+P-011 see briefs/_context/PRACTICES.md (James's agent-OS box)
+P-012 see briefs/_context/PRACTICES.md (James's agent-OS box)
+P-018 see briefs/_context/PRACTICES.md (James's agent-OS box)

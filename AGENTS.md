@@ -1,5 +1,7 @@
 # AGENTS.md — standing rules
 
+Cold start (operator agents): read briefs/agent-os/SYSTEM.md, then briefs/_context/PRACTICES.md P-000, then briefs/_context/tactical-risk/MANIFEST.md, all on the operator box, not in this repo.
+
 ## Agent cold start
 
 Read these before any work. They live on James's agent box, not in this repo.
