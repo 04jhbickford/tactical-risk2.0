@@ -3,7 +3,7 @@
 
 import { AIPlayer } from './aiPlayer.js';
 import { GAME_PHASES, TURN_PHASES } from '../state/gameState.js';
-import { DIRECT_TECH_IPC_COST } from '../gameOptions.js';
+import { DIRECT_TECH_IPC_COST, airUnitsEnabled, navalUnitsEnabled, unitFamilyEnabled } from '../gameOptions.js';
 import { tacticalBombersEnabled } from '../state/tacticalPairing.js';
 import { MECHANIZED_INFANTRY, mechanizedInfantryEnabled } from '../state/mechanizedInfantry.js';
 import { capitalChoicePool, pickCapitalFromPool } from './capitalSpacing.js';
@@ -534,7 +534,9 @@ export class AIController {
     const landPath = this._hasLandPathToEnemy(player.id);
     // Harder and Hardest buy boats only when no land path reaches an enemy.
     // Easier and Medium keep today's island navy.
-    const buyBoats = islandStart && !strategy.threatenedCapital && !!capitalZone
+    const navalOn = navalUnitsEnabled(this.gameState?.gameOptions);
+    const airOn = airUnitsEnabled(this.gameState?.gameOptions);
+    const buyBoats = navalOn && islandStart && !strategy.threatenedCapital && !!capitalZone
       && !(knobs.boatsNeedNoLandPath && landPath);
     let remaining = ipcs;
     const purchased = [];
@@ -585,7 +587,7 @@ export class AIController {
     // Admiral buys a transport and an escort from a coastal capital even
     // when a land path exists. The island plan above already did that
     // job, so this runs only when that plan was skipped. Land buys follow.
-    if (!buyBoats && knobs.preferBoats && !strategy.threatenedCapital && capitalZone) {
+    if (navalOn && !buyBoats && knobs.preferBoats && !strategy.threatenedCapital && capitalZone) {
       const sea = adjacentSeas(this.gameState.territoryByName, capital)[0];
       if (sea) {
         const plan = planIslandNavyPurchases({
@@ -625,6 +627,7 @@ export class AIController {
     for (const { unitType, maxCount } of priorities) {
       const def = this.unitDefs[unitType];
       if (!def || def.cost > remaining) continue;
+      if (!unitFamilyEnabled(this.gameState?.gameOptions, unitType, def)) continue;
       // Off never lists this unit. On buys one only when a fighter or tank
       // is already on the board or was just purchased this phase.
       if (unitType === 'tacticalBomber') {
@@ -647,7 +650,7 @@ export class AIController {
 
     // Bombadere still wants one bomber when the island navy skipped the
     // land list. A threatened capital keeps the defensive buy.
-    if (knobs.raidFactories && !strategy.threatenedCapital && !purchased.includes('bomber')) {
+    if (airOn && knobs.raidFactories && !strategy.threatenedCapital && !purchased.includes('bomber')) {
       const bomber = this.unitDefs?.bomber;
       if (bomber && remaining >= bomber.cost) {
         if (this._queuePurchase('bomber', capital)) {
@@ -659,7 +662,7 @@ export class AIController {
 
     // Island starts skip the land list. One tactical bomber from what the
     // navy plan left, and only when a fighter or tank is already owned.
-    if (tacticalBombersEnabled(this.gameState?.gameOptions)
+    if (airOn && tacticalBombersEnabled(this.gameState?.gameOptions)
       && islandStart
       && !strategy.threatenedCapital
       && this._pairingPartnerCount(player.id) > 0) {

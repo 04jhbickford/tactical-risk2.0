@@ -60,8 +60,8 @@ export class UnitTooltip {
       if (this.gameState.hasTech(owner, 'superSubs') && unitType === 'submarine') {
         attackBonus += 1;
       }
-      // longRangeAircraft: Aircraft +2 movement
-      if (this.gameState.hasTech(owner, 'longRangeAircraft') && (unitType === 'fighter' || unitType === 'bomber')) {
+      // longRangeAircraft: every air unit moves 2 farther
+      if (this.gameState.hasTech(owner, 'longRangeAircraft') && def?.isAir) {
         movementBonus += 2;
       }
       // heavyBombers: Bombers roll 2 dice in combat (note in tooltip)

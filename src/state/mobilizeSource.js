@@ -1,9 +1,15 @@
 // Which factory's production a sea-zone mobilize spends.
 // A sea zone bordered by two factories must name its source. Captured
 // and minor factories produce 5; the current player's capital produces 20.
+// A host option replaces those numbers. A missing option keeps 20 and 5.
 
-export function factoryProductionLimit(factoryName, capitalName) {
-  return factoryName && factoryName === capitalName ? 20 : 5;
+import { capitalFactoryOutputValue, purchasedFactoryOutputValue } from '../gameOptions.js';
+
+export function factoryProductionLimit(factoryName, capitalName, gameOptions) {
+  const capital = !!(factoryName && capitalName && factoryName === capitalName);
+  return capital
+    ? capitalFactoryOutputValue(gameOptions)
+    : purchasedFactoryOutputValue(gameOptions);
 }
 
 export function factoryProductionUsed(history, factoryName, playerId) {

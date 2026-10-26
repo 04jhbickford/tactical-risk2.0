@@ -19,6 +19,8 @@ import { DIRECT_TECH_IPC_COST } from '../gameOptions.js';
 import { getMap } from '../map/mapRegistry.js';
 import { pacificVictoryLine } from '../map/pacificVictory.js';
 import { tacticalBombersEnabled } from '../state/tacticalPairing.js';
+import { unitFamilyEnabled } from '../gameOptions.js';
+import { renderIncomeCalculator } from './incomeCalculator.js';
 import { landBlitzOptions, mechanizedInfantryEnabled } from '../state/mechanizedInfantry.js';
 import { getUnitIconPath } from '../utils/unitIcons.js';
 import { formatUnitName } from '../utils/unitNames.js';
@@ -2857,6 +2859,7 @@ export class PlayerPanel {
           </div>
           ${renderRiskTrack(this.gameState.currentRiskTradeCount?.() || 0)}
           ${this._renderOpponentTechs(p.id, viewerId, stats.techIds)}
+          ${renderIncomeCalculator(this.gameState, p.id)}
         </div>`;
     }
 
@@ -3318,6 +3321,7 @@ export class PlayerPanel {
       .filter(([type, def]) => {
         if (type === 'tacticalBomber' && !tacticalBombersEnabled(this.gameState?.gameOptions)) return false;
         if (type === 'mechanizedInfantry' && !mechanizedInfantryEnabled(this.gameState?.gameOptions)) return false;
+        if (!unitFamilyEnabled(this.gameState?.gameOptions, type, def)) return false;
         if (def.unpurchasable) return false;
         // AA guns can now be purchased
         if ((def.isLand || def.isAir || def.isBuilding) && hasFactories) return true;
@@ -3333,6 +3337,7 @@ export class PlayerPanel {
 
     let html = `
       <div class="pp-inline-purchase">
+        ${renderIncomeCalculator(this.gameState, player.id)}
         <div class="pp-budget-bar">
           <span class="pp-budget-label">Budget:</span>
           <span class="pp-budget-value ${remaining < 5 ? 'low' : ''}">${remaining}</span>

@@ -49,10 +49,19 @@ import { omitUndefinedDeep, persistableUnit } from './persistState.js';
 import { flushDiceBuffer, observeRolledDie } from '../stats/diceTracker.js';
 import {
   DIRECT_TECH_IPC_COST,
+  airUnitsEnabled,
+  applyStartingUnitCount,
+  navalUnitsEnabled,
+  capitalIpcValue,
+  nonCapitalIpcOverride,
   normalizeGameOptions,
   scaleStartingUnits,
+  startingUnitsCount,
+  stripDisabledUnitRows,
   techPicksFromRolls,
+  unitFamilyEnabled,
 } from '../gameOptions.js';
+import { rollCombatSide } from './combatRoll.js';
 import { GAME_VERSION } from '../version.js';
 import {
   CLASSIC_EXTRA_PACIFIC_BRIDGES,
@@ -95,10 +104,8 @@ import {
   unloadOneAirFromCarrier,
 } from './carrierPlacement.js';
 import { destroyIllegalAir, previewNcmAirDestruction as previewNcmAir, ncmAirWarningCopy } from './ncmAirCheck.js';
-import { consumePairedAttack, countPairing, tacticalBombersEnabled } from './tacticalPairing.js';
+import { tacticalBombersEnabled } from './tacticalPairing.js';
 import {
-  artillerySupportState,
-  consumeArtillerySupport,
   landBlitzOptions,
   MECHANIZED_INFANTRY,
   mechanizedInfantryEnabled,
@@ -135,6 +142,7 @@ import {
 } from './combatUnits.js';
 import { isSeaUnitType, repairSeaUnitsOnLand } from './seaOnLand.js';
 import {
+  factoryProductionLimit,
   factoryProductionUsed,
   resolveSeaMobilizeFactory,
 } from './mobilizeSource.js';
@@ -242,7 +250,7 @@ export const TECHNOLOGIES = {
   jets: { name: 'Jets', description: 'Fighters +1 attack/defense' },
   rockets: { name: 'Rockets', description: 'AA guns can bombard adjacent territories' },
   superSubs: { name: 'Super Submarines', description: 'Submarines +1 attack' },
-  longRangeAircraft: { name: 'Long Range Aircraft', description: 'Aircraft +2 movement' },
+  longRangeAircraft: { name: 'Long Range Aircraft', description: 'Fighters, bombers, and tactical bombers move 2 farther' },
   heavyBombers: { name: 'Heavy Bombers', description: 'Bombers roll 2 dice in combat' },
   industrialTech: { name: 'Industrial Technology', description: 'Units cost -1 IPC (min 1)' },
 };
@@ -892,6 +900,8 @@ export class GameState {
       respawnOriginalGarrison(this, player.id);
     }
 
+    this._stripDisabledUnitFamilies();
+
     this.phase = GAME_PHASES.PLAYING;
     this.turnPhase = TURN_PHASES.DEVELOP_TECH;
     this.currentPlayerIndex = 0;
@@ -1100,30 +1110,67 @@ export class GameState {
     return this.capturedThisTurn instanceof Set && this.capturedThisTurn.has(territoryName);
   }
 
-  // Preview collect-income IPCs. Does not mutate. Classic _collectIncome stays.
-  getCollectIncomeAmount(playerId = this.currentPlayer?.id) {
-    if (!playerId) return 0;
-    if (!this.canCollectIncome(playerId)) return 0;
-
-    let income = 0;
+  // What Collect Income adds. omitTerritories drops those lands and
+  // any continent that needed them. The preview and the payout share this.
+  incomePayout(playerId = this.currentPlayer?.id, { omitTerritories } = {}) {
+    if (!playerId) return { amount: 0, lines: [], capitalLost: false };
+    if (!this.canCollectIncome(playerId)) {
+      return {
+        amount: 0,
+        lines: [{ kind: 'capital', name: 'Capital lost', ipc: 0 }],
+        capitalLost: true,
+      };
+    }
+    const omit = omitTerritories instanceof Set
+      ? omitTerritories
+      : new Set(omitTerritories || []);
     const capitalTerritory = this.playerState[playerId]?.capitalTerritory;
+    const capitalIpc = capitalIpcValue(this.gameOptions);
+    const override = nonCapitalIpcOverride(this.gameOptions);
+    const lines = [];
+    let income = 0;
 
-    for (const [territory, state] of Object.entries(this.territoryState)) {
-      if (state.owner !== playerId) continue;
+    for (const [territory, state] of Object.entries(this.territoryState || {})) {
+      if (state?.owner !== playerId || omit.has(territory)) continue;
       if (territory === capitalTerritory) {
-        income += 10;
+        income += capitalIpc;
+        if (capitalIpc) lines.push({ kind: 'territory', name: territory, ipc: capitalIpc, capital: true });
         continue;
       }
       const t = this.territoryByName[territory];
-      if (t && t.production) income += t.production;
+      let prod = 0;
+      if (override != null) {
+        if (t && !t.isWater) prod = override;
+        else if (t && t.production) prod = t.production;
+      } else if (t && t.production) {
+        prod = t.production;
+      }
+      if (prod) {
+        income += prod;
+        lines.push({ kind: 'territory', name: territory, ipc: prod, capital: false });
+      }
     }
 
     for (const continent of this.continents || []) {
-      if (this.controlsContinent(playerId, continent.name)) {
-        income += continent.bonus;
-      }
+      if (!this._controlsContinent(playerId, continent.name, omit)) continue;
+      const bonus = Number(continent.bonus) || 0;
+      if (!bonus) continue;
+      income += bonus;
+      lines.push({ kind: 'bonus', name: continent.name, ipc: bonus });
     }
-    return income;
+    return { amount: income, lines, capitalLost: false };
+  }
+
+  _controlsContinent(playerId, continentName, omit) {
+    const continent = (this.continents || []).find((c) => c.name === continentName);
+    if (!continent) return false;
+    const skip = omit instanceof Set ? omit : new Set();
+    return continent.territories.every((t) => !skip.has(t) && this.getOwner(t) === playerId);
+  }
+
+  // Preview collect-income IPCs. Does not mutate.
+  getCollectIncomeAmount(playerId = this.currentPlayer?.id) {
+    return this.incomePayout(playerId).amount;
   }
 
   isCapital(territoryName) {
@@ -1135,11 +1182,12 @@ export class GameState {
     const t = this.territoryByName[territoryName];
     if (!t || t.isWater) return 0;
 
-    // Capitals are always worth 10 IPCs
     if (this.isCapital(territoryName)) {
-      return 10;
+      return capitalIpcValue(this.gameOptions);
     }
 
+    const override = nonCapitalIpcOverride(this.gameOptions);
+    if (override != null) return override;
     return t.production || 0;
   }
 
@@ -1162,12 +1210,11 @@ export class GameState {
     const hasFactory = units.some(u => u.type === 'factory');
     if (!hasFactory) return null;
 
-    // Check if this is a capital
     if (this.isCapital(territoryName)) {
-      return 20;
+      return factoryProductionLimit(territoryName, territoryName, this.gameOptions);
     }
 
-    return 5;
+    return factoryProductionLimit(territoryName, null, this.gameOptions);
   }
 
   getCapital(playerId) {
@@ -1581,6 +1628,7 @@ export class GameState {
 
       for (const conn of connections) {
         if (visited.has(conn)) continue;
+        if (this.landBridgeBlocks(territory, conn)) continue;
 
         const connT = this.territoryByName[conn];
         // Skip water territories
@@ -1653,6 +1701,40 @@ export class GameState {
       }
     }
     return false;
+  }
+
+  // A blocked land bridge still exists for air. Land movement refuses a
+  // hop that is not already in the territory's own connection list.
+  landBridgeBlocks(t1Name, t2Name) {
+    if (this.gameOptions?.landBridgeBlocking !== true) return false;
+    if (!this.hasLandBridge(t1Name, t2Name)) return false;
+    const left = this.territoryByName?.[t1Name]?.connections || [];
+    if (left.includes(t2Name)) return false;
+    const right = this.territoryByName?.[t2Name]?.connections || [];
+    if (right.includes(t1Name)) return false;
+    return true;
+  }
+
+  _stripDisabledUnitFamilies() {
+    if (navalUnitsEnabled(this.gameOptions) && airUnitsEnabled(this.gameOptions)) return;
+    for (const name of Object.keys(this.units || {})) {
+      const next = [];
+      for (const unit of this.units[name] || []) {
+        if (!unitFamilyEnabled(this.gameOptions, unit?.type, null)) continue;
+        if (!airUnitsEnabled(this.gameOptions) && Array.isArray(unit.aircraft)) {
+          unit.aircraft = [];
+        }
+        next.push(unit);
+      }
+      this.units[name] = next;
+    }
+  }
+
+  _familyPurchaseError(unitType, unitDef) {
+    if (unitFamilyEnabled(this.gameOptions, unitType, unitDef)) return null;
+    return unitDef?.isSea || unitType === 'transport' || unitType === 'submarine'
+      ? 'Naval units are off'
+      : 'Air units are off';
   }
 
   isWater(territoryName) {
@@ -1809,14 +1891,22 @@ export class GameState {
   }
 
   _startingUnitPool() {
-    const pool = scaleStartingUnits(RISK_STARTING_UNITS, this.gameOptions?.startingArmy);
-    // Default off matches RISK_STARTING_UNITS. On adds one to the tray only.
+    let pool = scaleStartingUnits(RISK_STARTING_UNITS, this.gameOptions?.startingArmy);
+    const count = startingUnitsCount(this.gameOptions);
+    if (count != null) pool = applyStartingUnitCount(pool, count);
+    // Default off matches RISK_STARTING_UNITS. On adds one to the tray only,
+    // or the host's starting-unit count when that slider is set.
     // Do not put tacticalBomber back on the default defs (V2.81.36).
-    if (this.gameOptions?.tacticalBombers !== true) return pool;
-    return {
-      land: pool.land.concat([{ type: 'tacticalBomber', quantity: 1 }]),
-      naval: pool.naval,
-    };
+    if (this.gameOptions?.tacticalBombers === true && airUnitsEnabled(this.gameOptions)) {
+      const quantity = count == null ? 1 : count;
+      if (quantity > 0) {
+        pool = {
+          land: pool.land.concat([{ type: 'tacticalBomber', quantity }]),
+          naval: pool.naval,
+        };
+      }
+    }
+    return stripDisabledUnitRows(pool, this.gameOptions);
   }
 
   _buildStartingDeployPool({ factoryAlreadyPlaced = false } = {}) {
@@ -1990,6 +2080,8 @@ export class GameState {
 
     const unitDef = unitDefs[unitType];
     if (!unitDef) return { success: false, error: 'Unknown unit type' };
+    const familyError = this._familyPurchaseError(unitType, unitDef);
+    if (familyError) return { success: false, error: familyError };
 
     // Validate placement location
     const capital = this.playerState[player.id]?.capitalTerritory;
@@ -2327,12 +2419,16 @@ export class GameState {
     if (unitType === GARRISON || unitDef.unpurchasable) {
       return { success: false, error: 'Garrison cannot be purchased' };
     }
+    const familyError = this._familyPurchaseError(unitType, unitDef);
+    if (familyError) return { success: false, error: familyError };
 
     // Check mobilization capacity - cannot buy more units than we can place
     const capacity = this.getMobilizationCapacity(player.id);
     const currentPurchases = this.getPendingPurchaseCount(player.id);
     if (currentPurchases >= capacity) {
-      return { success: false, error: `Mobilization capacity reached (${capacity} units max - capital: 20, factories: 5 each)` };
+      const capitalLimit = factoryProductionLimit('capital', 'capital', this.gameOptions);
+      const factoryLimit = factoryProductionLimit('factory', null, this.gameOptions);
+      return { success: false, error: `Mobilization capacity reached (${capacity} units max - capital: ${capitalLimit}, factories: ${factoryLimit} each)` };
     }
 
     // Apply industrial tech discount (-1 IPC, min 1)
@@ -2983,6 +3079,7 @@ export class GameState {
     if (unitType === 'tacticalBomber' && !tacticalBombersEnabled(this.gameOptions)) return false;
     if (unitType === MECHANIZED_INFANTRY && !mechanizedInfantryEnabled(this.gameOptions)) return false;
     if (unitType === GARRISON || unitDef.unpurchasable) return false;
+    if (this._familyPurchaseError(unitType, unitDef)) return false;
 
     const cost = unitDef.cost;
     if (this.playerState[player.id].ipcs < cost) return false;
@@ -3330,6 +3427,7 @@ export class GameState {
     if (unitType === 'tacticalBomber' && !tacticalBombersEnabled(this.gameOptions)) return false;
     if (unitType === MECHANIZED_INFANTRY && !mechanizedInfantryEnabled(this.gameOptions)) return false;
     if (unitType === GARRISON || unitDef.unpurchasable) return false;
+    if (this._familyPurchaseError(unitType, unitDef)) return false;
 
     const totalCost = unitDef.cost * quantity;
     if (this.playerState[player.id].ipcs < totalCost) return false;
@@ -3776,9 +3874,13 @@ export class GameState {
         // Air units validated above for multi-hop movement
         // They can land on water if there's a carrier (handled below)
       } else if (isLandBridge) {
-        // Land bridges allow land units to cross without naval transport
+        // Land bridges allow land units to cross without naval transport.
+        // Blocking refuses that hop. Air already took the branch above.
         if (unitDef.isSea) {
           return { success: false, error: 'Naval units cannot use land bridges' };
+        }
+        if (unitDef.isLand && this.landBridgeBlocks(fromTerritory, toTerritory)) {
+          return { success: false, error: 'Land units cannot cross a blocked land bridge' };
         }
       } else {
         // Normal movement rules for land and sea units
@@ -5636,47 +5738,21 @@ export class GameState {
   }
 
   _rollCombatWithRolls(units, type, unitDefs, contextLabel = 'combat') {
-    let hits = 0;
-    const rolls = [];
-    // Pairing only changes the to-hit of a tactical bomber. No extra die,
-    // and a stack with no tactical bomber (or the option off) uses def.attack
-    // exactly as before.
-    let pairedLeft = type === 'attack'
-      ? countPairing(units, { enabled: tacticalBombersEnabled(this.gameOptions) }).paired
-      : 0;
-    // Mechanized infantry only. Infantry artillery support stays in the
-    // human combat step, where it already lives.
-    const mechSupport = type === 'attack'
-      ? artillerySupportState(units, { applyInfantry: false })
-      : null;
-
-    for (const unit of units) {
-      const def = unitDefs[unit.type];
-      if (!def) continue;
-      if ((Number(unit.quantity) || 0) <= 0) continue;
-      if (type === 'attack' && (unit.type === GARRISON || def.defendOnly)) continue;
-      const hitValue = type === 'attack' ? def.attack : def.defense;
-
-      for (let i = 0; i < unit.quantity; i++) {
-        let need = hitValue;
-        if (type === 'attack') {
-          const paired = consumePairedAttack(unit.type, hitValue, pairedLeft);
-          need = paired.attack;
-          pairedLeft = paired.pairedLeft;
-          need = consumeArtillerySupport(unit.type, need, mechSupport);
-        }
-        const roll = this._rollDie({
-          context: contextLabel,
-          side: type === 'attack' ? 'attacker' : 'defender',
-          unit: unit.type,
-          need,
-          playerSeat: unit.owner,
-        });
-        rolls.push({ unit: unit.type, roll, hit: roll <= need });
-        if (roll <= need) hits++;
-      }
-    }
-    return { hits, rolls };
+    // Same dice as the combat screen. Infantry artillery stays out of
+    // auto-resolve. Jets, super submarines, and heavy bombers do not.
+    const seatOwner = (units || []).find((unit) => unit?.owner)?.owner || null;
+    return rollCombatSide({
+      units,
+      type,
+      unitDefs,
+      gameState: this,
+      rollDie: (meta) => this._rollDie(meta),
+      applyInfantry: false,
+      contextLabel,
+      side: type === 'attack' ? 'attacker' : 'defender',
+      seatOwner,
+      gameOptions: this.gameOptions,
+    });
   }
 
   _rollCombat(units, type, unitDefs) {
@@ -6016,29 +6092,7 @@ export class GameState {
       return;
     }
 
-    let income = 0;
-    const capitalTerritory = this.playerState[player.id]?.capitalTerritory;
-
-    for (const [territory, state] of Object.entries(this.territoryState)) {
-      if (state.owner === player.id) {
-        // Capitals always produce 10 IPCs
-        if (territory === capitalTerritory) {
-          income += 10;
-        } else {
-          const t = this.territoryByName[territory];
-          if (t && t.production) {
-            income += t.production;
-          }
-        }
-      }
-    }
-
-    // Add continent bonuses
-    for (const continent of this.continents) {
-      if (this.controlsContinent(player.id, continent.name)) {
-        income += continent.bonus;
-      }
-    }
+    const income = this.incomePayout(player.id).amount;
 
     const ipcBefore = ipcMapFromState(this);
     this.playerState[player.id].ipcs += income;
