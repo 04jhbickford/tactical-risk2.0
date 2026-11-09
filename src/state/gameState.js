@@ -294,6 +294,10 @@ export function resolveRiskTradeCount(data) {
 // Land bridges — the active map's list. Classic is CLASSIC_LAND_BRIDGES.
 export const LAND_BRIDGES = CLASSIC_LAND_BRIDGES;
 
+// Ships that close a land bridge under the blocking option. Transports
+// never block.
+const BRIDGE_BLOCKING_SHIPS = new Set(['submarine', 'destroyer', 'cruiser', 'battleship', 'carrier']);
+
 // Starting IPCs by player count for Risk mode
 export const STARTING_IPCS_BY_PLAYER_COUNT = {
   2: 35,
@@ -1628,7 +1632,7 @@ export class GameState {
 
       for (const conn of connections) {
         if (visited.has(conn)) continue;
-        if (this.landBridgeBlocks(territory, conn)) continue;
+        if (this.landBridgeBlocks(territory, conn, playerId)) continue;
 
         const connT = this.territoryByName[conn];
         // Skip water territories
@@ -1703,16 +1707,69 @@ export class GameState {
     return false;
   }
 
+  // The sea zones a land bridge crosses: every zone on a shortest sea
+  // route between a zone touching one end and a zone touching the other.
+  // Kenya-Rhodesia–Madagascar is Mozambique only; East Indies–Australia
+  // is East Indies, North Australia, and West Australia.
+  landBridgeSeaZones(t1Name, t2Name) {
+    const key = t1Name < t2Name ? `${t1Name}|${t2Name}` : `${t2Name}|${t1Name}`;
+    if (!this._bridgeZoneCache || this._bridgeZoneCacheFor !== this.territoryByName) {
+      this._bridgeZoneCache = new Map();
+      this._bridgeZoneCacheFor = this.territoryByName;
+    }
+    if (this._bridgeZoneCache.has(key)) return this._bridgeZoneCache.get(key);
+    const byName = this.territoryByName || {};
+    const seaOf = (name) => (byName[name]?.connections || []).filter((c) => byName[c]?.isWater);
+    const distances = (starts) => {
+      const dist = new Map(starts.map((zone) => [zone, 0]));
+      const queue = [...starts];
+      while (queue.length) {
+        const zone = queue.shift();
+        for (const next of byName[zone]?.connections || []) {
+          if (!byName[next]?.isWater || dist.has(next)) continue;
+          dist.set(next, dist.get(zone) + 1);
+          queue.push(next);
+        }
+      }
+      return dist;
+    };
+    const fromLeft = distances(seaOf(t1Name));
+    const fromRight = distances(seaOf(t2Name));
+    let best = Infinity;
+    for (const zone of seaOf(t2Name)) {
+      if (fromLeft.has(zone)) best = Math.min(best, fromLeft.get(zone));
+    }
+    const zones = [];
+    for (const [zone, d] of fromLeft) {
+      if (fromRight.has(zone) && d + fromRight.get(zone) === best) zones.push(zone);
+    }
+    this._bridgeZoneCache.set(key, zones);
+    return zones;
+  }
+
   // A blocked land bridge still exists for air. Land movement refuses a
-  // hop that is not already in the territory's own connection list.
-  landBridgeBlocks(t1Name, t2Name) {
+  // hop that is not already in the territory's own connection list, and
+  // only while an enemy warship sits in a sea zone that bridge crosses.
+  // Own and allied ships never block. Transports never block.
+  landBridgeBlocks(t1Name, t2Name, playerId = this.currentPlayer?.id) {
     if (this.gameOptions?.landBridgeBlocking !== true) return false;
     if (!this.hasLandBridge(t1Name, t2Name)) return false;
     const left = this.territoryByName?.[t1Name]?.connections || [];
     if (left.includes(t2Name)) return false;
     const right = this.territoryByName?.[t2Name]?.connections || [];
     if (right.includes(t1Name)) return false;
-    return true;
+    const defs = this._unitDefs || this.unitDefs || null;
+    const isWarship = (type) => type !== 'transport'
+      && (defs?.[type] ? !!defs[type].isSea : BRIDGE_BLOCKING_SHIPS.has(type));
+    return this.landBridgeSeaZones(t1Name, t2Name).some((zone) => (
+      (this.units?.[zone] || []).some((unit) => (
+        isWarship(unit?.type)
+        && (Number(unit.quantity) || 0) > 0
+        && unit.owner
+        && unit.owner !== playerId
+        && !this.areAllies(playerId, unit.owner)
+      ))
+    ));
   }
 
   _stripDisabledUnitFamilies() {
@@ -3879,7 +3936,7 @@ export class GameState {
         if (unitDef.isSea) {
           return { success: false, error: 'Naval units cannot use land bridges' };
         }
-        if (unitDef.isLand && this.landBridgeBlocks(fromTerritory, toTerritory)) {
+        if (unitDef.isLand && this.landBridgeBlocks(fromTerritory, toTerritory, player.id)) {
           return { success: false, error: 'Land units cannot cross a blocked land bridge' };
         }
       } else {
@@ -5472,6 +5529,8 @@ export class GameState {
       unitsSubsMayRoll(unitsForGeneralCombat(attackers, attackerSubsStruck), allDefenders, unitDefs),
       'attack',
       unitDefs,
+      'combat',
+      attackers,
     );
     const { hits: defenseHits, rolls: defenseRolls } = this._rollCombatWithRolls(
       unitsSubsMayRoll(unitsForGeneralCombat(allDefenders, defenderSubsStruck), attackers, unitDefs),
@@ -5737,17 +5796,20 @@ export class GameState {
     return this.combatTelemetry ? this.combatTelemetry.slice() : [];
   }
 
-  _rollCombatWithRolls(units, type, unitDefs, contextLabel = 'combat') {
-    // Same dice as the combat screen. Infantry artillery stays out of
-    // auto-resolve. Jets, super submarines, and heavy bombers do not.
+  _rollCombatWithRolls(units, type, unitDefs, contextLabel = 'combat', supportUnits = null) {
+    // Same dice as the combat screen (Discord 1567685171657052314,
+    // unified.69): attacking infantry paired with artillery roll at 2,
+    // exactly like the played battle. Defense never gets the bonus.
+    // Jets, super submarines, and heavy bombers also match.
     const seatOwner = (units || []).find((unit) => unit?.owner)?.owner || null;
     return rollCombatSide({
       units,
+      supportUnits,
       type,
       unitDefs,
       gameState: this,
       rollDie: (meta) => this._rollDie(meta),
-      applyInfantry: false,
+      applyInfantry: type === 'attack',
       contextLabel,
       side: type === 'attack' ? 'attacker' : 'defender',
       seatOwner,

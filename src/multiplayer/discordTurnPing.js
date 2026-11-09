@@ -556,8 +556,26 @@ export function turnEventsSince(gameState, index) {
   return all.slice(Math.min(start, all.length));
 }
 
-export function turnIndexOf({ round = 0, currentPlayerIndex = 0 } = {}) {
-  return (Number(round) || 0) * 64 + (Number(currentPlayerIndex) || 0);
+// Setup turns sit below zero so they never share a dedupe key with a
+// playing turn. Initial deployment keeps round 1 the whole time, so the
+// first player's first playing turn (round 1, seat 0) used to match that
+// seat's first placement turn and was deduped after the last placement.
+const SETUP_TURN_INDEX_BASE = Object.freeze({
+  territory_draft: 1 << 20,
+  capital_placement: 2 << 20,
+  unit_placement: 3 << 20,
+});
+
+export function turnIndexOf({
+  round = 0,
+  currentPlayerIndex = 0,
+  phase = '',
+  placementRound = 0,
+} = {}) {
+  const seat = Number(currentPlayerIndex) || 0;
+  const base = SETUP_TURN_INDEX_BASE[phase];
+  if (base) return -(base + (Number(placementRound) || 0) * 64 + seat);
+  return (Number(round) || 0) * 64 + seat;
 }
 
 export function pingDedupeKey({ gameId = '', turnIndex = 0, seatId = '' } = {}) {
@@ -979,6 +997,8 @@ export function bindDiscordTurnPing(gameState, {
         turnIndex: turnIndexOf({
           round: gameState.round,
           currentPlayerIndex: gameState.currentPlayerIndex,
+          phase: gameState.phase,
+          placementRound: gameState.placementRound,
         }),
         seatId: nextSeat,
         phase: phaseLabelOf(gameState),

@@ -65,6 +65,7 @@ const ADDED = [
   ['West US', 'Hawaiian Islands'],
   ['Australia', 'New Guinea'],
   ['Japan', 'Okinawa'],
+  ['Wake Island', 'Midway'],
 ];
 
 const REMOVED = [
@@ -225,7 +226,7 @@ console.log('=== pairs ===');
   const on = playing({ extraPacificBridges: true });
   const extras = on.activeLandBridges().slice(16);
   check('on adds the corrected Classic set and nothing else',
-    on.activeLandBridges().length === 30 && samePairs(extras, ADDED));
+    on.activeLandBridges().length === 31 && samePairs(extras, ADDED));
   check('on still has the original Alaska bridge', on.hasLandBridge('Alaska', 'Soviet Far East') === true);
   for (const [left, right] of ADDED) {
     check(`on steps ${left}–${right}`, on.hasLandBridge(left, right) === true);
@@ -272,18 +273,26 @@ console.log('=== one step ===');
   check('on: infantry cannot step the removed Japan–Midway bridge',
     dropped.success === false && qty(on, 'Japan', 'infantry') === 3 && qty(on, 'Midway', 'infantry') === 1);
 
+  // unified.69: Wake Island–Midway is one bridge. Wake Island–West US
+  // is still two (through Hawaiian Islands or Midway).
+  const wake = playing({ extraPacificBridges: true });
+  const wakeStep = wake.moveUnits('Wake Island', 'Midway', [{ type: 'infantry', quantity: 1 }], unitDefs);
+  check('on: infantry steps Wake Island–Midway in one move',
+    wakeStep.success === true && qty(wake, 'Wake Island', 'infantry') === 2 && qty(wake, 'Midway', 'infantry') === 1);
+
   const two = playing({ extraPacificBridges: true });
-  const hop = two.moveUnits('Wake Island', 'Midway', [{ type: 'infantry', quantity: 1 }], unitDefs);
+  const hop = two.moveUnits('Wake Island', 'West US', [{ type: 'infantry', quantity: 1 }], unitDefs);
   check('on: infantry cannot cross two bridges in one move',
-    hop.success === false && qty(two, 'Wake Island', 'infantry') === 3 && qty(two, 'Midway', 'infantry') === 0);
+    hop.success === false && qty(two, 'Wake Island', 'infantry') === 3 && qty(two, 'West US', 'infantry') === 3);
 
   const tank = playing({ extraPacificBridges: true });
-  const reached = tank.getLandUnitPath('Wake Island', 'Midway', 2, 'Japanese', false);
-  check('on: a move of 2 crosses Wake Island–Hawaiian Islands–Midway as two steps',
-    reached?.path?.join(' > ') === 'Wake Island > Hawaiian Islands > Midway');
-  const tankMove = tank.moveUnits('Wake Island', 'Midway', [{ type: 'armour', quantity: 1 }], unitDefs);
+  const reached = tank.getLandUnitPath('Wake Island', 'West US', 2, 'Japanese', false);
+  check('on: a move of 2 crosses Wake Island to West US as two steps',
+    reached?.path?.length === 3 && reached.path[0] === 'Wake Island' && reached.path[2] === 'West US'
+    && ['Hawaiian Islands', 'Midway'].includes(reached.path[1]));
+  const tankMove = tank.moveUnits('Wake Island', 'West US', [{ type: 'armour', quantity: 1 }], unitDefs);
   check('on: armour can spend both steps in one move',
-    tankMove.success === true && qty(tank, 'Midway', 'armour') === 1);
+    tankMove.success === true && qty(tank, 'West US', 'armour') === 1);
 
   const ship = playing({ extraPacificBridges: true });
   const naval = ship.moveUnits('West US', 'Midway', [{ type: 'destroyer', quantity: 1 }], unitDefs);

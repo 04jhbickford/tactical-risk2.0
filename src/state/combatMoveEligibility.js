@@ -286,7 +286,7 @@ function landCanEnter(gameState, fromName, toName, unit, unitDefs, playerId, isC
   }
   if (range <= 1) {
     if (!adjacent) return false;
-    if (typeof gameState.landBridgeBlocks === 'function' && gameState.landBridgeBlocks(fromName, toName)) {
+    if (typeof gameState.landBridgeBlocks === 'function' && gameState.landBridgeBlocks(fromName, toName, playerId)) {
       return false;
     }
     return true;

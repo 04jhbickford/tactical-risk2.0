@@ -74,10 +74,10 @@ function qtyOf(rows, type) {
 console.log('=== stamp ===');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  const stamp = 'V2.81.57-unified.68';
-  check('display stamp is V2.81.57-unified.68', GAME_VERSION === stamp);
+  const stamp = 'V2.81.57-unified.69';
+  check('display stamp is V2.81.57-unified.69', GAME_VERSION === stamp);
   check('schema stays 11', SCHEMA_VERSION === 11);
-  check('game docs write V2.82-unified.68', compatClientVersion() === 'V2.82-unified.68');
+  check('game docs write V2.82-unified.69', compatClientVersion() === 'V2.82-unified.69');
   check('index.html carries the display stamp',
     html.includes(`name="tr-game-version" content="${stamp}"`)
     && html.includes(`window.__TR_GAME_VERSION = '${stamp}'`)
@@ -108,9 +108,10 @@ console.log('=== option defaults reproduce today ===');
   const gs = board([
     { name: 'Britain', isWater: false, connections: [], production: 6 },
     { name: 'Egypt', isWater: false, connections: [], production: 2 },
-    { name: 'Alaska', isWater: false, connections: ['Western Canada'], production: 2 },
+    { name: 'Alaska', isWater: false, connections: ['Western Canada', 'Bering Sea Zone'], production: 2 },
     { name: 'Western Canada', isWater: false, connections: ['Alaska'], production: 1 },
-    { name: 'Soviet Far East', isWater: false, connections: [], production: 1 },
+    { name: 'Soviet Far East', isWater: false, connections: ['Bering Sea Zone'], production: 1 },
+    { name: 'Bering Sea Zone', isWater: true, connections: ['Alaska', 'Soviet Far East'] },
   ]);
   gs.gameOptions = normalizeGameOptions(DEFAULT_GAME_OPTIONS);
   gs.territoryState.Britain = { owner: 'british', isCapital: true };
@@ -259,15 +260,18 @@ console.log('=== income calculator matches the payout ===');
 console.log('=== land-bridge blocking ===');
 {
   const gs = board([
-    { name: 'Alaska', isWater: false, connections: ['Western Canada'], production: 2 },
+    { name: 'Alaska', isWater: false, connections: ['Western Canada', 'Bering Sea Zone'], production: 2 },
     { name: 'Western Canada', isWater: false, connections: ['Alaska'], production: 1 },
-    { name: 'Soviet Far East', isWater: false, connections: [], production: 1 },
+    { name: 'Soviet Far East', isWater: false, connections: ['Bering Sea Zone'], production: 1 },
+    { name: 'Bering Sea Zone', isWater: true, connections: ['Alaska', 'Soviet Far East'] },
   ]);
   gs.gameOptions = normalizeGameOptions({ landBridgeBlocking: true });
   gs.turnPhase = TURN_PHASES.COMBAT_MOVE;
   gs.territoryState.Alaska = { owner: 'british', isCapital: false };
   gs.territoryState['Soviet Far East'] = { owner: 'germans', isCapital: false };
   gs.units.Alaska = [{ type: 'infantry', quantity: 1, owner: 'british' }];
+  // unified.69: only an enemy warship in the bridge's sea zone blocks.
+  gs.units['Bering Sea Zone'] = [{ type: 'destroyer', quantity: 1, owner: 'germans' }];
   check('the bridge still exists for air', gs.hasLandBridge('Alaska', 'Soviet Far East') === true && gs.canAirUnitReach('Alaska', 'Soviet Far East', 1));
   check('land movement refuses the bridge', gs.landBridgeBlocks('Alaska', 'Soviet Far East') === true
     && !gs.getReachableTerritoriesForLand('Alaska', 1, 'british', true).has('Soviet Far East'));

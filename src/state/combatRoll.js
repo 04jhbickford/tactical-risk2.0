@@ -1,8 +1,7 @@
 // One combat-dice path for the combat screen and for auto-resolve.
 // Tech bonuses match the played battle: jets, super submarines, and
-// heavy bombers. Infantry artillery support stays on the played battle.
-// Auto-resolve passes applyInfantry: false and still supports mechanized
-// infantry, which is what that path already did.
+// heavy bombers. Infantry artillery support applies to attackers on both
+// the played battle and auto-resolve (unified.69 parity fix).
 
 import { GARRISON } from './garrison.js';
 import { artillerySupportState, consumeArtillerySupport } from './mechanizedInfantry.js';
