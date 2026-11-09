@@ -162,6 +162,7 @@ const PACIFIC_LAND_BRIDGES = Object.freeze([
 // Hawaiian Islands–Mexico; add New Guinea–Solomon Islands,
 // Borneo Celebes–New Guinea, West US–Hawaiian Islands,
 // Australia–New Guinea, and Japan–Okinawa.
+// Discord 1567610458838409339 (unified.69): add Wake Island–Midway.
 export const CLASSIC_EXTRA_PACIFIC_BRIDGES = Object.freeze([
   ['Philippines', 'Caroline Islands'],
   ['Philippines', 'French Indo China'],
@@ -177,6 +178,7 @@ export const CLASSIC_EXTRA_PACIFIC_BRIDGES = Object.freeze([
   ['West US', 'Hawaiian Islands'],
   ['Australia', 'New Guinea'],
   ['Japan', 'Okinawa'],
+  ['Wake Island', 'Midway'],
 ]);
 
 // Graph-derived. New South Wales borders Queensland, Victoria, and
