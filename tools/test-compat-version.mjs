@@ -54,7 +54,9 @@ const Probe = new Function('compareGameVersions', 'GAME_VERSION', `
 `)(oldVersion.compareGameVersions, oldVersion.GAME_VERSION);
 
 console.log('=== V2.81.57-unified.33 compat version ===');
-check('display stamp stays V2.81.57-unified.40', GAME_VERSION === 'V2.81.57-unified.40');
+// Checked against the current release, not the one this test shipped with (unified.40), so a later release keeps it green.
+const NEXT = compatClientVersion('V2.81.57-unified.' + (Number(/unified\.(\d+)/.exec(GAME_VERSION)[1]) + 1));
+check('display stamp is unified.40 or later', Number(/unified\.(\d+)/.exec(GAME_VERSION)[1]) >= 40);
 check('F1 loaded .14.1 GAME_VERSION', oldVersion.GAME_VERSION === 'V2.81.57-unified.14.1');
 check('F1 .14.1 comparator is the major.minor parser',
   oldVersionSrc.includes('/^V?(\\d+)\\.(\\d+)/')
@@ -70,7 +72,7 @@ const written = {
   },
   protectedGameOptions: { techAcquisition: 'keep', territorySetup: 'draft' },
 };
-check('F1 compat stamp is V2.82-unified.40', written.clientVersion === 'V2.82-unified.40');
+check('F1 compat stamp is this build\'s V2.82 stamp', written.clientVersion === compatClientVersion());
 check('compat keeps a unified.N.M patch and omits a zero patch',
   compatClientVersion('V2.81.57-unified.16.1') === 'V2.82-unified.16.1'
   && compatClientVersion('V2.81.57-unified.16') === 'V2.82-unified.16');
@@ -84,16 +86,15 @@ probe._checkRemoteVersion(written);
 check('F1 .14.1 refresh banner fires on a .17 doc',
   probe.events.length === 1
   && probe.events[0].event === 'version_outdated'
-  && probe.events[0].data.remoteVersion === 'V2.82-unified.40'
+  && probe.events[0].data.remoteVersion === compatClientVersion()
   && probe.events[0].data.localVersion === oldVersion.GAME_VERSION);
 
 const quiet = new Probe();
 quiet._checkRemoteVersion({ clientVersion: GAME_VERSION, state: written.state });
 check('F1 display stamp alone does not fire the .14.1 banner', quiet.events.length === 0);
 
-check('F2 unified.41 prompts a unified.40 tab',
-  compareGameVersions(compatClientVersion('V2.81.57-unified.41'), GAME_VERSION) > 0
-  && compareGameVersions('V2.82-unified.41', GAME_VERSION) > 0);
+check('F2 the next release prompts this tab',
+  compareGameVersions(NEXT, GAME_VERSION) > 0);
 check('F2 a V2.82-unified.39 doc does not prompt a unified.40 tab',
   compareGameVersions('V2.82-unified.39', GAME_VERSION) < 0);
 check('F2 a V2.82-unified.33 doc does not prompt a unified.40 tab',

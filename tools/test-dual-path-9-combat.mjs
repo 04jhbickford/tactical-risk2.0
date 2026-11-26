@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 if (typeof globalThis.localStorage === 'undefined') {
   globalThis.localStorage = { getItem() { return null; }, setItem() {}, removeItem() {} };
@@ -91,7 +92,7 @@ function makeGs({
 }
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
+check('GAME_VERSION is V2.81.57-unified.33', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'));
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== 9.20.26.02 / 35RB85 dequeue captures land leftover ===');

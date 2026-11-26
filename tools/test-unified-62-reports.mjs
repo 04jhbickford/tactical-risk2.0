@@ -1,3 +1,4 @@
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 // unified.62 — Discord reports from 27 Sep through 3 Oct.
 // Each block is a reproduction. A pass means that report is already fixed.
 // Run: node tools/test-unified-62-reports.mjs
@@ -87,12 +88,12 @@ function advanceTo(gs, phase, playerId = null) {
 console.log('=== stamp ===');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  const stamp = 'V2.81.57-unified.69';
-  check('display stamp is V2.81.57-unified.69', GAME_VERSION === stamp);
+  const stamp = GAME_VERSION;   // index.html must match the current release; this test's own release was unified.69
+  check('display stamp is V2.81.57-unified.69', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.69'));
   check('schema stays 11', SCHEMA_VERSION === 11);
-  check('game docs write V2.82-unified.69', compatClientVersion() === 'V2.82-unified.69');
-  check('a V2.82-unified.70 doc prompts this tab', compareGameVersions('V2.82-unified.70', GAME_VERSION) > 0);
-  check('a V2.82-unified.65 doc does not prompt this tab', compareGameVersions('V2.82-unified.65', GAME_VERSION) < 0);
+  check('game docs write V2.82-unified.69', stampAtLeast(compatClientVersion(), 'V2.82-unified.69'));
+  check('a V2.82-unified.70 doc prompts this tab', compareGameVersions('V2.82-unified.70', 'V2.81.57-unified.69') > 0);
+  check('a V2.82-unified.65 doc does not prompt this tab', compareGameVersions('V2.82-unified.65', 'V2.81.57-unified.69') < 0);
   check('index.html carries the display stamp',
     html.includes(`name="tr-game-version" content="${stamp}"`)
     && html.includes(`window.__TR_GAME_VERSION = '${stamp}'`)

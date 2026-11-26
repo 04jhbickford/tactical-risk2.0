@@ -1,3 +1,4 @@
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 // Expanded tech adds Wasserfall. AA guns then defend at 2.
 // Classic, and Expanded without the tech, stay at 1.
 // Run: node tools/test-wasserfall.mjs
@@ -112,7 +113,7 @@ function qty(gs, type, owner) {
 
 console.log('=== stamp and catalog ===');
 {
-  check('display stamp is V2.81.57-unified.69', GAME_VERSION === 'V2.81.57-unified.69');
+  check('display stamp is V2.81.57-unified.69', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.69'));
   check('schema stays 11', SCHEMA_VERSION === 11);
   const classicIds = Object.keys(TECHNOLOGIES);
   check('classic catalog has no Wasserfall', !classicIds.includes('wasserfall'));

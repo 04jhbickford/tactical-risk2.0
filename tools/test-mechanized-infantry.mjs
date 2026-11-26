@@ -5,6 +5,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 if (typeof globalThis.localStorage === 'undefined') {
   const mem = new Map();
@@ -65,21 +66,21 @@ function countType(gs, type) {
 console.log('=== stamp ===');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  check('display stamp is V2.81.57-unified.38', GAME_VERSION === 'V2.81.57-unified.38');
+  check('display stamp is V2.81.57-unified.38', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.38'));
   check('schema stays 11', SCHEMA_VERSION === 11);
-  check('game docs write V2.82-unified.38', compatClientVersion() === 'V2.82-unified.38');
+  check('game docs write V2.82-unified.38', stampAtLeast(compatClientVersion(), 'V2.82-unified.38'));
   check('a V2.82-unified.37 doc does not prompt this tab',
-    compareGameVersions('V2.82-unified.37', GAME_VERSION) < 0);
+    compareGameVersions('V2.82-unified.37', 'V2.81.57-unified.38') < 0);
   check('a V2.82-unified.39 doc prompts this tab',
-    compareGameVersions('V2.82-unified.39', GAME_VERSION) > 0);
+    compareGameVersions('V2.82-unified.39', 'V2.81.57-unified.38') > 0);
   check('our own V2.82-unified.38 doc does not prompt',
-    compareGameVersions('V2.82-unified.38', GAME_VERSION) === 0);
+    compareGameVersions('V2.82-unified.38', 'V2.81.57-unified.38') === 0);
   check('index.html carries the display stamp',
-    html.includes('content="V2.81.57-unified.38"')
-    && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.38'")
-    && html.includes("var LOCKED = 'V2.81.57-unified.38'")
-    && html.includes('style.css?v=V2.81.57-unified.38')
-    && html.includes('src/main.js?v=V2.81.57-unified.38'));
+    htmlStampAtLeast(html, 'V2.81.57-unified.38')
+    && html.includes("window.__TR_GAME_VERSION = '" + GAME_VERSION + "'")
+    && html.includes("var LOCKED = '" + GAME_VERSION + "'")
+    && html.includes('style.css?v=' + GAME_VERSION)
+    && html.includes('src/main.js?v=' + GAME_VERSION));
 }
 
 console.log('=== catalog and lobby ===');

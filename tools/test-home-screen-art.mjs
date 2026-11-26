@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const { GAME_VERSION, SCHEMA_VERSION, compareGameVersions, compatClientVersion } =
@@ -28,21 +29,21 @@ const bytes = readFileSync(join(root, ART));
 const hash = createHash('sha256').update(bytes).digest('hex');
 const url = `url('${ART}')`;
 
-check('display stamp is V2.81.57-unified.59', GAME_VERSION === 'V2.81.57-unified.59');
+check('display stamp is V2.81.57-unified.59', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.59'));
 check('schema stays 11', SCHEMA_VERSION === 11);
-check('game docs write V2.82-unified.59', compatClientVersion() === 'V2.82-unified.59');
+check('game docs write V2.82-unified.59', stampAtLeast(compatClientVersion(), 'V2.82-unified.59'));
 check('a V2.82-unified.50 doc does not prompt this tab',
-  compareGameVersions('V2.82-unified.50', GAME_VERSION) < 0);
+  compareGameVersions('V2.82-unified.50', 'V2.81.57-unified.59') < 0);
 check('a V2.82-unified.60 doc prompts this tab',
-  compareGameVersions('V2.82-unified.60', GAME_VERSION) > 0);
+  compareGameVersions('V2.82-unified.60', 'V2.81.57-unified.59') > 0);
 check('our own V2.82-unified.59 doc does not prompt',
-  compareGameVersions('V2.82-unified.59', GAME_VERSION) === 0);
+  compareGameVersions('V2.82-unified.59', 'V2.81.57-unified.59') === 0);
 check('index.html carries the display stamp',
-  html.includes('content="V2.81.57-unified.59"')
-  && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.59'")
-  && html.includes("var LOCKED = 'V2.81.57-unified.59'")
-  && html.includes('style.css?v=V2.81.57-unified.59')
-  && html.includes('src/main.js?v=V2.81.57-unified.59'));
+  htmlStampAtLeast(html, 'V2.81.57-unified.59')
+  && html.includes("window.__TR_GAME_VERSION = '" + GAME_VERSION + "'")
+  && html.includes("var LOCKED = '" + GAME_VERSION + "'")
+  && html.includes('style.css?v=' + GAME_VERSION)
+  && html.includes('src/main.js?v=' + GAME_VERSION));
 check('both lobby backgrounds point at the painting',
   css.split(url).length - 1 === 2);
 check('painting bytes are the supplied file', hash === SHA256 && bytes.length === BYTES);

@@ -4,6 +4,7 @@
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const { GAME_VERSION, SCHEMA_VERSION } = await import('../src/version.js');
@@ -63,12 +64,12 @@ const hostUser = { id: 'rob', displayName: 'Robert007' };
 const guestUser = { id: 'bastion', displayName: 'Bastion' };
 
 console.log('=== V2.81.57-unified.33 stamp ===');
-check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
+check('GAME_VERSION is V2.81.57-unified.33', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'));
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  check('index.html meta stamp', html.includes('content="V2.81.57-unified.33"'));
-  check('index.html lock stamp', html.includes("var LOCKED = 'V2.81.57-unified.33'"));
+  check('index.html meta stamp', htmlStampAtLeast(html, 'V2.81.57-unified.33'));
+  check('index.html lock stamp', html.includes("var LOCKED = '" + GAME_VERSION + "'"));
 }
 
 console.log('=== Host seat renders the Discord field ===');

@@ -1,3 +1,4 @@
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 // unified.66 — sea units stay at sea, submarine surprise strike, RISK cash-in.
 // Run: node tools/test-unified-66-reports.mjs
 
@@ -123,10 +124,10 @@ const atlantic = 'Atlantic';
 console.log('=== stamp ===');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  const stamp = 'V2.81.57-unified.69';
-  check('display stamp is V2.81.57-unified.69', GAME_VERSION === stamp);
+  const stamp = GAME_VERSION;   // index.html must match the current release; this test's own release was unified.69
+  check('display stamp is V2.81.57-unified.69', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.69'));
   check('schema stays 11', SCHEMA_VERSION === 11);
-  check('game docs write V2.82-unified.69', compatClientVersion() === 'V2.82-unified.69');
+  check('game docs write V2.82-unified.69', stampAtLeast(compatClientVersion(), 'V2.82-unified.69'));
   check('index.html carries the display stamp',
     html.includes(`name="tr-game-version" content="${stamp}"`)
     && html.includes(`window.__TR_GAME_VERSION = '${stamp}'`)

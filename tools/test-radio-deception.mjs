@@ -4,6 +4,7 @@
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -82,14 +83,14 @@ function board() {
 console.log('=== stamp ===');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  check('display stamp is V2.81.57-unified.59', GAME_VERSION === 'V2.81.57-unified.59');
+  check('display stamp is V2.81.57-unified.59', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.59'));
   check('schema stays 11', SCHEMA_VERSION === 11);
   check('index.html carries the display stamp',
-    html.includes('content="V2.81.57-unified.59"')
-    && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.59'")
-    && html.includes("var LOCKED = 'V2.81.57-unified.59'")
-    && html.includes('style.css?v=V2.81.57-unified.59')
-    && html.includes('src/main.js?v=V2.81.57-unified.59'));
+    htmlStampAtLeast(html, 'V2.81.57-unified.59')
+    && html.includes("window.__TR_GAME_VERSION = '" + GAME_VERSION + "'")
+    && html.includes("var LOCKED = '" + GAME_VERSION + "'")
+    && html.includes('style.css?v=' + GAME_VERSION)
+    && html.includes('src/main.js?v=' + GAME_VERSION));
 }
 
 console.log('=== lobby ===');

@@ -4,6 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 if (typeof globalThis.localStorage === 'undefined') {
   const mem = new Map();
@@ -56,14 +57,14 @@ const mpSrc = readFileSync(join(root, 'src/ui/multiplayerLobby.js'), 'utf8');
 const unitDefs = JSON.parse(readFileSync(join(root, 'data/units.json'), 'utf8'));
 
 console.log('=== stamp ===');
-check('stamp is V2.81.57-unified.59', GAME_VERSION === 'V2.81.57-unified.59');
+check('stamp is V2.81.57-unified.59', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.59'));
 check('schema stays 11', SCHEMA_VERSION === 11);
 check('index.html carries the display stamp',
-  html.includes('content="V2.81.57-unified.59"')
-  && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.59'")
-  && html.includes("var LOCKED = 'V2.81.57-unified.59'")
-  && html.includes('style.css?v=V2.81.57-unified.59')
-  && html.includes('src/main.js?v=V2.81.57-unified.59'));
+  htmlStampAtLeast(html, 'V2.81.57-unified.59')
+  && html.includes("window.__TR_GAME_VERSION = '" + GAME_VERSION + "'")
+  && html.includes("var LOCKED = '" + GAME_VERSION + "'")
+  && html.includes('style.css?v=' + GAME_VERSION)
+  && html.includes('src/main.js?v=' + GAME_VERSION));
 
 console.log('=== normalize ===');
 check('default is general', DEFAULT_AI_SPECIALIZATION === 'general'

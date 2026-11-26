@@ -10,6 +10,7 @@ import { buildPhaseSnapshot, writeSnapshotWithRetry, SNAPSHOT_VISIBLE_ERROR } fr
 import { GAME_VERSION, SCHEMA_VERSION } from '../src/version.js';
 import { battlesFromDiceSources } from '../src/stats/battleDice.js';
 import { renderBattleDiceFromModel } from '../src/ui/battleDicePanel.js';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -36,7 +37,7 @@ function board({ round, phase, ipcs, units }) {
 
 console.log('=== V2.81.57-unified.33 audit fixture ===');
 check('schema stays 11', SCHEMA_VERSION === 11);
-check('display stamp is unified.26', GAME_VERSION === 'V2.81.57-unified.33');
+check('display stamp is unified.26', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'));
 
 const opening = await buildPhaseSnapshot(board({
   round: 4,

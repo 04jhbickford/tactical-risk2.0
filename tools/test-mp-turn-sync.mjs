@@ -4,6 +4,7 @@
 import { pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 if (typeof globalThis.localStorage === 'undefined') {
   globalThis.localStorage = {
@@ -166,7 +167,7 @@ function makePlacementTable({
 
 console.log('=== V2.72 version + leftover-unit pass predicate ===');
 {
-  check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
+  check('GAME_VERSION is V2.81.57-unified.33', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'));
   check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
   check('round cap allows Done with leftovers still in the pool',
     canFinishPlacementRound({

@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 if (typeof globalThis.localStorage === 'undefined') {
   globalThis.localStorage = { getItem() { return null; }, setItem() {}, removeItem() {} };
@@ -74,13 +75,13 @@ const theater = [
 ];
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
+check('GAME_VERSION is V2.81.57-unified.33', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'));
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 check('Experimental query mode is three', UX_THREE === 'three');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
   const mode = readFileSync(join(root, 'src/map/presentationMode.js'), 'utf8');
-  check('index.html stamp is unified.2', html.includes('content="V2.81.57-unified.33"'));
+  check('index.html stamp is unified.2', htmlStampAtLeast(html, 'V2.81.57-unified.33'));
   check('Experimental boot query is ux=three', /ux=three/.test(mode) || /UX_THREE\s*=\s*'three'/.test(mode));
 }
 

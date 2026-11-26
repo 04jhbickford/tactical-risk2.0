@@ -1,3 +1,4 @@
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 // Discord turn ping: human-only, dedupe, untagged fallback, soft-fail.
 // Run: node tools/test-discord-turn-ping.mjs
 
@@ -37,7 +38,7 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-check('stamp is unified.2', GAME_VERSION === 'V2.81.57-unified.33');
+check('stamp is unified.2', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'));
 check('channel id documented', DISCORD_TURN_CHANNEL_ID === '1551283474303025292');
 check('Classic lobby field', classicLobby.includes('mp-discord-input') && classicLobby.includes('data-action="discord-id"'));
 check('New UX lobby field', threeChrome.includes('data-lobby-discord') && threeChrome.includes('three-lobby-discord'));

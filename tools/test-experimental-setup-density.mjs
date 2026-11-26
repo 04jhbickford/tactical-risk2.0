@@ -9,8 +9,9 @@ import { GAME_VERSION } from '../src/version.js';
 import { UX_LABEL_EXPERIMENTAL } from '../src/map/presentationMode.js';
 import { createSoloLobby, applyLobbyAction, seatOccupantView } from '../src/map/threeSoloLobby.js';
 import { injectThreeChrome } from '../src/map/threeMapChrome.js';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
-assert.equal(GAME_VERSION, 'V2.81.57-unified.33', 'stamp is unified.2');
+assert.ok(stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'), 'stamp is unified.2');
 assert.equal(UX_LABEL_EXPERIMENTAL, 'Experimental UX');
 
 const chromeSrc = readFileSync(new URL('../src/map/threeMapChrome.js', import.meta.url), 'utf8');

@@ -7,6 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 globalThis.localStorage ??= {
   getItem() { return null; },
@@ -73,7 +74,7 @@ const check = (label, cond, extra) => {
   } else console.log('ok  :', label);
 };
 
-check('stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.33');
+check('stamp is unified.21', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'));
 check('schema stays 11', SCHEMA_VERSION === 11);
 
 function mulberry32(seed) {
@@ -559,8 +560,9 @@ check('destroyer-present subs roll once in the general step and not in a strike'
   };
   const result = gs.resolveCombat('Egypt', unitDefs);
   const attack = steps.filter((s) => s.context === 'combat' && s.side === 'attacker');
-  check('AI heavy bombers still roll one die each (cap allows two)',
-    attack.length === 1 && attack[0].dice === 2 + 3 + 2 && attack[0].dice <= attack[0].eligible,
+  // unified.68: auto-resolve rolls heavy bombers' two dice, like the combat screen (Rob, 24 Oct). Before that it was one each.
+  check('AI heavy bombers roll two dice each, up to the cap',
+    attack.length === 1 && attack[0].dice === 2 + 3 + 2 + 2 && attack[0].dice === attack[0].eligible,
     attack);
   check('all-hit round still has hits <= dice',
     !!result && result.attackHits <= attack[0].dice, result && result.attackHits);

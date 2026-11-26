@@ -6,6 +6,7 @@
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 if (typeof globalThis.localStorage === 'undefined') {
   globalThis.localStorage = {
@@ -57,8 +58,8 @@ const unitDefs = {
 };
 
 console.log('=== stamp ===');
-check('display stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.33');
-check('compat stamp is V2.82-unified.33', compatClientVersion() === 'V2.82-unified.33');
+check('display stamp is unified.21', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'));
+check('compat stamp is V2.82-unified.33', stampAtLeast(compatClientVersion(), 'V2.82-unified.33'));
 check('schema stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== pure dice and cap ===');

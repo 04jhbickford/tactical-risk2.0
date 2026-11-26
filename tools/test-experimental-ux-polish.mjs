@@ -14,8 +14,9 @@ import {
 } from '../src/map/presentationMode.js';
 import { createSoloLobby } from '../src/map/threeSoloLobby.js';
 import { injectThreeChrome } from '../src/map/threeMapChrome.js';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
-assert.equal(GAME_VERSION, 'V2.81.57-unified.33', 'stamp is unified.2');
+assert.ok(stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'), 'stamp is unified.2');
 assert.equal(UX_LABEL_EXPERIMENTAL, 'Experimental UX');
 assert.equal(resolveUxMode('?ux=three'), UX_CLASSIC, '?ux=three redirects to Classic');
 assert.doesNotMatch(applyUxQuery(UX_THREE, 'https://example.test/'), /ux=three/);

@@ -4,6 +4,7 @@
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { pathToFileURL, fileURLToPath } from 'url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 if (typeof globalThis.localStorage === 'undefined') {
   globalThis.localStorage = {
@@ -40,7 +41,7 @@ const EMPTY_OWNED = [
 ];
 
 console.log('=== stamp ===');
-check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
+check('GAME_VERSION is V2.81.57-unified.33', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'));
 
 console.log('=== empty owned land still marked ===');
 {

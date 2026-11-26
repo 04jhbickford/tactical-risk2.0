@@ -239,7 +239,8 @@ async function resolveWebSocket() {
 }
 
 function chromePath() {
-  for (const candidate of ['/usr/local/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/google-chrome']) {
+  // CHROME_PATH lets a Mac (or a Playwright Chromium) run this too; the Linux paths are the box's.
+  for (const candidate of [process.env.CHROME_PATH, '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/local/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/google-chrome'].filter(Boolean)) {
     if (fs.existsSync(candidate)) return candidate;
   }
   throw new Error('google-chrome not found');

@@ -8,6 +8,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const { GAME_VERSION } = await import(pathToFileURL(join(root, 'src/version.js')));
@@ -94,7 +95,7 @@ const kazakh = data.find((row) => row.name === 'Kazakh S.S.R.');
 const txt = parsePolygonsLine(readFileSync(join(root, 'map/polygons.txt'), 'utf8'), 'Kazakh S.S.R.');
 const ring = kazakh?.polygons?.[0] || [];
 
-check('stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.33');
+check('stamp is unified.21', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'));
 check('Kazakh is one ring', kazakh && kazakh.polygons.length === 1 && !kazakh.isWater);
 check('map polygons.txt matches territories.json',
   txt && JSON.stringify(txt) === JSON.stringify(ring));

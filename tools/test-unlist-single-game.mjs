@@ -8,6 +8,7 @@ import {
   lobbyChromeStatusAfter,
 } from '../src/multiplayer/lobbyStart.js';
 import { buildMyGamesBoard } from '../src/multiplayer/lastMatch.js';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 let failures = 0;
 const check = (label, cond) => {
@@ -15,7 +16,7 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-check('stamp is unified.14', GAME_VERSION === 'V2.81.57-unified.33');
+check('stamp is unified.14', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'));
 
 const lobby = {
   id: 'lobby-txvkjb',

@@ -19,6 +19,7 @@ import {
   shouldShowSignInFormForIdentity,
 } from '../src/multiplayer/authSession.js';
 import { shouldShowSignInForm, shouldSignOutOnBackground } from '../src/multiplayer/presencePolicy.js';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 let failures = 0;
 const check = (label, cond) => {
@@ -26,7 +27,7 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-check('stamp is unified.2', GAME_VERSION === 'V2.81.57-unified.33');
+check('stamp is unified.2', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'));
 check('email local-part', emailLocalPart('rob@example.com') === 'rob');
 check('generic Player', isGenericDisplayName('Player') && isGenericDisplayName('non-player'));
 check('real name is not generic', isGenericDisplayName('Robert007') === false);

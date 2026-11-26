@@ -1,3 +1,4 @@
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 // unified.63 — Discord reports from 22 Sep through 5 Oct, plus a rejected
 // End Turn save. Each block is a reproduction. A pass with no production
 // change is evidence the report was already fixed.
@@ -236,12 +237,12 @@ async function settle() {
 console.log('=== stamp ===');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  const stamp = 'V2.81.57-unified.69';
-  check('display stamp is V2.81.57-unified.69', GAME_VERSION === stamp);
+  const stamp = GAME_VERSION;   // index.html must match the current release; this test's own release was unified.69
+  check('display stamp is V2.81.57-unified.69', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.69'));
   check('schema stays 11', SCHEMA_VERSION === 11);
-  check('game docs write V2.82-unified.69', compatClientVersion() === 'V2.82-unified.69');
-  check('a V2.82-unified.70 doc prompts this tab', compareGameVersions('V2.82-unified.70', GAME_VERSION) > 0);
-  check('a V2.82-unified.65 doc does not prompt this tab', compareGameVersions('V2.82-unified.65', GAME_VERSION) < 0);
+  check('game docs write V2.82-unified.69', stampAtLeast(compatClientVersion(), 'V2.82-unified.69'));
+  check('a V2.82-unified.70 doc prompts this tab', compareGameVersions('V2.82-unified.70', 'V2.81.57-unified.69') > 0);
+  check('a V2.82-unified.65 doc does not prompt this tab', compareGameVersions('V2.82-unified.65', 'V2.81.57-unified.69') < 0);
   check('index.html carries the display stamp',
     html.includes(`name="tr-game-version" content="${stamp}"`)
     && html.includes(`window.__TR_GAME_VERSION = '${stamp}'`)

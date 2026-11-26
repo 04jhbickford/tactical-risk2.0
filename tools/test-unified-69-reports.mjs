@@ -1,3 +1,4 @@
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 // unified.69 — batch 9: land bridges (enemy warships in the bridge's own sea zone block;
 // own/allied ships and transports never do; option off never blocks), Wake Island–Midway,
 // turn ping after the last deployment round, auto-resolve infantry+artillery parity.
@@ -66,7 +67,7 @@ function board() {
 const bridgesOf = (gs) => gs.hasLandBridge('Alaska', 'Soviet Far East') && gs.hasLandBridge('Kenya-Rhodesia', 'Madagascar');
 
 console.log('=== stamp ===');
-check('display stamp is V2.81.57-unified.69', GAME_VERSION === 'V2.81.57-unified.69');
+check('display stamp is V2.81.57-unified.69', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.69'));
 
 console.log('=== 1567474462675177512: bridges work for land attack + movement ===');
 {

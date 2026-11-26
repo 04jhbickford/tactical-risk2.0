@@ -4,6 +4,7 @@
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 if (typeof globalThis.localStorage === 'undefined') {
   globalThis.localStorage = {
@@ -113,7 +114,7 @@ function attackRoll(gs, units) {
 }
 
 console.log('=== stamps ===');
-check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
+check('GAME_VERSION is V2.81.57-unified.33', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'));
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 console.log('=== pairing ===');
@@ -215,6 +216,7 @@ console.log('=== pairing ===');
     phoneCombatDetailSide: 'attacker',
     gameState: gs,
     _calculateProbability() { return 70; },
+    _currentTerritoryIsWater() { return false; },
     _getTotalUnits(list) {
       return (list || []).reduce((sum, unit) => sum + (Number(unit.quantity) || 0), 0);
     },

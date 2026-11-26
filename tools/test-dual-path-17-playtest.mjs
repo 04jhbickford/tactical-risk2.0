@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const { GAME_VERSION, SCHEMA_VERSION } = await import(pathToFileURL(join(root, 'src/version.js')));
@@ -32,10 +33,10 @@ const mgr = readFileSync(join(root, 'src/multiplayer/lobbyManager.js'), 'utf8');
 const lobbySrc = readFileSync(join(root, 'src/ui/lobby.js'), 'utf8');
 const ping = readFileSync(join(root, 'src/multiplayer/discordTurnPing.js'), 'utf8');
 
-assert.equal(GAME_VERSION, 'V2.81.57-unified.33');
+assert.ok(stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'));
 assert.equal(SCHEMA_VERSION, 11);
-assert.match(html, /content="V2\.81\.57-unified\.33"/);
-assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.33'/);
+assert.match(html, /content="V2\.81\.57-unified\.\d+"/);
+assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.\d+'/);
 
 function listedRow() {
   return {

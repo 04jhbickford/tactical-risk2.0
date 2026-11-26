@@ -6,6 +6,7 @@
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 globalThis.localStorage ??= { getItem() { return null; }, setItem() {}, removeItem() {} };
 const mk = () => ({
@@ -61,7 +62,7 @@ const check = (label, cond, extra) => {
 };
 
 console.log('=== V2.81.57-unified.33 discord playtest ===');
-check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
+check('GAME_VERSION is V2.81.57-unified.33', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'));
 check('SCHEMA_VERSION stays 11', SCHEMA_VERSION === 11);
 
 const mainSrc = readFileSync(join(root, 'src/main.js'), 'utf8');
