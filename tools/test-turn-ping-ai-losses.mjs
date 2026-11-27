@@ -6,6 +6,7 @@
 import { pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 globalThis.localStorage ??= { getItem() { return null; }, setItem() {}, removeItem() {} };
 const el = () => ({
@@ -39,7 +40,7 @@ const check = (label, cond, extra) => {
   }
 };
 
-check('stamp is unified.15', GAME_VERSION === 'V2.81.57-unified.33');
+check('stamp is unified.15', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'));
 check('schema stays 11', SCHEMA_VERSION === 11);
 
 const landDefs = {

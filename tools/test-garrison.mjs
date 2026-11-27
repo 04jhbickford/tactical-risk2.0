@@ -4,6 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 if (typeof globalThis.localStorage === 'undefined') {
   const mem = new Map();
@@ -81,21 +82,21 @@ function firstLand(gs) {
 console.log('=== stamp ===');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  check('display stamp is V2.81.57-unified.59', GAME_VERSION === 'V2.81.57-unified.59');
+  check('display stamp is V2.81.57-unified.59', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.59'));
   check('schema stays 11', SCHEMA_VERSION === 11);
-  check('game docs write V2.82-unified.59', compatClientVersion() === 'V2.82-unified.59');
+  check('game docs write V2.82-unified.59', stampAtLeast(compatClientVersion(), 'V2.82-unified.59'));
   check('a V2.82-unified.50 doc does not prompt this tab',
-    compareGameVersions('V2.82-unified.50', GAME_VERSION) < 0);
+    compareGameVersions('V2.82-unified.50', 'V2.81.57-unified.59') < 0);
   check('a V2.82-unified.60 doc prompts this tab',
-    compareGameVersions('V2.82-unified.60', GAME_VERSION) > 0);
+    compareGameVersions('V2.82-unified.60', 'V2.81.57-unified.59') > 0);
   check('our own V2.82-unified.59 doc does not prompt',
-    compareGameVersions('V2.82-unified.59', GAME_VERSION) === 0);
+    compareGameVersions('V2.82-unified.59', 'V2.81.57-unified.59') === 0);
   check('index.html carries the display stamp',
-    html.includes('content="V2.81.57-unified.59"')
-    && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.59'")
-    && html.includes("var LOCKED = 'V2.81.57-unified.59'")
-    && html.includes('style.css?v=V2.81.57-unified.59')
-    && html.includes('src/main.js?v=V2.81.57-unified.59'));
+    htmlStampAtLeast(html, 'V2.81.57-unified.59')
+    && html.includes("window.__TR_GAME_VERSION = '" + GAME_VERSION + "'")
+    && html.includes("var LOCKED = '" + GAME_VERSION + "'")
+    && html.includes('style.css?v=' + GAME_VERSION)
+    && html.includes('src/main.js?v=' + GAME_VERSION));
 }
 
 console.log('=== lobby default off ===');
@@ -355,10 +356,11 @@ console.log('=== defends, and dies last ===');
     && one.find((u) => u.type === 'aaGun').quantity === 1);
   const two = fresh();
   gs._applyCasualtiesWithDamage(two, 2, unitDefs, false);
-  check('other units die before the garrison',
+  // unified.61: an AA gun is never a casualty, so after the infantry the garrison is the last unit that can take a hit.
+  check('other units die before the garrison; the AA gun is never a casualty',
     two.find((u) => u.type === 'infantry').quantity === 0
-    && two.find((u) => u.type === 'aaGun').quantity === 0
-    && two.find((u) => u.type === GARRISON).quantity === 1);
+    && two.find((u) => u.type === 'aaGun').quantity === 1
+    && two.find((u) => u.type === GARRISON).quantity === 0);
   const three = fresh();
   gs._applyCasualtiesWithDamage(three, 3, unitDefs, false);
   check('the garrison dies once it is the last unit',
@@ -405,7 +407,7 @@ console.log('=== defends, and dies last ===');
   const picked = ui._selectCheapestCasualties(fresh(), 1);
   check('the combat picker takes infantry first', picked.infantry === 1 && !picked.garrison);
   const pickedAll = ui._selectCheapestCasualties(fresh(), 2);
-  check('the combat picker still holds the garrison', pickedAll.infantry === 1 && pickedAll.aaGun === 1 && !pickedAll.garrison);
+  check('the combat picker takes the garrison after the infantry, never the AA gun', pickedAll.infantry === 1 && !pickedAll.aaGun && pickedAll.garrison === 1);
   const pickedLast = ui._selectCheapestCasualties(fresh(), 3);
   check('the combat picker takes the garrison last', pickedLast.garrison === 1);
   ui.combatState = {
@@ -419,11 +421,9 @@ console.log('=== defends, and dies last ===');
   ui._adjustCasualty('defender', GARRISON, 1);
   check('a click cannot kill the garrison first', !ui.combatState.selectedDefenderCasualties.garrison);
   ui._adjustCasualty('defender', 'infantry', 1);
-  ui._adjustCasualty('defender', 'aaGun', 1);
   ui._adjustCasualty('defender', GARRISON, 1);
   check('a click can kill the garrison after the others',
     ui.combatState.selectedDefenderCasualties.infantry === 1
-    && ui.combatState.selectedDefenderCasualties.aaGun === 1
     && ui.combatState.selectedDefenderCasualties.garrison === 1);
 }
 

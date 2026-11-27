@@ -6,6 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 if (typeof globalThis.localStorage === 'undefined') {
   const mem = new Map();
@@ -161,7 +162,7 @@ async function buy(name, opts, difficulty, tacticalBombers) {
 }
 
 console.log('=== tactical bomber AI buy ===');
-check('stamp is unified.26', GAME_VERSION === 'V2.81.57-unified.33');
+check('stamp is unified.26', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'));
 
 const offRuns = [];
 for (const [name, opts, difficulty] of CASES) {

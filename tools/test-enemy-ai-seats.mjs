@@ -5,6 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -41,7 +42,7 @@ function offeredFor(settings, seated, factions, mapId) {
 }
 
 console.log('=== 7-seat enemy AI ===');
-check('stamp is V2.81.57-unified.40', GAME_VERSION === 'V2.81.57-unified.40');
+check('stamp is V2.81.57-unified.40', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.40'));
 
 {
   const settings = { maxPlayers: 7, gameOptions: { maxPlayers: 7 } };

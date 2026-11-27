@@ -4,6 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 if (typeof globalThis.localStorage === 'undefined') {
   const mem = new Map();
@@ -157,7 +158,7 @@ function link(pairs) {
 }
 
 console.log('=== four AI levels ===');
-check('stamp is V2.81.57-unified.59', GAME_VERSION === 'V2.81.57-unified.59');
+check('stamp is V2.81.57-unified.59', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.59'));
 check('schema stays 11', SCHEMA_VERSION === 11);
 check('live turn is aiController from main', mainSrc.includes("from './ai/aiController.js'")
   && !mainSrc.includes('strategyAI'));

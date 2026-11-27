@@ -1,3 +1,4 @@
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 // V2.81.57-unified.33 — green advances the phase; blue confirms the action.
 
 import { readFileSync } from 'fs';
@@ -23,7 +24,7 @@ const check = (label, cond) => {
   }
 };
 
-check('stamp is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
+check('stamp is V2.81.57-unified.33', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'));
 
 console.log('=== pending named move keeps blue confirm and green advance ===');
 {

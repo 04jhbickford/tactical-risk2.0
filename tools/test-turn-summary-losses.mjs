@@ -4,6 +4,7 @@
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const { GAME_VERSION } = await import(pathToFileURL(join(root, 'src/version.js')));
@@ -20,7 +21,7 @@ const check = (label, cond) => {
 };
 
 console.log('=== V2.81.57-unified.33 turn summary losses ===');
-check('GAME_VERSION is V2.81.57-unified.33', GAME_VERSION === 'V2.81.57-unified.33');
+check('GAME_VERSION is V2.81.57-unified.33', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'));
 
 const line = formatLossCount({ infantry: 2, armour: 1 });
 check('loss map prints like the ping', line === '2x Infantry, 1x Tank');

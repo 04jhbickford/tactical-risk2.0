@@ -52,7 +52,7 @@ export function garrisonHitAllowed(units, selected = {}) {
   const picked = selected || {};
   const byType = new Map();
   for (const unit of units || []) {
-    if (!unit || unit.type === GARRISON || unit.type === 'factory' || unit.type === 'transport') continue;
+    if (!unit || unit.type === GARRISON || unit.type === 'factory' || unit.type === 'transport' || unit.type === 'aaGun') continue;   // an AA gun is never a casualty (unified.61), so it never has to go first
     const qty = Math.max(0, Number(unit.quantity) || 0);
     if (qty <= 0) continue;
     byType.set(unit.type, (byType.get(unit.type) || 0) + qty);

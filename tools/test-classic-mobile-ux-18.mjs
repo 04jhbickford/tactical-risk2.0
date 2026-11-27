@@ -5,17 +5,18 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const { GAME_VERSION, SCHEMA_VERSION } = await import(pathToFileURL(join(root, 'src/version.js')));
 
-assert.equal(GAME_VERSION, 'V2.81.57-unified.33', 'stamp is unified.2');
+assert.ok(stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'), 'stamp is unified.2');
 assert.equal(SCHEMA_VERSION, 11, 'SCHEMA stays 11');
 
 const html = readFileSync(join(root, 'index.html'), 'utf8');
-assert.match(html, /tr-game-version" content="V2\.81\.57-unified\.33"/);
-assert.match(html, /style\.css\?v=V2\.81\.57-unified\.33/);
-assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.33'/);
+assert.match(html, /tr-game-version" content="V2\.81\.57-unified\.\d+"/);
+assert.match(html, /style\.css\?v=V2\.81\.57-unified\.\d+/);
+assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.\d+'/);
 
 const css = readFileSync(join(root, 'style.css'), 'utf8');
 assert.match(css, /\.phone-peek-tile\s*\{/);

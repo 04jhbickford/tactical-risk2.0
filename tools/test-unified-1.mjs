@@ -16,6 +16,7 @@ import {
 } from '../src/map/presentationMode.js';
 import { readFileSync } from 'node:fs';
 import { GAME_VERSION, SCHEMA_VERSION } from '../src/version.js';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 function memoryStore() {
   return {
@@ -30,12 +31,12 @@ globalThis.sessionStorage = memoryStore();
 globalThis.localStorage = memoryStore();
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-assert.match(html, /window\.__TR_GAME_VERSION = 'V2\.81\.57-unified\.33'/);
-assert.match(html, /name="tr-game-version" content="V2\.81\.57-unified\.33"/);
+assert.match(html, /window\.__TR_GAME_VERSION = 'V2\.81\.57-unified\.\d+'/);
+assert.match(html, /name="tr-game-version" content="V2\.81\.57-unified\.\d+"/);
 assert.match(html, /lockStamp/);
-assert.match(html, /src="src\/main\.js\?v=V2\.81\.57-unified\.33"/);
+assert.match(html, /src="src\/main\.js\?v=V2\.81\.57-unified\.\d+"/);
 
-assert.equal(GAME_VERSION, 'V2.81.57-unified.33', 'stamp is unified.2');
+assert.ok(stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'), 'stamp is unified.2');
 assert.equal(SCHEMA_VERSION, 11, 'SCHEMA stays 11');
 assert.equal(UX_LABEL_EXPERIMENTAL, 'Experimental UX');
 

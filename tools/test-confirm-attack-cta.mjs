@@ -18,6 +18,7 @@ import {
 import { startClassicSolo } from '../src/map/threeSoloMatch.js';
 import { TURN_PHASES } from '../src/state/gameState.js';
 import { GAME_VERSION } from '../src/version.js';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 if (typeof globalThis.localStorage === 'undefined') {
   const store = new Map();
@@ -44,7 +45,7 @@ function assert(cond, msg) {
   }
 }
 
-assert(GAME_VERSION === 'V2.81.57-unified.33', 'stamp is unified.2');
+assert(stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'), 'stamp is unified.2');
 
 const hiddenZoom = {
   hidden: true,

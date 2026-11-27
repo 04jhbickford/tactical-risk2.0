@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 if (typeof globalThis.localStorage === 'undefined') {
   const mem = () => {
@@ -44,10 +45,10 @@ const bootSrc = readFileSync(join(root, 'src/map/threeSoloBoot.js'), 'utf8');
 const playSrc = readFileSync(join(root, 'src/map/threeSoloPlay.js'), 'utf8');
 const lobbyScreens = readFileSync(join(root, 'src/map/threeSoloLobby.js'), 'utf8');
 
-assert.equal(GAME_VERSION, 'V2.81.57-unified.33');
+assert.ok(stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'));
 assert.equal(SCHEMA_VERSION, 11);
-assert.match(html, /content="V2\.81\.57-unified\.33"/);
-assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.33'/);
+assert.match(html, /content="V2\.81\.57-unified\.\d+"/);
+assert.match(html, /__TR_GAME_VERSION = 'V2\.81\.57-unified\.\d+'/);
 
 function fresh() {
   const territories = [

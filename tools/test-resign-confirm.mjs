@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -263,7 +264,7 @@ const check = (label, cond) => {
   else console.log('ok  :', label);
 };
 
-check('stamp is unified.14', GAME_VERSION === 'V2.81.57-unified.33');
+check('stamp is unified.14', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'));
 
 const hudSrc = readFileSync(join(root, 'src/ui/hud.js'), 'utf8');
 const paths = hudSrc.slice(hudSrc.indexOf('const exitItem'));

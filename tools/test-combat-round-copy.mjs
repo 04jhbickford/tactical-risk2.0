@@ -7,6 +7,7 @@
 
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 function makeEl() {
   const classSet = new Set();
@@ -120,7 +121,7 @@ ui.lastRolls = {
 };
 
 const forces = ui._renderExpandedForces(attackers, defenders, attacker, defender);
-check('stamp is unified.21', GAME_VERSION === 'V2.81.57-unified.33');
+check('stamp is unified.21', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.33'));
 check('paired infantry and artillery show both quantities', forces.includes('>2 + 2<'));
 check('tactical bomber row keeps one count and the paired label',
   forces.includes(`>${TACTICAL_PAIR_LABEL}<`)

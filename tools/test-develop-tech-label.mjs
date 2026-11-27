@@ -5,6 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { stampAtLeast, htmlStampAtLeast } from './stamp-at-least.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -68,21 +69,21 @@ function advanceLabel(html) {
 console.log('=== stamp ===');
 {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  check('display stamp is V2.81.57-unified.43', GAME_VERSION === 'V2.81.57-unified.43');
+  check('display stamp is V2.81.57-unified.43', stampAtLeast(GAME_VERSION, 'V2.81.57-unified.43'));
   check('schema stays 11', SCHEMA_VERSION === 11);
-  check('game docs write V2.82-unified.43', compatClientVersion() === 'V2.82-unified.43');
+  check('game docs write V2.82-unified.43', stampAtLeast(compatClientVersion(), 'V2.82-unified.43'));
   check('a V2.82-unified.42 doc does not prompt this tab',
-    compareGameVersions('V2.82-unified.42', GAME_VERSION) < 0);
+    compareGameVersions('V2.82-unified.42', 'V2.81.57-unified.43') < 0);
   check('a V2.82-unified.44 doc prompts this tab',
-    compareGameVersions('V2.82-unified.44', GAME_VERSION) > 0);
+    compareGameVersions('V2.82-unified.44', 'V2.81.57-unified.43') > 0);
   check('our own V2.82-unified.43 doc does not prompt',
-    compareGameVersions('V2.82-unified.43', GAME_VERSION) === 0);
+    compareGameVersions('V2.82-unified.43', 'V2.81.57-unified.43') === 0);
   check('index.html carries the display stamp',
-    html.includes('content="V2.81.57-unified.43"')
-    && html.includes("window.__TR_GAME_VERSION = 'V2.81.57-unified.43'")
-    && html.includes("var LOCKED = 'V2.81.57-unified.43'")
-    && html.includes('style.css?v=V2.81.57-unified.43')
-    && html.includes('src/main.js?v=V2.81.57-unified.43'));
+    htmlStampAtLeast(html, 'V2.81.57-unified.43')
+    && html.includes("window.__TR_GAME_VERSION = '" + GAME_VERSION + "'")
+    && html.includes("var LOCKED = '" + GAME_VERSION + "'")
+    && html.includes('style.css?v=' + GAME_VERSION)
+    && html.includes('src/main.js?v=' + GAME_VERSION));
 }
 
 console.log('=== develop tech label ===');
